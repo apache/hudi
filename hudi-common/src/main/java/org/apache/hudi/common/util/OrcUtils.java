@@ -19,6 +19,8 @@
 package org.apache.hudi.common.util;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,12 +41,16 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+
 import org.apache.orc.OrcFile;
 import org.apache.orc.OrcProto.UserMetadataItem;
 import org.apache.orc.Reader;
 import org.apache.orc.Reader.Options;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
+
+import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_SCHEMA_METADATA_KEY;
 
 /**
  * Utility functions for ORC files.
@@ -103,6 +109,11 @@ public class OrcUtils extends BaseFileUtils {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
     return hoodieKeys;
+  }
+
+  @Override
+  public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    throw new HoodieIOException("UnsupportedOperation : Disabling meta fields not yet supported for Orc");
   }
 
   /**
@@ -202,8 +213,7 @@ public class OrcUtils extends BaseFileUtils {
           footerVals.put(footerName, metadata.get(footerName));
         } else if (required) {
           throw new MetadataNotFoundException(
-              "Could not find index in ORC footer. Looked for key " + footerName + " in "
-                  + orcFilePath);
+              "Could not find index in ORC footer. Looked for key " + footerName + " in " + orcFilePath);
         }
       }
       return footerVals;
@@ -216,8 +226,9 @@ public class OrcUtils extends BaseFileUtils {
   public Schema readAvroSchema(Configuration conf, Path orcFilePath) {
     try {
       Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
-      TypeDescription orcSchema = reader.getSchema();
-      return AvroOrcUtils.createAvroSchema(orcSchema);
+      ByteBuffer schemaBuffer = reader.getMetadataValue(HOODIE_AVRO_SCHEMA_METADATA_KEY);
+      String schemaText = StandardCharsets.UTF_8.decode(schemaBuffer).toString();
+      return new Schema.Parser().parse(schemaText);
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get Avro schema for ORC file:" + orcFilePath, io);
     }

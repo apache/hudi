@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -33,109 +35,129 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Compaction related config.
  */
 @Immutable
+@ConfigClassProperty(name = "Compaction Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control compaction "
+        + "(merging of log files onto a new base files) as well as  "
+        + "cleaning (reclamation of older/unused file groups/slices).")
 public class HoodieCompactionConfig extends HoodieConfig {
-
-  public static final ConfigProperty<String> CLEANER_POLICY_PROP = ConfigProperty
-      .key("hoodie.cleaner.policy")
-      .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
-      .withDocumentation("Cleaning policy to be used. Hudi will delete older versions of parquet files to re-claim space."
-          + " Any Query/Computation referring to this version of the file will fail. "
-          + "It is good to make sure that the data is retained for more than the maximum query execution time.");
 
   public static final ConfigProperty<String> AUTO_CLEAN_PROP = ConfigProperty
       .key("hoodie.clean.automatic")
       .defaultValue("true")
-      .withDocumentation("Should cleanup if there is anything to cleanup immediately after the commit");
+      .withDocumentation("When enabled, the cleaner table service is invoked immediately after each commit,"
+          + " to delete older file slices. It's recommended to enable this, to ensure metadata and data storage"
+          + " growth is bounded.");
 
   public static final ConfigProperty<String> ASYNC_CLEAN_PROP = ConfigProperty
       .key("hoodie.clean.async")
       .defaultValue("false")
-      .withDocumentation("Only applies when #withAutoClean is turned on. When turned on runs cleaner async with writing.");
-
-  public static final ConfigProperty<String> INLINE_COMPACT_PROP = ConfigProperty
-      .key("hoodie.compact.inline")
-      .defaultValue("false")
-      .withDocumentation("When set to true, compaction is triggered by the ingestion itself, "
-          + "right after a commit/deltacommit action as part of insert/upsert/bulk_insert");
-
-  public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = ConfigProperty
-      .key("hoodie.compact.inline.max.delta.commits")
-      .defaultValue("5")
-      .withDocumentation("Number of max delta commits to keep before triggering an inline compaction");
-
-  public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS_PROP = ConfigProperty
-      .key("hoodie.compact.inline.max.delta.seconds")
-      .defaultValue(String.valueOf(60 * 60))
-      .withDocumentation("Run a compaction when time elapsed > N seconds since last compaction");
-
-  public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY_PROP = ConfigProperty
-      .key("hoodie.compact.inline.trigger.strategy")
-      .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
-      .withDocumentation("");
-
-  public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED_PROP = ConfigProperty
-      .key("hoodie.cleaner.fileversions.retained")
-      .defaultValue("3")
-      .withDocumentation("");
+      .withDocumentation("Only applies when " + AUTO_CLEAN_PROP.key() + " is turned on. "
+          + "When turned on runs cleaner async with writing, which can speed up overall write performance.");
 
   public static final ConfigProperty<String> CLEANER_COMMITS_RETAINED_PROP = ConfigProperty
       .key("hoodie.cleaner.commits.retained")
       .defaultValue("10")
-      .withDocumentation("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits "
-          + "(scheduled). This also directly translates into how much you can incrementally pull on this table");
+      .withDocumentation("Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits "
+          + "(scheduled). This also directly translates into how much data retention the table supports for incremental queries.");
+
+  public static final ConfigProperty<String> CLEANER_POLICY_PROP = ConfigProperty
+      .key("hoodie.cleaner.policy")
+      .defaultValue(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      .withDocumentation("Cleaning policy to be used. The cleaner service deletes older file slices files to re-claim space."
+          + " By default, cleaner spares the file slices written by the last N commits, determined by  " + CLEANER_COMMITS_RETAINED_PROP.key()
+          + " Long running query plans may often refer to older file slices and will break if those are cleaned, before the query has had"
+          + "   a chance to run. So, it is good to make sure that the data is retained for more than the maximum query execution time");
+
+  public static final ConfigProperty<String> INLINE_COMPACT_PROP = ConfigProperty
+      .key("hoodie.compact.inline")
+      .defaultValue("false")
+      .withDocumentation("When set to true, compaction service is triggered after each write. While being "
+          + " simpler operationally, this adds extra latency on the write path.");
+
+  public static final ConfigProperty<String> INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = ConfigProperty
+      .key("hoodie.compact.inline.max.delta.commits")
+      .defaultValue("5")
+      .withDocumentation("Number of delta commits after the last compaction, before scheduling of a new compaction is attempted.");
+
+  public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS_PROP = ConfigProperty
+      .key("hoodie.compact.inline.max.delta.seconds")
+      .defaultValue(String.valueOf(60 * 60))
+      .withDocumentation("Number of elapsed seconds after the last compaction, before scheduling a new one.");
+
+  public static final ConfigProperty<String> INLINE_COMPACT_TRIGGER_STRATEGY_PROP = ConfigProperty
+      .key("hoodie.compact.inline.trigger.strategy")
+      .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
+      .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
+          + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+
+  public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED_PROP = ConfigProperty
+      .key("hoodie.cleaner.fileversions.retained")
+      .defaultValue("3")
+      .withDocumentation("When " + HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
+          + " the minimum number of file slices to retain in each file group, during cleaning.");
 
   public static final ConfigProperty<String> CLEANER_INCREMENTAL_MODE = ConfigProperty
       .key("hoodie.cleaner.incremental.mode")
       .defaultValue("true")
-      .withDocumentation("");
+      .withDocumentation("When enabled, the plans for each cleaner service run is computed incrementally off the events "
+          + " in the timeline, since the last cleaner run. This is much more efficient than obtaining listings for the full"
+          + " table for each planning (even with a metadata table).");
 
   public static final ConfigProperty<String> MAX_COMMITS_TO_KEEP_PROP = ConfigProperty
       .key("hoodie.keep.max.commits")
       .defaultValue("30")
-      .withDocumentation("Each commit is a small file in the .hoodie directory. Since DFS typically does not favor lots of "
-          + "small files, Hudi archives older commits into a sequential log. A commit is published atomically "
-          + "by a rename of the commit file.");
+      .withDocumentation("Archiving service moves older entries from timeline into an archived log after each write, to "
+          + " keep the metadata overhead constant, even as the table size grows."
+          + "This config controls the maximum number of instants to retain in the active timeline. ");
 
   public static final ConfigProperty<String> MIN_COMMITS_TO_KEEP_PROP = ConfigProperty
       .key("hoodie.keep.min.commits")
       .defaultValue("20")
-      .withDocumentation("Each commit is a small file in the .hoodie directory. Since DFS typically does not favor lots of "
-          + "small files, Hudi archives older commits into a sequential log. A commit is published atomically "
-          + "by a rename of the commit file.");
+      .withDocumentation("Similar to " + MAX_COMMITS_TO_KEEP_PROP.key() + ", but controls the minimum number of"
+          + "instants to retain in the active timeline.");
 
   public static final ConfigProperty<String> COMMITS_ARCHIVAL_BATCH_SIZE_PROP = ConfigProperty
       .key("hoodie.commits.archival.batch")
       .defaultValue(String.valueOf(10))
-      .withDocumentation("This controls the number of commit instants read in memory as a batch and archived together.");
+      .withDocumentation("Archiving of instants is batched in best-effort manner, to pack more instants into a single"
+          + " archive log. This config controls such archival batch size.");
 
   public static final ConfigProperty<String> CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = ConfigProperty
       .key("hoodie.cleaner.delete.bootstrap.base.file")
       .defaultValue("false")
-      .withDocumentation("Set true to clean bootstrap source files when necessary");
+      .withDocumentation("When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is "
+          + " cleaned. Turn this to true, if you want to ensure the bootstrap dataset storage is reclaimed over time, as the"
+          + " table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
+          + " base files are also physically deleted, to comply with data privacy enforcement processes.");
 
   public static final ConfigProperty<String> PARQUET_SMALL_FILE_LIMIT_BYTES = ConfigProperty
       .key("hoodie.parquet.small.file.limit")
       .defaultValue(String.valueOf(104857600))
-      .withDocumentation("Upsert uses this file size to compact new data onto existing files. "
-          + "By default, treat any file <= 100MB as a small file.");
+      .withDocumentation("During upsert operation, we opportunistically expand existing small files on storage, instead of writing"
+          + " new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage "
+          + " becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file.");
 
   public static final ConfigProperty<String> RECORD_SIZE_ESTIMATION_THRESHOLD_PROP = ConfigProperty
       .key("hoodie.record.size.estimation.threshold")
       .defaultValue("1.0")
-      .withDocumentation("Hudi will use the previous commit to calculate the estimated record size by totalBytesWritten/totalRecordsWritten. "
-          + "If the previous commit is too small to make an accurate estimation, Hudi will search commits in the reverse order, "
-          + "until find a commit has totalBytesWritten larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * RECORD_SIZE_ESTIMATION_THRESHOLD)");
+      .withDocumentation("We use the previous commits' metadata to calculate the estimated record size and use it "
+          + " to bin pack records into partitions. If the previous commit is too small to make an accurate estimation, "
+          + " Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten "
+          + " larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)");
 
   public static final ConfigProperty<String> CLEANER_PARALLELISM = ConfigProperty
       .key("hoodie.cleaner.parallelism")
       .defaultValue("200")
-      .withDocumentation("Increase this if cleaning becomes slow.");
+      .withDocumentation("Parallelism for the cleaning operation. Increase this if cleaning becomes slow.");
 
   // 500GB of target IO per compaction (both read and write
   public static final ConfigProperty<String> TARGET_IO_PER_COMPACTION_IN_MB_PROP = ConfigProperty
@@ -161,15 +183,15 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
       .defaultValue("false")
-      .withDocumentation("When a CompactedLogScanner merges all log files, this config helps to choose whether the logblocks "
-          + "should be read lazily or not. Choose true to use I/O intensive lazy block reading (low memory usage) or false "
-          + "for Memory intensive immediate block read (high memory usage)");
+      .withDocumentation("When merging the delta log files, this config helps to choose whether the log blocks "
+          + "should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block"
+          + " header) or false for immediate block read (higher memory usage)");
 
   public static final ConfigProperty<String> COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = ConfigProperty
       .key("hoodie.compaction.reverse.log.read")
       .defaultValue("false")
       .withDocumentation("HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. "
-          + "If this config is set to true, the Reader reads the logfile in reverse direction, from pos=file_length to pos=0");
+          + "If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0");
 
   public static final ConfigProperty<String> FAILED_WRITES_CLEANER_POLICY_PROP = ConfigProperty
       .key("hoodie.cleaner.policy.failed.writes")
@@ -190,22 +212,24 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = ConfigProperty
       .key("hoodie.copyonwrite.insert.split.size")
       .defaultValue(String.valueOf(500000))
-      .withDocumentation("Number of inserts, that will be put each partition/bucket for writing. "
-          + "The rationale to pick the insert parallelism is the following. Writing out 100MB files, "
-          + "with at least 1kb records, means 100K records per file. we just over provision to 500K.");
+      .withDocumentation("Number of inserts assigned for each partition/bucket for writing. "
+          + "We based the default on writing out 100MB files, with at least 1kb records (100K records per file), and "
+          + "  over provision to 500K. As long as auto-tuning of splits is turned on, this only affects the first "
+          + "  write, where there is no history to learn record sizes from.");
 
   public static final ConfigProperty<String> COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = ConfigProperty
       .key("hoodie.copyonwrite.insert.auto.split")
       .defaultValue("true")
       .withDocumentation("Config to control whether we control insert split sizes automatically based on average"
-          + " record sizes.");
+          + " record sizes. It's recommended to keep this turned on, since hand tuning is otherwise extremely"
+          + " cumbersome.");
 
   public static final ConfigProperty<String> COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = ConfigProperty
       .key("hoodie.copyonwrite.record.size.estimate")
       .defaultValue(String.valueOf(1024))
-      .withDocumentation("The average record size. If specified, hudi will use this and not compute dynamically "
-          + "based on the last 24 commit’s metadata. No value set as default. This is critical in computing "
-          + "the insert parallelism and bin-packing inserts into small files. See above.");
+      .withDocumentation("The average record size. If not explicitly specified, hudi will compute the "
+          + "record size estimate compute dynamically based on commit metadata. "
+          + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
   private HoodieCompactionConfig() {
     super();

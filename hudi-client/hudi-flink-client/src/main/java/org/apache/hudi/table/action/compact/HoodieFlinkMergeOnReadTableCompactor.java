@@ -129,6 +129,8 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withSpillableMapBasePath(config.getSpillableMapBasePath())
+        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .build();
     if (!scanner.iterator().hasNext()) {
       return new ArrayList<>();
@@ -162,6 +164,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
       s.getStat().setRuntimeStats(runtimeStats);
+      scanner.close();
     }).collect(toList());
   }
 

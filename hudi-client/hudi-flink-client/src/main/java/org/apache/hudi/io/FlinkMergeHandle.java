@@ -23,10 +23,12 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -64,7 +66,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                           TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier);
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty());
     if (rolloverPaths == null) {
       // #makeOldAndNewFilePaths may already initialize it already
       rolloverPaths = new ArrayList<>();
@@ -114,9 +116,8 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    // no need to create marker file for flink merge handle,
-    // the flink write handle does not rely on MARKER files for
-    // corrupt files cleaning, see HoodieFlinkCopyOnWriteTable#getInvalidDataPaths for details.
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override

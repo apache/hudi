@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -29,31 +31,11 @@ import java.util.Properties;
 /**
  * Clustering specific configs.
  */
+@ConfigClassProperty(name = "Clustering Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control the clustering table service in hudi, "
+        + "which optimizes the storage layout for better query performance by sorting and sizing data files.")
 public class HoodieClusteringConfig extends HoodieConfig {
-
-  public static final ConfigProperty<String> CLUSTERING_PLAN_STRATEGY_CLASS = ConfigProperty
-      .key("hoodie.clustering.plan.strategy.class")
-      .defaultValue("org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy")
-      .sinceVersion("0.7.0")
-      .withDocumentation("Config to provide a strategy class to create ClusteringPlan. Class has to be subclass of ClusteringPlanStrategy");
-
-  public static final ConfigProperty<String> CLUSTERING_EXECUTION_STRATEGY_CLASS = ConfigProperty
-      .key("hoodie.clustering.execution.strategy.class")
-      .defaultValue("org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
-      .sinceVersion("0.7.0")
-      .withDocumentation("Config to provide a strategy class to execute a ClusteringPlan. Class has to be subclass of RunClusteringStrategy");
-
-  public static final ConfigProperty<String> INLINE_CLUSTERING_PROP = ConfigProperty
-      .key("hoodie.clustering.inline")
-      .defaultValue("false")
-      .sinceVersion("0.7.0")
-      .withDocumentation("Turn on inline clustering - clustering will be run after write operation is complete");
-
-  public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMIT_PROP = ConfigProperty
-      .key("hoodie.clustering.inline.max.commits")
-      .defaultValue("4")
-      .sinceVersion("0.7.0")
-      .withDocumentation("Config to control frequency of clustering");
 
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
@@ -63,6 +45,40 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue("2")
       .sinceVersion("0.7.0")
       .withDocumentation("Number of partitions to list to create ClusteringPlan");
+
+  public static final ConfigProperty<String> CLUSTERING_PLAN_STRATEGY_CLASS = ConfigProperty
+      .key("hoodie.clustering.plan.strategy.class")
+      .defaultValue("org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy")
+      .sinceVersion("0.7.0")
+      .withDocumentation("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
+          + "i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by "
+          + CLUSTERING_TARGET_PARTITIONS.key() + ") day based partitions picks the small file slices within those partitions.");
+
+  public static final ConfigProperty<String> CLUSTERING_EXECUTION_STRATEGY_CLASS = ConfigProperty
+      .key("hoodie.clustering.execution.strategy.class")
+      .defaultValue("org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
+      .sinceVersion("0.7.0")
+      .withDocumentation("Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the "
+          + " clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while "
+          + " meeting the configured target file sizes.");
+
+  public static final ConfigProperty<String> INLINE_CLUSTERING_PROP = ConfigProperty
+      .key("hoodie.clustering.inline")
+      .defaultValue("false")
+      .sinceVersion("0.7.0")
+      .withDocumentation("Turn on inline clustering - clustering will be run after each write operation is complete");
+
+  public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMIT_PROP = ConfigProperty
+      .key("hoodie.clustering.inline.max.commits")
+      .defaultValue("4")
+      .sinceVersion("0.7.0")
+      .withDocumentation("Config to control frequency of clustering planning");
+
+  public static final ConfigProperty<String> ASYNC_CLUSTERING_MAX_COMMIT_PROP = ConfigProperty
+      .key("hoodie.clustering.async.max.commits")
+      .defaultValue("4")
+      .sinceVersion("0.9.0")
+      .withDocumentation("Config to control frequency of async clustering");
 
   public static final ConfigProperty<String> CLUSTERING_PLAN_SMALL_FILE_LIMIT = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
@@ -74,7 +90,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
       .defaultValue(String.valueOf(2 * 1024 * 1024 * 1024L))
       .sinceVersion("0.7.0")
-      .withDocumentation("Each clustering operation can create multiple groups. Total amount of data processed by clustering operation"
+      .withDocumentation("Each clustering operation can create multiple output file groups. Total amount of data processed by clustering operation"
           + " is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS)."
           + " Max amount of data to be included in one group");
 
@@ -86,7 +102,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CLUSTERING_TARGET_FILE_MAX_BYTES = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "target.file.max.bytes")
-      .defaultValue(String.valueOf(1 * 1024 * 1024 * 1024L))
+      .defaultValue(String.valueOf(1024 * 1024 * 1024L))
       .sinceVersion("0.7.0")
       .withDocumentation("Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups");
 
@@ -100,13 +116,14 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key("hoodie.clustering.updates.strategy")
       .defaultValue("org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy")
       .sinceVersion("0.7.0")
-      .withDocumentation("When file groups is in clustering, need to handle the update to these file groups. Default strategy just reject the update");
+      .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
+          + " Default strategy just rejects the update");
 
   public static final ConfigProperty<String> ASYNC_CLUSTERING_ENABLE_OPT_KEY = ConfigProperty
       .key("hoodie.clustering.async.enabled")
       .defaultValue("false")
       .sinceVersion("0.7.0")
-      .withDocumentation("Async clustering");
+      .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.");
 
   private HoodieClusteringConfig() {
     super();
@@ -174,6 +191,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withInlineClusteringNumCommits(int numCommits) {
       clusteringConfig.setValue(INLINE_CLUSTERING_MAX_COMMIT_PROP, String.valueOf(numCommits));
+      return this;
+    }
+
+    public Builder withAsyncClusteringMaxCommits(int numCommits) {
+      clusteringConfig.setValue(ASYNC_CLUSTERING_MAX_COMMIT_PROP, String.valueOf(numCommits));
       return this;
     }
 

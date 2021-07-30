@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -33,6 +35,10 @@ import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
  * {@link org.apache.hudi.metrics.MetricsReporterType#DATADOG}
  */
 @Immutable
+@ConfigClassProperty(name = "Metrics Configurations for Datadog reporter",
+    groupName = ConfigGroups.Names.METRICS,
+    description = "Enables reporting on Hudi metrics using the Datadog reporter type. "
+        + "Hudi publishes metrics on every commit, clean, rollback etc.")
 public class HoodieMetricsDatadogConfig extends HoodieConfig {
 
   public static final String DATADOG_PREFIX = METRIC_PREFIX + ".datadog";
@@ -41,7 +47,7 @@ public class HoodieMetricsDatadogConfig extends HoodieConfig {
       .key(DATADOG_PREFIX + ".report.period.seconds")
       .defaultValue(30)
       .sinceVersion("0.6.0")
-      .withDocumentation("Datadog report period in seconds. Default to 30.");
+      .withDocumentation("Datadog reporting period in seconds. Default to 30.");
 
   public static final ConfigProperty<String> DATADOG_API_SITE = ConfigProperty
       .key(DATADOG_PREFIX + ".api.site")

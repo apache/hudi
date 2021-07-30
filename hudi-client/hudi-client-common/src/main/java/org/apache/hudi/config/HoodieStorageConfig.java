@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -32,6 +34,9 @@ import java.util.Properties;
  * Storage related config.
  */
 @Immutable
+@ConfigClassProperty(name = "Storage Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control aspects around writing, sizing, reading base and log files.")
 public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARQUET_FILE_MAX_BYTES = ConfigProperty
@@ -43,19 +48,19 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARQUET_BLOCK_SIZE_BYTES = ConfigProperty
       .key("hoodie.parquet.block.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
-      .withDocumentation("Parquet RowGroup size. Its better this is same as the file size, so that a single column "
-          + "within a file is stored continuously on disk");
+      .withDocumentation("Parquet RowGroup size. It's recommended to make this large enough that scan costs can be"
+          + " amortized by packing enough column values into a single row group.");
 
   public static final ConfigProperty<String> PARQUET_PAGE_SIZE_BYTES = ConfigProperty
       .key("hoodie.parquet.page.size")
       .defaultValue(String.valueOf(1 * 1024 * 1024))
       .withDocumentation("Parquet page size. Page is the unit of read within a parquet file. "
-          + "Within a block, pages are compressed seperately.");
+          + "Within a block, pages are compressed separately.");
 
   public static final ConfigProperty<String> ORC_FILE_MAX_BYTES = ConfigProperty
       .key("hoodie.orc.max.file.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
-      .withDocumentation("");
+      .withDocumentation("Target file size for ORC base files.");
 
   public static final ConfigProperty<String> ORC_STRIPE_SIZE = ConfigProperty
       .key("hoodie.orc.stripe.size")
@@ -65,17 +70,18 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> ORC_BLOCK_SIZE = ConfigProperty
       .key("hoodie.orc.block.size")
       .defaultValue(ORC_FILE_MAX_BYTES.defaultValue())
-      .withDocumentation("File system block size");
+      .withDocumentation("ORC block size, recommended to be aligned with the target file size.");
 
   public static final ConfigProperty<String> HFILE_FILE_MAX_BYTES = ConfigProperty
       .key("hoodie.hfile.max.file.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
-      .withDocumentation("");
+      .withDocumentation("Target file size for HFile base files.");
 
   public static final ConfigProperty<String> HFILE_BLOCK_SIZE_BYTES = ConfigProperty
       .key("hoodie.hfile.block.size")
-      .defaultValue(String.valueOf(1 * 1024 * 1024))
-      .withDocumentation("");
+      .defaultValue(String.valueOf(1024 * 1024))
+      .withDocumentation("Lower values increase the size of metadata tracked within HFile, but can offer potentially "
+          + "faster lookup times.");
 
   // used to size log files
   public static final ConfigProperty<String> LOGFILE_SIZE_MAX_BYTES = ConfigProperty
@@ -107,12 +113,12 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
-      .withDocumentation("");
+      .withDocumentation("Compression codec to use for hfile base files.");
 
   public static final ConfigProperty<String> ORC_COMPRESSION_CODEC = ConfigProperty
       .key("hoodie.orc.compression.codec")
       .defaultValue("ZLIB")
-      .withDocumentation("");
+      .withDocumentation("Compression codec to use for ORC base files.");
 
   // Default compression ratio for log file to parquet, general 3x
   public static final ConfigProperty<String> LOGFILE_TO_PARQUET_COMPRESSION_RATIO = ConfigProperty

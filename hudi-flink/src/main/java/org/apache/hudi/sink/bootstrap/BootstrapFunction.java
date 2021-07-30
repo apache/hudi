@@ -41,16 +41,9 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.state.CheckpointListener;
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ListStateDescriptor;
-import org.apache.flink.api.scala.typeutils.Types;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.state.FunctionInitializationContext;
-import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
-import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.util.Collector;
@@ -73,8 +66,7 @@ import static java.util.stream.Collectors.toList;
  * <p>The output records should then shuffle by the recordKey and thus do scalable write.
  */
 public class BootstrapFunction<I, O extends HoodieRecord>
-    extends ProcessFunction<I, O>
-    implements CheckpointedFunction, CheckpointListener {
+    extends ProcessFunction<I, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(BootstrapFunction.class);
 
@@ -86,7 +78,6 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   private transient HoodieWriteConfig writeConfig;
 
   private GlobalAggregateManager aggregateManager;
-  private ListState<Boolean> bootstrapState;
 
   private final Pattern pattern;
   private boolean alreadyBootstrap;
@@ -94,20 +85,6 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   public BootstrapFunction(Configuration conf) {
     this.conf = conf;
     this.pattern = Pattern.compile(conf.getString(FlinkOptions.INDEX_PARTITION_REGEX));
-  }
-
-  @Override
-  public void initializeState(FunctionInitializationContext context) throws Exception {
-    this.bootstrapState = context.getOperatorStateStore()
-        .getListState(new ListStateDescriptor<>("bootstrap-state", Types.BOOLEAN()));
-
-    if (context.isRestored()) {
-      LOG.info("Restoring state for the {}.", getClass().getSimpleName());
-
-      for (Boolean alreadyBootstrap : bootstrapState.get()) {
-        this.alreadyBootstrap = alreadyBootstrap;
-      }
-    }
   }
 
   @Override
@@ -257,6 +234,8 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         .withBufferSize(this.writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(this.writeConfig.getMaxMemoryPerPartitionMerge())
         .withSpillableMapBasePath(this.writeConfig.getSpillableMapBasePath())
+        .withDiskMapType(this.writeConfig.getCommonConfig().getSpillableDiskMapType())
+        .withBitCaskDiskMapCompressionEnabled(this.writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .build();
   }
 
@@ -275,16 +254,6 @@ public class BootstrapFunction<I, O extends HoodieRecord>
                                         int taskID) {
     return KeyGroupRangeAssignment.assignKeyToParallelOperator(
         fileId, maxParallelism, parallelism) == taskID;
-  }
-
-  @Override
-  public void notifyCheckpointComplete(long checkpointId) {
-    // no operation
-  }
-
-  @Override
-  public void snapshotState(FunctionSnapshotContext context) throws Exception {
-    this.bootstrapState.add(alreadyBootstrap);
   }
 
   @VisibleForTesting

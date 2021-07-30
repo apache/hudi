@@ -19,6 +19,8 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.EngineType;
@@ -36,6 +38,10 @@ import java.util.Properties;
  * Indexing related config.
  */
 @Immutable
+@ConfigClassProperty(name = "Index Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control indexing behavior, "
+        + "which tags incoming records as either inserts or updates to older records.")
 public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INDEX_TYPE_PROP = ConfigProperty
@@ -58,13 +64,12 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue("60000")
       .withDocumentation("Only applies if index type is BLOOM. "
           + "This is the number of entries to be stored in the bloom filter. "
-          + "We assume the maxParquetFileSize is 128MB and averageRecordSize is 1024B and "
+          + "The rationale for the default: Assume the maxParquetFileSize is 128MB and averageRecordSize is 1kb and "
           + "hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. "
-          + "HUDI-56 tracks computing this dynamically. Warning: Setting this very low, "
-          + "will generate a lot of false positives and index lookup will have to scan a lot more files "
-          + "than it has to and Setting this to a very high number will increase the size every data file linearly "
-          + "(roughly 4KB for every 50000 entries). "
-          + "This config is also used with DYNNAMIC bloom filter which determines the initial size for the bloom.");
+          + "Warning: Setting this very low, will generate a lot of false positives and index lookup "
+          + "will have to scan a lot more files than it has to and setting this to a very high number will "
+          + "increase the size every base file linearly (roughly 4KB for every 50000 entries). "
+          + "This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.");
 
   public static final ConfigProperty<String> BLOOM_FILTER_FPP = ConfigProperty
       .key("hoodie.index.bloom.fpp")
@@ -73,16 +78,15 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "Error rate allowed given the number of entries. This is used to calculate how many bits should be "
           + "assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), "
           + "we like to tradeoff disk space for lower false positives. "
-          + "If the number of entries added to bloom filter exceeds the congfigured value (hoodie.index.bloom.num_entries), "
+          + "If the number of entries added to bloom filter exceeds the configured value (hoodie.index.bloom.num_entries), "
           + "then this fpp may not be honored.");
 
   public static final ConfigProperty<String> BLOOM_INDEX_PARALLELISM_PROP = ConfigProperty
       .key("hoodie.bloom.index.parallelism")
       .defaultValue("0")
       .withDocumentation("Only applies if index type is BLOOM. "
-          + "This is the amount of parallelism for index lookup, which involves a Spark Shuffle. "
-          + "By default, this is auto computed based on input workload characteristics. "
-          + "Disable explicit bloom index parallelism setting by default - hoodie auto computes");
+          + "This is the amount of parallelism for index lookup, which involves a shuffle. "
+          + "By default, this is auto computed based on input workload characteristics.");
 
   public static final ConfigProperty<String> BLOOM_INDEX_PRUNE_BY_RANGES_PROP = ConfigProperty
       .key("hoodie.bloom.index.prune.by.ranges")
@@ -90,7 +94,8 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BLOOM. "
           + "When true, range information from files to leveraged speed up index lookups. Particularly helpful, "
           + "if the key has a monotonously increasing prefix, such as timestamp. "
-          + "If the record key is completely random, it is better to turn this off.");
+          + "If the record key is completely random, it is better to turn this off, since range pruning will only "
+          + " add extra overhead to the index lookup.");
 
   public static final ConfigProperty<String> BLOOM_INDEX_USE_CACHING_PROP = ConfigProperty
       .key("hoodie.bloom.index.use.caching")
@@ -131,7 +136,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.simple.index.use.caching")
       .defaultValue("true")
       .withDocumentation("Only applies if index type is SIMPLE. "
-          + "When true, the input RDD will cached to speed up index lookup by reducing IO "
+          + "When true, the incoming writes will cached to speed up index lookup by reducing IO "
           + "for computing parallelism or affected partitions");
 
   public static final ConfigProperty<String> SIMPLE_INDEX_PARALLELISM_PROP = ConfigProperty
@@ -187,7 +192,7 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<String> SIMPLE_INDEX_UPDATE_PARTITION_PATH = ConfigProperty
       .key("hoodie.simple.index.update.partition.path")
       .defaultValue("false")
-      .withDocumentation("");
+      .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH + ", but for simple index.");
 
   private EngineType engineType;
 

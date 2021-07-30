@@ -25,12 +25,14 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
@@ -105,6 +107,11 @@ public class HoodieClientTestUtils {
 
   public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
                                         String instantTime) {
+    return readCommit(basePath, sqlContext, commitTimeline, instantTime, true);
+  }
+
+  public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
+                                        String instantTime, boolean filterByCommitTime) {
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
       throw new HoodieException("No commit exists at " + instantTime);
@@ -113,8 +120,21 @@ public class HoodieClientTestUtils {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
       LOG.info("Path :" + paths.values());
-      return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
-          .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime));
+      Dataset<Row> unFilteredRows = null;
+      if (HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().equals(HoodieFileFormat.PARQUET)) {
+        unFilteredRows = sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]));
+      } else if (HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().equals(HoodieFileFormat.ORC)) {
+        unFilteredRows = sqlContext.read().orc(paths.values().toArray(new String[paths.size()]));
+      }
+      if (unFilteredRows != null) {
+        if (filterByCommitTime) {
+          return unFilteredRows.filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime));
+        } else {
+          return unFilteredRows;
+        }
+      } else {
+        return sqlContext.emptyDataFrame();
+      }
     } catch (Exception e) {
       throw new HoodieException("Error reading commit " + instantTime, e);
     }
@@ -139,6 +159,10 @@ public class HoodieClientTestUtils {
         return readHFile(jsc, paths)
             .filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTime, HoodieActiveTimeline.LESSER_THAN,
                 gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
+            .count();
+      } else if (paths[0].endsWith(HoodieFileFormat.ORC.getFileExtension())) {
+        return sqlContext.read().orc(paths)
+            .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime))
             .count();
       }
       throw new HoodieException("Unsupported base file format for file :" + paths[0]);
@@ -174,7 +198,16 @@ public class HoodieClientTestUtils {
       for (HoodieBaseFile file : latestFiles) {
         filteredPaths.add(file.getPath());
       }
-      return sqlContext.read().parquet(filteredPaths.toArray(new String[filteredPaths.size()]));
+      if (filteredPaths.isEmpty()) {
+        return sqlContext.emptyDataFrame();
+      }
+      String[] filteredPathsToRead = filteredPaths.toArray(new String[filteredPaths.size()]);
+      if (filteredPathsToRead[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+        return sqlContext.read().parquet(filteredPathsToRead);
+      } else if (filteredPathsToRead[0].endsWith(HoodieFileFormat.ORC.getFileExtension())) {
+        return sqlContext.read().orc(filteredPathsToRead);
+      }
+      return sqlContext.emptyDataFrame();
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }
@@ -211,4 +244,22 @@ public class HoodieClientTestUtils {
     return valuesAsList.stream();
   }
 
+  public static Option<HoodieCommitMetadata> getCommitMetadataForLatestInstant(HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    if (timeline.lastInstant().isPresent()) {
+      return getCommitMetadataForInstant(metaClient, timeline.lastInstant().get());
+    } else {
+      return Option.empty();
+    }
+  }
+
+  private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+    try {
+      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      byte[] data = timeline.getInstantDetails(instant).get();
+      return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
+    } catch (Exception e) {
+      throw new HoodieException("Failed to read schema from commit metadata", e);
+    }
+  }
 }

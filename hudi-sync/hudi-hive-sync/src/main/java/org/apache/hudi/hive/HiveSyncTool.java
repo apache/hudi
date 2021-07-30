@@ -20,29 +20,39 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.util.ConfigUtils;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.hive.util.Parquet2SparkSchemaUtils;
+
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncTool;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.Type;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.parquet.schema.OriginalType.UTF8;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 
 /**
  * Tool to sync a hoodie HDFS table with a hive metastore table. Either use it as a api
@@ -104,20 +114,7 @@ public class HiveSyncTool extends AbstractSyncTool {
   public void syncHoodieTable() {
     try {
       if (hoodieHiveClient != null) {
-        switch (hoodieHiveClient.getTableType()) {
-          case COPY_ON_WRITE:
-            syncHoodieTable(snapshotTableName, false, false);
-            break;
-          case MERGE_ON_READ:
-            // sync a RO table for MOR
-            syncHoodieTable(roTableName.get(), false, true);
-            // sync a RT table for MOR
-            syncHoodieTable(snapshotTableName, true, false);
-            break;
-          default:
-            LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-            throw new InvalidTableException(hoodieHiveClient.getBasePath());
-        }
+        doSync();
       }
     } catch (RuntimeException re) {
       throw new HoodieException("Got runtime exception when hive syncing " + cfg.tableName, re);
@@ -127,7 +124,24 @@ public class HiveSyncTool extends AbstractSyncTool {
       }
     }
   }
-  
+
+  protected void doSync() {
+    switch (hoodieHiveClient.getTableType()) {
+      case COPY_ON_WRITE:
+        syncHoodieTable(snapshotTableName, false, false);
+        break;
+      case MERGE_ON_READ:
+        // sync a RO table for MOR
+        syncHoodieTable(roTableName.get(), false, true);
+        // sync a RT table for MOR
+        syncHoodieTable(snapshotTableName, true, false);
+        break;
+      default:
+        LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
+        throw new InvalidTableException(hoodieHiveClient.getBasePath());
+    }
+  }
+
   protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
                                boolean readAsOptimized) {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
@@ -136,7 +150,9 @@ public class HiveSyncTool extends AbstractSyncTool {
     // check if the database exists else create it
     if (cfg.autoCreateDatabase) {
       try {
-        hoodieHiveClient.updateHiveSQL("create database if not exists " + cfg.databaseName);
+        if (!hoodieHiveClient.doesDataBaseExist(cfg.databaseName)) {
+          hoodieHiveClient.createDatabase(cfg.databaseName);
+        }
       } catch (Exception e) {
         // this is harmless since table creation will fail anyways, creation of DB is needed for in-memory testing
         LOG.warn("Unable to create database", e);
@@ -152,6 +168,16 @@ public class HiveSyncTool extends AbstractSyncTool {
 
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
+
+    // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
+    // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
+    // by the data source way (which will use the HoodieBootstrapRelation).
+    // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
+    if (hoodieHiveClient.isBootstrap()
+            && hoodieHiveClient.getTableType() == HoodieTableType.MERGE_ON_READ
+            && !readAsOptimized) {
+      cfg.syncAsSparkDataSourceTable = false;
+    }
     // Sync schema if needed
     syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
 
@@ -180,6 +206,15 @@ public class HiveSyncTool extends AbstractSyncTool {
    */
   private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
                           boolean readAsOptimized, MessageType schema) {
+    // Append spark table properties & serde properties
+    Map<String, String> tableProperties = ConfigUtils.toMap(cfg.tableProperties);
+    Map<String, String> serdeProperties = ConfigUtils.toMap(cfg.serdeProperties);
+    if (cfg.syncAsSparkDataSourceTable) {
+      Map<String, String> sparkTableProperties = getSparkTableProperties(cfg.sparkSchemaLengthThreshold, schema);
+      Map<String, String> sparkSerdeProperties = getSparkSerdeProperties(readAsOptimized);
+      tableProperties.putAll(sparkTableProperties);
+      serdeProperties.putAll(sparkSerdeProperties);
+    }
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Hive table " + tableName + " is not found. Creating it");
@@ -196,27 +231,11 @@ public class HiveSyncTool extends AbstractSyncTool {
       String outputFormatClassName = HoodieInputFormatUtils.getOutputFormatClassName(baseFileFormat);
       String serDeFormatClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
 
-      Map<String, String> serdeProperties = ConfigUtils.toMap(cfg.serdeProperties);
-
-      // The serdeProperties is non-empty only for spark sync meta data currently.
-      if (!serdeProperties.isEmpty()) {
-        String queryTypeKey = serdeProperties.remove(ConfigUtils.SPARK_QUERY_TYPE_KEY);
-        String queryAsROKey = serdeProperties.remove(ConfigUtils.SPARK_QUERY_AS_RO_KEY);
-        String queryAsRTKey = serdeProperties.remove(ConfigUtils.SPARK_QUERY_AS_RT_KEY);
-
-        if (queryTypeKey != null && queryAsROKey != null && queryAsRTKey != null) {
-          if (readAsOptimized) { // read optimized
-            serdeProperties.put(queryTypeKey, queryAsROKey);
-          } else { // read snapshot
-            serdeProperties.put(queryTypeKey, queryAsRTKey);
-          }
-        }
-      }
       // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
       // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive
       // /ql/exec/DDLTask.java#L3488
       hoodieHiveClient.createTable(tableName, schema, inputFormatClassName,
-          outputFormatClassName, serDeFormatClassName, serdeProperties, ConfigUtils.toMap(cfg.tableProperties));
+          outputFormatClassName, serDeFormatClassName, serdeProperties, tableProperties);
     } else {
       // Check if the table schema has evolved
       Map<String, String> tableSchema = hoodieHiveClient.getTableSchema(tableName);
@@ -226,7 +245,6 @@ public class HiveSyncTool extends AbstractSyncTool {
         hoodieHiveClient.updateTableDefinition(tableName, schema);
         // Sync the table properties if the schema has changed
         if (cfg.tableProperties != null) {
-          Map<String, String> tableProperties = ConfigUtils.toMap(cfg.tableProperties);
           hoodieHiveClient.updateTableProperties(tableName, tableProperties);
           LOG.info("Sync table properties for " + tableName + ", table properties is: " + cfg.tableProperties);
         }
@@ -234,6 +252,72 @@ public class HiveSyncTool extends AbstractSyncTool {
         LOG.info("No Schema difference for " + tableName);
       }
     }
+  }
+
+  /**
+   * Get Spark Sql related table properties. This is used for spark datasource table.
+   * @param schema  The schema to write to the table.
+   * @return A new parameters added the spark's table properties.
+   */
+  private Map<String, String> getSparkTableProperties(int schemaLengthThreshold, MessageType schema)  {
+    // Convert the schema and partition info used by spark sql to hive table properties.
+    // The following code refers to the spark code in
+    // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
+    GroupType originGroupType = schema.asGroupType();
+    List<String> partitionNames = cfg.partitionFields;
+    List<Type> partitionCols = new ArrayList<>();
+    List<Type> dataCols = new ArrayList<>();
+    Map<String, Type> column2Field = new HashMap<>();
+
+    for (Type field : originGroupType.getFields()) {
+      column2Field.put(field.getName(), field);
+    }
+    // Get partition columns and data columns.
+    for (String partitionName : partitionNames) {
+      // Default the unknown partition fields to be String.
+      // Keep the same logical with HiveSchemaUtil#getPartitionKeyType.
+      partitionCols.add(column2Field.getOrDefault(partitionName,
+              new PrimitiveType(Type.Repetition.REQUIRED, BINARY, partitionName, UTF8)));
+    }
+
+    for (Type field : originGroupType.getFields()) {
+      if (!partitionNames.contains(field.getName())) {
+        dataCols.add(field);
+      }
+    }
+
+    List<Type> reOrderedFields = new ArrayList<>();
+    reOrderedFields.addAll(dataCols);
+    reOrderedFields.addAll(partitionCols);
+    GroupType reOrderedType = new GroupType(originGroupType.getRepetition(), originGroupType.getName(), reOrderedFields);
+
+    Map<String, String> sparkProperties = new HashMap<>();
+    sparkProperties.put("spark.sql.sources.provider", "hudi");
+    // Split the schema string to multi-parts according the schemaLengthThreshold size.
+    String schemaString = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(reOrderedType);
+    int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;
+    sparkProperties.put("spark.sql.sources.schema.numParts", String.valueOf(numSchemaPart));
+    // Add each part of schema string to sparkProperties
+    for (int i = 0; i < numSchemaPart; i++) {
+      int start = i * schemaLengthThreshold;
+      int end = Math.min(start + schemaLengthThreshold, schemaString.length());
+      sparkProperties.put("spark.sql.sources.schema.part." + i, schemaString.substring(start, end));
+    }
+    // Add partition columns
+    if (!partitionNames.isEmpty()) {
+      sparkProperties.put("spark.sql.sources.schema.numPartCols", String.valueOf(partitionNames.size()));
+      for (int i = 0; i < partitionNames.size(); i++) {
+        sparkProperties.put("spark.sql.sources.schema.partCol." + i, partitionNames.get(i));
+      }
+    }
+    return sparkProperties;
+  }
+
+  private Map<String, String> getSparkSerdeProperties(boolean readAsOptimized) {
+    Map<String, String> sparkSerdeProperties = new HashMap<>();
+    sparkSerdeProperties.put("path", cfg.basePath);
+    sparkSerdeProperties.put(ConfigUtils.IS_QUERY_AS_RO_TABLE, String.valueOf(readAsOptimized));
+    return sparkSerdeProperties;
   }
 
   /**

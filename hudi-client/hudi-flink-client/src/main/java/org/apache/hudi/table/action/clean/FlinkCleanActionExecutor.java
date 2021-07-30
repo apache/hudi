@@ -40,7 +40,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -62,9 +61,8 @@ public class FlinkCleanActionExecutor<T extends HoodieRecordPayload> extends
 
   @Override
   List<HoodieCleanStat> clean(HoodieEngineContext context, HoodieCleanerPlan cleanerPlan) {
-
-    Iterator<Tuple2<String, CleanFileInfo>> filesToBeDeletedPerPartition = cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
-        .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(), new CleanFileInfo(y.getFilePath(), y.getIsBootstrapBaseFile())))).iterator();
+    Stream<Tuple2<String, CleanFileInfo>> filesToBeDeletedPerPartition = cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
+        .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(), new CleanFileInfo(y.getFilePath(), y.getIsBootstrapBaseFile()))));
 
     Stream<Tuple2<String, PartitionCleanStat>> partitionCleanStats =
         deleteFilesFunc(filesToBeDeletedPerPartition, table)
@@ -97,12 +95,11 @@ public class FlinkCleanActionExecutor<T extends HoodieRecordPayload> extends
     }).collect(Collectors.toList());
   }
 
-  private static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Tuple2<String, CleanFileInfo>> iter, HoodieTable table) {
+  private static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Stream<Tuple2<String, CleanFileInfo>> cleanFileInfo, HoodieTable table) {
     Map<String, PartitionCleanStat> partitionCleanStatMap = new HashMap<>();
     FileSystem fs = table.getMetaClient().getFs();
 
-    while (iter.hasNext()) {
-      Tuple2<String, CleanFileInfo> partitionDelFileTuple = iter.next();
+    cleanFileInfo.parallel().forEach(partitionDelFileTuple -> {
       String partitionPath = partitionDelFileTuple._1();
       Path deletePath = new Path(partitionDelFileTuple._2().getFilePath());
       String deletePathStr = deletePath.toString();
@@ -112,11 +109,11 @@ public class FlinkCleanActionExecutor<T extends HoodieRecordPayload> extends
       } catch (IOException e) {
         LOG.error("Delete file failed");
       }
-      if (!partitionCleanStatMap.containsKey(partitionPath)) {
-        partitionCleanStatMap.put(partitionPath, new PartitionCleanStat(partitionPath));
+      final PartitionCleanStat partitionCleanStat;
+      synchronized (partitionCleanStatMap) {
+        partitionCleanStat = partitionCleanStatMap.computeIfAbsent(partitionPath, k -> new PartitionCleanStat(partitionPath));
       }
       boolean isBootstrapBasePathFile = partitionDelFileTuple._2().isBootstrapBaseFile();
-      PartitionCleanStat partitionCleanStat = partitionCleanStatMap.get(partitionPath);
       if (isBootstrapBasePathFile) {
         // For Bootstrap Base file deletions, store the full file path.
         partitionCleanStat.addDeleteFilePatterns(deletePath.toString(), true);
@@ -125,7 +122,7 @@ public class FlinkCleanActionExecutor<T extends HoodieRecordPayload> extends
         partitionCleanStat.addDeleteFilePatterns(deletePath.getName(), false);
         partitionCleanStat.addDeletedFileResult(deletePath.getName(), deletedFileResult, false);
       }
-    }
+    });
     return partitionCleanStatMap.entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue()));
   }
 }

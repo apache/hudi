@@ -17,26 +17,22 @@
 
 package org.apache.hudi
 
-import java.util
-import java.util.Properties
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.HoodieWriteResult
-import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory
-import org.apache.hudi.hive.util.ConfigUtils
+import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.index.SparkHoodieIndex
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
@@ -44,16 +40,15 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.log4j.LogManager
-import org.apache.spark.SPARK_VERSION
-import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.hudi.HoodieSqlUtils
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
+import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.{SPARK_VERSION, SparkContext}
 
+import java.util
+import java.util.Properties
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
 
@@ -62,6 +57,7 @@ object HoodieSparkSqlWriter {
   private val log = LogManager.getLogger(getClass)
   private var tableExists: Boolean = false
   private var asyncCompactionTriggerFnDefined: Boolean = false
+  private var asyncClusteringTriggerFnDefined: Boolean = false
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
@@ -69,9 +65,10 @@ object HoodieSparkSqlWriter {
             df: DataFrame,
             hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
-            asyncCompactionTriggerFn: Option[Function1[SparkRDDWriteClient[HoodieRecordPayload[Nothing]], Unit]] = Option.empty
+            asyncCompactionTriggerFn: Option[Function1[SparkRDDWriteClient[HoodieRecordPayload[Nothing]], Unit]] = Option.empty,
+            asyncClusteringTriggerFn: Option[Function1[SparkRDDWriteClient[HoodieRecordPayload[Nothing]], Unit]] = Option.empty
            )
-  : (Boolean, common.util.Option[String], common.util.Option[String],
+  : (Boolean, common.util.Option[String], common.util.Option[String], common.util.Option[String],
     SparkRDDWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
 
     val sparkContext = sqlContext.sparkContext
@@ -79,6 +76,7 @@ object HoodieSparkSqlWriter {
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
     val tblNameOp = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TABLE_NAME, s"'${HoodieWriteConfig.TABLE_NAME.key}' must be set.")
     asyncCompactionTriggerFnDefined = asyncCompactionTriggerFn.isDefined
+    asyncClusteringTriggerFnDefined = asyncClusteringTriggerFn.isDefined
     if (path.isEmpty) {
       throw new HoodieException(s"'path' must be set.")
     }
@@ -112,22 +110,27 @@ object HoodieSparkSqlWriter {
 
     if (mode == SaveMode.Ignore && tableExists) {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
-      (false, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+      (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
       // Handle various save modes
-      handleSaveModes(mode, basePath, tableConfig, tblName, operation, fs)
+      handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
       // Create the table if not present
       if (!tableExists) {
+        val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP)
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP)
         val partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator)
+        val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
 
         val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
           .setTableName(tblName)
+          .setRecordKeyFields(recordKeyFields)
+          .setBaseFileFormat(baseFileFormat)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
-          .setPartitionColumns(partitionColumns)
+          .setPartitionFields(partitionColumns)
+          .setPopulateMetaFields(parameters.getOrElse(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()).toBoolean)
           .initTable(sparkContext.hadoopConfiguration, path.get)
         tableConfig = tableMetaClient.getTableConfig
       }
@@ -139,8 +142,9 @@ object HoodieSparkSqlWriter {
       if (hoodieConfig.getBoolean(ENABLE_ROW_WRITER_OPT_KEY) &&
         operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
-                                                                                basePath, path, instantTime)
-        return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+          basePath, path, instantTime, parameters.getOrElse(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(),
+            HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()).toBoolean)
+        return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
       }
       // scalastyle:on
 
@@ -180,17 +184,16 @@ object HoodieSparkSqlWriter {
             asyncCompactionTriggerFn.get.apply(client)
           }
 
+          if (isAsyncClusteringEnabled(client, parameters)) {
+            asyncClusteringTriggerFn.get.apply(client)
+          }
+
           val hoodieRecords =
             if (hoodieConfig.getBoolean(INSERT_DROP_DUPS_OPT_KEY)) {
               DataSourceUtils.dropDuplicates(jsc, hoodieAllIncomingRecords, mapAsJavaMap(parameters))
             } else {
               hoodieAllIncomingRecords
             }
-
-          if (hoodieRecords.isEmpty()) {
-            log.info("new batch has no new records, skipping...")
-            (true, common.util.Option.empty())
-          }
           client.startCommitWithTime(instantTime, commitActionType)
           val writeResult = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
           (writeResult, client)
@@ -219,6 +222,10 @@ object HoodieSparkSqlWriter {
             asyncCompactionTriggerFn.get.apply(client)
           }
 
+          if (isAsyncClusteringEnabled(client, parameters)) {
+            asyncClusteringTriggerFn.get.apply(client)
+          }
+
           // Issue deletes
           client.startCommitWithTime(instantTime, commitActionType)
           val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
@@ -226,28 +233,12 @@ object HoodieSparkSqlWriter {
         }
 
       // Check for errors and commit the write.
-      val (writeSuccessful, compactionInstant) =
+      val (writeSuccessful, compactionInstant, clusteringInstant) =
         commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
           writeResult, parameters, writeClient, tableConfig, jsc,
           TableInstantInfo(basePath, instantTime, commitActionType, operation))
 
-      def unpersistRdd(rdd: RDD[_]): Unit = {
-        if (sparkContext.getPersistentRDDs.contains(rdd.id)) {
-          try {
-            rdd.unpersist()
-          } catch {
-            case t: Exception => log.warn("Got excepting trying to unpersist rdd", t)
-          }
-        }
-        val parentRdds = rdd.dependencies.map(_.rdd)
-        parentRdds.foreach { parentRdd =>
-          unpersistRdd(parentRdd)
-        }
-      }
-      // it's safe to unpersist cached rdds here
-      unpersistRdd(writeResult.getWriteStatuses.rdd)
-
-      (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, writeClient, tableConfig)
+      (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     }
   }
 
@@ -286,21 +277,24 @@ object HoodieSparkSqlWriter {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       false
     } else {
-      handleSaveModes(mode, basePath, tableConfig, tableName, WriteOperationType.BOOTSTRAP, fs)
+      handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tableName, WriteOperationType.BOOTSTRAP, fs)
     }
 
     if (!tableExists) {
       val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP)
       val partitionColumns = HoodieWriterUtils.getPartitionColumns(parameters)
+      val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
+
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
+          .setRecordKeyFields(recordKeyFields)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS_OPT_KEY))
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBootstrapBasePath(bootstrapBasePath)
-          .setPartitionColumns(partitionColumns)
+          .setPartitionFields(partitionColumns)
           .initTable(sparkContext.hadoopConfiguration, path)
     }
 
@@ -322,7 +316,8 @@ object HoodieSparkSqlWriter {
                       tblName: String,
                       basePath: Path,
                       path: Option[String],
-                      instantTime: String): (Boolean, common.util.Option[String]) = {
+                      instantTime: String,
+                      populateMetaFields: Boolean): (Boolean, common.util.Option[String]) = {
     val sparkContext = sqlContext.sparkContext
     // register classes & schemas
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
@@ -337,27 +332,41 @@ object HoodieSparkSqlWriter {
     }
     val params = parameters.updated(HoodieWriteConfig.AVRO_SCHEMA.key, schema.toString)
     val writeConfig = DataSourceUtils.createHoodieConfig(schema.toString, path.get, tblName, mapAsJavaMap(params))
-    val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
-    val bulkInsertPartitionerRows : BulkInsertPartitioner[Dataset[Row]] = if (userDefinedBulkInsertPartitionerOpt.isPresent)  {
-      userDefinedBulkInsertPartitionerOpt.get
-    }
-    else {
-      BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+    val bulkInsertPartitionerRows : BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
+      val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
+      if (userDefinedBulkInsertPartitionerOpt.isPresent)  {
+        userDefinedBulkInsertPartitionerOpt.get
+      }
+      else {
+        BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+      }
+    } else {
+      // Sort modes are not yet supported when meta fields are disabled
+      new NonSortPartitionerWithRows()
     }
     val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted();
     parameters.updated(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, arePartitionRecordsSorted.toString)
-    val isGlobalIndex = SparkHoodieIndex.isGlobalIndex(writeConfig)
-    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
-      bulkInsertPartitionerRows, isGlobalIndex)
+    val isGlobalIndex = if (populateMetaFields) {
+      SparkHoodieIndex.isGlobalIndex(writeConfig)
+    } else {
+      false
+    }
+    val hoodieDF = if (populateMetaFields) {
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
+        bulkInsertPartitionerRows, isGlobalIndex)
+    } else {
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(df)
+    }
     if (SPARK_VERSION.startsWith("2.")) {
       hoodieDF.write.format("org.apache.hudi.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
         .options(params)
+        .mode(SaveMode.Append)
         .save()
     } else if (SPARK_VERSION.startsWith("3.")) {
       hoodieDF.write.format("org.apache.hudi.spark3.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
-        .option(HoodieWriteConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key, hoodieDF.schema.toDDL)
+        .option(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key, hoodieDF.schema.toDDL)
         .options(params)
         .mode(SaveMode.Append)
         .save()
@@ -383,12 +392,14 @@ object HoodieSparkSqlWriter {
     props
   }
 
-  private def handleSaveModes(mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,
+  private def handleSaveModes(spark: SparkSession, mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,
                               operation: WriteOperationType, fs: FileSystem): Unit = {
     if (mode == SaveMode.Append && tableExists) {
       val existingTableName = tableConfig.getTableName
-      if (!existingTableName.equals(tableName)) {
-        throw new HoodieException(s"hoodie table with name $existingTableName already exists at $tablePath")
+      val resolver = spark.sessionState.conf.resolver
+      if (!resolver(existingTableName, tableName)) {
+        throw new HoodieException(s"hoodie table with name $existingTableName already exists at $tablePath," +
+          s" can not append data to the table with another name $tableName.")
       }
     }
 
@@ -410,15 +421,15 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def syncHive(basePath: Path, fs: FileSystem, hoodieConfig: HoodieConfig): Boolean = {
-    val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, hoodieConfig)
+  private def syncHive(basePath: Path, fs: FileSystem, hoodieConfig: HoodieConfig, sqlConf: SQLConf): Boolean = {
+    val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, hoodieConfig, sqlConf)
     val hiveConf: HiveConf = new HiveConf()
     hiveConf.addResource(fs.getConf)
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable()
     true
   }
 
-  private def buildSyncConfig(basePath: Path, hoodieConfig: HoodieConfig): HiveSyncConfig = {
+  private def buildSyncConfig(basePath: Path, hoodieConfig: HoodieConfig, sqlConf: SQLConf): HiveSyncConfig = {
     val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig()
     hiveSyncConfig.basePath = basePath.toString
     hiveSyncConfig.baseFileFormat = hoodieConfig.getString(HIVE_BASE_FILE_FORMAT_OPT_KEY)
@@ -443,75 +454,13 @@ object HoodieSparkSqlWriter {
     hiveSyncConfig.decodePartition = hoodieConfig.getStringOrDefault(URL_ENCODE_PARTITIONING_OPT_KEY).toBoolean
     hiveSyncConfig.batchSyncNum = hoodieConfig.getStringOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM).toInt
 
-    val syncAsDtaSourceTable = hoodieConfig.getStringOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE).toBoolean
-    if (syncAsDtaSourceTable) {
-      hiveSyncConfig.tableProperties = hoodieConfig.getStringOrDefault(HIVE_TABLE_PROPERTIES, null)
-      val serdePropText = createSqlTableSerdeProperties(hoodieConfig, basePath.toString)
-      val serdeProp = ConfigUtils.toMap(serdePropText)
-      serdeProp.put(ConfigUtils.SPARK_QUERY_TYPE_KEY, DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key)
-      serdeProp.put(ConfigUtils.SPARK_QUERY_AS_RO_KEY, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      serdeProp.put(ConfigUtils.SPARK_QUERY_AS_RT_KEY, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-
-      hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProp)
-    }
+    hiveSyncConfig.syncAsSparkDataSourceTable =  hoodieConfig.getStringOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE).toBoolean
+    hiveSyncConfig.sparkSchemaLengthThreshold = sqlConf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD)
     hiveSyncConfig.createManagedTable = hoodieConfig.getBoolean(HIVE_CREATE_MANAGED_TABLE)
+
+    hiveSyncConfig.serdeProperties = hoodieConfig.getString(HIVE_TABLE_SERDE_PROPERTIES)
+    hiveSyncConfig.tableProperties = hoodieConfig.getString(HIVE_TABLE_PROPERTIES)
     hiveSyncConfig
-  }
-
-  /**
-   * Add Spark Sql related table properties to the HIVE_TABLE_PROPERTIES.
-   * @param sqlConf The spark sql conf.
-   * @param schema  The schema to write to the table.
-   * @param hoodieConfig The HoodieConfig contains origin parameters.
-   * @return A new parameters added the HIVE_TABLE_PROPERTIES property.
-   */
-  private def addSqlTableProperties(sqlConf: SQLConf, schema: StructType,
-                                    hoodieConfig: HoodieConfig): HoodieConfig = {
-    // Convert the schema and partition info used by spark sql to hive table properties.
-    // The following code refers to the spark code in
-    // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
-
-    // Sync schema with meta fields
-    val schemaWithMetaFields = HoodieSqlUtils.addMetaFields(schema)
-    val partitionSet = hoodieConfig.getString(HIVE_PARTITION_FIELDS_OPT_KEY)
-      .split(",").map(_.trim).filter(!_.isEmpty).toSet
-    val threshold = sqlConf.getConf(SCHEMA_STRING_LENGTH_THRESHOLD)
-
-    val (partitionCols, dataCols) = schemaWithMetaFields.partition(c => partitionSet.contains(c.name))
-    val reOrderedType = StructType(dataCols ++ partitionCols)
-    val schemaParts = reOrderedType.json.grouped(threshold).toSeq
-
-    var properties = Map(
-      "spark.sql.sources.provider" -> "hudi",
-      "spark.sql.sources.schema.numParts" -> schemaParts.size.toString
-    )
-    schemaParts.zipWithIndex.foreach { case (part, index) =>
-      properties += s"spark.sql.sources.schema.part.$index" -> part
-    }
-    // add partition columns
-    if (partitionSet.nonEmpty) {
-      properties += "spark.sql.sources.schema.numPartCols" -> partitionSet.size.toString
-      partitionSet.zipWithIndex.foreach { case (partCol, index) =>
-        properties += s"spark.sql.sources.schema.partCol.$index" -> partCol
-      }
-    }
-    var sqlPropertyText = ConfigUtils.configToString(properties)
-    sqlPropertyText = if (hoodieConfig.contains(HIVE_TABLE_PROPERTIES)) {
-      sqlPropertyText + "\n" + hoodieConfig.getString(HIVE_TABLE_PROPERTIES)
-    } else {
-      sqlPropertyText
-    }
-    hoodieConfig.setValue(HIVE_TABLE_PROPERTIES, sqlPropertyText)
-    hoodieConfig
-  }
-
-  private def createSqlTableSerdeProperties(hoodieConfig: HoodieConfig, basePath: String): String = {
-    val pathProp = s"path=$basePath"
-    if (hoodieConfig.contains(HIVE_TABLE_SERDE_PROPERTIES)) {
-      pathProp + "\n" + hoodieConfig.getString(HIVE_TABLE_SERDE_PROPERTIES)
-    } else {
-      pathProp
-    }
   }
 
   private def metaSync(spark: SparkSession, hoodieConfig: HoodieConfig, basePath: Path,
@@ -521,7 +470,6 @@ object HoodieSparkSqlWriter {
     var syncClientToolClassSet = scala.collection.mutable.Set[String]()
     hoodieConfig.getString(META_SYNC_CLIENT_TOOL_CLASS).split(",").foreach(syncClass =>  syncClientToolClassSet += syncClass)
 
-    val newHoodieConfig = addSqlTableProperties(spark.sessionState.conf, schema, hoodieConfig)
     // for backward compatibility
     if (hiveSyncEnabled) {
       metaSyncEnabled = true
@@ -534,12 +482,12 @@ object HoodieSparkSqlWriter {
         val syncSuccess = impl.trim match {
           case "org.apache.hudi.hive.HiveSyncTool" => {
             log.info("Syncing to Hive Metastore (URL: " + hoodieConfig.getString(HIVE_URL_OPT_KEY) + ")")
-            syncHive(basePath, fs, newHoodieConfig)
+            syncHive(basePath, fs, hoodieConfig, spark.sessionState.conf)
             true
           }
           case _ => {
             val properties = new Properties()
-            properties.putAll(newHoodieConfig.getProps)
+            properties.putAll(hoodieConfig.getProps)
             properties.put("basePath", basePath.toString)
             val syncHoodie = ReflectionUtils.loadClass(impl.trim, Array[Class[_]](classOf[Properties], classOf[FileSystem]), properties, fs).asInstanceOf[AbstractSyncTool]
             syncHoodie.syncHoodieTable()
@@ -565,7 +513,7 @@ object HoodieSparkSqlWriter {
                                              tableConfig: HoodieTableConfig,
                                              jsc: JavaSparkContext,
                                              tableInstantInfo: TableInstantInfo
-                                             ): (Boolean, common.util.Option[java.lang.String]) = {
+                                             ): (Boolean, common.util.Option[java.lang.String], common.util.Option[java.lang.String]) = {
     if(writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors).isEmpty()) {
       log.info("Proceeding to commit the write.")
       val metaMap = parameters.filter(kv =>
@@ -593,14 +541,24 @@ object HoodieSparkSqlWriter {
 
       log.info(s"Compaction Scheduled is $compactionInstant")
 
+      val asyncClusteringEnabled = isAsyncClusteringEnabled(client, parameters)
+      val clusteringInstant: common.util.Option[java.lang.String] =
+        if (asyncClusteringEnabled) {
+          client.scheduleClustering(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
+        } else {
+          common.util.Option.empty()
+        }
+
+      log.info(s"Clustering Scheduled is $clusteringInstant")
+
       val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
         tableInstantInfo.basePath, schema)
 
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
-      if (!asyncCompactionEnabled) {
+      if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
         client.close()
       }
-      (commitSuccess && metaSyncSuccess, compactionInstant)
+      (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
       log.error(s"${tableInstantInfo.operation} failed with errors")
       if (log.isTraceEnabled) {
@@ -615,7 +573,7 @@ object HoodieSparkSqlWriter {
             }
           })
       }
-      (false, common.util.Option.empty())
+      (false, common.util.Option.empty(), common.util.Option.empty())
     }
   }
 
@@ -629,6 +587,13 @@ object HoodieSparkSqlWriter {
     } else {
       false
     }
+  }
+
+  private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
+                                       parameters: Map[String, String]) : Boolean = {
+    log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
+    asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled &&
+      parameters.get(ASYNC_CLUSTERING_ENABLE_OPT_KEY.key).exists(r => r.toBoolean)
   }
 
   private def getHoodieTableConfig(sparkContext: SparkContext,

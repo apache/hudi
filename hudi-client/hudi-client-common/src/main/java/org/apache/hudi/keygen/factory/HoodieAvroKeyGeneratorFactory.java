@@ -60,7 +60,7 @@ public class HoodieAvroKeyGeneratorFactory {
         props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), null);
 
     if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
-      LOG.info("The value of {} is empty, use SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key());
+      LOG.info("The value of {} is empty, using SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key());
       keyGeneratorType = KeyGeneratorType.SIMPLE.name();
     }
 

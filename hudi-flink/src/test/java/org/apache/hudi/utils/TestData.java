@@ -20,6 +20,7 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -149,6 +150,18 @@ public class TestData {
           TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
       insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
           TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
+  // data set of test_source.data latest commit.
+  public static List<RowData> DATA_SET_SOURCE_INSERT_LATEST_COMMIT = Arrays.asList(
       insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
           TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
       insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
@@ -497,6 +510,8 @@ public class TestData {
         .withBufferSize(16 * 1024 * 1024)
         .withMaxMemorySizeInBytes(1024 * 1024L)
         .withSpillableMapBasePath("/tmp/")
+        .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
+        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
         .build();
   }
 
@@ -515,7 +530,7 @@ public class TestData {
     return Strings.join(fields, ",");
   }
 
-  private static BinaryRowData insertRow(Object... fields) {
+  public static BinaryRowData insertRow(Object... fields) {
     LogicalType[] types = TestConfigurations.ROW_TYPE.getFields().stream().map(RowType.RowField::getType)
         .toArray(LogicalType[]::new);
     assertEquals(

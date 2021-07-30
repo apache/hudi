@@ -172,9 +172,9 @@ public class StreamWriteOperatorCoordinator
     if (executor != null) {
       executor.close();
     }
-    // sync Hive if is enabled in batch mode.
-    syncHiveIfEnabled();
-
+    if (hiveSyncExecutor != null) {
+      hiveSyncExecutor.close();
+    }
     this.eventBuffer = null;
   }
 
@@ -243,7 +243,9 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
-    // no operation
+    // reset the event
+    this.eventBuffer[i] = null;
+    LOG.warn("Reset the event for task [" + i + "]", throwable);
   }
 
   @Override
@@ -256,7 +258,7 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
 
   private void initHiveSync() {
-    this.hiveSyncExecutor = new NonThrownExecutor(LOG);
+    this.hiveSyncExecutor = new NonThrownExecutor(LOG, true);
     this.hiveSyncContext = HiveSyncContext.create(conf);
   }
 
@@ -328,8 +330,8 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
-    addEventToBuffer(event);
-    if (Arrays.stream(eventBuffer).allMatch(Objects::nonNull)) {
+    this.eventBuffer[event.getTaskID()] = event;
+    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to initialize the instant.
       initInstant(event.getInstantTime());
     }
@@ -340,7 +342,8 @@ public class StreamWriteOperatorCoordinator
     if (allEventsReceived()) {
       // start to commit the instant.
       commitInstant(this.instant);
-      // no compaction scheduling for batch mode
+      // sync Hive if is enabled in batch mode.
+      syncHiveIfEnabled();
     }
   }
 

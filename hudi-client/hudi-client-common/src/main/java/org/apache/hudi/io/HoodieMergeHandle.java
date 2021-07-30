@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
@@ -40,6 +41,8 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -101,21 +104,23 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected long updatedRecordsWritten = 0;
   protected long insertRecordsWritten = 0;
   protected boolean useWriterSchema;
+  protected Option<BaseKeyGenerator> keyGeneratorOpt;
   private HoodieBaseFile baseFileToMerge;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                           TaskContextSupplier taskContextSupplier) {
+                           TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
-        hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
+        hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get(), keyGeneratorOpt);
   }
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                           TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile) {
+                           TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     init(fileId, recordItr);
     init(fileId, partitionPath, baseFile);
+    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
   /**
@@ -123,11 +128,17 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
+                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
+    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+  }
+
+  private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
+    ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
+    this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
   @Override
@@ -200,7 +211,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema),
-          config.getSpillableDiskMapType());
+          config.getCommonConfig().getSpillableDiskMapType(),
+          config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -278,7 +290,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
   public void write(GenericRecord oldRecord) {
-    String key = oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+    String key = KeyGenUtils.getRecordKeyFromGenericRecord(oldRecord, keyGeneratorOpt);
     boolean copyOldRecord = true;
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after

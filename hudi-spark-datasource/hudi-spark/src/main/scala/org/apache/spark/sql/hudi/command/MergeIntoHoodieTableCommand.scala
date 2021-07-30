@@ -61,14 +61,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
   /**
     * The target table identify.
     */
-  private lazy val targetTableIdentify: TableIdentifier = {
-    val aliaId = mergeInto.targetTable match {
-      case SubqueryAlias(_, SubqueryAlias(tableId, _)) => tableId
-      case SubqueryAlias(tableId, _) => tableId
-      case plan => throw new IllegalArgumentException(s"Illegal plan $plan in target")
-    }
-    sparkAdapter.toTableIdentify(aliaId)
-  }
+  private lazy val targetTableIdentify: TableIdentifier = getMergeIntoTargetTableId(mergeInto)
 
   /**
    * The target table schema without hoodie meta fields.
@@ -124,7 +117,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
    */
   private lazy val target2SourcePreCombineFiled: Option[(String, Expression)] = {
     val updateActions = mergeInto.matchedActions.collect { case u: UpdateAction => u }
-    assert(updateActions.size <= 1, s"Only support one updateAction, current is: ${updateActions.size}")
+    assert(updateActions.size <= 1, s"Only support one updateAction currently, current update action count is: ${updateActions.size}")
 
     val updateAction = updateActions.headOption
     HoodieOptionConfig.getPreCombineField(targetTable.storage.properties).map(preCombineField => {
@@ -151,6 +144,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
 
     // Create the write parameters
     val parameters = buildMergeIntoConfig(mergeInto)
+
     val sourceDF = buildSourceDF(sparkSession)
 
     if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
@@ -224,15 +218,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     assert(deleteActions.size <= 1, "Should be only one delete action in the merge into statement.")
     val deleteAction = deleteActions.headOption
 
-    val insertActions = if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
-      // For Mor table, the update record goes through the HoodieRecordPayload#getInsertValue
-      // We append the update actions to the insert actions, so that we can execute the update
-      // actions in the ExpressionPayload#getInsertValue.
-      mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction]) ++
-        updateActions.map(update => InsertAction(update.condition, update.assignments))
-    } else {
+    val insertActions =
       mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
-    }
+
     // Check for the insert actions
     checkInsertAssignments(insertActions)
 
@@ -272,7 +260,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))
 
-    // Remove the meta fiels from the sourceDF as we do not need these when writing.
+    // Remove the meta fields from the sourceDF as we do not need these when writing.
     val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
     HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
   }
@@ -293,7 +281,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))
 
-    // Remove the meta fiels from the sourceDF as we do not need these when writing.
+    // Remove the meta fields from the sourceDF as we do not need these when writing.
     val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
     HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
   }
@@ -303,6 +291,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       assert(update.assignments.length == targetTableSchemaWithoutMetaFields.length,
         s"The number of update assignments[${update.assignments.length}] must equal to the " +
           s"targetTable field size[${targetTableSchemaWithoutMetaFields.length}]"))
+    // For MOR table, the target table field cannot be the right-value in the update action.
+    if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
+      updateActions.foreach(update => {
+        val targetAttrs = update.assignments.flatMap(a => a.value.collect {
+          case attr: AttributeReference if mergeInto.targetTable.outputSet.contains(attr) => attr
+        })
+        assert(targetAttrs.isEmpty,
+          s"Target table's field(${targetAttrs.map(_.name).mkString(",")}) cannot be the right-value of the update clause for MOR table.")
+      })
+    }
   }
 
   private def checkInsertAssignments(insertActions: Seq[InsertAction]): Unit = {
@@ -310,6 +308,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       assert(insert.assignments.length == targetTableSchemaWithoutMetaFields.length,
         s"The number of insert assignments[${insert.assignments.length}] must equal to the " +
           s"targetTable field size[${targetTableSchemaWithoutMetaFields.length}]"))
+
   }
 
   private def getTableSchema: Schema = {
@@ -399,7 +398,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       references.foreach(ref => {
         if (ref.ordinal >= sourceDFOutput.size) {
           val targetColumn = targetTableSchemaWithoutMetaFields(ref.ordinal - sourceDFOutput.size)
-          throw new IllegalArgumentException(s"Insert clause cannot contain target table field: $targetColumn" +
+          throw new IllegalArgumentException(s"Insert clause cannot contain target table's field: ${targetColumn.name}" +
             s" in ${exp.sql}")
         }
       })

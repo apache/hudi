@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -310,6 +311,19 @@ public class HoodieTableMetaClient implements Serializable {
       archivedTimeline = new HoodieArchivedTimeline(this);
     }
     return archivedTimeline;
+  }
+
+  /**
+   * Validate table properties.
+   * @param properties Properties from writeConfig.
+   * @param operationType operation type to be executed.
+   */
+  public void validateTableProperties(Properties properties, WriteOperationType operationType) {
+    // once meta fields are disabled, it cant be re-enabled for a given table.
+    if (!getTableConfig().populateMetaFields()
+        && Boolean.parseBoolean((String) properties.getOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()))) {
+      throw new HoodieException(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
+    }
   }
 
   /**
@@ -599,9 +613,10 @@ public class HoodieTableMetaClient implements Serializable {
     private Integer timelineLayoutVersion;
     private String baseFileFormat;
     private String preCombineField;
-    private String partitionColumns;
+    private String partitionFields;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
+    private Boolean populateMetaFields;
 
     private PropertyBuilder() {
 
@@ -660,8 +675,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setPartitionColumns(String partitionColumns) {
-      this.partitionColumns = partitionColumns;
+    public PropertyBuilder setPartitionFields(String partitionFields) {
+      this.partitionFields = partitionFields;
       return this;
     }
 
@@ -672,6 +687,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setBootstrapBasePath(String bootstrapBasePath) {
       this.bootstrapBasePath = bootstrapBasePath;
+      return this;
+    }
+
+    public PropertyBuilder setPopulateMetaFields(boolean populateMetaFields) {
+      this.populateMetaFields = populateMetaFields;
       return this;
     }
 
@@ -715,15 +735,18 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP)) {
         setPreCombineField(hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP));
       }
-      if (hoodieConfig.contains(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS_PROP)) {
-        setPartitionColumns(
-            hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS_PROP));
+      if (hoodieConfig.contains(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP)) {
+        setPartitionFields(
+            hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP));
       }
       if (hoodieConfig.contains(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS));
       }
       if (hoodieConfig.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA)) {
         setTableCreateSchema(hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS)) {
+        setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS));
       }
       return this;
     }
@@ -772,11 +795,14 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP, preCombineField);
       }
 
-      if (null != partitionColumns) {
-        tableConfig.setValue(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS_PROP, partitionColumns);
+      if (null != partitionFields) {
+        tableConfig.setValue(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP, partitionFields);
       }
       if (null != recordKeyFields) {
         tableConfig.setValue(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS, recordKeyFields);
+      }
+      if (null != populateMetaFields) {
+        tableConfig.setValue(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       return tableConfig.getProps();
     }

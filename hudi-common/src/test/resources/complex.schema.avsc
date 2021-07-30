@@ -1,0 +1,1882 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+{
+  "type": "record",
+  "name": "field_20",
+  "namespace": "hoodie.complex",
+  "fields": [
+    {
+      "name": "field_24",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": "null"
+    },
+    {
+      "name": "field_31",
+      "type": [
+        {
+          "type": "record",
+          "name": "field_35",
+          "namespace": "hoodie.complex.complex_record",
+          "fields": [
+            {
+              "name": "field_39",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_43",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_47",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_54",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_61",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_68",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_75",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_82",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_89",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_96",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_103",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_110",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_117",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_124",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_131",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_138",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_145",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_152",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_165",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_172",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_184",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_188",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_192",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_199",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_206",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_213",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_220",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_227",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_234",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_241",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_248",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_255",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_262",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_269",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_276",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_283",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_290",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_297",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_310",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_317",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_329",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_333",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_337",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_344",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_351",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_358",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_365",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_372",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_379",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_386",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_393",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_400",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_407",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_414",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_421",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_428",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_435",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_442",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_455",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_462",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_474",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_478",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_482",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_489",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_496",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_503",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_510",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_517",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_524",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_531",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_538",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_545",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_552",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_559",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_566",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_573",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_580",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_587",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_600",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_607",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_619",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_623",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_627",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_634",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_641",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_648",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_655",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_662",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_669",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_676",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_683",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_690",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_697",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_704",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_711",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_718",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_725",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_732",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_745",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_752",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_764",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_768",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_772",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_779",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_786",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_793",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_800",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_807",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_814",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_821",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_828",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_835",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_842",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_849",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_856",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_863",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_870",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_877",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_890",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_897",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_909",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_913",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_917",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_924",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_931",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_938",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_945",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_952",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_959",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_966",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_973",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_980",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_987",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_994",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1001",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1008",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1015",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1022",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1035",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1042",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_1054",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_1058",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_1062",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1069",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1076",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1083",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1090",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1097",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1104",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1111",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1118",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1125",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1132",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1139",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1146",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1153",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1160",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1167",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1180",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1187",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_1199",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_1203",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_1207",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1214",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1221",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1228",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1235",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1242",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1249",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1256",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1263",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1270",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1277",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1284",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1291",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1298",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1305",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1312",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1325",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1332",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_1344",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_1348",
+                  "namespace": "hoodie.complex.complex_record.metadata",
+                  "fields": [
+                    {
+                      "name": "field_1352",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1359",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1366",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1373",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1380",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1387",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1394",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1401",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1408",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1415",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1422",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1429",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1436",
+                      "type": [
+                        "int",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1443",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1450",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1457",
+                      "type": [
+                        {
+                          "type": "array",
+                          "items": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1470",
+                      "type": [
+                        "double",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1477",
+                      "type": [
+                        "long",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            }
+          ]
+        },
+        "null"
+      ]
+    },
+    {
+      "name": "field_1494",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    {
+      "name": "field_1501",
+      "type": [
+        "double",
+        "null"
+      ]
+    },
+    {
+      "name": "field_1508",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    {
+      "name": "field_1515",
+      "type": [
+        "int",
+        "null"
+      ]
+    },
+    {
+      "name": "field_1522",
+      "type": [
+        "long",
+        "null"
+      ]
+    },
+    {
+      "name": "field_1529",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    {
+      "name": "field_1536",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    {
+      "name": "field_1543",
+      "type": [
+        {
+          "type": "record",
+          "name": "field_1547",
+          "namespace": "hoodie.complex.complex_record",
+          "fields": [
+            {
+              "name": "field_1551",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1558",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1565",
+              "type": [
+                "long",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1572",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1579",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          ]
+        },
+        "null"
+      ]
+    },
+    {
+      "name": "field_1591",
+      "type": [
+        {
+          "type": "record",
+          "name": "field_1595",
+          "namespace": "hoodie.complex.complex_record",
+          "fields": [
+            {
+              "name": "field_1599",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1606",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "field_1610",
+                  "namespace": "hoodie.complex.complex_record.FLAGS",
+                  "fields": [
+                    {
+                      "name": "field_1614",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    {
+                      "name": "field_1621",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  ]
+                },
+                "null"
+              ]
+            }
+          ]
+        },
+        "null"
+      ]
+    },
+    {
+      "name": "field_1638",
+      "type": [
+        {
+          "type": "record",
+          "name": "field_1642",
+          "namespace": "hoodie.complex.complex_record",
+          "fields": [
+            {
+              "name": "field_1646",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1653",
+              "type": [
+                {
+                  "type": "array",
+                  "items": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_1666",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1673",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1680",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1687",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1694",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1701",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1708",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1715",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1722",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1729",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1736",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1743",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1750",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          ]
+        },
+        "null"
+      ]
+    },
+    {
+      "name": "field_1762",
+      "type": [
+        {
+          "type": "record",
+          "name": "field_1766",
+          "namespace": "hoodie.complex.complex_record",
+          "fields": [
+            {
+              "name": "field_1770",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1777",
+              "type": [
+                {
+                  "type": "array",
+                  "items": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "null"
+              ]
+            },
+            {
+              "name": "field_1790",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1797",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1804",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1811",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1818",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1825",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1832",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1839",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1846",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1853",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1860",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "name": "field_1867",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          ]
+        },
+        "null"
+      ]
+    }
+  ]
+}

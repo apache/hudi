@@ -193,6 +193,7 @@ public class HoodieMultiTableDeltaStreamer {
       tableConfig.payloadClassName = globalConfig.payloadClassName;
       tableConfig.forceDisableCompaction = globalConfig.forceDisableCompaction;
       tableConfig.maxPendingCompactions = globalConfig.maxPendingCompactions;
+      tableConfig.maxPendingClustering = globalConfig.maxPendingClustering;
       tableConfig.minSyncIntervalSeconds = globalConfig.minSyncIntervalSeconds;
       tableConfig.transformerClassNames = globalConfig.transformerClassNames;
       tableConfig.commitOnErrors = globalConfig.commitOnErrors;
@@ -295,6 +296,11 @@ public class HoodieMultiTableDeltaStreamer {
         description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"
         + "outstanding compactions is less than this number")
     public Integer maxPendingCompactions = 5;
+
+    @Parameter(names = {"--max-pending-clustering"},
+        description = "Maximum number of outstanding inflight/requested clustering. Delta Sync will not happen unless"
+            + "outstanding clustering is less than this number")
+    public Integer maxPendingClustering = 5;
 
     @Parameter(names = {"--continuous"}, description = "Delta Streamer runs in continuous mode running"
         + " source-fetch -> Transform -> Hudi Write in loop")

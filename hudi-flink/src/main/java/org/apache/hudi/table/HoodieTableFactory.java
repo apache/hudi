@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -146,8 +147,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     conf.setString(FlinkOptions.TABLE_NAME.key(), tableName);
     // hoodie key about options
     setupHoodieKeyOptions(conf, table);
-    // cleaning options
-    setupCleaningOptions(conf);
+    // compaction options
+    setupCompactionOptions(conf);
+    // hive options
+    setupHiveOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toRowDataType().notNull().getLogicalType());
   }
@@ -186,9 +189,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   }
 
   /**
-   * Sets up the cleaning options from the table definition.
+   * Sets up the compaction options from the table definition.
    */
-  private static void setupCleaningOptions(Configuration conf) {
+  private static void setupCompactionOptions(Configuration conf) {
     int commitsToRetain = conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS);
     int minCommitsToKeep = conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS);
     if (commitsToRetain >= minCommitsToKeep) {
@@ -198,6 +201,22 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           FlinkOptions.CLEAN_RETAIN_COMMITS.key(), commitsToRetain);
       conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
       conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
+    }
+    if (conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED)
+        && !conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)
+        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
+      // if compaction schedule is on, tweak the target io to 500GB
+      conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
+    }
+  }
+
+  /**
+   * Sets up the hive options from the table definition.
+   * */
+  private static void setupHiveOptions(Configuration conf) {
+    if (!conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING)
+        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS)) {
+      conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS, MultiPartKeysValueExtractor.class.getName());
     }
   }
 

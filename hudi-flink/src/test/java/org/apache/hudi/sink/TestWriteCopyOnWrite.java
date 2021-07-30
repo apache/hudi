@@ -219,6 +219,29 @@ public class TestWriteCopyOnWrite {
   }
 
   @Test
+  public void testSubtaskFails() throws Exception {
+    // open the function and ingest data
+    funcWrapper.openFunction();
+    // no data written and triggers checkpoint fails,
+    // then we should revert the start instant
+
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+    funcWrapper.getNextEvent();
+
+    String instant1 = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
+    assertNotNull(instant1);
+
+    // fails the subtask
+    funcWrapper.subTaskFails(0);
+
+    String instant2 = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
+    assertNotEquals(instant2, instant1, "The previous instant should be rolled back when starting new instant");
+
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, null);
+  }
+
+  @Test
   public void testInsert() throws Exception {
     // open the function and ingest data
     funcWrapper.openFunction();
@@ -399,7 +422,7 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("3 records expect to flush out as a mini-batch",
+    assertThat("2 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
         is(2));
 
@@ -461,7 +484,7 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("3 records expect to flush out as a mini-batch",
+    assertThat("2 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
         is(2));
 
@@ -525,7 +548,7 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("3 records expect to flush out as a mini-batch",
+    assertThat("2 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
         is(2));
 

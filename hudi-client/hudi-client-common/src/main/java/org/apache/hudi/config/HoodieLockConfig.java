@@ -17,9 +17,11 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
@@ -55,100 +57,105 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 /**
  * Hoodie Configs for Locks.
  */
+@ConfigClassProperty(name = "Locks Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configs that control locking mechanisms required for concurrency control "
+        + " between writers to a Hudi table. Concurrency between Hudi's own table services "
+        + " are auto managed internally.")
 public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY)
       .defaultValue(DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS)
       .sinceVersion("0.8.0")
-      .withDocumentation("Parameter used in the exponential backoff retry policy. Stands for the Initial amount "
-          + "of time to wait between retries by lock provider client");
+      .withDocumentation("Initial amount of time to wait between retries to acquire locks, "
+          + " subsequent retries will exponentially backoff.");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY)
       .defaultValue(String.valueOf(5000L))
       .sinceVersion("0.8.0")
-      .withDocumentation("Parameter used in the exponential backoff retry policy. Stands for the maximum amount "
-          + "of time to wait between retries by lock provider client");
+      .withDocumentation("Maximum amount of time to wait between retries by lock provider client. This bounds"
+          + " the maximum delay from the exponential backoff. Currently used by ZK based lock provider only.");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY)
       .defaultValue(String.valueOf(10000L))
       .sinceVersion("0.8.0")
-      .withDocumentation("Amount of time to wait between retries from the hudi client");
+      .withDocumentation("Amount of time to wait between retries on the lock provider by the lock manager");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_NUM_RETRIES_PROP = ConfigProperty
       .key(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY)
       .defaultValue(DEFAULT_LOCK_ACQUIRE_NUM_RETRIES)
       .sinceVersion("0.8.0")
-      .withDocumentation("Maximum number of times to retry by lock provider client");
+      .withDocumentation("Maximum number of times to retry lock acquire, at each lock provider");
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY)
       .defaultValue(String.valueOf(0))
       .sinceVersion("0.8.0")
-      .withDocumentation("Maximum number of times to retry to acquire lock additionally from the hudi client");
+      .withDocumentation("Maximum number of times to retry to acquire lock additionally from the lock manager.");
 
   public static final ConfigProperty<Integer> LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP = ConfigProperty
       .key(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY)
       .defaultValue(60 * 1000)
       .sinceVersion("0.8.0")
-      .withDocumentation("");
+      .withDocumentation("Timeout in ms, to wait on an individual lock acquire() call, at the lock provider.");
 
   public static final ConfigProperty<String> FILESYSTEM_LOCK_PATH_PROP = ConfigProperty
       .key(FILESYSTEM_LOCK_PATH_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("");
+      .withDocumentation("For DFS based lock providers, path to store the locks under.");
 
   public static final ConfigProperty<String> HIVE_DATABASE_NAME_PROP = ConfigProperty
       .key(HIVE_DATABASE_NAME_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("The Hive database to acquire lock against");
+      .withDocumentation("For Hive based lock provider, the Hive database to acquire lock against");
 
   public static final ConfigProperty<String> HIVE_TABLE_NAME_PROP = ConfigProperty
       .key(HIVE_TABLE_NAME_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("The Hive table under the hive database to acquire lock against");
+      .withDocumentation("For Hive based lock provider, the Hive table to acquire lock against");
 
   public static final ConfigProperty<String> HIVE_METASTORE_URI_PROP = ConfigProperty
       .key(HIVE_METASTORE_URI_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("");
+      .withDocumentation("For Hive based lock provider, the Hive metastore URI to acquire locks against.");
 
   public static final ConfigProperty<String> ZK_BASE_PATH_PROP = ConfigProperty
       .key(ZK_BASE_PATH_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("The base path on Zookeeper under which to create a ZNode to acquire the lock. "
-          + "This should be common for all jobs writing to the same table");
+      .withDocumentation("The base path on Zookeeper under which to create lock related ZNodes. "
+          + "This should be same for all concurrent writers to the same table");
 
   public static final ConfigProperty<Integer> ZK_SESSION_TIMEOUT_MS_PROP = ConfigProperty
       .key(ZK_SESSION_TIMEOUT_MS_PROP_KEY)
       .defaultValue(DEFAULT_ZK_SESSION_TIMEOUT_MS)
       .sinceVersion("0.8.0")
-      .withDocumentation("How long to wait after losing a connection to ZooKeeper before the session is expired");
+      .withDocumentation("Timeout in ms, to wait after losing connection to ZooKeeper, before the session is expired");
 
   public static final ConfigProperty<Integer> ZK_CONNECTION_TIMEOUT_MS_PROP = ConfigProperty
       .key(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY)
       .defaultValue(DEFAULT_ZK_CONNECTION_TIMEOUT_MS)
       .sinceVersion("0.8.0")
-      .withDocumentation("How long to wait when connecting to ZooKeeper before considering the connection a failure");
+      .withDocumentation("Timeout in ms, to wait for establishing connection with Zookeeper.");
 
   public static final ConfigProperty<String> ZK_CONNECT_URL_PROP = ConfigProperty
       .key(ZK_CONNECT_URL_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("Set the list of comma separated servers to connect to");
+      .withDocumentation("Zookeeper URL to connect to.");
 
   public static final ConfigProperty<String> ZK_PORT_PROP = ConfigProperty
       .key(ZK_PORT_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
-      .withDocumentation("The connection port to be used for Zookeeper");
+      .withDocumentation("Zookeeper port to connect to.");
 
   public static final ConfigProperty<String> ZK_LOCK_KEY_PROP = ConfigProperty
       .key(ZK_LOCK_KEY_PROP_KEY)

@@ -27,6 +27,8 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
@@ -35,6 +37,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
+import org.apache.hudi.sink.transform.Transformer;
+import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.avro.Schema;
@@ -49,6 +53,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -162,9 +168,10 @@ public class StreamerUtil {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
+          .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))
           .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
-          .setPartitionColumns(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
+          .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
           .setPreCombineField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
           .setTimelineLayoutVersion(1)
           .initTable(hadoopConf, basePath);
@@ -253,6 +260,18 @@ public class StreamerUtil {
       return (newTimestamp - oldTimestamp) / 1000;
     } catch (ParseException e) {
       throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);
+    }
+  }
+
+  public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
+    try {
+      List<Transformer> transformers = new ArrayList<>();
+      for (String className : Option.ofNullable(classNames).orElse(Collections.emptyList())) {
+        transformers.add(ReflectionUtils.loadClass(className));
+      }
+      return transformers.isEmpty() ? Option.empty() : Option.of(new ChainedTransformer(transformers));
+    } catch (Throwable e) {
+      throw new IOException("Could not load transformer class(es) " + classNames, e);
     }
   }
 }

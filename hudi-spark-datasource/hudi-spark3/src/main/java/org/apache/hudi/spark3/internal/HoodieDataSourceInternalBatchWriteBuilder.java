@@ -26,6 +26,8 @@ import org.apache.spark.sql.connector.write.BatchWrite;
 import org.apache.spark.sql.connector.write.WriteBuilder;
 import org.apache.spark.sql.types.StructType;
 
+import java.util.Map;
+
 /**
  * Implementation of {@link WriteBuilder} for datasource "hudi.spark3.internal" to be used in datasource implementation
  * of bulk insert.
@@ -37,21 +39,26 @@ public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
   private final StructType structType;
   private final SparkSession jss;
   private final Configuration hadoopConfiguration;
+  private final Map<String, String> properties;
+  private final boolean populateMetaFields;
   private final boolean arePartitionRecordsSorted;
 
   public HoodieDataSourceInternalBatchWriteBuilder(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-      SparkSession jss, Configuration hadoopConfiguration, boolean arePartitionRecordsSorted) {
+      SparkSession jss, Configuration hadoopConfiguration, Map<String, String> properties, boolean populateMetaFields,
+                                                   boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.jss = jss;
     this.hadoopConfiguration = hadoopConfiguration;
+    this.properties = properties;
+    this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
   }
 
   @Override
   public BatchWrite buildForBatch() {
     return new HoodieDataSourceInternalBatchWrite(instantTime, writeConfig, structType, jss,
-        hadoopConfiguration, arePartitionRecordsSorted);
+        hadoopConfiguration, properties, populateMetaFields, arePartitionRecordsSorted);
   }
 }

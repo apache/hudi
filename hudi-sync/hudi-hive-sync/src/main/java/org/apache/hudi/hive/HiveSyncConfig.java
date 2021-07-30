@@ -70,8 +70,12 @@ public class HiveSyncConfig implements Serializable {
           + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
 
+  @Deprecated
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
   public Boolean useJdbc = true;
+
+  @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql")
+  public String syncMode;
 
   @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
   public Boolean autoCreateDatabase = true;
@@ -110,6 +114,12 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
   public Integer batchSyncNum = 1000;
 
+  @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
+  public Boolean syncAsSparkDataSourceTable = true;
+
+  @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
+  public int sparkSchemaLengthThreshold = 4000;
+
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -131,6 +141,8 @@ public class HiveSyncConfig implements Serializable {
     newConfig.serdeProperties = cfg.serdeProperties;
     newConfig.createManagedTable = cfg.createManagedTable;
     newConfig.batchSyncNum = cfg.batchSyncNum;
+    newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
+    newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
     return newConfig;
   }
 
@@ -160,6 +172,8 @@ public class HiveSyncConfig implements Serializable {
       + ", supportTimestamp=" + supportTimestamp
       + ", decodePartition=" + decodePartition
       + ", createManagedTable=" + createManagedTable
+      + ", syncAsSparkDataSourceTable=" + syncAsSparkDataSourceTable
+      + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + '}';
   }
 }

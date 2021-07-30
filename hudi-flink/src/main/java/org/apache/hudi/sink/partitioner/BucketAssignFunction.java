@@ -123,6 +123,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(
         getRuntimeContext().getIndexOfThisSubtask(),
+        getRuntimeContext().getMaxNumberOfParallelSubtasks(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
         WriteOperationType.isOverwrite(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION))),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
@@ -194,9 +195,10 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     } else {
       location = getNewRecordLocation(partitionPath);
       this.context.setCurrentKey(recordKey);
-      if (isChangingRecords) {
-        updateIndexState(partitionPath, location);
-      }
+    }
+    // always refresh the index
+    if (isChangingRecords) {
+      updateIndexState(partitionPath, location);
     }
     record.setCurrentLocation(location);
     out.collect((O) record);

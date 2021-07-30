@@ -1,0 +1,89 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# For more configuration details:
+# https://docs.codecov.io/docs/codecov-yaml
+
+# Check if this file is valid by running in bash:
+# curl -X POST --data-binary @.codecov.yml https://codecov.io/validate
+
+coverage:
+  precision: 2
+  round: down
+  range: "50...100"
+  status:
+    project: # settings affecting project coverage
+      enabled: no
+
+    # do not run coverage on patch nor changes
+    patch: no
+    changes: no
+
+# Ignoring Paths
+# --------------
+# which folders/files to ignore
+ignore:
+  - "hudi-common/src/main/java/org/apache/hudi/avro/model/*"
+  - "hudi-common/src/main/java/org/apache/hudi/avro/MercifulJsonConverter.java"
+  - "hudi-common/src/main/java/org/apache/hudi/common/HoodieJsonPayload"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCleaner.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactionAdminTool.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieSnapshotCopier.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieWithTimelineServer.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/UpgradePayloadFromUberToApache.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/perf/TimelineServerPerf.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HDFSParquetImporter.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HiveIncrementalPuller.java"
+  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/adhoc/UpgradePayloadFromUberToApache.java"
+  - "hudi-client/src/main/java/org/apache/hudi/metrics/JmxMetricsReporter.java"
+  - "hudi-client/src/main/java/org/apache/hudi/metrics/JmxReporterServer.java"
+  - "hudi-client/src/main/java/org/apache/hudi/metrics/MetricsGraphiteReporter.java"
+  - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/HoodieInputFormat.java"
+  - "hudi-hadoop-mr/src/main/java/com/uber/hoodie/hadoop/realtime/HoodieRealtimeInputFormat.java"
+
+comment: false
+
+flags:
+  hudicli:
+    paths:
+      - hudi-cli/src/main/
+  hudiclient:
+    paths:
+      - hudi-client/src/main/
+  hudicommon:
+    paths:
+      - hudi-common/src/main/
+  hudiexamples:
+    paths:
+      - hudi-examples/src/main/
+  hudihadoopmr:
+    paths:
+      - hudi-hadoop-mr/src/main/
+  hudihivesync:
+    paths:
+      - hudi-hive-sync/src/main/
+  hudiintegtest:
+    paths:
+      - hudi-integ-test/src/main/
+  hudispark:
+    paths:
+      - hudi-spark/src/main/
+  huditimelineservice:
+    paths:
+      - hudi-timeline-service/src/main/
+  hudiutilities:
+    paths:
+      - hudi-utilities/src/main/

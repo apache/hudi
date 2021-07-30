@@ -18,6 +18,9 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,7 +46,11 @@ import java.util.Set;
  *
  * <p>It has the options for Hoodie table read and write. It also defines some utilities.
  */
-public class FlinkOptions {
+@ConfigClassProperty(name = "Flink Options",
+    groupName = ConfigGroups.Names.FLINK_SQL,
+    description = "Flink jobs using the SQL can be configured through the options in WITH clause."
+        + " The actual datasource level configs are listed below.")
+public class FlinkOptions extends HoodieConfig {
   private FlinkOptions() {
   }
 
@@ -280,6 +287,18 @@ public class FlinkOptions {
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
 
+  public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
+      .key("write.index_bootstrap.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do index bootstrap, default is 4");
+
+  public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
+      .key("write.bucket_assign.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do bucket assign, default is 4");
+
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
       .intType()
@@ -292,6 +311,12 @@ public class FlinkOptions {
       .defaultValue(1024D) // 1GB
       .withDescription("Maximum memory in MB for a write task, when the threshold hits,\n"
           + "it flushes the max size data bucket to avoid OOM, default 1GB");
+
+  public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
+      .key("write.rate.limit")
+      .longType()
+      .defaultValue(0L) // default no limit
+      .withDescription("Write record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)");
 
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size")
@@ -324,6 +349,24 @@ public class FlinkOptions {
       .defaultValue(-1L) // default at least once
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
+
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION = ConfigOptions
+      .key("write.bulk_insert.shuffle_by_partition")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to shuffle the inputs by partition path for bulk insert tasks, default true");
+
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_BY_PARTITION = ConfigOptions
+      .key("write.bulk_insert.sort_by_partition")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to sort the inputs by partition path for bulk insert tasks, default true");
+
+  public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
+      .key("write.sort.memory")
+      .intType()
+      .defaultValue(128)
+      .withDescription("Sort memory in MB, default 128MB");
 
   // ------------------------------------------------------------------------
   //  Compaction Options
@@ -436,6 +479,12 @@ public class FlinkOptions {
       .stringType()
       .defaultValue("PARQUET")
       .withDescription("File format for hive sync, default 'PARQUET'");
+
+  public static final ConfigOption<String> HIVE_SYNC_MODE = ConfigOptions
+      .key("hive_sync.mode")
+      .stringType()
+      .defaultValue("jdbc")
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'");
 
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
       .key("hive_sync.username")
@@ -562,7 +611,9 @@ public class FlinkOptions {
     return options.keySet().stream().anyMatch(k -> k.startsWith(PROPERTIES_PREFIX));
   }
 
-  /** Creates a new configuration that is initialized with the options of the given map. */
+  /**
+   * Creates a new configuration that is initialized with the options of the given map.
+   */
   public static Configuration fromMap(Map<String, String> map) {
     final Configuration configuration = new Configuration();
     map.forEach(configuration::setString);

@@ -47,6 +47,10 @@ public class RowDataProjection {
     return new RowDataProjection(types, positions);
   }
 
+  public static RowDataProjection instance(LogicalType[] types, int[] positions) {
+    return new RowDataProjection(types, positions);
+  }
+
   /**
    * Returns the projected row data.
    */
@@ -57,5 +61,17 @@ public class RowDataProjection {
       genericRowData.setField(i, val);
     }
     return genericRowData;
+  }
+
+  /**
+   * Returns the projected values array.
+   */
+  public Object[] projectAsValues(RowData rowData) {
+    Object[] values = new Object[this.fieldGetters.length];
+    for (int i = 0; i < this.fieldGetters.length; i++) {
+      final Object val = this.fieldGetters[i].getFieldOrNull(rowData);
+      values[i] = val;
+    }
+    return values;
   }
 }

@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.AppendResult;
@@ -62,6 +63,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -108,6 +110,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   protected final Map<HeaderMetadataType, String> header = new HashMap<>();
   private SizeEstimator<HoodieRecord> sizeEstimator;
 
+  private Properties recordProperties = new Properties();
+
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
@@ -115,6 +119,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     this.recordItr = recordItr;
     sizeEstimator = new DefaultSizeEstimator();
     this.statuses = new ArrayList<>();
+    this.recordProperties.putAll(config.getProps());
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -189,8 +194,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
     Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
     try {
-      Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(tableSchema,
-          config.getProps());
+      // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
+      // Whether it is a update or insert record.
+      boolean isUpdateRecord = isUpdateRecord(hoodieRecord);
+      recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
+      Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
       if (avroRecord.isPresent()) {
         if (avroRecord.get().equals(IGNORE_RECORD)) {
           return avroRecord;
@@ -199,9 +207,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
         String seqId =
             HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
-        HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
-            hoodieRecord.getPartitionPath(), fileId);
-        HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
+        if (config.populateMetaFields()) {
+          HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
+              hoodieRecord.getPartitionPath(), fileId);
+          HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
+        }
         if (isUpdateRecord(hoodieRecord)) {
           updatedRecordsWritten++;
         } else {

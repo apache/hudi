@@ -114,6 +114,12 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written.")
   public Boolean commitOnErrors = false;
 
+  @Parameter(names = {"--transformer-class"},
+      description = "A subclass or a list of subclasses of org.apache.hudi.sink.transform.Transformer"
+          + ". Allows transforming raw source DataStream to a target DataStream (conforming to target schema) before "
+          + "writing. Default : Not set. Pass a comma-separated list of subclass names to chain the transformations.")
+  public List<String> transformerClassNames = null;
+
   /**
    * Flink checkpoint interval.
    */
@@ -122,6 +128,12 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
+
+  @Parameter(names = {"--index-bootstrap-num"}, description = "Parallelism of tasks that do bucket assign, default is 4.")
+  public Integer indexBootstrapNum = 4;
+
+  @Parameter(names = {"--bucket-assign-num"}, description = "Parallelism of tasks that do bucket assign, default is 4.")
+  public Integer bucketAssignNum = 4;
 
   @Parameter(names = {"--write-task-num"}, description = "Parallelism of tasks that do actual write, default is 4.")
   public Integer writeTaskNum = 4;
@@ -236,6 +248,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--hive-sync-file-format"}, description = "File format for hive sync, default 'PARQUET'")
   public String hiveSyncFileFormat = "PARQUET";
 
+  @Parameter(names = {"--hive-sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'")
+  public String hiveSyncMode = "jdbc";
+
   @Parameter(names = {"--hive-sync-username"}, description = "Username for hive sync, default 'hive'")
   public String hiveSyncUsername = "hive";
 
@@ -304,6 +319,8 @@ public class FlinkStreamerConfig extends Configuration {
     } else {
       conf.setString(FlinkOptions.KEYGEN_TYPE, config.keygenType);
     }
+    conf.setInteger(FlinkOptions.INDEX_BOOTSTRAP_TASKS, config.indexBootstrapNum);
+    conf.setInteger(FlinkOptions.BUCKET_ASSIGN_TASKS, config.bucketAssignNum);
     conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
     conf.setString(FlinkOptions.PARTITION_DEFAULT_NAME, config.partitionDefaultName);
     conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, config.indexBootstrapEnabled);
@@ -335,6 +352,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.HIVE_SYNC_DB, config.hiveSyncDb);
     conf.setString(FlinkOptions.HIVE_SYNC_TABLE, config.hiveSyncTable);
     conf.setString(FlinkOptions.HIVE_SYNC_FILE_FORMAT, config.hiveSyncFileFormat);
+    conf.setString(FlinkOptions.HIVE_SYNC_MODE, config.hiveSyncMode);
     conf.setString(FlinkOptions.HIVE_SYNC_USERNAME, config.hiveSyncUsername);
     conf.setString(FlinkOptions.HIVE_SYNC_PASSWORD, config.hiveSyncPassword);
     conf.setString(FlinkOptions.HIVE_SYNC_JDBC_URL, config.hiveSyncJdbcUrl);

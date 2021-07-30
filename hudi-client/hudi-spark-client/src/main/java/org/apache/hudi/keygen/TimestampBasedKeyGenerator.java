@@ -18,11 +18,14 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
@@ -64,9 +67,23 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public String getPartitionPath(Row row) {
-    Object fieldVal = null;
     buildFieldPositionMapIfNeeded(row.schema());
     Object partitionPathFieldVal = RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathPositions.get(getPartitionPathFields().get(0)));
+    return getTimestampBasedPartitionPath(partitionPathFieldVal);
+  }
+
+  @Override
+  public String getPartitionPath(InternalRow internalRow, StructType structType) {
+    buildFieldDataTypesMapIfNeeded(structType);
+    validatePartitionFieldsForInternalRow();
+    Object partitionPathFieldVal = RowKeyGeneratorHelper.getFieldValFromInternalRow(internalRow,
+        partitionPathPositions.get(getPartitionPathFields().get(0)).get(0),
+        partitionPathDataTypes.get(getPartitionPathFields().get(0)).get(0));
+    return getTimestampBasedPartitionPath(partitionPathFieldVal);
+  }
+
+  private String getTimestampBasedPartitionPath(Object partitionPathFieldVal) {
+    Object fieldVal = null;
     try {
       if (partitionPathFieldVal == null || partitionPathFieldVal.toString().contains(DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
           || partitionPathFieldVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {

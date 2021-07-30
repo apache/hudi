@@ -18,9 +18,6 @@
 
 package org.apache.hudi.client;
 
-import com.codahale.metrics.Timer;
-import java.util.stream.Stream;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -70,6 +67,9 @@ import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
+
+import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -81,6 +81,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
@@ -130,7 +131,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   public AbstractHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                                    Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-    this.metrics = new HoodieMetrics(config, config.getTableName());
+    this.metrics = new HoodieMetrics(config);
     this.index = createIndex(writeConfig);
     this.txnManager = new TransactionManager(config, fs);
   }
@@ -172,6 +173,11 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds) {
+    // Skip the empty commit if not allowed
+    if (!config.allowEmptyCommit() && stats.isEmpty()) {
+      return true;
+    }
+    LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
@@ -184,6 +190,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
+      releaseResources();
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
@@ -197,7 +204,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       if (null == commitCallback) {
         commitCallback = HoodieCommitCallbackFactory.create(config);
       }
-      commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath()));
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath(), stats));
     }
     return true;
   }
@@ -673,8 +680,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   /**
-   * Provides a new commit time for a write operation (insert/update/delete).
-   *
+   * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) without specified action.
    * @param instantTime Instant time to be generated
    */
   public void startCommitWithTime(String instantTime) {
@@ -683,7 +689,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   /**
-   * Completes a new commit time for a write operation (insert/update/delete) with specified action.
+   * Completes a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
   public void startCommitWithTime(String instantTime, String actionType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
@@ -1035,6 +1041,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
     }
+  }
+
+  /**
+   * Called after each write, to release any resources used.
+   */
+  protected void releaseResources() {
+    // do nothing here
   }
 
   @Override

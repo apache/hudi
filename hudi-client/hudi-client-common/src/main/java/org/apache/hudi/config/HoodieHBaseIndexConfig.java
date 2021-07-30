@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
@@ -27,6 +29,11 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
+@ConfigClassProperty(name = "HBase Index Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control indexing behavior "
+        + "(when HBase based indexing is enabled), which tags incoming "
+        + "records as either inserts or updates to older records.")
 public class HoodieHBaseIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> HBASE_ZKQUORUM_PROP = ConfigProperty
@@ -48,7 +55,8 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> HBASE_GET_BATCH_SIZE_PROP = ConfigProperty
       .key("hoodie.index.hbase.get.batch.size")
       .defaultValue(100)
-      .withDocumentation("");
+      .withDocumentation("Controls the batch size for performing gets against HBase. "
+          + "Batching improves throughput, by saving round trips.");
 
   public static final ConfigProperty<String> HBASE_ZK_ZNODEPARENT = ConfigProperty
       .key("hoodie.index.hbase.zknode.path")
@@ -59,12 +67,14 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> HBASE_PUT_BATCH_SIZE_PROP = ConfigProperty
       .key("hoodie.index.hbase.put.batch.size")
       .defaultValue(100)
-      .withDocumentation("");
+      .withDocumentation("Controls the batch size for performing puts against HBase. "
+          + "Batching improves throughput, by saving round trips.");
 
   public static final ConfigProperty<String> HBASE_INDEX_QPS_ALLOCATOR_CLASS = ConfigProperty
       .key("hoodie.index.hbase.qps.allocator.class")
       .defaultValue(DefaultHBaseQPSResourceAllocator.class.getName())
-      .withDocumentation("Property to set which implementation of HBase QPS resource allocator to be used");
+      .withDocumentation("Property to set which implementation of HBase QPS resource allocator to be used, which"
+          + "controls the batching rate dynamically.");
 
   public static final ConfigProperty<String> HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP = ConfigProperty
       .key("hoodie.index.hbase.put.batch.size.autocompute")
@@ -90,17 +100,17 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = ConfigProperty
       .key("hoodie.index.hbase.dynamic_qps")
       .defaultValue(false)
-      .withDocumentation("Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on volume");
+      .withDocumentation("Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.");
 
   public static final ConfigProperty<String> HBASE_MIN_QPS_FRACTION_PROP = ConfigProperty
       .key("hoodie.index.hbase.min.qps.fraction")
       .noDefaultValue()
-      .withDocumentation("Min for HBASE_QPS_FRACTION_PROP to stabilize skewed volume workloads");
+      .withDocumentation("Minimum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads");
 
   public static final ConfigProperty<String> HBASE_MAX_QPS_FRACTION_PROP = ConfigProperty
       .key("hoodie.index.hbase.max.qps.fraction")
       .noDefaultValue()
-      .withDocumentation("Max for HBASE_QPS_FRACTION_PROP to stabilize skewed volume workloads");
+      .withDocumentation("Maximum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads");
 
   public static final ConfigProperty<Integer> HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS = ConfigProperty
       .key("hoodie.index.hbase.desired_puts_time_in_secs")
@@ -120,17 +130,18 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS = ConfigProperty
       .key("hoodie.index.hbase.zk.session_timeout_ms")
       .defaultValue(60 * 1000)
-      .withDocumentation("");
+      .withDocumentation("Session timeout value to use for Zookeeper failure detection, for the HBase client."
+          + "Lower this value, if you want to fail faster.");
 
   public static final ConfigProperty<Integer> HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS = ConfigProperty
       .key("hoodie.index.hbase.zk.connection_timeout_ms")
       .defaultValue(15 * 1000)
-      .withDocumentation("");
+      .withDocumentation("Timeout to use for establishing connection with zookeeper, from HBase client.");
 
   public static final ConfigProperty<String> HBASE_ZK_PATH_QPS_ROOT = ConfigProperty
       .key("hoodie.index.hbase.zkpath.qps_root")
       .defaultValue("/QPS_ROOT")
-      .withDocumentation("");
+      .withDocumentation("chroot in zookeeper, to use for all qps allocation co-ordination.");
 
   public static final ConfigProperty<Boolean> HBASE_INDEX_UPDATE_PARTITION_PATH = ConfigProperty
       .key("hoodie.hbase.index.update.partition.path")

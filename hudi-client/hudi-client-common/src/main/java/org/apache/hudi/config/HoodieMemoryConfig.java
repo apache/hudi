@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -32,6 +34,10 @@ import java.util.Properties;
  * Memory related config.
  */
 @Immutable
+@ConfigClassProperty(name = "Memory Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Controls memory usage for compaction "
+        + "and merges, performed internally by Hudi.")
 public class HoodieMemoryConfig extends HoodieConfig {
 
   // Default max memory fraction during hash-merge, excess spills to disk
@@ -59,22 +65,22 @@ public class HoodieMemoryConfig extends HoodieConfig {
   public static final ConfigProperty<Long> MAX_MEMORY_FOR_MERGE_PROP = ConfigProperty
       .key("hoodie.memory.merge.max.size")
       .defaultValue(DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-      .withDocumentation("Property to set the max memory for merge");
+      .withDocumentation("Maximum amount of memory used for merge operations, before spilling to local storage.");
 
   public static final ConfigProperty<String> MAX_MEMORY_FOR_COMPACTION_PROP = ConfigProperty
       .key("hoodie.memory.compaction.max.size")
       .noDefaultValue()
-      .withDocumentation("Property to set the max memory for compaction");
+      .withDocumentation("Maximum amount of memory used for compaction operations, before spilling to local storage.");
 
   public static final ConfigProperty<Integer> MAX_DFS_STREAM_BUFFER_SIZE_PROP = ConfigProperty
       .key("hoodie.memory.dfs.buffer.max.size")
       .defaultValue(16 * 1024 * 1024)
-      .withDocumentation("Property to set the max memory for dfs inputstream buffer size");
+      .withDocumentation("Property to control the max memory for dfs input stream buffer size");
 
   public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH_PROP = ConfigProperty
       .key("hoodie.memory.spillable.map.path")
       .defaultValue("/tmp/")
-      .withDocumentation("Default file path prefix for spillable file");
+      .withDocumentation("Default file path prefix for spillable map");
 
   public static final ConfigProperty<Double> WRITESTATUS_FAILURE_FRACTION_PROP = ConfigProperty
       .key("hoodie.memory.writestatus.failure.fraction")

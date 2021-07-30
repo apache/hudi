@@ -29,6 +29,8 @@ import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.scalatest.Assertions.fail
@@ -259,6 +261,8 @@ class TestDataSourceDefaults {
       val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]
       getKey(genericRecord).getPartitionPath
     }
+
+    override def getPartitionPath(internalRow: InternalRow, structType: StructType): String = null
   }
 
   @Test def testComplexKeyGenerator() = {

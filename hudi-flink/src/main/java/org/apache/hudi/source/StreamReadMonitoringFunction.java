@@ -203,9 +203,10 @@ public class StreamReadMonitoringFunction
         instantRange = InstantRange.getInstance(specifiedStart, instantToIssue.getTimestamp(),
             InstantRange.RangeType.CLOSE_CLOSE);
       } else {
-        // first time consume and no start commit,
-        // would consume all the snapshot data PLUS incremental data set
-        instantRange = null;
+        // first time consume and no start commit, consumes the latest incremental data set.
+        HoodieInstant latestCommitInstant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+        instantRange = InstantRange.getInstance(latestCommitInstant.getTimestamp(), instantToIssue.getTimestamp(),
+            InstantRange.RangeType.CLOSE_CLOSE);
       }
     } else {
       LOG.info("No new instant found for the table under path " + path + ", skip reading");

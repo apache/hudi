@@ -43,7 +43,7 @@ import static org.apache.hudi.util.StreamerUtil.flinkConf2TypedProperties;
 /**
  * Function that transforms RowData to HoodieRecord.
  */
-public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?>>
+public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
     extends RichMapFunction<I, O> {
   /**
    * Row type of the input.
