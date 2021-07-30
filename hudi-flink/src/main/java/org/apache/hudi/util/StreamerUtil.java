@@ -324,5 +324,4 @@ public class StreamerUtil {
       throw new IOException("Could not load transformer class(es) " + classNames, e);
     }
   }
-
 }
