@@ -149,6 +149,10 @@
                   <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.htrace:htrace-core</include>
                   <include>commons-codec:commons-codec</include>
+
+                  <include>com.amazonaws:dynamodb-lock-client</include>
+                  <include>com.amazonaws:aws-java-sdk-dynamodb</include>
+                  <include>com.amazonaws:aws-java-sdk-core</include>
                 </includes>
               </artifactSet>
               <relocations>

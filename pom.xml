@@ -83,6 +83,7 @@
     <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
+    <maven-docker-plugin.version>0.37.0</maven-docker-plugin.version>
 
     <java.version>1.8</java.version>
     <fasterxml.version>2.6.7</fasterxml.version>
@@ -140,6 +141,7 @@
     <skipITs>${skipTests}</skipITs>
     <skip.hudi-spark2.unit.tests>${skipTests}</skip.hudi-spark2.unit.tests>
     <skip.hudi-spark3.unit.tests>${skipTests}</skip.hudi-spark3.unit.tests>
+    <skipDocker>${skipTests}</skipDocker>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
@@ -158,6 +160,9 @@
     <aws.sdk.version>1.12.22</aws.sdk.version>
     <proto.version>3.17.3</proto.version>
     <protoc.version>3.1.0</protoc.version>
+    <dynamodb.lockclient.version>1.1.0</dynamodb.lockclient.version>
+    <dynamodb-local.port>8000</dynamodb-local.port>
+    <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
   </properties>
 
   <scm>
@@ -330,6 +335,14 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
         <version>${jacoco.version}</version>
+      </plugin>
+      <plugin>
+        <groupId>io.fabric8</groupId>
+        <artifactId>docker-maven-plugin</artifactId>
+        <version>${maven-docker-plugin.version}</version>
+        <configuration>
+          <skip>${skipDocker}</skip>
+        </configuration>
       </plugin>
     </plugins>
 
@@ -1269,6 +1282,9 @@
               <includes>
                 <include>**/IT*.java</include>
               </includes>
+              <systemPropertyVariables>
+                <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
+              </systemPropertyVariables>
             </configuration>
             <executions>
               <execution>

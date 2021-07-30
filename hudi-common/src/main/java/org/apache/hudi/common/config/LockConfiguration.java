@@ -74,6 +74,21 @@ public class LockConfiguration implements Serializable {
 
   public static final String ZK_LOCK_KEY_PROP_KEY = ZOOKEEPER_BASED_LOCK_PROPERTY_PREFIX + "lock_key";
 
+  // configs for DynamoDb based locks
+  public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LOCK_PREFIX + "dynamodb.";
+
+  public static final String DYNAMODB_TABLE_NAME_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table";
+
+  public static final String DYNAMODB_PARTITION_KEY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "partition_key";
+
+  public static final String DYNAMODB_REGION_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region";
+
+  public static final String DYNAMODB_BILLING_MODE_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode";
+
+  public static final String DYNAMODB_READ_CAPACITY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "read_capacity";
+
+  public static final String DYNAMODB_WRITE_CAPACITY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "write_capacity";
+
   /** @deprecated Use {@link #LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY} */
   @Deprecated
   public static final String LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
