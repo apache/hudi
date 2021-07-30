@@ -86,6 +86,7 @@ public class HoodieRowCreateHandle implements Serializable {
         writeConfig.getWriteStatusFailureFraction());
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
+    writeStatus.setStat(new HoodieWriteStat());
     try {
       HoodiePartitionMetadata partitionMetadata =
           new HoodiePartitionMetadata(
@@ -144,7 +145,7 @@ public class HoodieRowCreateHandle implements Serializable {
    */
   public HoodieInternalWriteStatus close() throws IOException {
     fileWriter.close();
-    HoodieWriteStat stat = new HoodieWriteStat();
+    HoodieWriteStat stat = writeStatus.getStat();
     stat.setPartitionPath(partitionPath);
     stat.setNumWrites(writeStatus.getTotalRecords());
     stat.setNumDeletes(0);
@@ -159,7 +160,6 @@ public class HoodieRowCreateHandle implements Serializable {
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
     runtimeStats.setTotalCreateTime(currTimer.endTimer());
     stat.setRuntimeStats(runtimeStats);
-    writeStatus.setStat(stat);
     return writeStatus;
   }
 
