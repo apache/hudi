@@ -1019,7 +1019,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
         }
         case HoodieClusteringJob.EXECUTE: {
           assertNotNull(exception);
-          assertTrue(exception instanceof RuntimeException);
+          assertEquals(exception.getMessage(), "--instant-time couldn't be null when executing clustering plan.");
           return true;
         }
         default:
