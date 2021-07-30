@@ -51,15 +51,15 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass();
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer.sql",
+            "src/src/test/resources/delta-streamer-config/sql-file-transformer.sql",
         UtilitiesTestBase.dfs,
         UtilitiesTestBase.dfsBasePath + "/sql-file-transformer.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer-invalid.sql",
+            "src/src/test/resources/delta-streamer-config/sql-file-transformer-invalid.sql",
         UtilitiesTestBase.dfs,
         UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-invalid.sql");
     UtilitiesTestBase.Helpers.copyToDFS(
-        "delta-streamer-config/sql-file-transformer-empty.sql",
+            "src/src/test/resources/delta-streamer-config/sql-file-transformer-empty.sql",
         UtilitiesTestBase.dfs,
         UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-empty.sql");
   }

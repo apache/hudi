@@ -309,7 +309,7 @@ public class UtilitiesTestBase {
     }
 
     public static TypedProperties setupSchemaOnDFS() throws IOException {
-      return setupSchemaOnDFS("delta-streamer-config", "source.avsc");
+      return setupSchemaOnDFS("src/src/test/resources/delta-streamer-config", "source.avsc");
     }
 
     public static TypedProperties setupSchemaOnDFS(String scope, String filename) throws IOException {
