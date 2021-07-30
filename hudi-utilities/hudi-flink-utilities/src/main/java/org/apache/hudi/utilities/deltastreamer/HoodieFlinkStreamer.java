@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.streamer;
+package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -30,11 +30,12 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.util.AvroSchemaConverter;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkStreamerUtil;
 
 import com.beust.jcommander.JCommander;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -49,6 +50,7 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hudi.util.StreamerUtil;
 
 import java.util.Properties;
 
@@ -78,11 +80,11 @@ public class HoodieFlinkStreamer {
       env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
     }
 
-    Properties kafkaProps = StreamerUtil.appendKafkaProps(cfg);
+    Properties kafkaProps = FlinkStreamerUtil.appendKafkaProps(cfg);
 
     // Read from kafka source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
+        (RowType) AvroSchemaConverter.convertToDataType(FlinkStreamerUtil.getSourceSchema(cfg))
             .getLogicalType();
 
     Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
