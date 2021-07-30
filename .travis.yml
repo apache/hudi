@@ -11,9 +11,6 @@ env:
     - GIT_BRANCH="asf-site"
     - DOCS_ROOT="`pwd`/website"
 
-cache:
-  yarn: true
-
 before_install:
   - if [ "$(git show -s --format=%ae)" = "${GIT_EMAIL}" ]; then echo "avoid recursion, ignore ..."; exit 0; fi
   - git config --global user.name ${GIT_USER}
