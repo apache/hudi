@@ -194,7 +194,7 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 23. ["New features from Apache hudi in Amazon EMR"](https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-available-in-amazon-emr/)
 24. ["Build a data lake using amazon kinesis data stream for amazon dynamodb and apache hudi"](https://aws.amazon.com/blogs/big-data/build-a-data-lake-using-amazon-kinesis-data-streams-for-amazon-dynamodb-and-apache-hudi/) - Amazon AWS
 25. ["Amazon Athena expands Apache Hudi support"](https://aws.amazon.com/about-aws/whats-new/2021/07/amazon-athena-expands-apache-hudi-support/) - Amazon AWS
-26. ["Part1: Query apache hudi dataset in an amazon S3 data lake with amazon athena : Read optimized queries"](part-1-query-an-apache-hudi-dataset-in-an-amazon-s3-data-lake-with-amazon-athena-part-1-read-optimized-queries/)
+26. ["Part1: Query apache hudi dataset in an amazon S3 data lake with amazon athena : Read optimized queries"](https://aws.amazon.com/blogs/big-data/part-1-query-an-apache-hudi-dataset-in-an-amazon-s3-data-lake-with-amazon-athena-part-1-read-optimized-queries/) - Amazon AWS
 
 ## Powered by
 
