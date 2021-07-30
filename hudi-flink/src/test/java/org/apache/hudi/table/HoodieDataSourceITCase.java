@@ -569,7 +569,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.OPERATION.key(), "bulk_insert");
-    options.put(FlinkOptions.SINK_SHUFFLE_BY_PARTITION.key(), "true");
+    options.put(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION.key(), "true");
     if (hiveStylePartitioning) {
       options.put(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), "true");
     }
