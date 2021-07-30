@@ -156,7 +156,7 @@ public class HoodieRowData implements RowData {
 
   @Override
   public StringData getString(int ordinal) {
-    if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
+    if (ordinal < metaColumnsNum) {
       return StringData.fromString(getMetaColumnVal(ordinal));
     }
     return row.getString(ordinal - metaColumnsNum);
