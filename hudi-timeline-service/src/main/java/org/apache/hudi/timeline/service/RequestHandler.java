@@ -107,6 +107,10 @@ public class RequestHandler {
     }
   }
 
+  public void stop() {
+    markerHandler.stop();
+  }
+
   /**
    * Determines if local view of table's timeline is behind that of client's view.
    */

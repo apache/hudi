@@ -76,6 +76,8 @@ public class MarkerDirState implements Serializable {
   // A list of pending futures from async marker creation requests
   private final List<MarkerCreationCompletableFuture> markerCreationFutures = new ArrayList<>();
   private final int parallelism;
+  private final Object firstRequestLock = new Object();
+  private final Object markerCreationProcessingLock = new Object();
   private transient HoodieEngineContext hoodieEngineContext;
   // Last underlying file index used, for finding the next file index
   // in a round-robin fashion
@@ -128,26 +130,46 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * Processes pending marker creation requests.
+   * @return  futures of pending marker creation requests.
+   */
+  public List<MarkerCreationCompletableFuture> fetchPendingMarkerCreationRequests() {
+    if (markerCreationFutures.isEmpty()) {
+      return new ArrayList<>();
+    }
+    maybeSyncOnFirstRequest();
+    List<MarkerCreationCompletableFuture> pendingFutures;
+    synchronized (markerCreationFutures) {
+      pendingFutures = new ArrayList<>(markerCreationFutures);
+      markerCreationFutures.clear();
+    }
+    return pendingFutures;
+  }
+
+  /**
+   * Processes pending marker creation requests if possible.
    *
+   * @param pendingMarkerCreationFutures futures of pending marker creation requests
    * @return A list of processed futures
    */
-  public List<MarkerCreationCompletableFuture> processMarkerCreationRequests() {
-    List<MarkerCreationCompletableFuture> futuresToRemove = new ArrayList<>();
-    if (markerCreationFutures.isEmpty()) {
-      return futuresToRemove;
+  public List<MarkerCreationCompletableFuture> processMarkerCreationRequests(
+      final List<MarkerCreationCompletableFuture> pendingMarkerCreationFutures) {
+    if (pendingMarkerCreationFutures.isEmpty()) {
+      return Collections.emptyList();
     }
     maybeSyncOnFirstRequest();
 
     int fileIndex = getNextFileIndexToUse();
     if (fileIndex < 0) {
       LOG.debug("All marker files are busy, skip batch processing of create marker requests in " + markerDirPath);
-      return futuresToRemove;
+      synchronized (markerCreationFutures) {
+        markerCreationFutures.addAll(pendingMarkerCreationFutures);
+      }
+      return Collections.emptyList();
     }
     LOG.debug("timeMs=" + System.currentTimeMillis() + " fileIndex=" + fileIndex);
 
-    synchronized (markerCreationFutures) {
-      for (MarkerCreationCompletableFuture future : markerCreationFutures) {
+    synchronized (markerCreationProcessingLock) {
+      for (MarkerCreationCompletableFuture future : pendingMarkerCreationFutures) {
         String markerName = future.getMarkerName();
         boolean exists = allMarkers.contains(markerName);
         if (!exists) {
@@ -157,16 +179,14 @@ public class MarkerDirState implements Serializable {
           stringBuilder.append('\n');
         }
         future.setResult(!exists);
-        futuresToRemove.add(future);
       }
-      markerCreationFutures.removeAll(futuresToRemove);
     }
     flushMarkersToFile(fileIndex);
 
     synchronized (threadUseStatus) {
       threadUseStatus.set(fileIndex, false);
     }
-    return futuresToRemove;
+    return pendingMarkerCreationFutures;
   }
 
   /**
@@ -209,9 +229,11 @@ public class MarkerDirState implements Serializable {
    * Syncs the markers from the underlying files for the first request.
    */
   private void maybeSyncOnFirstRequest() {
-    if (!hasFirstRequest) {
-      syncAllMarkersFromFile();
-      hasFirstRequest = true;
+    synchronized (firstRequestLock) {
+      if (!hasFirstRequest) {
+        syncMarkersFromFileSystem();
+        hasFirstRequest = true;
+      }
     }
   }
 
@@ -239,7 +261,7 @@ public class MarkerDirState implements Serializable {
   /**
    * Syncs all markers maintained in the underlying files from the marker directory in the file system.
    */
-  private void syncAllMarkersFromFile() {
+  private void syncMarkersFromFileSystem() {
     Path dirPath = new Path(markerDirPath);
     try {
       if (fileSystem.exists(dirPath)) {

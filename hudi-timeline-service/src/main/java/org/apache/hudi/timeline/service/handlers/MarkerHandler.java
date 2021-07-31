@@ -23,8 +23,8 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.timeline.service.TimelineService;
-import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationBatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationCompletableFuture;
+import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
 import io.javalin.Context;
@@ -38,9 +38,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -63,23 +62,19 @@ import java.util.stream.Collectors;
  */
 public class MarkerHandler extends Handler {
   private static final Logger LOG = LogManager.getLogger(MarkerHandler.class);
-  // Margin time for scheduling the processing of the next batch of marker creation requests
-  private static final long SCHEDULING_MARGIN_TIME_MS = 5L;
 
-  private final Registry metricsRegistry;
-  private final ScheduledExecutorService executorService;
-
-  // Batch process interval in milliseconds
-  private final long batchIntervalMs;
+  private final ExecutorService executorService;
   // Parallelism for reading and deleting marker files
   private final int parallelism;
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
   private final Map<String, MarkerDirState> markerDirStateMap = new HashMap<>();
+  // A long-running thread to dispatch marker creation requests to batch processing threads
+  private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
   private transient HoodieEngineContext hoodieEngineContext;
   // Lock for synchronous processing of marker creating requests
   private final Object createMarkerRequestLockObject = new Object();
   // Next batch process timestamp in milliseconds
-  private long nextBatchProcessTimeMs = 0L;
+  private boolean firstMarkerCreationRequest = true;
 
   public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
@@ -89,10 +84,15 @@ public class MarkerHandler extends Handler {
     LOG.debug("MarkerHandler batching params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
         + " batchIntervalMs=" + timelineServiceConfig.markerBatchIntervalMs + "ms");
     this.hoodieEngineContext = hoodieEngineContext;
-    this.metricsRegistry = metricsRegistry;
-    this.batchIntervalMs = timelineServiceConfig.markerBatchIntervalMs;
     this.parallelism = timelineServiceConfig.markerParallelism;
-    this.executorService = Executors.newScheduledThreadPool(timelineServiceConfig.markerBatchNumThreads);
+    this.executorService = Executors.newSingleThreadExecutor();
+    this.markerCreationDispatchingRunnable = new MarkerCreationDispatchingRunnable(
+        markerDirStateMap, metricsRegistry, timelineServiceConfig.markerBatchNumThreads,
+        timelineServiceConfig.markerBatchIntervalMs);
+  }
+
+  public void stop() {
+    markerCreationDispatchingRunnable.stop();
   }
 
   /**
@@ -142,29 +142,19 @@ public class MarkerHandler extends Handler {
     LOG.info("Request: create marker " + markerDir + " " + markerName);
     MarkerCreationCompletableFuture future = new MarkerCreationCompletableFuture(context, markerDir, markerName);
     // Add the future to the list
-    MarkerDirState markerDirState = markerDirStateMap.computeIfAbsent(
-        markerDir, k -> new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads,
-            fileSystem, hoodieEngineContext, parallelism));
+    MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
+    if (markerDirState == null) {
+      synchronized (markerDirStateMap) {
+        markerDirState = new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads,
+            fileSystem, hoodieEngineContext, parallelism);
+        markerDirStateMap.put(markerDir, markerDirState);
+      }
+    }
     markerDirState.addMarkerCreationFuture(future);
     synchronized (createMarkerRequestLockObject) {
-      // Update the next batch processing time and schedule the batch processing if necessary
-      long currTimeMs = System.currentTimeMillis();
-      // If the current request may miss the next batch processing, schedule a new batch processing thread
-      // A margin time is always considered for checking the tiemstamp to make sure no request is missed
-      if (currTimeMs >= nextBatchProcessTimeMs - SCHEDULING_MARGIN_TIME_MS) {
-        if (currTimeMs < nextBatchProcessTimeMs + batchIntervalMs - SCHEDULING_MARGIN_TIME_MS) {
-          // within the batch interval from the latest batch processing thread
-          // increment nextBatchProcessTimeMs by batchIntervalMs
-          nextBatchProcessTimeMs += batchIntervalMs;
-        } else {
-          // Otherwise, wait for batchIntervalMs based on the current timestamp
-          nextBatchProcessTimeMs = currTimeMs + batchIntervalMs;
-        }
-
-        long waitMs = nextBatchProcessTimeMs - currTimeMs;
-        executorService.schedule(new MarkerCreationBatchingRunnable(markerDirStateMap, metricsRegistry),
-            Math.max(0L, waitMs), TimeUnit.MILLISECONDS);
-        LOG.debug("Wait for " + waitMs + " ms, next batch time: " + nextBatchProcessTimeMs);
+      if (firstMarkerCreationRequest) {
+        executorService.execute(markerCreationDispatchingRunnable);
+        firstMarkerCreationRequest = false;
       }
     }
     return future;

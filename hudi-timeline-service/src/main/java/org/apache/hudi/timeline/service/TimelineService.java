@@ -59,6 +59,7 @@ public class TimelineService {
   private transient FileSystem fs;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
+  private transient RequestHandler requestHandler;
 
   public int getServerPort() {
     return serverPort;
@@ -268,7 +269,7 @@ public class TimelineService {
       app.disableDynamicGzip();
     }
 
-    RequestHandler requestHandler = new RequestHandler(
+    requestHandler = new RequestHandler(
         app, conf, timelineServerConf, context, fs, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
@@ -314,6 +315,7 @@ public class TimelineService {
 
   public void close() {
     LOG.info("Closing Timeline Service");
+    this.requestHandler.stop();
     this.app.stop();
     this.app = null;
     this.fsViewsManager.close();

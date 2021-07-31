@@ -42,11 +42,14 @@ public class MarkerCreationBatchingRunnable implements Runnable {
 
   private final Map<String, MarkerDirState> markerDirStateMap;
   private final Registry metricsRegistry;
+  private final Map<String, List<MarkerCreationCompletableFuture>> futureMap;
 
   public MarkerCreationBatchingRunnable(
-      Map<String, MarkerDirState> markerDirStateMap, Registry metricsRegistry) {
+      Map<String, MarkerDirState> markerDirStateMap, Registry metricsRegistry,
+      Map<String, List<MarkerCreationCompletableFuture>> futureMap) {
     this.markerDirStateMap = markerDirStateMap;
     this.metricsRegistry = metricsRegistry;
+    this.futureMap = futureMap;
   }
 
   @Override
@@ -55,8 +58,16 @@ public class MarkerCreationBatchingRunnable implements Runnable {
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<MarkerCreationCompletableFuture> futuresToRemove = new ArrayList<>();
 
-    for (MarkerDirState markerDirState : markerDirStateMap.values()) {
-      futuresToRemove.addAll(markerDirState.processMarkerCreationRequests());
+    for (String markerDir : futureMap.keySet()) {
+      MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
+
+      if (markerDirState == null) {
+        LOG.error("MarkerDirState of " + markerDir + " does not exist!");
+        continue;
+      }
+
+      futuresToRemove.addAll(
+          markerDirState.processMarkerCreationRequests(futureMap.get(markerDir)));
     }
 
     for (MarkerCreationCompletableFuture future : futuresToRemove) {
