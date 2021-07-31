@@ -31,7 +31,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
@@ -188,7 +189,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
    * @param partitionPath Partition path
    */
   private void createMarkerFile(String partitionPath, String dataFileName) {
-    MarkerFiles markerFiles = new MarkerFiles(table, instantTime);
+    MarkerFiles markerFiles = MarkerFilesFactory.get(writeConfig.getMarkersType(), table, instantTime);
     markerFiles.create(partitionPath, dataFileName, IOType.CREATE);
   }
 
