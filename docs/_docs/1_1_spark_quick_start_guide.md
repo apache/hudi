@@ -75,6 +75,7 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Overwrite).
   save(basePath)
@@ -89,6 +90,11 @@ and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/d
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
 {: .notice--info}
+
+**Note:** For non-partitioned table, set
+```
+option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+```
 
 ## Query data 
 
@@ -126,6 +132,7 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -135,6 +142,11 @@ Notice that the save mode is now `Append`. In general, always use append mode un
 [Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts.html) 
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
 {: .notice--info}
+
+**Note:** For non-partitioned table, set
+```
+option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+```
 
 ## Incremental query
 
@@ -208,6 +220,7 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -225,6 +238,11 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 Note: Only `Append` mode is supported for delete operation.
 
 See the [deletion section](/docs/writing_data.html#deletes) of the writing data page for more details.
+
+For non-partitioned table, set
+```
+option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+```
 
 ## Insert Overwrite Table
 
@@ -248,6 +266,7 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -287,6 +306,7 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -530,6 +550,10 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 
 See the [deletion section](/docs/writing_data.html#deletes) of the writing data page for more details.
 
+**Note:** For non-partitioned table, set
+```
+option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+```
 
 ## Where to go from here?
 
