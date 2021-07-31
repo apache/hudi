@@ -732,4 +732,94 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
       }
     }
   }
+
+  test("Test MergeInto For Source Table With ColumnAliases") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "/")}/$tableName'
+           | options (
+           |  primaryKey ='id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      // First merge with a extra input field 'flag' (insert a new record)
+      spark.sql(
+        s"""
+           | merge into $tableName
+           | using (
+           |  select 1, 'a1', 10, 1000, '1'
+           | ) s0 (id,name,price,ts,flag)
+           | on s0.id = $tableName.id
+           | when matched and flag = '1' then update set
+           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts
+           | when not matched and flag = '1' then insert *
+             """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+
+      // Second merge (update the record)
+      spark.sql(
+        s"""
+           | merge into $tableName
+           | using (
+           |  select 1 , 'a1', 10 , 1001
+           | ) s0 (id,name,price,ts)
+           | on s0.id = $tableName.id
+           | when matched then update set
+           | id = s0.id, name = s0.name, price = s0.price + $tableName.price, ts = s0.ts
+           | when not matched then insert *
+             """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 20.0, 1001)
+      )
+
+      // Third merge (update & insert the record)
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select * from (
+           |  select 1, 'a1', 10, 1002
+           |  union all
+           |  select 2, 'a2', 12, 1001
+           |  )
+           | ) s0 (id,name,price,ts)
+           | on s0.id = t0.id
+           | when matched then update set
+           | t0.id = s0.id, t0.name = s0.name, t0.price = s0.price + t0.price, t0.ts = s0.ts
+           | when not matched and s0.id % 2 = 0 then insert *
+             """.stripMargin)
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 30.0, 1002),
+        Seq(2, "a2", 12.0, 1001)
+      )
+
+      // Fourth merge (delete the record)
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 1, 'a1', 12, 1003
+           | ) s0 (id,name,price,ts)
+           | on s0.id = t0.id
+           | when matched and id != 1 then update set
+           | t0.id = s0.id, t0.name = s0.name, t0.price = s0.price, t0.ts = s0.ts
+           | when matched and s0.id = 1 then delete
+           | when not matched then insert *
+             """.stripMargin)
+      val cnt = spark.sql(s"select * from $tableName where id = 1").count()
+      assertResult(0)(cnt)
+    }
+  }
+
 }
