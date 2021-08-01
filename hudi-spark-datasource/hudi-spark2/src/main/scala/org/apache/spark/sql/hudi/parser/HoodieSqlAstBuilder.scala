@@ -185,12 +185,11 @@ class HoodieSqlAstBuilder(conf: SQLConf, delegate: ParserInterface) extends Hood
     */
   protected def mayApplyAliasPlan(tableAlias: TableAliasContext, plan: LogicalPlan): LogicalPlan = {
     if (tableAlias.strictIdentifier != null) {
-      val subquery = SubqueryAlias(tableAlias.strictIdentifier.getText, plan)
       if (tableAlias.identifierList != null) {
         val columnNames = visitIdentifierList(tableAlias.identifierList)
-        UnresolvedSubqueryColumnAliases(columnNames, subquery)
+        SubqueryAlias(tableAlias.strictIdentifier.getText,UnresolvedSubqueryColumnAliases(columnNames, plan))
       } else {
-        subquery
+        SubqueryAlias(tableAlias.strictIdentifier.getText, plan)
       }
     } else {
       plan
