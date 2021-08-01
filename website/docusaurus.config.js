@@ -197,8 +197,8 @@ module.exports = {
               to: '/docs/concepts',
             },
             {
-              label: 'Roadmap',
-              to: '/roadmap',
+              label: 'Streaming Data Lake',
+              to: '/blog/2021/07/21/streaming-data-lake-platform',
             },
             {
               label: 'Team',
