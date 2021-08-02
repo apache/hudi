@@ -58,7 +58,7 @@ public class TransactionUtils {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant);
-      final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.get());
+      final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElse(new HoodieCommitMetadata()));
       instantStream.forEach(instant -> {
         try {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());

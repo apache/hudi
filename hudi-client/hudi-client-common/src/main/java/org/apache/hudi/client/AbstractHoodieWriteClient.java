@@ -188,7 +188,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
       preCommit(instantTime, metadata);
-      // TODO: Should this be under its own transaction
       table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime));
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);

@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -40,12 +39,13 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
   // Update the metadata table due to a COMMIT operation
   void update(HoodieCommitMetadata option, String instantTime);
 
-  void update(HoodieCleanerPlan cleanerPlan, String instantTime);
-
+  // Update the metadata table due to a CLEAN operation
   void update(HoodieCleanMetadata cleanMetadata, String instantTime);
 
+  // Update the metadata table due to a RESTORE operation
   void update(HoodieRestoreMetadata restoreMetadata, String instantTime);
 
+  // Update the metadata table due to a ROLLBACK operation
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
 
   /**

@@ -52,22 +52,18 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
   public abstract R execute();
 
   protected final void syncTableMetadata(HoodieCommitMetadata metadata) {
-    // TODO: Should this be under its own transaction
     table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
   }
 
   protected final void syncTableMetadata(HoodieCleanMetadata metadata) {
-    // TODO: Should this be under its own transaction
     table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
   }
 
   protected final void syncTableMetadata(HoodieRollbackMetadata metadata) {
-    // TODO: Should this be under its own transaction
     table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
   }
 
   protected final void syncTableMetadata(HoodieRestoreMetadata metadata) {
-    // TODO: Should this be under its own transaction
     table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
   }
 }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
+import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -33,7 +34,11 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -43,6 +48,7 @@ import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
@@ -54,6 +60,7 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -70,6 +77,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -386,6 +394,64 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   }
 
   /**
+   * Test multi-writer on metadata table with optimistic concurrency.
+   */
+  @Test
+  public void testMetadataMultiWriter() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class).build())
+        .withProperties(properties)
+        .build();
+
+    ExecutorService executors = Executors.newFixedThreadPool(dataGen.getPartitionPaths().length);
+    // Create clients in advance
+    SparkRDDWriteClient[] writeClients = new SparkRDDWriteClient[dataGen.getPartitionPaths().length];
+    for (int i = 0; i < dataGen.getPartitionPaths().length; ++i) {
+      writeClients[i] = new SparkRDDWriteClient(engineContext, writeConfig);
+    }
+
+    // Parallel commits for separate partitions
+    List<Future> futures = new LinkedList<>();
+    for (int i = 0; i < dataGen.getPartitionPaths().length; ++i) {
+      final int index = i;
+      String newCommitTime = "00" + (index + 1);
+      Future future = executors.submit(() -> {
+        List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, dataGen.getPartitionPaths()[index]);
+        writeClients[index].startCommitWithTime(newCommitTime);
+        List<WriteStatus> writeStatuses = writeClients[index].insert(jsc.parallelize(records, 1), newCommitTime).collect();
+        assertNoWriteErrors(writeStatuses);
+      });
+      futures.add(future);
+    }
+
+    // Wait for all commits to complete
+    for (Future future : futures) {
+      future.get();
+    }
+
+    // Ensure all commits were synced to the Metadata Table
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 4);
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "001")));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002")));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "003")));
+
+    // Compaction may occur if the commits completed in order
+    assertTrue(metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants() <= 1);
+
+    // Validation
+    validateMetadata(writeClients[0]);
+  }
+
+  /**
    * Test rollback of various table operations sync to Metadata Table correctly.
    */
   @ParameterizedTest
@@ -411,7 +477,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
       client.rollback(newCommitTime);
-      // TODO client.syncTableMetadata();
       validateMetadata(client);
 
       // Write 3 (updates) + Rollback of updates
@@ -422,7 +487,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
       client.rollback(newCommitTime);
-      // TODO client.syncTableMetadata();
       validateMetadata(client);
 
       // Rollback of updates and inserts
@@ -433,7 +497,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
       client.rollback(newCommitTime);
-      // TODO client.syncTableMetadata();
       validateMetadata(client);
 
       // Rollback of Compaction
@@ -453,7 +516,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
       client.rollback(newCommitTime);
-      // TODO client.syncTableMetadata();
       validateMetadata(client);
 
       // Rollback of Clean

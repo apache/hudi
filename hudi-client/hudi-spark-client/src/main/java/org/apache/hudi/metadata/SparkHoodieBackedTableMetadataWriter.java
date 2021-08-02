@@ -105,6 +105,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         }
       });
 
+      // reload timeline
+      metaClient.reloadActiveTimeline();
+
       compactIfNecessary(writeClient, instantTime);
       cleanIfNecessary(writeClient, instantTime);
     }
@@ -133,22 +136,29 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   /**
    *  Perform a compaction on the Metadata Table.
    *
-   * We cannot perform compaction if there are previous inflight operations on the dataset. This is because
-   * a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx.
+   * Cases to be handled:
+   *   1. We cannot perform compaction if there are previous inflight operations on the dataset. This is because
+   *      a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx.
+   *
+   *   2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
+   *      deltacommit.
    */
   private void compactIfNecessary(SparkRDDWriteClient writeClient, String instantTime) {
-    List<HoodieInstant> pendingInstants = datasetMetaClient.reloadActiveTimeline().filterInflightsAndRequested().findInstantsBefore(instantTime)
-        .getInstants().collect(Collectors.toList());
+    String latestDeltacommitTime = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
+        .get().getTimestamp();
+    List<HoodieInstant> pendingInstants = datasetMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
+        .findInstantsBefore(latestDeltacommitTime).getInstants().collect(Collectors.toList());
+
     if (!pendingInstants.isEmpty()) {
       LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
-          pendingInstants.size(), instantTime, Arrays.toString(pendingInstants.toArray())));
+          pendingInstants.size(), latestDeltacommitTime, Arrays.toString(pendingInstants.toArray())));
       return;
     }
 
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    final String compactionInstantTime = instantTime + "001";
+    final String compactionInstantTime = latestDeltacommitTime + "001";
     if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       writeClient.compact(compactionInstantTime);
     }
