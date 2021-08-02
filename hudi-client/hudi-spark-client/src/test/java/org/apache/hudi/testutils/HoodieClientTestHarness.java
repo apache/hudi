@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -234,10 +235,13 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     properties.put(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), "false");
     properties.put("hoodie.datasource.write.recordkey.field","_row_key");
     properties.put("hoodie.datasource.write.partitionpath.field","partition_path");
+    properties.put(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS.key(), "_row_key");
+    properties.put(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP.key(), "partition_path");
+    properties.put(HoodieTableConfig.HOODIE_TABLE_KEY_GENERATOR_CLASS.key(), SimpleKeyGenerator.class.getName());
     return properties;
   }
 
-  protected void addAppropriatePropsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
+  protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
     if (!populateMetaFields) {
       configBuilder.withProperties(getPropertiesForKeyGen())
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());

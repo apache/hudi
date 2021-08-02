@@ -49,7 +49,8 @@ case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
                                        tableAvroSchema: String,
                                        requiredAvroSchema: String,
                                        hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
-                                       preCombineField: Option[String])
+                                       preCombineField: Option[String],
+                                       recordKeyFieldOpt: Option[String])
 
 class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
                                   val optParams: Map[String, String],
@@ -87,6 +88,10 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
     }
   }
+  private var recordKeyFieldOpt = Option.empty[String]
+  if (!metaClient.getTableConfig.populateMetaFields()) {
+    recordKeyFieldOpt = Option(metaClient.getTableConfig.getRecordKeyFieldProp)
+  }
   override def schema: StructType = tableStructSchema
 
   override def needConversion: Boolean = false
@@ -104,7 +109,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       tableAvroSchema.toString,
       requiredAvroSchema.toString,
       fileIndex,
-      preCombineField
+      preCombineField,
+      recordKeyFieldOpt
     )
     val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
       sparkSession = sqlContext.sparkSession,

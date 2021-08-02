@@ -110,7 +110,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestBootstrap extends HoodieClientTestBase {
 
-  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,"
+  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,double,double,double,double,"
       + "struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
   @TempDir
@@ -576,11 +576,11 @@ public class TestBootstrap extends HoodieClientTestBase {
     if (isPartitioned) {
       df = df.withColumn("datestr", callUDF("partgen", new Column("_row_key")));
       // Order the columns to ensure generated avro schema aligns with Hive schema
-      df = df.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon",
+      df = df.select("timestamp", "_row_key", "partition_path", "rider", "driver", "begin_lat", "begin_lon",
           "end_lat", "end_lon", "fare", "tip_history", "_hoodie_is_deleted", "datestr");
     } else {
       // Order the columns to ensure generated avro schema aligns with Hive schema
-      df = df.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon",
+      df = df.select("timestamp", "_row_key", "partition_path", "rider", "driver", "begin_lat", "begin_lon",
           "end_lat", "end_lon", "fare", "tip_history", "_hoodie_is_deleted");
     }
     return df;

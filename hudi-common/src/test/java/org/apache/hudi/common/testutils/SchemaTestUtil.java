@@ -185,8 +185,13 @@ public final class SchemaTestUtil {
   }
 
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
-      String fileId) throws IOException {
-    SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId);
+                                                         String fileId) throws IOException {
+    return generateAvroRecordFromJson(schema, recordNumber, instantTime, fileId, true);
+  }
+
+  public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
+      String fileId, boolean populateMetaFields) throws IOException {
+    SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId, populateMetaFields);
     MercifulJsonConverter converter = new MercifulJsonConverter();
     return converter.convert(record.toJsonString(), schema);
   }

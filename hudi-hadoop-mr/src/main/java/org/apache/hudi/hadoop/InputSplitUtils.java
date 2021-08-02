@@ -45,6 +45,14 @@ public class InputSplitUtils {
     return new String(bytes, StandardCharsets.UTF_8);
   }
 
+  public static void writeBoolean(Boolean valueToWrite, DataOutput out) throws IOException {
+    out.writeBoolean(valueToWrite);
+  }
+
+  public static boolean readBoolean(DataInput in) throws IOException {
+    return in.readBoolean();
+  }
+
   /**
    * Return correct base-file schema based on split.
    *
