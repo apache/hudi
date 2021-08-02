@@ -22,7 +22,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public enum MetadataPartitionType {
-  FILES("files");
+  FILES("files"),
+  RECORD_LEVEL_INDEX("record_index");
 
   private final String partitionPath;
 
@@ -35,6 +36,6 @@ public enum MetadataPartitionType {
   }
 
   public static List<String> all() {
-    return Arrays.asList(MetadataPartitionType.FILES.partitionPath());
+    return Arrays.asList(MetadataPartitionType.FILES.partitionPath(), MetadataPartitionType.RECORD_LEVEL_INDEX.partitionPath());
   }
 }

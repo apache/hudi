@@ -20,9 +20,12 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -36,9 +39,11 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -65,10 +70,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   // This can be an enum in the schema but Avro 1.8 has a bug - https://issues.apache.org/jira/browse/AVRO-1810
   private static final int PARTITION_LIST = 1;
   private static final int FILE_LIST = 2;
+  private static final int RECORD_LEVEL_INDEX = 3;
 
   private String key = null;
   private int type = 0;
-  private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
+  private Map<String, HoodieMetadataFileInfo> filesystemMetadata;
+  private HoodieRecordIndexInfo recordIndexInfo;
 
   public HoodieMetadataPayload(Option<GenericRecord> record) {
     if (record.isPresent()) {
@@ -76,12 +83,18 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // https://issues.apache.org/jira/browse/AVRO-1811
       key = record.get().get("key").toString();
       type = (int) record.get().get("type");
-      if (record.get().get("filesystemMetadata") != null) {
+      if (type == PARTITION_LIST || type == FILE_LIST) {
         filesystemMetadata = (Map<String, HoodieMetadataFileInfo>) record.get().get("filesystemMetadata");
         filesystemMetadata.keySet().forEach(k -> {
           GenericRecord v = filesystemMetadata.get(k);
           filesystemMetadata.put(k.toString(), new HoodieMetadataFileInfo((Long)v.get("size"), (Boolean)v.get("isDeleted")));
         });
+      } else if (type == RECORD_LEVEL_INDEX) {
+        GenericRecord recordLevelIndexMetadata = (GenericRecord) record.get().get("recordLevelIndexMetadata");
+        recordIndexInfo = new HoodieRecordIndexInfo(recordLevelIndexMetadata.get("partition").toString(),
+            Long.parseLong(recordLevelIndexMetadata.get("fileIdHighBits").toString()),
+            Long.parseLong(recordLevelIndexMetadata.get("fileIdLowBits").toString()),
+            Integer.parseInt(recordLevelIndexMetadata.get("instantTime").toString()));
       }
     }
   }
@@ -91,6 +104,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
   }
+
+  private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexInfo) {
+    this.key = key;
+    this.type = RECORD_LEVEL_INDEX;
+    this.recordIndexInfo = recordIndexInfo;
+  }
+
+  private HoodieMetadataPayload() {}
 
   /**
    * Create and return a {@code HoodieMetadataPayload} to save list of partitions.
@@ -126,23 +147,60 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return new HoodieRecord<>(key, payload);
   }
 
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to save an entry for the record level index.
+   *
+   * Each entry maps the key of a single record in HUDI to its location.
+   *
+   * @param recordKey Key of the record
+   * @param partition Name of the partition which contains the record
+   * @param fileId fileId which contains the record
+   * @param instantTime instantTime when the record was added
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createRecordLevelIndexRecord(String recordKey, String partition,
+      String fileId, String instantTime) {
+    HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_LEVEL_INDEX.partitionPath());
+    final UUID uuid = UUID.fromString(fileId);
+    Date instantDate;
+    try {
+      instantDate = HoodieActiveTimeline.getCommitFormatter().parse(instantTime);
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Invalid instantTime format: " + instantTime, e);
+    }
+
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey, new HoodieRecordIndexInfo(partition,
+        uuid.getMostSignificantBits(), uuid.getLeastSignificantBits(), (int)(instantDate.getTime() / 1000)));
+    return new HoodieRecord<>(key, payload);
+  }
+
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to delete a record in the Metadata Table's record level index.
+   *
+   * @param recordKey Key of the record to be deleted
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createRecordLevelIndexDelete(String recordKey) {
+    HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_LEVEL_INDEX.partitionPath());
+    HoodieMetadataPayload payload = new HoodieMetadataPayload();
+    return new HoodieRecord<>(key, payload);
+  }
+
   @Override
   public HoodieMetadataPayload preCombine(HoodieMetadataPayload previousRecord) {
-    ValidationUtils.checkArgument(previousRecord.type == type,
-        "Cannot combine " + previousRecord.type  + " with " + type);
-
-    Map<String, HoodieMetadataFileInfo> combinedFileInfo = null;
+    ValidationUtils.checkArgument(previousRecord.type == type, "Cannot combine " + previousRecord.type  + " with " + type);
 
     switch (type) {
       case PARTITION_LIST:
       case FILE_LIST:
-        combinedFileInfo = combineFilesystemMetadata(previousRecord);
-        break;
+        Map<String, HoodieMetadataFileInfo> combinedFileInfo = combineFilesystemMetadata(previousRecord);
+        return new HoodieMetadataPayload(key, type, combinedFileInfo);
+      case RECORD_LEVEL_INDEX:
+        ValidationUtils.checkArgument(previousRecord.recordIndexInfo.getInstantTime() == recordIndexInfo.getInstantTime(),
+            String.format("InstantTime should not change from %s to %s", previousRecord.recordIndexInfo.getInstantTime(),
+                recordIndexInfo.getInstantTime()));
+        return this;
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
-
-    return new HoodieMetadataPayload(key, type, combinedFileInfo);
   }
 
   @Override
@@ -158,7 +216,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata);
+    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, recordIndexInfo);
     return Option.of(record);
   }
 
@@ -186,6 +244,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         .map(e -> new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
             null, null, null, new Path(partitionPath, e.getKey())))
         .toArray(FileStatus[]::new);
+  }
+
+  /**
+   * If this is a record-level index entry, returns the file to which this is mapped.
+   */
+  public HoodieRecordLocation getRecordLocation() {
+    final String fileId = new UUID(recordIndexInfo.getFileIdHighBits(), recordIndexInfo.getFileIdLowBits()).toString();
+    final Date instantDate = new Date(recordIndexInfo.getInstantTime() * 1000);
+    return new HoodieRecordLocation(HoodieActiveTimeline.getCommitFormatter().format(instantDate), fileId);
   }
 
   private Stream<Map.Entry<String, HoodieMetadataFileInfo>> filterFileInfoEntries(boolean isDeleted) {
@@ -229,8 +296,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     final StringBuilder sb = new StringBuilder("HoodieMetadataPayload {");
     sb.append("key=").append(key).append(", ");
     sb.append("type=").append(type).append(", ");
-    sb.append("creations=").append(Arrays.toString(getFilenames().toArray())).append(", ");
-    sb.append("deletions=").append(Arrays.toString(getDeletions().toArray())).append(", ");
+    if (type == PARTITION_LIST || type == FILE_LIST) {
+      sb.append("creations=").append(Arrays.toString(getFilenames().toArray())).append(", ");
+      sb.append("deletions=").append(Arrays.toString(getDeletions().toArray())).append(", ");
+    } else if (type == RECORD_LEVEL_INDEX) {
+      sb.append(getRecordLocation().toString());
+    }
     sb.append('}');
     return sb.toString();
   }
