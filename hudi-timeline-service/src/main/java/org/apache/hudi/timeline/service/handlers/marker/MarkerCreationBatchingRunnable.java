@@ -18,47 +18,35 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.exception.HoodieException;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-
-import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
 /**
  * A runnable for batch processing marker creation requests.
  */
 public class MarkerCreationBatchingRunnable implements Runnable {
   private static final Logger LOG = LogManager.getLogger(MarkerCreationBatchingRunnable.class);
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   private final Map<String, MarkerDirState> markerDirStateMap;
-  private final Registry metricsRegistry;
-  private final Map<String, List<MarkerCreationCompletableFuture>> futureMap;
+  private final Map<String, MarkerDirRequestContext> requestContextMap;
 
   public MarkerCreationBatchingRunnable(
-      Map<String, MarkerDirState> markerDirStateMap, Registry metricsRegistry,
-      Map<String, List<MarkerCreationCompletableFuture>> futureMap) {
+      Map<String, MarkerDirState> markerDirStateMap,
+      Map<String, MarkerDirRequestContext> requestContextMap) {
     this.markerDirStateMap = markerDirStateMap;
-    this.metricsRegistry = metricsRegistry;
-    this.futureMap = futureMap;
+    this.requestContextMap = requestContextMap;
   }
 
   @Override
   public void run() {
     LOG.debug("Start processing create marker requests");
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<MarkerCreationCompletableFuture> futuresToRemove = new ArrayList<>();
 
-    for (String markerDir : futureMap.keySet()) {
+    for (String markerDir : requestContextMap.keySet()) {
       MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
 
       if (markerDirState == null) {
@@ -66,18 +54,9 @@ public class MarkerCreationBatchingRunnable implements Runnable {
         continue;
       }
 
-      futuresToRemove.addAll(
-          markerDirState.processMarkerCreationRequests(futureMap.get(markerDir)));
-    }
-
-    for (MarkerCreationCompletableFuture future : futuresToRemove) {
-      try {
-        synchronized (metricsRegistry) {
-          future.complete(jsonifyResult(future.getContext(), future.getResult(), metricsRegistry, OBJECT_MAPPER, LOG));
-        }
-      } catch (JsonProcessingException e) {
-        throw new HoodieException("Failed to JSON encode the value", e);
-      }
+      MarkerDirRequestContext requestContext = requestContextMap.get(markerDir);
+      markerDirState.processMarkerCreationRequests(
+          requestContext.getFutures(), requestContext.getFileIndex());
     }
     LOG.debug("Finish batch processing of create marker requests in " + timer.endTimer() + " ms");
   }

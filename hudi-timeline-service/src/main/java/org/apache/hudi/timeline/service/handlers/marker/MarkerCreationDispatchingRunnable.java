@@ -18,17 +18,14 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
-import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.util.HoodieTimer;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
 /**
  * A runnable for scheduling batch processing of marker creation requests.
@@ -38,42 +35,38 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
 
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
   private final Map<String, MarkerDirState> markerDirStateMap;
-  private final Registry metricsRegistry;
   private final ExecutorService executorService;
-  // Batch process interval in milliseconds
-  private final long batchIntervalMs;
-  private boolean isRunning = false;
 
   public MarkerCreationDispatchingRunnable(
-      Map<String, MarkerDirState> markerDirStateMap, Registry metricsRegistry,
-      int batchNumThreads, long batchIntervalMs) {
+      Map<String, MarkerDirState> markerDirStateMap, int batchNumThreads) {
     this.markerDirStateMap = markerDirStateMap;
-    this.metricsRegistry = metricsRegistry;
-    this.batchIntervalMs = batchIntervalMs;
     this.executorService = Executors.newFixedThreadPool(batchNumThreads);
-    this.isRunning = true;
-  }
-
-  public void stop() {
-    this.isRunning = false;
   }
 
   @Override
   public void run() {
-    while (isRunning) {
-      HoodieTimer timer = new HoodieTimer().startTimer();
-      Map<String, List<MarkerCreationCompletableFuture>> futureMap =
-          markerDirStateMap.entrySet().stream().collect(
-              Collectors.toMap(Map.Entry::getKey,
-                  e -> e.getValue().fetchPendingMarkerCreationRequests()));
-      executorService.execute(
-          new MarkerCreationBatchingRunnable(markerDirStateMap, metricsRegistry, futureMap));
+    Map<String, MarkerDirRequestContext> requestContextMap = new HashMap<>();
 
-      try {
-        Thread.sleep(Math.max(batchIntervalMs - timer.endTimer(), 0L));
-      } catch (InterruptedException e) {
-        LOG.warn("InterruptedException in MarkerCreationDispatchingRunnable", e);
+    // Only fetch pending marker creation requests that can be processed,
+    // i.e., that markers can be written to a underlying file
+    for (String markerDir : markerDirStateMap.keySet()) {
+      MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
+      int fileIndex = markerDirState.getNextFileIndexToUse();
+      if (fileIndex < 0) {
+        LOG.debug("All marker files are busy, skip batch processing of create marker requests in " + markerDir);
+        continue;
       }
+      List<MarkerCreationCompletableFuture> futures = markerDirState.fetchPendingMarkerCreationRequests();
+      if (futures.isEmpty()) {
+        markerDirState.markFileAvailable(fileIndex);
+        continue;
+      }
+      requestContextMap.put(markerDir, new MarkerDirRequestContext(futures, fileIndex));
+    }
+
+    if (requestContextMap.size() > 0) {
+      executorService.execute(
+          new MarkerCreationBatchingRunnable(markerDirStateMap, requestContextMap));
     }
   }
 }

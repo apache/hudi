@@ -20,10 +20,14 @@ package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -42,15 +46,16 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
+import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
 /**
  * Stores the state of a marker directory.
@@ -60,9 +65,11 @@ import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
 public class MarkerDirState implements Serializable {
   public static final String MARKERS_FILENAME_PREFIX = "MARKERS";
   private static final Logger LOG = LogManager.getLogger(MarkerDirState.class);
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   // Marker directory
   private final String markerDirPath;
   private final FileSystem fileSystem;
+  private final Registry metricsRegistry;
   // A cached copy of all markers in memory
   private final Set<String> allMarkers = new HashSet<>();
   // A cached copy of marker entries in each marker file, stored in StringBuilder
@@ -84,18 +91,15 @@ public class MarkerDirState implements Serializable {
   private int lastFileIndex = 0;
   private boolean hasFirstRequest = false;
 
-  public MarkerDirState(String markerDirPath, int markerBatchNumThreads,
-                        FileSystem fileSystem, HoodieEngineContext hoodieEngineContext, int parallelism) {
+  public MarkerDirState(String markerDirPath, int markerBatchNumThreads, FileSystem fileSystem,
+                        Registry metricsRegistry, HoodieEngineContext hoodieEngineContext, int parallelism) {
     this.markerDirPath = markerDirPath;
     this.fileSystem = fileSystem;
+    this.metricsRegistry = metricsRegistry;
     this.hoodieEngineContext = hoodieEngineContext;
     this.parallelism = parallelism;
-
-    List<Boolean> isMarkerFileInUseList = new ArrayList<>(markerBatchNumThreads);
-    for (int i = 0; i < markerBatchNumThreads; i++) {
-      isMarkerFileInUseList.add(false);
-    }
-    this.threadUseStatus = Collections.synchronizedList(isMarkerFileInUseList);
+    this.threadUseStatus =
+        Stream.generate(() -> false).limit(markerBatchNumThreads).collect(Collectors.toList());
   }
 
   /**
@@ -130,13 +134,46 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * @return  futures of pending marker creation requests.
+   * @return the next file index to use in a round-robin fashion,
+   * or -1 if no file is available.
+   */
+  public int getNextFileIndexToUse() {
+    int fileIndex = -1;
+    synchronized (threadUseStatus) {
+      for (int i = 0; i < threadUseStatus.size(); i++) {
+        int index = (lastFileIndex + 1 + i) % threadUseStatus.size();
+        if (!threadUseStatus.get(index)) {
+          fileIndex = index;
+          threadUseStatus.set(index, true);
+          break;
+        }
+      }
+      if (fileIndex >= 0) {
+        lastFileIndex = fileIndex;
+      }
+    }
+    return fileIndex;
+  }
+
+  /**
+   * Marks the file available to use again.
+   *
+   * @param fileIndex file index
+   */
+  public void markFileAvailable(int fileIndex) {
+    synchronized (threadUseStatus) {
+      threadUseStatus.set(fileIndex, false);
+    }
+  }
+
+  /**
+   * @return  futures of pending marker creation requests and removes them from the list.
    */
   public List<MarkerCreationCompletableFuture> fetchPendingMarkerCreationRequests() {
     if (markerCreationFutures.isEmpty()) {
       return new ArrayList<>();
     }
-    maybeSyncOnFirstRequest();
+
     List<MarkerCreationCompletableFuture> pendingFutures;
     synchronized (markerCreationFutures) {
       pendingFutures = new ArrayList<>(markerCreationFutures);
@@ -146,27 +183,20 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * Processes pending marker creation requests if possible.
+   * Processes pending marker creation requests.
    *
    * @param pendingMarkerCreationFutures futures of pending marker creation requests
-   * @return A list of processed futures
+   * @param fileIndex file index to use to write markers
    */
-  public List<MarkerCreationCompletableFuture> processMarkerCreationRequests(
-      final List<MarkerCreationCompletableFuture> pendingMarkerCreationFutures) {
+  public void processMarkerCreationRequests(
+      final List<MarkerCreationCompletableFuture> pendingMarkerCreationFutures, int fileIndex) {
     if (pendingMarkerCreationFutures.isEmpty()) {
-      return Collections.emptyList();
+      markFileAvailable(fileIndex);
     }
     maybeSyncOnFirstRequest();
 
-    int fileIndex = getNextFileIndexToUse();
-    if (fileIndex < 0) {
-      LOG.debug("All marker files are busy, skip batch processing of create marker requests in " + markerDirPath);
-      synchronized (markerCreationFutures) {
-        markerCreationFutures.addAll(pendingMarkerCreationFutures);
-      }
-      return Collections.emptyList();
-    }
-    LOG.debug("timeMs=" + System.currentTimeMillis() + " fileIndex=" + fileIndex);
+    LOG.debug("timeMs=" + System.currentTimeMillis() + " markerDirPath=" + markerDirPath
+        + " numRequests=" + pendingMarkerCreationFutures.size() + " fileIndex=" + fileIndex);
 
     synchronized (markerCreationProcessingLock) {
       for (MarkerCreationCompletableFuture future : pendingMarkerCreationFutures) {
@@ -182,11 +212,16 @@ public class MarkerDirState implements Serializable {
       }
     }
     flushMarkersToFile(fileIndex);
+    markFileAvailable(fileIndex);
 
-    synchronized (threadUseStatus) {
-      threadUseStatus.set(fileIndex, false);
+    for (MarkerCreationCompletableFuture future : pendingMarkerCreationFutures) {
+      try {
+        future.complete(jsonifyResult(
+            future.getContext(), future.getResult(), metricsRegistry, OBJECT_MAPPER, LOG));
+      } catch (JsonProcessingException e) {
+        throw new HoodieException("Failed to JSON encode the value", e);
+      }
     }
-    return pendingMarkerCreationFutures;
   }
 
   /**
@@ -238,28 +273,7 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * @return the next file index to use in a round-robin fashion
-   */
-  private int getNextFileIndexToUse() {
-    int fileIndex = -1;
-    synchronized (threadUseStatus) {
-      for (int i = 0; i < threadUseStatus.size(); i++) {
-        int index = (lastFileIndex + 1 + i) % threadUseStatus.size();
-        if (!threadUseStatus.get(index)) {
-          fileIndex = index;
-          threadUseStatus.set(index, true);
-          break;
-        }
-      }
-      if (fileIndex >= 0) {
-        lastFileIndex = fileIndex;
-      }
-    }
-    return fileIndex;
-  }
-
-  /**
-   * Syncs all markers maintained in the underlying files from the marker directory in the file system.
+   * Syncs all markers maintained in the underlying files under the marker directory in the file system.
    */
   private void syncMarkersFromFileSystem() {
     Path dirPath = new Path(markerDirPath);

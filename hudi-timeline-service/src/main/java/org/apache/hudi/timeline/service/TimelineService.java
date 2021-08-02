@@ -32,7 +32,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import io.javalin.core.util.JettyServerUtil;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -75,6 +74,9 @@ public class TimelineService {
     this.fsViewsManager = globalFileSystemViewManager;
   }
 
+  /**
+   * Config for {@code TimelineService} class.
+   */
   public static class Config implements Serializable {
 
     @Parameter(names = {"--server-port", "-p"}, description = " Server Port")

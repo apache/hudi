@@ -38,8 +38,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -63,7 +65,9 @@ import java.util.stream.Collectors;
 public class MarkerHandler extends Handler {
   private static final Logger LOG = LogManager.getLogger(MarkerHandler.class);
 
-  private final ExecutorService executorService;
+  private final Registry metricsRegistry;
+  // a scheduled executor service to schedule dispatching of marker creation requests
+  private final ScheduledExecutorService executorService;
   // Parallelism for reading and deleting marker files
   private final int parallelism;
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
@@ -75,6 +79,7 @@ public class MarkerHandler extends Handler {
   private final Object createMarkerRequestLockObject = new Object();
   // Next batch process timestamp in milliseconds
   private boolean firstMarkerCreationRequest = true;
+  private ScheduledFuture<?> dispatchingScheduledFuture;
 
   public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
@@ -84,15 +89,18 @@ public class MarkerHandler extends Handler {
     LOG.debug("MarkerHandler batching params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
         + " batchIntervalMs=" + timelineServiceConfig.markerBatchIntervalMs + "ms");
     this.hoodieEngineContext = hoodieEngineContext;
+    this.metricsRegistry = metricsRegistry;
     this.parallelism = timelineServiceConfig.markerParallelism;
-    this.executorService = Executors.newSingleThreadExecutor();
+    this.executorService = Executors.newSingleThreadScheduledExecutor();
     this.markerCreationDispatchingRunnable = new MarkerCreationDispatchingRunnable(
-        markerDirStateMap, metricsRegistry, timelineServiceConfig.markerBatchNumThreads,
-        timelineServiceConfig.markerBatchIntervalMs);
+        markerDirStateMap, timelineServiceConfig.markerBatchNumThreads);
   }
 
   public void stop() {
-    markerCreationDispatchingRunnable.stop();
+    if (dispatchingScheduledFuture != null) {
+      dispatchingScheduledFuture.cancel(true);
+    }
+    executorService.shutdown();
   }
 
   /**
@@ -100,9 +108,7 @@ public class MarkerHandler extends Handler {
    * @return all marker paths in the marker directory
    */
   public Set<String> getAllMarkers(String markerDir) {
-    MarkerDirState markerDirState = markerDirStateMap.computeIfAbsent(markerDir,
-        k -> new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads, fileSystem,
-            hoodieEngineContext, parallelism));
+    MarkerDirState markerDirState = getMarkerDirState(markerDir);
     return markerDirState.getAllMarkers();
   }
 
@@ -121,9 +127,7 @@ public class MarkerHandler extends Handler {
    * @return {@code true} if the marker directory exists; {@code false} otherwise.
    */
   public boolean doesMarkerDirExist(String markerDir) {
-    MarkerDirState markerDirState = markerDirStateMap.computeIfAbsent(markerDir,
-        k -> new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads, fileSystem,
-            hoodieEngineContext, parallelism));
+    MarkerDirState markerDirState = getMarkerDirState(markerDir);
     return markerDirState.exists();
   }
 
@@ -142,18 +146,13 @@ public class MarkerHandler extends Handler {
     LOG.info("Request: create marker " + markerDir + " " + markerName);
     MarkerCreationCompletableFuture future = new MarkerCreationCompletableFuture(context, markerDir, markerName);
     // Add the future to the list
-    MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
-    if (markerDirState == null) {
-      synchronized (markerDirStateMap) {
-        markerDirState = new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads,
-            fileSystem, hoodieEngineContext, parallelism);
-        markerDirStateMap.put(markerDir, markerDirState);
-      }
-    }
+    MarkerDirState markerDirState = getMarkerDirState(markerDir);
     markerDirState.addMarkerCreationFuture(future);
     synchronized (createMarkerRequestLockObject) {
       if (firstMarkerCreationRequest) {
-        executorService.execute(markerCreationDispatchingRunnable);
+        dispatchingScheduledFuture = executorService.scheduleAtFixedRate(markerCreationDispatchingRunnable,
+            timelineServiceConfig.markerBatchIntervalMs, timelineServiceConfig.markerBatchIntervalMs,
+            TimeUnit.MILLISECONDS);
         firstMarkerCreationRequest = false;
       }
     }
@@ -173,8 +172,14 @@ public class MarkerHandler extends Handler {
   }
 
   private MarkerDirState getMarkerDirState(String markerDir) {
-    return markerDirStateMap.computeIfAbsent(markerDir,
-        k -> new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads, fileSystem,
-            hoodieEngineContext, parallelism));
+    MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
+    if (markerDirState == null) {
+      synchronized (markerDirStateMap) {
+        markerDirState = new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads,
+            fileSystem, metricsRegistry, hoodieEngineContext, parallelism);
+        markerDirStateMap.put(markerDir, markerDirState);
+      }
+    }
+    return markerDirState;
   }
 }
