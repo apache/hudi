@@ -77,6 +77,22 @@ public class FlinkOptions extends HoodieConfig {
           + " column value is null/empty string");
 
   // ------------------------------------------------------------------------
+  //  Metadata table Options
+  // ------------------------------------------------------------------------
+
+  public static final ConfigOption<Boolean> METADATA_ENABLED = ConfigOptions
+      .key("metadata.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default false");
+
+  public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
+      .key("metadata.compaction.delta_commits")
+      .intType()
+      .defaultValue(24)
+      .withDescription("Max delta commits for metadata table to trigger compaction, default 24");
+
+  // ------------------------------------------------------------------------
   //  Index Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<Boolean> INDEX_BOOTSTRAP_ENABLED = ConfigOptions
