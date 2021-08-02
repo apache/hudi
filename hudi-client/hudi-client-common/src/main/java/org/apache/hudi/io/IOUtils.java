@@ -31,7 +31,6 @@ import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_
 import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP;
 
 public class IOUtils {
-
   /**
    * Dynamic calculation of max memory to use for for spillable map. user.available.memory = executor.memory *
    * (1 - memory.fraction) spillable.available.memory = user.available.memory * hoodie.memory.fraction. Anytime

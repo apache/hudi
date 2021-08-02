@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
-public class TestTimelineServerBasedMarkerFiles extends TestMarkerFiles {
+public class TestTimelineServerBasedMarkerFiles extends TestMarkerFilesBase {
   TimelineService timelineService;
 
   @BeforeEach

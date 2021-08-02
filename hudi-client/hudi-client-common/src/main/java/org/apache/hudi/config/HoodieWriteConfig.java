@@ -232,9 +232,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.markers.type")
       .defaultValue(MarkerType.DIRECT.toString())
       .sinceVersion("0.9.0")
-      .withDocumentation("Marker IO mode to use.  Two modes are supported: "
+      .withDocumentation("Marker type to use.  Two modes are supported: "
           + "- DIRECT: individual marker file corresponding to each data file is directly "
-          + "created by writer. "
+          + "created by the writer. "
           + "- TIMELINE_SERVER_BASED: marker operations are all handled at the timeline service "
           + "which serves as a proxy.  New marker entries are batch processed and stored "
           + "in a limited number of underlying files for efficiency.");
@@ -244,7 +244,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(20)
       .sinceVersion("0.9.0")
       .withDocumentation("Number of threads to use for batch processing marker "
-          + "creation requests at the timeline service");
+          + "creation requests at the timeline server");
 
   public static final ConfigProperty<Long> MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS_PROP = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.interval_ms")
@@ -561,8 +561,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public MarkerType getMarkersType() {
-    String mode = getString(MARKERS_TYPE_PROP);
-    return MarkerType.valueOf(mode.toUpperCase());
+    String markerType = getString(MARKERS_TYPE_PROP);
+    return MarkerType.valueOf(markerType.toUpperCase());
   }
 
   public int getMarkersTimelineServerBasedBatchNumThreads() {
@@ -1579,8 +1579,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMarkersType(String mode) {
-      writeConfig.setValue(MARKERS_TYPE_PROP, mode);
+    public Builder withMarkersType(String markerType) {
+      writeConfig.setValue(MARKERS_TYPE_PROP, markerType);
       return this;
     }
 

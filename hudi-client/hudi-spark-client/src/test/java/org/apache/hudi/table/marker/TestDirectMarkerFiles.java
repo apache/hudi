@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
-public class TestDirectMarkerFiles extends TestMarkerFiles {
+public class TestDirectMarkerFiles extends TestMarkerFilesBase {
 
   @BeforeEach
   public void setup() throws IOException {

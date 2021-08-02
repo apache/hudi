@@ -52,7 +52,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PA
 /**
  * Marker file operations of using timeline server as a proxy to create and delete marker files.
  * Each data file has a corresponding marker entry, which is stored in a limited number of
- * marker files maintained by the timeline service (each marker file contains multiple marker
+ * underlying files maintained by the timeline server (each file contains multiple marker
  * entries).
  */
 public class TimelineServerBasedMarkerFiles extends MarkerFiles {

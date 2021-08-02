@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public abstract class TestMarkerFiles extends HoodieCommonTestHarness {
+public abstract class TestMarkerFilesBase extends HoodieCommonTestHarness {
 
   protected MarkerFiles markerFiles;
   protected FileSystem fs;

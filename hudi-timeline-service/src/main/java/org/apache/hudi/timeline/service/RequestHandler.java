@@ -450,7 +450,7 @@ public class RequestHandler {
     }, false));
 
     app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("DELETE_MARKERS", 1);
+      metricsRegistry.add("DELETE_MARKER_DIR", 1);
       boolean success = markerHandler.deleteMarkers(
           ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
       writeValueAsString(ctx, success);

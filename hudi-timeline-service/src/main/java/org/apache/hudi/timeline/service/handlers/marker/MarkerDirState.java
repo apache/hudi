@@ -51,6 +51,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -83,13 +84,12 @@ public class MarkerDirState implements Serializable {
   // A list of pending futures from async marker creation requests
   private final List<MarkerCreationCompletableFuture> markerCreationFutures = new ArrayList<>();
   private final int parallelism;
-  private final Object firstRequestLock = new Object();
+  private final AtomicBoolean lazyInitComplete;
   private final Object markerCreationProcessingLock = new Object();
   private transient HoodieEngineContext hoodieEngineContext;
   // Last underlying file index used, for finding the next file index
   // in a round-robin fashion
   private int lastFileIndex = 0;
-  private boolean hasFirstRequest = false;
 
   public MarkerDirState(String markerDirPath, int markerBatchNumThreads, FileSystem fileSystem,
                         Registry metricsRegistry, HoodieEngineContext hoodieEngineContext, int parallelism) {
@@ -100,6 +100,7 @@ public class MarkerDirState implements Serializable {
     this.parallelism = parallelism;
     this.threadUseStatus =
         Stream.generate(() -> false).limit(markerBatchNumThreads).collect(Collectors.toList());
+    this.lazyInitComplete = new AtomicBoolean(false);
   }
 
   /**
@@ -264,11 +265,8 @@ public class MarkerDirState implements Serializable {
    * Syncs the markers from the underlying files for the first request.
    */
   private void maybeSyncOnFirstRequest() {
-    synchronized (firstRequestLock) {
-      if (!hasFirstRequest) {
-        syncMarkersFromFileSystem();
-        hasFirstRequest = true;
-      }
+    if (!lazyInitComplete.getAndSet(true)) {
+      syncMarkersFromFileSystem();
     }
   }
 

@@ -42,6 +42,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /**
@@ -74,11 +75,8 @@ public class MarkerHandler extends Handler {
   private final Map<String, MarkerDirState> markerDirStateMap = new HashMap<>();
   // A long-running thread to dispatch marker creation requests to batch processing threads
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
+  private final AtomicBoolean firstMarkerCreationRequest;
   private transient HoodieEngineContext hoodieEngineContext;
-  // Lock for synchronous processing of marker creating requests
-  private final Object createMarkerRequestLockObject = new Object();
-  // Next batch process timestamp in milliseconds
-  private boolean firstMarkerCreationRequest = true;
   private ScheduledFuture<?> dispatchingScheduledFuture;
 
   public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
@@ -94,8 +92,12 @@ public class MarkerHandler extends Handler {
     this.executorService = Executors.newSingleThreadScheduledExecutor();
     this.markerCreationDispatchingRunnable = new MarkerCreationDispatchingRunnable(
         markerDirStateMap, timelineServiceConfig.markerBatchNumThreads);
+    this.firstMarkerCreationRequest = new AtomicBoolean(true);
   }
 
+  /**
+   * Stops the dispatching of marker creation requests.
+   */
   public void stop() {
     if (dispatchingScheduledFuture != null) {
       dispatchingScheduledFuture.cancel(true);
@@ -148,13 +150,10 @@ public class MarkerHandler extends Handler {
     // Add the future to the list
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
     markerDirState.addMarkerCreationFuture(future);
-    synchronized (createMarkerRequestLockObject) {
-      if (firstMarkerCreationRequest) {
-        dispatchingScheduledFuture = executorService.scheduleAtFixedRate(markerCreationDispatchingRunnable,
-            timelineServiceConfig.markerBatchIntervalMs, timelineServiceConfig.markerBatchIntervalMs,
-            TimeUnit.MILLISECONDS);
-        firstMarkerCreationRequest = false;
-      }
+    if (firstMarkerCreationRequest.getAndSet(false)) {
+      dispatchingScheduledFuture = executorService.scheduleAtFixedRate(markerCreationDispatchingRunnable,
+          timelineServiceConfig.markerBatchIntervalMs, timelineServiceConfig.markerBatchIntervalMs,
+          TimeUnit.MILLISECONDS);
     }
     return future;
   }
