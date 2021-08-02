@@ -100,7 +100,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           // time.
           HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
-            HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getHoodieVirtualKeyInfoOpt());
+            HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getHoodieVirtualKeyInfo());
           }
           this.conf = jobConf;
           this.conf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");

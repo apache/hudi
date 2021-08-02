@@ -216,8 +216,8 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
           HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
               tableConfig.getPayloadClass(),
-              tableConfig.populateMetaFields() ? Option.empty() : Option.of(tableConfig.getRecordKeyFieldProp()),
-              tableConfig.populateMetaFields() ? Option.empty() : Option.of(tableConfig.getPartitionFieldProp())));
+              tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
+                  tableConfig.getPartitionFieldProp()))));
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);

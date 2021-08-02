@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -133,8 +134,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         if (baseRecord.isPresent()) {
           hoodieRecord = tableConfig.populateMetaFields() ? SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
               tableConfig.getPayloadClass()) : SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
-              tableConfig.getPayloadClass(), tableConfig.getRecordKeyFieldProp(),
-              tableConfig.getPartitionFieldProp());
+              tableConfig.getPayloadClass(), Pair.of(tableConfig.getRecordKeyFieldProp(),
+              tableConfig.getPartitionFieldProp()));
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
         }
       }

@@ -143,8 +143,8 @@ public class HoodieClientTestUtils {
   /**
    * Obtain all new data written into the Hoodie table with an optional from timestamp.
    */
-  public static long countRecordsWithOptionalSince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
-                                                   HoodieTimeline commitTimeline, Option<String> lastCommitTimeOpt) {
+  public static long countRecordsOptionallySince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
+                                                 HoodieTimeline commitTimeline, Option<String> lastCommitTimeOpt) {
     List<HoodieInstant> commitsToReturn =
         lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants().collect(Collectors.toList()) :
             commitTimeline.getInstants().collect(Collectors.toList());

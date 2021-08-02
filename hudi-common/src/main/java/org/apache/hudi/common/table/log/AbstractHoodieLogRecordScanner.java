@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -82,10 +83,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
-  // simple recordKey field
-  private Option<String> simpleRecordKeyField = Option.empty();
-  // simple partition path field
-  private Option<String> simplePartitionPathField = Option.empty();
+  // simple key gen fields
+  private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
   protected final List<String> logFilePaths;
   // Read Lazily flag
@@ -123,8 +122,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     if (!tableConfig.populateMetaFields()) {
-      this.simpleRecordKeyField = Option.of(tableConfig.getRecordKeyFieldProp());
-      this.simplePartitionPathField = Option.of(tableConfig.getPartitionFieldProp());
+      this.simpleKeyGenFields = Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
     }
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
@@ -313,11 +311,10 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
-    if (!simpleRecordKeyField.isPresent()) {
+    if (!simpleKeyGenFields.isPresent()) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
     } else {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.simpleRecordKeyField.get(),
-          this.simplePartitionPathField.get());
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.simpleKeyGenFields.get());
     }
   }
 

@@ -38,20 +38,20 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
 
   private String basePath;
 
-  private Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt = Option.empty();
+  private Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
 
   public HoodieRealtimeFileSplit() {
     super();
   }
 
   public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths, String maxCommitTime,
-                                 Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt)
+                                 Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo)
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
     this.deltaLogPaths = deltaLogPaths;
     this.maxCommitTime = maxCommitTime;
     this.basePath = basePath;
-    this.hoodieVirtualKeyInfoOpt = hoodieVirtualKeyInfoOpt;
+    this.hoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
   }
 
   public List<String> getDeltaLogPaths() {
@@ -67,13 +67,13 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
   }
 
   @Override
-  public void setHoodieVirtualKeyInfoOpt(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt) {
-    this.hoodieVirtualKeyInfoOpt = hoodieVirtualKeyInfoOpt;
+  public void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
+    this.hoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
   }
 
   @Override
-  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfoOpt() {
-    return hoodieVirtualKeyInfoOpt;
+  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo() {
+    return hoodieVirtualKeyInfo;
   }
 
   public void setDeltaLogPaths(List<String> deltaLogPaths) {

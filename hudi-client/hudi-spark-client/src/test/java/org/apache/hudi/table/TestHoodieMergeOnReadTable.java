@@ -198,10 +198,10 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
       if (cfg.populateMetaFields()) {
-        assertEquals(200, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.of("000")),
+        assertEquals(200, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of("000")),
             "Must contain 200 records");
       } else {
-        assertEquals(200, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.empty()));
+        assertEquals(200, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.empty()));
       }
     }
   }
@@ -248,7 +248,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
       assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
-      assertEquals(200, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.of("000")),
+      assertEquals(200, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of("000")),
           "Must contain 200 records");
     }
   }
@@ -333,10 +333,10 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       assertEquals(clusteringCommitTime, timeline.lastInstant().get().getTimestamp());
       assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, timeline.lastInstant().get().getAction());
       if (cfg.populateMetaFields()) {
-        assertEquals(400, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.of("000")),
+        assertEquals(400, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of("000")),
             "Must contain 200 records");
       } else {
-        assertEquals(400, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.empty()));
+        assertEquals(400, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.empty()));
       }
     }
   }

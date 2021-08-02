@@ -79,7 +79,7 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   }
 
   @Override
-  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfoOpt() {
+  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo() {
     return Option.empty();
   }
 
@@ -99,6 +99,6 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   }
 
   @Override
-  public void setHoodieVirtualKeyInfoOpt(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt) {}
+  public void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {}
 
 }

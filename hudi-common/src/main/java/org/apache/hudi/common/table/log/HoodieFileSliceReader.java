@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieFileReader;
 
 import org.apache.avro.Schema;
@@ -39,12 +40,12 @@ public class HoodieFileSliceReader implements Iterator<HoodieRecord<? extends Ho
 
   public static <R extends IndexedRecord, T extends HoodieRecordPayload> HoodieFileSliceReader getFileSliceReader(
       HoodieFileReader<R> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass,
-      Option<String> simpleRecordKeyFieldOpt, Option<String> simplePartitionPathFieldOpt) throws IOException {
+      Option<Pair<String,String>> simpleKeyGenFieldsOpt) throws IOException {
     Iterator<R> baseIterator = baseFileReader.getRecordIterator(schema);
     while (baseIterator.hasNext()) {
       GenericRecord record = (GenericRecord) baseIterator.next();
-      HoodieRecord<T> hoodieRecord = simpleRecordKeyFieldOpt.isPresent()
-          ? SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, simpleRecordKeyFieldOpt.get(), simplePartitionPathFieldOpt.get())
+      HoodieRecord<T> hoodieRecord = simpleKeyGenFieldsOpt.isPresent()
+          ? SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, simpleKeyGenFieldsOpt.get())
           : SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass);
       scanner.processNextRecord(hoodieRecord);
     }

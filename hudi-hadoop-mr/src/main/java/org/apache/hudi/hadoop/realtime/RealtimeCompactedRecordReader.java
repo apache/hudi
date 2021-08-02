@@ -62,8 +62,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     this.parquetReader = realReader;
     this.deltaRecordMap = getMergedLogRecordScanner().getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
-    if (split.getHoodieVirtualKeyInfoOpt().isPresent()) {
-      this.recordKeyIndex = split.getHoodieVirtualKeyInfoOpt().get().getRecordKeyFieldIndex();
+    if (split.getHoodieVirtualKeyInfo().isPresent()) {
+      this.recordKeyIndex = split.getHoodieVirtualKeyInfo().get().getRecordKeyFieldIndex();
     }
   }
 

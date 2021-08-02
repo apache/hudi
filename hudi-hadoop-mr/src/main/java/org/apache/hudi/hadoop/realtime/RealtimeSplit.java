@@ -57,7 +57,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    * Returns Virtual key info if meta fields are disabled.
    * @return
    */
-  Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfoOpt();
+  Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo();
 
   /**
    * Update Log File Paths.
@@ -78,7 +78,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    */
   void setBasePath(String basePath);
 
-  void setHoodieVirtualKeyInfoOpt(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt);
+  void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo);
 
   default void writeToOutput(DataOutput out) throws IOException {
     InputSplitUtils.writeString(getBasePath(), out);
@@ -87,14 +87,14 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
     for (String logFilePath : getDeltaLogPaths()) {
       InputSplitUtils.writeString(logFilePath, out);
     }
-    if (!getHoodieVirtualKeyInfoOpt().isPresent()) {
+    if (!getHoodieVirtualKeyInfo().isPresent()) {
       InputSplitUtils.writeBoolean(false, out);
     } else {
       InputSplitUtils.writeBoolean(true, out);
-      InputSplitUtils.writeString(getHoodieVirtualKeyInfoOpt().get().getRecordKeyField(), out);
-      InputSplitUtils.writeString(getHoodieVirtualKeyInfoOpt().get().getPartitionPathField(), out);
-      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfoOpt().get().getRecordKeyFieldIndex()), out);
-      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfoOpt().get().getPartitionPathFieldIndex()), out);
+      InputSplitUtils.writeString(getHoodieVirtualKeyInfo().get().getRecordKeyField(), out);
+      InputSplitUtils.writeString(getHoodieVirtualKeyInfo().get().getPartitionPathField(), out);
+      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfo().get().getRecordKeyFieldIndex()), out);
+      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfo().get().getPartitionPathFieldIndex()), out);
     }
   }
 
@@ -113,7 +113,7 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
       String partitionPathField = InputSplitUtils.readString(in);
       int recordFieldIndex = Integer.parseInt(InputSplitUtils.readString(in));
       int partitionPathIndex = Integer.parseInt(InputSplitUtils.readString(in));
-      setHoodieVirtualKeyInfoOpt(Option.of(new HoodieVirtualKeyInfo(recordKeyField, partitionPathField, recordFieldIndex, partitionPathIndex)));
+      setHoodieVirtualKeyInfo(Option.of(new HoodieVirtualKeyInfo(recordKeyField, partitionPathField, recordFieldIndex, partitionPathIndex)));
     }
   }
 

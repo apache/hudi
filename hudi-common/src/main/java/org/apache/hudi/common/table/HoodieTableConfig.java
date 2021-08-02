@@ -158,7 +158,7 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
   public static final ConfigProperty<String> HOODIE_TABLE_KEY_GENERATOR_CLASS = ConfigProperty
-      .key("hoodie.datasource.write.keygenerator.class")
+      .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
 
