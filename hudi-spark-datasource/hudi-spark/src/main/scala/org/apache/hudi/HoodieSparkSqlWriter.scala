@@ -120,6 +120,7 @@ object HoodieSparkSqlWriter {
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP)
         val partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator)
         val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
+        val populateMetaFields = parameters.getOrElse(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()).toBoolean
 
         val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
@@ -130,7 +131,9 @@ object HoodieSparkSqlWriter {
           .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
           .setPartitionFields(partitionColumns)
-          .setPopulateMetaFields(parameters.getOrElse(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()).toBoolean)
+          .setPopulateMetaFields(populateMetaFields)
+          .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD_OPT_KEY))
+          .setKeyGeneratorClassProp(hoodieConfig.getString(KEYGENERATOR_CLASS_OPT_KEY))
           .initTable(sparkContext.hadoopConfiguration, path.get)
         tableConfig = tableMetaClient.getTableConfig
       }
@@ -284,18 +287,22 @@ object HoodieSparkSqlWriter {
       val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP)
       val partitionColumns = HoodieWriterUtils.getPartitionColumns(parameters)
       val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
+      val keyGenProp = hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_KEY_GENERATOR_CLASS)
+      val populateMetaFields = parameters.getOrElse(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()).toBoolean
 
       HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(HoodieTableType.valueOf(tableType))
-          .setTableName(tableName)
-          .setRecordKeyFields(recordKeyFields)
-          .setArchiveLogFolder(archiveLogFolder)
-          .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS_OPT_KEY))
-          .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
-          .setBootstrapIndexClass(bootstrapIndexClass)
-          .setBootstrapBasePath(bootstrapBasePath)
-          .setPartitionFields(partitionColumns)
-          .initTable(sparkContext.hadoopConfiguration, path)
+        .setTableType(HoodieTableType.valueOf(tableType))
+        .setTableName(tableName)
+        .setRecordKeyFields(recordKeyFields)
+        .setArchiveLogFolder(archiveLogFolder)
+        .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS_OPT_KEY))
+        .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
+        .setBootstrapIndexClass(bootstrapIndexClass)
+        .setBootstrapBasePath(bootstrapBasePath)
+        .setPartitionFields(partitionColumns)
+        .setPopulateMetaFields(populateMetaFields)
+        .setKeyGeneratorClassProp(keyGenProp)
+        .initTable(sparkContext.hadoopConfiguration, path)
     }
 
     val jsc = new JavaSparkContext(sqlContext.sparkContext)

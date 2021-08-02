@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -110,8 +111,15 @@ public class SpillableMapUtils {
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
-    String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-    String partitionPath = rec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    return convertToHoodieRecordPayload(rec, payloadClazz, Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
+  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, Pair<String, String> recordKeyPartitionPathPair) {
+    String recKey = rec.get(recordKeyPartitionPathPair.getLeft()).toString();
+    String partitionPath = rec.get(recordKeyPartitionPathPair.getRight()).toString();
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
         ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.of(rec)}, Option.class));
     return (R) hoodieRecord;
