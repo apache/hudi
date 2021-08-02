@@ -174,6 +174,7 @@ public class MarkerDirState implements Serializable {
     if (markerCreationFutures.isEmpty()) {
       return new ArrayList<>();
     }
+    maybeSyncOnFirstRequest();
 
     List<MarkerCreationCompletableFuture> pendingFutures;
     synchronized (markerCreationFutures) {
@@ -194,7 +195,6 @@ public class MarkerDirState implements Serializable {
     if (pendingMarkerCreationFutures.isEmpty()) {
       markFileAvailable(fileIndex);
     }
-    maybeSyncOnFirstRequest();
 
     LOG.debug("timeMs=" + System.currentTimeMillis() + " markerDirPath=" + markerDirPath
         + " numRequests=" + pendingMarkerCreationFutures.size() + " fileIndex=" + fileIndex);
