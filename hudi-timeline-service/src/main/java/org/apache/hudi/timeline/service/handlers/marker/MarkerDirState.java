@@ -344,9 +344,9 @@ public class MarkerDirState implements Serializable {
     try {
       return Integer.parseInt(markerFileName.substring(prefixIndex + MARKERS_FILENAME_PREFIX.length()));
     } catch (NumberFormatException nfe) {
-      nfe.printStackTrace();
+      LOG.error("Failed to parse marker file index from " + markerFilePathStr);
+      throw new HoodieException(nfe.getMessage(), nfe);
     }
-    return -1;
   }
 
   /**
