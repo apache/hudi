@@ -19,10 +19,16 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
@@ -32,6 +38,8 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 
 /**
  * Sink function that cleans the old commits.
@@ -62,6 +70,8 @@ public class CleanFunction<T> extends AbstractRichFunction
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
       this.executor = new NonThrownExecutor(LOG);
     }
+
+    removeCorruptedCleanAction();
   }
 
   @Override
@@ -89,5 +99,29 @@ public class CleanFunction<T> extends AbstractRichFunction
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
     // no operation
+  }
+
+  private void removeCorruptedCleanAction() {
+    HoodieTableMetaClient client = writeClient.getHoodieTable().getMetaClient();
+    HoodieTimeline cleanerTimeline = client.getActiveTimeline().getCleanerTimeline();
+
+    executor.execute(() -> {
+      LOG.info("Inspecting clean metadata in timeline for corrupted files");
+      cleanerTimeline.getInstants().forEach(instant -> {
+        try {
+          CleanerUtils.getCleanerPlan(client, instant);
+        } catch (AvroRuntimeException e) {
+          LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+          FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+        } catch (IOException ioe) {
+          if (ioe.getMessage().contains("Not an Avro data file")) {
+            LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+            FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+          } else {
+            throw new HoodieIOException(ioe.getMessage(), ioe);
+          }
+        }
+      });
+    }, "remove corrupted clean action");
   }
 }
