@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -76,6 +77,8 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     if (writeClient == null) {
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
     }
+
+    this.writeClient.registerMetricsGroup(HoodieTimeline.COMPACTION_ACTION, getClass().getSimpleName());
     this.commitBuffer = new HashMap<>();
   }
 

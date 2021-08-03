@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.HoodieFlinkMetrics;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -42,6 +43,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Histogram;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -82,6 +84,8 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   private final Pattern pattern;
   private boolean alreadyBootstrap;
 
+  private Histogram bootstrapHistogram;
+
   public BootstrapFunction(Configuration conf) {
     this.conf = conf;
     this.pattern = Pattern.compile(conf.getString(FlinkOptions.INDEX_PARTITION_REGEX));
@@ -94,6 +98,7 @@ public class BootstrapFunction<I, O extends HoodieRecord>
     this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
     this.hoodieTable = getTable();
     this.aggregateManager = ((StreamingRuntimeContext) getRuntimeContext()).getGlobalAggregateManager();
+    this.bootstrapHistogram = new HoodieFlinkMetrics("bootstrap", getRuntimeContext().getMetricGroup().addGroup(getClass().getSimpleName())).getBootstrapHistogram();
   }
 
   @Override
@@ -175,6 +180,8 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         }
         LOG.info("Load records from {}.", fileSlice);
 
+        long startProcessFileSlice = System.currentTimeMillis();
+
         // load parquet records
         fileSlice.getBaseFile().ifPresent(baseFile -> {
           // filter out crushed files
@@ -197,10 +204,10 @@ public class BootstrapFunction<I, O extends HoodieRecord>
 
         // load avro log records
         List<String> logPaths = fileSlice.getLogFiles()
-                // filter out crushed files
-                .filter(logFile -> logFile.getFileSize() > 0)
-                .map(logFile -> logFile.getPath().toString())
-                .collect(toList());
+            // filter out crushed files
+            .filter(logFile -> logFile.getFileSize() > 0)
+            .map(logFile -> logFile.getPath().toString())
+            .collect(toList());
         HoodieMergedLogRecordScanner scanner = scanLog(logPaths, schema, latestCommitTime.get().getTimestamp());
 
         try {
@@ -210,6 +217,8 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         } catch (Exception e) {
           throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
         }
+
+        bootstrapHistogram.update(System.currentTimeMillis() - startProcessFileSlice);
       }
     }
 
@@ -219,9 +228,9 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   }
 
   private HoodieMergedLogRecordScanner scanLog(
-          List<String> logPaths,
-          Schema logSchema,
-          String latestInstantTime) {
+      List<String> logPaths,
+      Schema logSchema,
+      String latestInstantTime) {
     String basePath = this.hoodieTable.getMetaClient().getBasePath();
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(FSUtils.getFs(basePath, this.hadoopConf))
