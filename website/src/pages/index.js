@@ -43,7 +43,7 @@ function DataLake() {
                 </AnchoredH2>
 
                 <div className="sub-title" className="text--center text--semibold">
-                    Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing.
+                    Hudi brings stream processing to data lakes, providing fresh data while being an order of magnitude efficient over traditional batch processing.
                 </div>
 
                 <img className="hudi-lake text-center" src={require('/assets/images/hudi-lake.png').default} alt="Hudi Data Lake" />
@@ -67,41 +67,41 @@ function HomepageFeatures() {
                                     <tr>
                                         <td>
                                             <i className={classnames("feather", `icon-zap`)}></i>
-                                            Upsert support with fast, pluggable indexing.
+                                            Upserts, Deletes with fast, pluggable indexing.
                                         </td>
                                         <td>
                                             <i className={classnames("feather", `icon-zap`)}></i>
-                                            Atomically publish data with rollback support.
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>
-                                            <i className={classnames("feather", `icon-zap`)}></i>
-                                            Snapshot isolation between writer & queries.
-                                        </td>
-                                        <td>
-                                            <i className={classnames("feather", `icon-zap`)}></i>
-                                            Savepoints for data recovery.
+                                            Incremental queries, Record level change streams
                                         </td>
                                     </tr>
                                     <tr>
                                         <td>
                                             <i className={classnames("feather", `icon-zap`)}></i>
-                                            Manages file sizes, layout using statistics.
+                                            Transactions, Rollbacks, Concurrency Control.
                                         </td>
                                         <td>
                                             <i className={classnames("feather", `icon-zap`)}></i>
-                                            Async compaction of row & columnar data.
+                                            SQL Read/Writes from Spark, Presto, Trino, Hive & more
                                         </td>
                                     </tr>
                                     <tr>
                                         <td>
                                             <i className={classnames("feather", `icon-zap`)}></i>
-                                            Timeline metadata to track lineage.
+                                            Automatic file sizing, data clustering, compactions, cleaning.
                                         </td>
                                         <td>
                                             <i className={classnames("feather", `icon-zap`)}></i>
-                                            Optimize data lake layout with clustering.
+                                            Streaming ingestion, Built-in CDC sources & tools.
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <i className={classnames("feather", `icon-zap`)}></i>
+                                            Built-in metadata tracking for scalable storage access.
+                                        </td>
+                                        <td>
+                                            <i className={classnames("feather", `icon-zap`)}></i>
+                                            Backwards compatible schema evolution and enforcement.
                                         </td>
                                     </tr>
                                 </tbody>
