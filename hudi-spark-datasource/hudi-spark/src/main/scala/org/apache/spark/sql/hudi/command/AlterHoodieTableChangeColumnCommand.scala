@@ -68,7 +68,6 @@ case class AlterHoodieTableChangeColumnCommand(
     val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
 
     val path = getTableLocation(table, sparkSession)
-      .getOrElse(s"missing location for ${table.identifier}")
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
       .setConf(hadoopConf).build()

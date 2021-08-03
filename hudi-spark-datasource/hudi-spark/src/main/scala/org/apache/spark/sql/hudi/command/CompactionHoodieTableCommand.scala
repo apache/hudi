@@ -31,7 +31,6 @@ case class CompactionHoodieTableCommand(table: CatalogTable,
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val basePath = getTableLocation(table, sparkSession)
-      .getOrElse(s"missing location for ${table.identifier}")
     CompactionHoodiePathCommand(basePath, operation, instantTimestamp).run(sparkSession)
   }
 

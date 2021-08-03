@@ -37,7 +37,6 @@ class AlterHoodieTableRenameCommand(
       val catalog = sparkSession.sessionState.catalog
       val table = catalog.getTableMetadata(oldName)
       val path = getTableLocation(table, sparkSession)
-        .getOrElse(s"missing location for ${table.identifier}")
 
       val hadoopConf = sparkSession.sessionState.newHadoopConf()
       val metaClient = HoodieTableMetaClient.builder().setBasePath(path)

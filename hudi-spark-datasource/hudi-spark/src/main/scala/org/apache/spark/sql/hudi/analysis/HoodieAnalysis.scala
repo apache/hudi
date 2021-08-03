@@ -21,7 +21,8 @@ import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
 import org.apache.hudi.SparkAdapterSupport
 
 import scala.collection.JavaConverters._
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
@@ -286,7 +287,28 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       } else {
         l
       }
-
+    // Fill schema for Create Table without specify schema info
+    case c @ CreateTable(tableDesc, _, _)
+      if isHoodieTable(tableDesc) =>
+        val tablePath = getTableLocation(c.tableDesc, sparkSession)
+        if (tableExistsInPath(tablePath, sparkSession.sessionState.newHadoopConf())) {
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(tablePath)
+            .setConf(sparkSession.sessionState.newHadoopConf())
+            .build()
+          val tableSchema = HoodieSqlUtils.getTableSqlSchema(metaClient).map(HoodieSqlUtils.addMetaFields)
+          if (tableSchema.isDefined && tableDesc.schema.isEmpty) {
+            // Fill the schema with the schema from the table
+            c.copy(tableDesc.copy(schema = tableSchema.get))
+          } else if (tableSchema.isDefined && tableDesc.schema != tableSchema.get) {
+            throw new AnalysisException(s"Specified schema in create table statement is not equal to the table schema." +
+              s"You should not specify the schema for an exist table: ${tableDesc.identifier} ")
+          } else {
+            c
+          }
+        } else {
+          c
+        }
     case p => p
   }
 

@@ -62,7 +62,6 @@ case class CreateHoodieTableAsSelectCommand(
       }
     }
     val tablePath = getTableLocation(table, sparkSession)
-      .getOrElse(s"Missing path for table ${table.identifier}")
     val conf = sparkSession.sessionState.newHadoopConf()
     assert(CreateHoodieTableCommand.isEmptyPath(tablePath, conf),
       s"Path '$tablePath' should be empty for CTAS")

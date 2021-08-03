@@ -416,7 +416,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     val targetTableDb = targetTableIdentify.database.getOrElse("default")
     val targetTableName = targetTableIdentify.identifier
     val path = getTableLocation(targetTable, sparkSession)
-      .getOrElse(s"missing location for $targetTableIdentify")
 
     val options = targetTable.storage.properties
     val definedPk = HoodieOptionConfig.getPrimaryColumns(options)

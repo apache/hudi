@@ -24,7 +24,9 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.SPARK_VERSION
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -62,6 +64,16 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       case SubqueryAlias(name, _) => sparkAdapter.toTableIdentify(name)
       case _ => throw new IllegalArgumentException(s"Illegal table: $table")
     }
+  }
+
+  def getTableSqlSchema(metaClient: HoodieTableMetaClient): Option[StructType] = {
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val avroSchema = try Some(schemaResolver.getTableAvroSchema(false))
+    catch {
+      case _: Throwable => None
+    }
+    avroSchema.map(SchemaConverters.toSqlType(_).dataType
+      .asInstanceOf[StructType])
   }
 
   private def tripAlias(plan: LogicalPlan): LogicalPlan = {
@@ -122,12 +134,12 @@ object HoodieSqlUtils extends SparkAdapterSupport {
    * @param spark
    * @return
    */
-  def getTableLocation(tableId: TableIdentifier, spark: SparkSession): Option[String] = {
+  def getTableLocation(tableId: TableIdentifier, spark: SparkSession): String = {
     val table = spark.sessionState.catalog.getTableMetadata(tableId)
     getTableLocation(table, spark)
   }
 
-  def getTableLocation(table: CatalogTable, sparkSession: SparkSession): Option[String] = {
+  def getTableLocation(table: CatalogTable, sparkSession: SparkSession): String = {
     val uri = if (table.tableType == CatalogTableType.MANAGED && isHoodieTable(table)) {
       Some(sparkSession.sessionState.catalog.defaultTablePath(table.identifier))
     } else {
@@ -136,6 +148,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${table.identifier}"))
   }
 
   private def removePlaceHolder(path: String): String = {
@@ -152,6 +165,16 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     val hadoopPath = new Path(path)
     val fs = hadoopPath.getFileSystem(hadoopConf)
     fs.makeQualified(hadoopPath).toUri.toString
+  }
+
+  /**
+   * Check if the hoodie.properties exists in the table path.
+   */
+  def tableExistsInPath(tablePath: String, conf: Configuration): Boolean = {
+    val basePath = new Path(tablePath)
+    val fs = basePath.getFileSystem(conf)
+    val metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)
+    fs.exists(metaPath)
   }
 
   def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
