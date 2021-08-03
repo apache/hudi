@@ -38,6 +38,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -68,14 +69,16 @@ public class MarkerHandler extends Handler {
 
   private final Registry metricsRegistry;
   // a scheduled executor service to schedule dispatching of marker creation requests
-  private final ScheduledExecutorService executorService;
+  private final ScheduledExecutorService dispatchingExecutorService;
+  // an executor service to schedule the worker threads of batch processing marker creation requests
+  private final ExecutorService batchingExecutorService;
   // Parallelism for reading and deleting marker files
   private final int parallelism;
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
   private final Map<String, MarkerDirState> markerDirStateMap = new HashMap<>();
   // A long-running thread to dispatch marker creation requests to batch processing threads
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
-  private final AtomicBoolean firstMarkerCreationRequest;
+  private final AtomicBoolean firstCreationRequestSeen;
   private transient HoodieEngineContext hoodieEngineContext;
   private ScheduledFuture<?> dispatchingScheduledFuture;
 
@@ -89,10 +92,11 @@ public class MarkerHandler extends Handler {
     this.hoodieEngineContext = hoodieEngineContext;
     this.metricsRegistry = metricsRegistry;
     this.parallelism = timelineServiceConfig.markerParallelism;
-    this.executorService = Executors.newSingleThreadScheduledExecutor();
-    this.markerCreationDispatchingRunnable = new MarkerCreationDispatchingRunnable(
-        markerDirStateMap, timelineServiceConfig.markerBatchNumThreads);
-    this.firstMarkerCreationRequest = new AtomicBoolean(true);
+    this.dispatchingExecutorService = Executors.newSingleThreadScheduledExecutor();
+    this.batchingExecutorService = Executors.newFixedThreadPool(timelineServiceConfig.markerBatchNumThreads);
+    this.markerCreationDispatchingRunnable =
+        new MarkerCreationDispatchingRunnable(markerDirStateMap, batchingExecutorService);
+    this.firstCreationRequestSeen = new AtomicBoolean(false);
   }
 
   /**
@@ -102,7 +106,8 @@ public class MarkerHandler extends Handler {
     if (dispatchingScheduledFuture != null) {
       dispatchingScheduledFuture.cancel(true);
     }
-    executorService.shutdown();
+    dispatchingExecutorService.shutdown();
+    batchingExecutorService.shutdown();
   }
 
   /**
@@ -150,8 +155,8 @@ public class MarkerHandler extends Handler {
     // Add the future to the list
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
     markerDirState.addMarkerCreationFuture(future);
-    if (firstMarkerCreationRequest.getAndSet(false)) {
-      dispatchingScheduledFuture = executorService.scheduleAtFixedRate(markerCreationDispatchingRunnable,
+    if (firstCreationRequestSeen.getAndSet(true)) {
+      dispatchingScheduledFuture = dispatchingExecutorService.scheduleAtFixedRate(markerCreationDispatchingRunnable,
           timelineServiceConfig.markerBatchIntervalMs, timelineServiceConfig.markerBatchIntervalMs,
           TimeUnit.MILLISECONDS);
     }

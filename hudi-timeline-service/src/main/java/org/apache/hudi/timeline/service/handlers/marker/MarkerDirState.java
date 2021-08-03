@@ -51,7 +51,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -84,12 +83,13 @@ public class MarkerDirState implements Serializable {
   // A list of pending futures from async marker creation requests
   private final List<MarkerCreationCompletableFuture> markerCreationFutures = new ArrayList<>();
   private final int parallelism;
-  private final AtomicBoolean lazyInitComplete;
+  private final Object lazyInitLock = new Object();
   private final Object markerCreationProcessingLock = new Object();
   private transient HoodieEngineContext hoodieEngineContext;
   // Last underlying file index used, for finding the next file index
   // in a round-robin fashion
   private int lastFileIndex = 0;
+  private boolean lazyInitComplete;
 
   public MarkerDirState(String markerDirPath, int markerBatchNumThreads, FileSystem fileSystem,
                         Registry metricsRegistry, HoodieEngineContext hoodieEngineContext, int parallelism) {
@@ -100,7 +100,7 @@ public class MarkerDirState implements Serializable {
     this.parallelism = parallelism;
     this.threadUseStatus =
         Stream.generate(() -> false).limit(markerBatchNumThreads).collect(Collectors.toList());
-    this.lazyInitComplete = new AtomicBoolean(false);
+    this.lazyInitComplete = false;
   }
 
   /**
@@ -141,12 +141,18 @@ public class MarkerDirState implements Serializable {
   public int getNextFileIndexToUse() {
     int fileIndex = -1;
     synchronized (threadUseStatus) {
-      for (int i = 0; i < threadUseStatus.size(); i++) {
-        int index = (lastFileIndex + 1 + i) % threadUseStatus.size();
-        if (!threadUseStatus.get(index)) {
-          fileIndex = index;
-          threadUseStatus.set(index, true);
-          break;
+      int nextIndex = (lastFileIndex + 1) % threadUseStatus.size();
+      if (!threadUseStatus.get(nextIndex)) {
+        fileIndex = nextIndex;
+        threadUseStatus.set(nextIndex, true);
+      } else {
+        for (int i = 1; i < threadUseStatus.size(); i++) {
+          int index = (lastFileIndex + 1 + i) % threadUseStatus.size();
+          if (!threadUseStatus.get(index)) {
+            fileIndex = index;
+            threadUseStatus.set(index, true);
+            break;
+          }
         }
       }
       if (fileIndex >= 0) {
@@ -157,11 +163,11 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * Marks the file available to use again.
+   * Marks the file as available to use again.
    *
    * @param fileIndex file index
    */
-  public void markFileAvailable(int fileIndex) {
+  public void markFileAsAvailable(int fileIndex) {
     synchronized (threadUseStatus) {
       threadUseStatus.set(fileIndex, false);
     }
@@ -193,7 +199,8 @@ public class MarkerDirState implements Serializable {
   public void processMarkerCreationRequests(
       final List<MarkerCreationCompletableFuture> pendingMarkerCreationFutures, int fileIndex) {
     if (pendingMarkerCreationFutures.isEmpty()) {
-      markFileAvailable(fileIndex);
+      markFileAsAvailable(fileIndex);
+      return;
     }
 
     LOG.debug("timeMs=" + System.currentTimeMillis() + " markerDirPath=" + markerDirPath
@@ -213,7 +220,7 @@ public class MarkerDirState implements Serializable {
       }
     }
     flushMarkersToFile(fileIndex);
-    markFileAvailable(fileIndex);
+    markFileAsAvailable(fileIndex);
 
     for (MarkerCreationCompletableFuture future : pendingMarkerCreationFutures) {
       try {
@@ -265,8 +272,11 @@ public class MarkerDirState implements Serializable {
    * Syncs the markers from the underlying files for the first request.
    */
   private void maybeSyncOnFirstRequest() {
-    if (!lazyInitComplete.getAndSet(true)) {
-      syncMarkersFromFileSystem();
+    synchronized (lazyInitLock) {
+      if (!lazyInitComplete) {
+        syncMarkersFromFileSystem();
+        lazyInitComplete = true;
+      }
     }
   }
 

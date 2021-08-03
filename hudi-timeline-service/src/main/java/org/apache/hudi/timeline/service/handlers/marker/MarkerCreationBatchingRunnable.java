@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.Map;
+import java.util.List;
 
 /**
  * A runnable for batch processing marker creation requests.
@@ -31,14 +31,10 @@ import java.util.Map;
 public class MarkerCreationBatchingRunnable implements Runnable {
   private static final Logger LOG = LogManager.getLogger(MarkerCreationBatchingRunnable.class);
 
-  private final Map<String, MarkerDirState> markerDirStateMap;
-  private final Map<String, MarkerDirRequestContext> requestContextMap;
+  private final List<MarkerDirRequestContext> requestContextList;
 
-  public MarkerCreationBatchingRunnable(
-      Map<String, MarkerDirState> markerDirStateMap,
-      Map<String, MarkerDirRequestContext> requestContextMap) {
-    this.markerDirStateMap = markerDirStateMap;
-    this.requestContextMap = requestContextMap;
+  public MarkerCreationBatchingRunnable(List<MarkerDirRequestContext> requestContextList) {
+    this.requestContextList = requestContextList;
   }
 
   @Override
@@ -46,16 +42,8 @@ public class MarkerCreationBatchingRunnable implements Runnable {
     LOG.debug("Start processing create marker requests");
     HoodieTimer timer = new HoodieTimer().startTimer();
 
-    for (String markerDir : requestContextMap.keySet()) {
-      MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
-
-      if (markerDirState == null) {
-        LOG.error("MarkerDirState of " + markerDir + " does not exist!");
-        continue;
-      }
-
-      MarkerDirRequestContext requestContext = requestContextMap.get(markerDir);
-      markerDirState.processMarkerCreationRequests(
+    for (MarkerDirRequestContext requestContext : requestContextList) {
+      requestContext.getMarkerDirState().processMarkerCreationRequests(
           requestContext.getFutures(), requestContext.getFileIndex());
     }
     LOG.debug("Finish batch processing of create marker requests in " + timer.endTimer() + " ms");

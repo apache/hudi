@@ -21,14 +21,13 @@ package org.apache.hudi.timeline.service.handlers.marker;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
- * A runnable for scheduling batch processing of marker creation requests.
+ * A runnable / worker for scheduling batch processing of marker creation requests.
  */
 public class MarkerCreationDispatchingRunnable implements Runnable {
   public static final Logger LOG = LogManager.getLogger(MarkerCreationDispatchingRunnable.class);
@@ -38,14 +37,30 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
   private final ExecutorService executorService;
 
   public MarkerCreationDispatchingRunnable(
-      Map<String, MarkerDirState> markerDirStateMap, int batchNumThreads) {
+      Map<String, MarkerDirState> markerDirStateMap, ExecutorService executorService) {
     this.markerDirStateMap = markerDirStateMap;
-    this.executorService = Executors.newFixedThreadPool(batchNumThreads);
+    this.executorService = executorService;
   }
 
+  /**
+   * Dispatches the marker creation requests that can be process to a worker thread of batch
+   * processing the requests.
+   *
+   * For each marker directory, goes through the following steps:
+   * (1) find the next available file index for writing.  If no file index is available,
+   *   skip the processing of this marker directory;
+   * (2) fetch the pending marker creation requests for this marker directory.  If there is
+   *   no request, skip this marker directory;
+   * (3) put the marker directory, marker dir state, list of requests futures, and the file index
+   *   to a {@code MarkerDirRequestContext} instance and add the instance to the request context list.
+   *
+   * If the request context list is not empty, spins up a worker thread, {@code MarkerCreationBatchingRunnable},
+   * and pass all the request context to the thread for batch processing.  The thread is responsible
+   * for responding to the request futures directly.
+   */
   @Override
   public void run() {
-    Map<String, MarkerDirRequestContext> requestContextMap = new HashMap<>();
+    List<MarkerDirRequestContext> requestContextList = new ArrayList<>();
 
     // Only fetch pending marker creation requests that can be processed,
     // i.e., that markers can be written to a underlying file
@@ -58,15 +73,15 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
       }
       List<MarkerCreationCompletableFuture> futures = markerDirState.fetchPendingMarkerCreationRequests();
       if (futures.isEmpty()) {
-        markerDirState.markFileAvailable(fileIndex);
+        markerDirState.markFileAsAvailable(fileIndex);
         continue;
       }
-      requestContextMap.put(markerDir, new MarkerDirRequestContext(futures, fileIndex));
+      requestContextList.add(new MarkerDirRequestContext(markerDir, markerDirState, futures, fileIndex));
     }
 
-    if (requestContextMap.size() > 0) {
+    if (requestContextList.size() > 0) {
       executorService.execute(
-          new MarkerCreationBatchingRunnable(markerDirStateMap, requestContextMap));
+          new MarkerCreationBatchingRunnable(requestContextList));
     }
   }
 }

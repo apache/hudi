@@ -24,14 +24,27 @@ import java.util.List;
  * Input of batch processing of marker creation requests for a single marker directory.
  */
 public class MarkerDirRequestContext {
+  private final String markerDir;
+  private final MarkerDirState markerDirState;
   // List of marker creation futures to process
   private final List<MarkerCreationCompletableFuture> futures;
   // File index to use to write markers
   private final int fileIndex;
 
-  public MarkerDirRequestContext(List<MarkerCreationCompletableFuture> futures, int fileIndex) {
+  public MarkerDirRequestContext(String markerDir, MarkerDirState markerDirState,
+                                 List<MarkerCreationCompletableFuture> futures, int fileIndex) {
+    this.markerDir = markerDir;
+    this.markerDirState = markerDirState;
     this.futures = futures;
     this.fileIndex = fileIndex;
+  }
+
+  public String getMarkerDir() {
+    return markerDir;
+  }
+
+  public MarkerDirState getMarkerDirState() {
+    return markerDirState;
   }
 
   public List<MarkerCreationCompletableFuture> getFutures() {
