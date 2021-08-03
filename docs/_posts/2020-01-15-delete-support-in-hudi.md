@@ -52,7 +52,6 @@ df.write.format("org.apache.hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Overwrite).
   save(basePath);
@@ -61,6 +60,7 @@ df.write.format("org.apache.hudi").
 ```
 option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
 ```
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 **Step 4** : Query data. Load the data files into a DataFrame.
 
@@ -93,7 +93,6 @@ df.write.format("org.apache.hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath);
@@ -102,6 +101,7 @@ df.write.format("org.apache.hudi").
 ```
 option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
 ```
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 **Step 7** : Reload the table and verify that the records are deleted
 

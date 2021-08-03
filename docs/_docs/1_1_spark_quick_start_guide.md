@@ -75,7 +75,6 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Overwrite).
   save(basePath)
@@ -95,6 +94,7 @@ Here we are using the default write operation : `upsert`. If you have a workload
 ```
 option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
 ```
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 ## Query data 
 
@@ -132,7 +132,6 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -147,6 +146,7 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `d
 ```
 option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
 ```
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 ## Incremental query
 
@@ -220,7 +220,6 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -266,7 +265,6 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -306,7 +304,6 @@ df.write.format("hudi").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.SimpleKeyGenerator").
   option(TABLE_NAME, tableName).
   mode(Append).
   save(basePath)
@@ -554,6 +551,7 @@ See the [deletion section](/docs/writing_data.html#deletes) of the writing data 
 ```
 option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
 ```
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 ## Where to go from here?
 
