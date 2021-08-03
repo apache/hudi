@@ -157,8 +157,8 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
     if (null != rocksDb) {
       rocksDb.close();
     }
-    super.close();
     rocksDb = null;
+    super.close();
   }
 
   private RocksDBDAO getRocksDb() {

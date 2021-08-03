@@ -88,8 +88,6 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
   private final ThreadLocal<BufferedRandomAccessFile> randomAccessFile = new ThreadLocal<>();
   private final Queue<BufferedRandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
 
-  private transient Thread shutdownThread = null;
-
   public BitCaskDiskMap(String baseFilePath, boolean isCompressionEnabled) throws IOException {
     super(baseFilePath, ExternalSpillableMap.DiskMapType.BITCASK.name());
     this.valueMetadataMap = new ConcurrentHashMap<>();
@@ -140,16 +138,6 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
         + ")");
     // Make sure file is deleted when JVM exits
     writeOnlyFile.deleteOnExit();
-    addShutDownHook();
-  }
-
-  /**
-   * Register shutdown hook to force flush contents of the data written to FileOutputStream from OS page cache
-   * (typically 4 KB) to disk.
-   */
-  private void addShutDownHook() {
-    shutdownThread = new Thread(this::cleanup);
-    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
   private void flushToDisk() {
@@ -269,14 +257,8 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
     // reducing concurrency). Instead, just clear the pointer map. The file will be removed on exit.
   }
 
+  @Override
   public void close() {
-    cleanup();
-    if (shutdownThread != null) {
-      Runtime.getRuntime().removeShutdownHook(shutdownThread);
-    }
-  }
-
-  private void cleanup() {
     valueMetadataMap.clear();
     try {
       if (writeOnlyFileHandle != null) {
