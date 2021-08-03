@@ -15,9 +15,9 @@ module.exports = {
   baseUrl: '/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
-  favicon: 'assets/image/favicon.ico',
-  organizationName: 'apache', // Usually your GitHub org/user name.
-  projectName: 'hudi', // Usually your repo name.
+  favicon: '/assets/images/favicon.ico',
+  organizationName: 'apache',
+  projectName: 'hudi',
   i18n: {
     defaultLocale: 'en',
     locales: ['en', 'cn'],
@@ -40,8 +40,8 @@ module.exports = {
         path: 'contribute',
         routeBasePath: 'contribute',
         sidebarPath: require.resolve('./sidebarsContribute.js'),
-        showLastUpdateAuthor: true,
-        showLastUpdateTime: true,
+        showLastUpdateAuthor: false,
+        showLastUpdateTime: false,
       },
     ],
     [
@@ -51,8 +51,8 @@ module.exports = {
         path: 'releases',
         routeBasePath: 'releases',
         sidebarPath: require.resolve('./sidebarsReleases.js'),
-        showLastUpdateAuthor: true,
-        showLastUpdateTime: true,
+        showLastUpdateAuthor: false,
+        showLastUpdateTime: false,
       },
     ],
     [
@@ -193,12 +193,12 @@ module.exports = {
           title: 'About',
           items: [
             {
-              label: 'Concepts',
-              to: '/docs/concepts',
-            },
-            {
               label: 'Our Vision',
               to: '/blog/2021/07/21/streaming-data-lake-platform',
+            },
+            {
+              label: 'Concepts',
+              to: '/docs/concepts',
             },
             {
               label: 'Team',
