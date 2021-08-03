@@ -33,8 +33,10 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
@@ -103,6 +105,24 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       });
     }
     return partitionPaths;
+  }
+
+  @Override
+  public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths)
+      throws IOException {
+    if (partitionPaths == null || partitionPaths.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    int parallelism = Math.min(DEFAULT_LISTING_PARALLELISM, partitionPaths.size());
+
+    List<Pair<String, FileStatus[]>> partitionToFiles = engineContext.map(partitionPaths, partitionPathStr -> {
+      Path partitionPath = new Path(partitionPathStr);
+      FileSystem fs = partitionPath.getFileSystem(hadoopConf.get());
+      return Pair.of(partitionPathStr, FSUtils.getAllDataFilesInPartition(fs, partitionPath));
+    }, parallelism);
+
+    return partitionToFiles.stream().collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
   @Override

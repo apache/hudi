@@ -17,11 +17,13 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_OPT_KEY, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.common.config.ConfigProperty
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.hive.{HiveSyncTool, SlashEncodedDayPartitionValueExtractor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{CustomKeyGenerator, SimpleKeyGenerator}
@@ -470,5 +472,17 @@ object DataSourceOptionsHelper {
       }
     })
     translatedOpt.toMap
+  }
+
+  def parametersWithReadDefaults(parameters: Map[String, String]): Map[String, String] = {
+    // First check if the ConfigUtils.IS_QUERY_AS_RO_TABLE has set by HiveSyncTool,
+    // or else use query type from QUERY_TYPE_OPT_KEY.
+    val queryType = parameters.get(ConfigUtils.IS_QUERY_AS_RO_TABLE)
+      .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .getOrElse(parameters.getOrElse(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_OPT_KEY.defaultValue()))
+
+    Map(
+      QUERY_TYPE_OPT_KEY.key -> queryType
+    ) ++ translateConfigurations(parameters)
   }
 }
