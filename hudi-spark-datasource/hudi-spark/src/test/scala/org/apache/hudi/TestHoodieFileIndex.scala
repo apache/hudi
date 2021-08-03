@@ -53,6 +53,10 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
   )
 
+  var queryOpts = Map(
+    DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
+  )
+
   @BeforeEach override def setUp() {
     initPath()
     initSparkContexts()
@@ -60,6 +64,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     initTestDataGenerator()
     initFileSystem()
     initMetaClient()
+
+    queryOpts = queryOpts ++ Map("path" -> basePath)
   }
 
   @ParameterizedTest
@@ -74,7 +80,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> basePath))
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
     assertEquals("partition", fileIndex.partitionSchema.fields.map(_.name).mkString(","))
   }
 
@@ -96,7 +102,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> basePath))
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
     assertEquals("partition", fileIndex.partitionSchema.fields.map(_.name).mkString(","))
   }
 
@@ -115,7 +121,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> basePath))
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
     assertEquals("partition", fileIndex.partitionSchema.fields.map(_.name).mkString(","))
   }
 
@@ -133,7 +139,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> basePath))
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
 
     val partitionFilter1 = EqualTo(attribute("partition"), literal("2021/03/08"))
     val partitionName = if (partitionEncode) PartitionPathEncodeUtils.escapePathName("2021/03/08")
@@ -176,7 +182,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> basePath))
+    val fileIndex = HoodieFileIndex(spark, metaClient, None,
+      queryOpts ++ Map(HoodieMetadataConfig.METADATA_ENABLE_PROP.key -> useMetaFileList.toString))
 
     val partitionFilter1 = And(
       EqualTo(attribute("dt"), literal("2021-03-01")),
@@ -190,7 +197,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     assertEquals(partitionValues.toSeq(Seq(StringType)).mkString(","), "2021-03-01,10")
     assertEquals(getFileCountInPartitionPath("2021-03-01/10"), filesAfterPrune.size)
 
-    val readDF1 = spark.read.format("hudi").load(basePath)
+    val readDF1 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key(), useMetaFileList)
+      .load(basePath)
     assertEquals(10, readDF1.count())
     assertEquals(5, readDF1.filter("dt = '2021-03-01' and hh = '10'").count())
 
@@ -206,6 +215,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .option(PARTITIONPATH_FIELD_OPT_KEY.key, "dt,hh")
       .option(KEYGENERATOR_CLASS_OPT_KEY.key, classOf[ComplexKeyGenerator].getName)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, "false")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key(), useMetaFileList)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -224,7 +234,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     // The returned file size should equal to the whole file size in all the partition paths.
     assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
       filesAfterPrune2.length)
-    val readDF2 = spark.read.format("hudi").load(basePath)
+    val readDF2 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, useMetaFileList)
+      .load(basePath)
 
     assertEquals(10, readDF2.count())
     // There are 5 rows in the  dt = 2021/03/01 and hh = 10

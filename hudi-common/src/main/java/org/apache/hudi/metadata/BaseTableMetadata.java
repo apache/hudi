@@ -44,7 +44,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
@@ -132,6 +134,26 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath, metadataConfig.shouldAssumeDatePartitioning())
         .getAllFilesInPartition(partitionPath);
+  }
+
+  @Override
+  public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths)
+      throws IOException {
+    if (enabled) {
+      Map<String, FileStatus[]> partitionsFilesMap = new HashMap<>();
+
+      try {
+        for (String partitionPath : partitionPaths) {
+          partitionsFilesMap.put(partitionPath, fetchAllFilesInPartition(new Path(partitionPath)));
+        }
+        return partitionsFilesMap;
+      } catch (Exception e) {
+        throw new HoodieMetadataException("Failed to retrieve files in partition from metadata", e);
+      }
+    }
+
+    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath, metadataConfig.shouldAssumeDatePartitioning())
+        .getAllFilesInPartitions(partitionPaths);
   }
 
   /**
