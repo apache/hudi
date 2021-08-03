@@ -19,7 +19,7 @@
 package org.apache.hudi.table.format.mor;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -59,7 +59,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.IntStream;
 
@@ -293,15 +292,14 @@ public class MergeOnReadInputFormat
         Long.MAX_VALUE); // read the whole file
   }
 
-  private Iterator<RowData> getLogFileIterator(MergeOnReadInputSplit split) {
+  private ClosableIterator<RowData> getLogFileIterator(MergeOnReadInputSplit split) {
     final Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
     final Schema requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
         AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-    final Map<String, HoodieRecord<? extends HoodieRecordPayload>> logRecords =
-        FormatUtils.scanLog(split, tableSchema, hadoopConf).getRecords();
-    final Iterator<String> logRecordsKeyIterator = logRecords.keySet().iterator();
+    final HoodieMergedLogRecordScanner scanner = FormatUtils.scanLog(split, tableSchema, hadoopConf);
+    final Iterator<String> logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
     final int[] pkOffset = tableState.getPkOffsetsInRequired();
     // flag saying whether the pk semantics has been dropped by user specified
     // projections. For e.g, if the pk fields are [a, b] but user only select a,
@@ -310,7 +308,7 @@ public class MergeOnReadInputFormat
     final LogicalType[] pkTypes = pkSemanticLost ? null : tableState.getPkTypes(pkOffset);
     final StringToRowDataConverter converter = pkSemanticLost ? null : new StringToRowDataConverter(pkTypes);
 
-    return new Iterator<RowData>() {
+    return new ClosableIterator<RowData>() {
       private RowData currentRecord;
 
       @Override
@@ -318,7 +316,7 @@ public class MergeOnReadInputFormat
         while (logRecordsKeyIterator.hasNext()) {
           String curAvroKey = logRecordsKeyIterator.next();
           Option<IndexedRecord> curAvroRecord = null;
-          final HoodieRecord<?> hoodieRecord = logRecords.get(curAvroKey);
+          final HoodieRecord<?> hoodieRecord = scanner.getRecords().get(curAvroKey);
           try {
             curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
           } catch (IOException e) {
@@ -359,12 +357,22 @@ public class MergeOnReadInputFormat
       public RowData next() {
         return currentRecord;
       }
+
+      @Override
+      public void close() {
+        scanner.close();
+      }
     };
   }
 
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
+
+  private interface ClosableIterator<E> extends Iterator<E>, AutoCloseable {
+    @Override
+    void close(); // override to not throw exception
+  }
 
   private interface RecordIterator {
     boolean reachedEnd() throws IOException;
@@ -453,9 +461,9 @@ public class MergeOnReadInputFormat
 
   static class LogFileOnlyIterator implements RecordIterator {
     // iterator for log files
-    private final Iterator<RowData> iterator;
+    private final ClosableIterator<RowData> iterator;
 
-    LogFileOnlyIterator(Iterator<RowData> iterator) {
+    LogFileOnlyIterator(ClosableIterator<RowData> iterator) {
       this.iterator = iterator;
     }
 
@@ -471,7 +479,9 @@ public class MergeOnReadInputFormat
 
     @Override
     public void close() {
-      // no operation
+      if (this.iterator != null) {
+        this.iterator.close();
+      }
     }
   }
 
@@ -479,7 +489,7 @@ public class MergeOnReadInputFormat
     // base file reader
     private final ParquetColumnarRowSplitReader reader;
     // iterator for log files
-    private final Iterator<RowData> iterator;
+    private final ClosableIterator<RowData> iterator;
 
     // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
     // method #reachedEnd() returns false after it returns true.
@@ -488,7 +498,7 @@ public class MergeOnReadInputFormat
 
     private RowData currentRecord;
 
-    SkipMergeIterator(ParquetColumnarRowSplitReader reader, Iterator<RowData> iterator) {
+    SkipMergeIterator(ParquetColumnarRowSplitReader reader, ClosableIterator<RowData> iterator) {
       this.reader = reader;
       this.iterator = iterator;
     }
@@ -517,6 +527,9 @@ public class MergeOnReadInputFormat
       if (this.reader != null) {
         this.reader.close();
       }
+      if (this.iterator != null) {
+        this.iterator.close();
+      }
     }
   }
 
@@ -525,8 +538,8 @@ public class MergeOnReadInputFormat
     private final ParquetColumnarRowSplitReader reader;
     // log keys used for merging
     private final Iterator<String> logKeysIterator;
-    // log records
-    private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> logRecords;
+    // scanner
+    private final HoodieMergedLogRecordScanner scanner;
 
     private final Schema tableSchema;
     private final Schema requiredSchema;
@@ -559,8 +572,8 @@ public class MergeOnReadInputFormat
         ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
       this.tableSchema = tableSchema;
       this.reader = reader;
-      this.logRecords = FormatUtils.scanLog(split, tableSchema, hadoopConf).getRecords();
-      this.logKeysIterator = this.logRecords.keySet().iterator();
+      this.scanner = FormatUtils.scanLog(split, tableSchema, hadoopConf);
+      this.logKeysIterator = scanner.getRecords().keySet().iterator();
       this.requiredSchema = requiredSchema;
       this.requiredPos = requiredPos;
       this.recordBuilder = new GenericRecordBuilder(requiredSchema);
@@ -582,7 +595,7 @@ public class MergeOnReadInputFormat
           }
         }
         final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
-        if (logRecords.containsKey(curKey)) {
+        if (scanner.getRecords().containsKey(curKey)) {
           keyToSkip.add(curKey);
           Option<IndexedRecord> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
           if (!mergedAvroRecord.isPresent()) {
@@ -608,7 +621,7 @@ public class MergeOnReadInputFormat
         final String curKey = logKeysIterator.next();
         if (!keyToSkip.contains(curKey)) {
           Option<IndexedRecord> insertAvroRecord =
-              logRecords.get(curKey).getData().getInsertValue(tableSchema);
+              scanner.getRecords().get(curKey).getData().getInsertValue(tableSchema);
           if (insertAvroRecord.isPresent()) {
             // the record is a DELETE if insertAvroRecord not present, skipping
             GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
@@ -634,13 +647,16 @@ public class MergeOnReadInputFormat
       if (this.reader != null) {
         this.reader.close();
       }
+      if (this.scanner != null) {
+        this.scanner.close();
+      }
     }
 
     private Option<IndexedRecord> mergeRowWithLog(
         RowData curRow,
         String curKey) throws IOException {
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      return logRecords.get(curKey).getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
+      return scanner.getRecords().get(curKey).getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
     }
   }
 
