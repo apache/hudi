@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.hive.functional;
+package org.apache.hudi.client.functional;
 
 import org.junit.platform.runner.JUnitPlatform;
 import org.junit.platform.suite.api.IncludeTags;
@@ -25,9 +25,8 @@ import org.junit.platform.suite.api.SelectPackages;
 import org.junit.runner.RunWith;
 
 @RunWith(JUnitPlatform.class)
-@SelectPackages("org.apache.hudi.hive")
+@SelectPackages("org.apache.hudi.client")
 @IncludeTags("functional")
-public class HiveSyncFunctionalTestSuite {
+public class SparkClientFunctionalTestSuite {
 
 }
-

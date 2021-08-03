@@ -25,7 +25,7 @@ import org.junit.platform.suite.api.SelectPackages;
 import org.junit.runner.RunWith;
 
 @RunWith(JUnitPlatform.class)
-@SelectPackages("org.apache.hudi.utilities.functional")
+@SelectPackages("org.apache.hudi.utilities")
 @IncludeTags("functional")
 public class UtilitiesFunctionalTestSuite {
 
