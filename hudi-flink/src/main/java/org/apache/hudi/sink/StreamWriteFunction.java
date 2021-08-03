@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -190,6 +191,7 @@ public class StreamWriteFunction<K, I, O>
     this.tracer = new TotalSizeTracer(this.config);
     initBuffer();
     initWriteFunction();
+    initMetrics();
   }
 
   @Override
@@ -304,6 +306,16 @@ public class StreamWriteFunction<K, I, O>
       default:
         throw new RuntimeException("Unsupported write operation : " + writeOperation);
     }
+  }
+
+  private void initMetrics() {
+    String actionType;
+    if (this.writeClient.getHoodieTable().getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {
+      actionType = HoodieTimeline.COMMIT_ACTION;
+    } else {
+      actionType = HoodieTimeline.DELTA_COMMIT_ACTION;
+    }
+    this.writeClient.registerMetricsGroup(actionType, getClass().getSimpleName());
   }
 
   private void restoreWriteMetadata() throws Exception {
