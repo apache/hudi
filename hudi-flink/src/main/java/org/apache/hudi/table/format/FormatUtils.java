@@ -20,6 +20,7 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -80,6 +81,29 @@ public class FormatUtils {
             config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
                 HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
         .withInstantRange(split.getInstantRange())
+        .build();
+  }
+
+  public static HoodieMergedLogRecordScanner scanLog(
+      List<String> logPaths,
+      Schema logSchema,
+      String latestInstantTime,
+      HoodieWriteConfig writeConfig,
+      Configuration hadoopConf) {
+    String basePath = writeConfig.getBasePath();
+    return HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(FSUtils.getFs(basePath, hadoopConf))
+        .withBasePath(basePath)
+        .withLogFilePaths(logPaths)
+        .withReaderSchema(logSchema)
+        .withLatestInstantTime(latestInstantTime)
+        .withReadBlocksLazily(writeConfig.getCompactionLazyBlockReadEnabled())
+        .withReverseReader(false)
+        .withBufferSize(writeConfig.getMaxDFSStreamBufferSize())
+        .withMaxMemorySizeInBytes(writeConfig.getMaxMemoryPerPartitionMerge())
+        .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
+        .withDiskMapType(writeConfig.getCommonConfig().getSpillableDiskMapType())
+        .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .build();
   }
 
