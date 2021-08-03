@@ -1,0 +1,90 @@
+{
+  "version-0.7.0/docs": [
+    {
+      "type": "doc",
+      "id": "version-0.7.0/overview"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.7.0/quick-start-guide"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.7.0/use_cases"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.7.0/writing_data"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.7.0/querying_data"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.7.0/configurations"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.7.0/performance"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.7.0/deployment"
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Storage Configurations",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.7.0/cloud"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.7.0/s3_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.7.0/gcs_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.7.0/oss_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.7.0/azure_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.7.0/cos_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.7.0/ibm_cos_hoodie"
+        }
+      ]
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Resources",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.7.0/docker_demo"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.7.0/metrics"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.7.0/privacy"
+        }
+      ]
+    }
+  ]
+}
