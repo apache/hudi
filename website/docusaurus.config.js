@@ -197,7 +197,7 @@ module.exports = {
               to: '/docs/concepts',
             },
             {
-              label: 'Streaming Data Lake',
+              label: 'Our Vision',
               to: '/blog/2021/07/21/streaming-data-lake-platform',
             },
             {
@@ -336,7 +336,7 @@ module.exports = {
         src: '/assets/images/logo-big.png',
         href: 'https://hudi.apache.org/',
       },
-      copyright: 'Copyright © 2021 The Apache Software Foundation, Licensed under the Apache License, Version 2.0. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.',
+      copyright: 'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.',
     },
     prism: {
       theme: darkCodeTheme,
@@ -362,6 +362,18 @@ module.exports = {
           // Please change this to your repo.
           editUrl:
             'https://github.com/apache/hudi/edit/asf-site/website/docs/',
+          includeCurrentVersion: true,
+          versions: {
+            current: {
+              label: 'Current',
+              path: 'next',
+              banner: 'unreleased',
+            },
+            '0.8.0': {
+              label: '0.8.0',
+              path: '',
+            }
+          },
         },
         blog: {
           editUrl:

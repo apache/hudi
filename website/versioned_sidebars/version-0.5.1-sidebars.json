@@ -50,19 +50,7 @@
       "items": [
         {
           "type": "doc",
-          "id": "version-0.5.1/concepts"
-        },
-        {
-          "type": "doc",
           "id": "version-0.5.1/docker_demo"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.5.1/comparison"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.5.1/migration_guide"
         },
         {
           "type": "doc",

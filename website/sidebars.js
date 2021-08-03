@@ -42,12 +42,8 @@ module.exports = {
             type: 'category',
             label: 'Resources',
             items: [
-                'concepts',
                 'docker_demo',
                 'metrics',
-                'comparison',
-                'migration_guide',
-                'structure',
                 'privacy'
             ],
         },
