@@ -17,6 +17,7 @@ before_install:
   - git config --global user.email ${GIT_EMAIL}
   - git remote add hudi https://${GIT_TOKEN}@github.com/${GIT_REPO}/${GIT_PROJECT}.git
   - git checkout -b pr
+  - git pull --rebase hudi asf-site
 
 script:
   - pushd ${DOCS_ROOT}
