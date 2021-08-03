@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -387,4 +388,8 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return getUpsertPartitioner(profile);
   }
 
+  @Override
+  protected void runPrecommitValidators(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
+    SparkValidatorUtils.runValidators(config, writeMetadata, context, table, instantTime);
+  }
 }
