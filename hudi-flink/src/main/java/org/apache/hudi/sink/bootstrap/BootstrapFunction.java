@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -201,7 +202,8 @@ public class BootstrapFunction<I, O extends HoodieRecord>
                 .filter(logFile -> logFile.getFileSize() > 0)
                 .map(logFile -> logFile.getPath().toString())
                 .collect(toList());
-        HoodieMergedLogRecordScanner scanner = scanLog(logPaths, schema, latestCommitTime.get().getTimestamp());
+        HoodieMergedLogRecordScanner scanner = FormatUtils.scanLog(logPaths, schema, latestCommitTime.get().getTimestamp(),
+            writeConfig, hadoopConf);
 
         try {
           for (String recordKey : scanner.getRecords().keySet()) {
@@ -209,6 +211,8 @@ public class BootstrapFunction<I, O extends HoodieRecord>
           }
         } catch (Exception e) {
           throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
+        } finally {
+          scanner.close();
         }
       }
     }
@@ -216,27 +220,6 @@ public class BootstrapFunction<I, O extends HoodieRecord>
     long cost = System.currentTimeMillis() - start;
     LOG.info("Task [{}}:{}}] finish loading the index under partition {} and sending them to downstream, time cost: {} milliseconds.",
         this.getClass().getSimpleName(), taskID, partitionPath, cost);
-  }
-
-  private HoodieMergedLogRecordScanner scanLog(
-          List<String> logPaths,
-          Schema logSchema,
-          String latestInstantTime) {
-    String basePath = this.hoodieTable.getMetaClient().getBasePath();
-    return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(FSUtils.getFs(basePath, this.hadoopConf))
-        .withBasePath(basePath)
-        .withLogFilePaths(logPaths)
-        .withReaderSchema(logSchema)
-        .withLatestInstantTime(latestInstantTime)
-        .withReadBlocksLazily(this.writeConfig.getCompactionLazyBlockReadEnabled())
-        .withReverseReader(false)
-        .withBufferSize(this.writeConfig.getMaxDFSStreamBufferSize())
-        .withMaxMemorySizeInBytes(this.writeConfig.getMaxMemoryPerPartitionMerge())
-        .withSpillableMapBasePath(this.writeConfig.getSpillableMapBasePath())
-        .withDiskMapType(this.writeConfig.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(this.writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .build();
   }
 
   @SuppressWarnings("unchecked")
