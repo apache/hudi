@@ -77,7 +77,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   // config to enable OptimisticConsistencyGuard in finalizeWrite instead of FailSafeConsistencyGuard
   public static final ConfigProperty<Boolean> ENABLE_OPTIMISTIC_CONSISTENCY_GUARD_PROP = ConfigProperty
       .key("_hoodie.optimistic.consistency.guard.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("0.6.0")
       .withDocumentation("Enable consistency guard, which optimistically assumes consistency is achieved after a certain time period.");
 

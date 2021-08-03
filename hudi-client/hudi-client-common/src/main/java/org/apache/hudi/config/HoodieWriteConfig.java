@@ -65,6 +65,8 @@ import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
+
 /**
  * Class storing configs for the HoodieWriteClient.
  */
@@ -108,13 +110,13 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS = ConfigProperty
       .key("hoodie.rollback.using.markers")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned off by default.");
 
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION = ConfigProperty
       .key("hoodie.timeline.layout.version")
-      .noDefaultValue()
+      .defaultValue(String.valueOf(VERSION_1))
       .sinceVersion("0.5.1")
       .withDocumentation("Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models "
           + "the timeline as an immutable log relying only on atomic writes for object storage.");
