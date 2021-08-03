@@ -41,7 +41,7 @@ import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 
 /**
@@ -160,9 +160,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
 
   @ParameterizedTest
-  //TODO(metadata): Needs HUDI-1459 to be fixed
-  //@ValueSource(booleans = Array(true, false))
-  @ValueSource(booleans = Array(false))
+  @ValueSource(booleans = Array(true, false))
   def testCopyOnWriteStorage(isMetadataEnabled: Boolean) {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
@@ -180,7 +178,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Snapshot query
     val snapshotDF1 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF1.count())
 
     // Upsert based on the written table with Hudi metadata columns
@@ -189,11 +187,14 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     updateDf.write.format("org.apache.hudi")
       .options(commonOpts)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
-    val snapshotDF2 = spark.read.format("hudi").load(basePath + "/*/*/*/*")
+    val snapshotDF2 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF2.count())
     assertEquals(updatedVerificationVal, snapshotDF2.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
 
@@ -214,7 +215,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Snapshot Query
     val snapshotDF3 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF3.count()) // still 100, since we only updated
 
     // Read Incremental Query
@@ -666,8 +667,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testQueryCOWWithBasePathAndFileIndex(partitionEncode: Boolean): Unit = {
+  @CsvSource(Array("true,false", "true,true", "false,true", "false,false"))
+  def testQueryCOWWithBasePathAndFileIndex(partitionEncode: Boolean, isMetadataEnabled: Boolean): Unit = {
     val N = 20
     // Test query with partition prune if URL_ENCODE_PARTITIONING_OPT_KEY has enable
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", N)
@@ -676,6 +677,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, partitionEncode)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
@@ -683,6 +685,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
     // query the partition by filter
     val count1 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .load(basePath)
       .filter("partition = '2016/03/15'")
       .count()
@@ -691,6 +694,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // query the partition by path
     val partitionPath = if (partitionEncode) "2016%2F03%2F15" else "2016/03/15"
     val count2 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .load(basePath + s"/$partitionPath")
       .count()
     assertEquals(countIn20160315, count2)
@@ -702,6 +706,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, partitionEncode)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
     // Incremental query without "*" in path
