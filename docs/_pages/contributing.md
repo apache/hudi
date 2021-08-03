@@ -26,8 +26,21 @@ To contribute, you would need to do the following
  
 - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/spark_quick-start-guide.html) or [flink quickstart](/docs/flink-quick-start-guide.html)
 
-- \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
-
+- \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please set up your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
+   * Open Project Preferences in IDE
+   * Install and activate CheckStyle plugin
+     
+     ![IDE_setup_checkstyle_1](/assets/images/contributing/IDE_setup_checkstyle_1.png)
+   * Open Preferences -> Tools -> checkstyle
+     
+     ![IDE_setup_checkstyle_2](/assets/images/contributing/IDE_setup_checkstyle_2.png)
+   * Change checkstyle version to 8.20
+     
+     ![IDE_setup_checkstyle_3](/assets/images/contributing/IDE_setup_checkstyle_3.png)
+   * Click on + and add the style/checkstyle.xml file
+     
+     ![IDE_setup_checkstyle_4](/assets/images/contributing/IDE_setup_checkstyle_4.png)
+   * Apply/Save the changes
 - \[Recommended\] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
 
 - \[Recommended\] As it is required to add [Apache License header](https://www.apache.org/legal/src-headers.html#headers) to all source files, configuring "Copyright" settings as shown below will come in handy.
