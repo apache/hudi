@@ -1284,6 +1284,22 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getWriteMetaKeyPrefixes() {
     return getString(WRITE_META_KEY_PREFIXES_PROP);
   }
+  
+  public String getPreCommitValidators() {
+    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS);
+  }
+
+  public String getPreCommitValidatorEqualitySqlQueries() {
+    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_EQUALITY_SQL_QUERIES);
+  }
+
+  public String getPreCommitValidatorSingleResultSqlQueries() {
+    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_SINGLE_VALUE_SQL_QUERIES);
+  }
+
+  public String getPreCommitValidatorInequalitySqlQueries() {
+    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_INEQUALITY_SQL_QUERIES);
+  }
 
   public boolean allowEmptyCommit() {
     return getBooleanOrDefault(ALLOW_EMPTY_COMMIT);
@@ -1306,6 +1322,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isPayloadConfigSet = false;
     private boolean isMetadataConfigSet = false;
     private boolean isLockConfigSet = false;
+    private boolean isPreCommitValidationConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -1452,6 +1469,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withLockConfig(HoodieLockConfig lockConfig) {
       writeConfig.getProps().putAll(lockConfig.getProps());
       isLockConfigSet = true;
+      return this;
+    }
+
+    public Builder withPreCommitValidatorConfig(HoodiePreCommitValidatorConfig validatorConfig) {
+      writeConfig.getProps().putAll(validatorConfig.getProps());
+      isPreCommitValidationConfigSet = true;
       return this;
     }
 
@@ -1625,7 +1648,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieMetadataConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isLockConfigSet,
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
-
+      writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
+          HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
     }
 
