@@ -256,7 +256,9 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   public void close() {
+    inMemoryMap.clear();
     getDiskBasedMap().close();
+    currentInMemoryMapSize = 0L;
   }
 
   @Override
