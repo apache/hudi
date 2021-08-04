@@ -18,7 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
+import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM, INSERT_PARALLELISM, TABLE_NAME, UPSERT_PARALLELISM}
@@ -29,8 +29,8 @@ class TestStreamingSource extends StreamTest {
 
   import testImplicits._
   private val commonOptions = Map(
-    RECORDKEY_FIELD_OPT_KEY.key -> "id",
-    PRECOMBINE_FIELD_OPT_KEY.key -> "ts",
+    RECORDKEY_FIELD.key -> "id",
+    PRECOMBINE_FIELD.key -> "ts",
     INSERT_PARALLELISM.key -> "4",
     UPSERT_PARALLELISM.key -> "4",
     DELETE_PARALLELISM.key -> "4"
@@ -47,7 +47,7 @@ class TestStreamingSource extends StreamTest {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(COPY_ON_WRITE)
           .setTableName(getTableName(tablePath))
-          .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY.defaultValue)
+          .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS.defaultValue)
           .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -97,7 +97,7 @@ class TestStreamingSource extends StreamTest {
       HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
-        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY.defaultValue)
+        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS.defaultValue)
         .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))

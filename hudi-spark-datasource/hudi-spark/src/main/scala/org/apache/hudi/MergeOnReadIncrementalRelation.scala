@@ -55,9 +55,9 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
-  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key)) {
+  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME.key)) {
     throw new HoodieException(s"Specify the begin instant time to pull from using " +
-      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key}")
+      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
   }
   if (!metaClient.getTableConfig.populateMetaFields()) {
     throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
@@ -65,12 +65,12 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
 
   private val lastInstant = commitTimeline.lastInstant().get()
   private val mergeType = optParams.getOrElse(
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.key,
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.defaultValue)
+    DataSourceReadOptions.REALTIME_MERGE.key,
+    DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
   private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
-    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, lastInstant.getTimestamp))
+    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
+    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, lastInstant.getTimestamp))
   log.debug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
   private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
   private val schemaUtil = new TableSchemaResolver(metaClient)
@@ -182,10 +182,10 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
 
     // Filter files based on user defined glob pattern
     val pathGlobPattern = optParams.getOrElse(
-      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.key,
-      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.defaultValue)
+      DataSourceReadOptions.INCR_PATH_GLOB.key,
+      DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)
     val filteredFileGroup = if(!pathGlobPattern
-      .equals(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.defaultValue)) {
+      .equals(DataSourceReadOptions.INCR_PATH_GLOB.defaultValue)) {
       val globMatcher = new GlobPattern("*" + pathGlobPattern)
       fileGroup.filter(f => {
         if (f.getLatestFileSlice.get().getBaseFile.isPresent) {

@@ -126,14 +126,14 @@ public class TestHoodieDataSourceInternalWriter extends
 
     String commitExtraMetaPrefix = "commit_extra_meta_";
     Map<String, String> extraMeta = new HashMap<>();
-    extraMeta.put(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX_OPT_KEY().key(), commitExtraMetaPrefix);
+    extraMeta.put(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key(), commitExtraMetaPrefix);
     extraMeta.put(commitExtraMetaPrefix + "a", "valA");
     extraMeta.put(commitExtraMetaPrefix + "b", "valB");
     extraMeta.put("commit_extra_c", "valC"); // should not be part of commit extra metadata
 
     Map<String, String> expectedMetadata = new HashMap<>();
     expectedMetadata.putAll(extraMeta);
-    expectedMetadata.remove(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX_OPT_KEY().key());
+    expectedMetadata.remove(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key());
     expectedMetadata.remove("commit_extra_c");
 
     testDataSourceWriterInternal(extraMeta, expectedMetadata, true);
@@ -143,7 +143,7 @@ public class TestHoodieDataSourceInternalWriter extends
   public void testDataSourceWriterEmptyExtraCommitMetadata() throws Exception {
     String commitExtraMetaPrefix = "commit_extra_meta_";
     Map<String, String> extraMeta = new HashMap<>();
-    extraMeta.put(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX_OPT_KEY().key(), commitExtraMetaPrefix);
+    extraMeta.put(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key(), commitExtraMetaPrefix);
     extraMeta.put("keyA", "valA");
     extraMeta.put("keyB", "valB");
     extraMeta.put("commit_extra_c", "valC");

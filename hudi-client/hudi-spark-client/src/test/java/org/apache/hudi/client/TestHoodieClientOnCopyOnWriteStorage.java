@@ -128,7 +128,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NULL_SCHE
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
-import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY;
+import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.CLUSTERING_EXECUTION_STRATEGY_CLASS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -969,7 +969,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     final String testPartitionPath = "2016/09/26";
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     Properties props = new Properties();
-    props.setProperty(ASYNC_CLUSTERING_ENABLE_OPT_KEY.key(), "true");
+    props.setProperty(ASYNC_CLUSTERING_ENABLE.key(), "true");
     HoodieWriteConfig config = getSmallInsertWriteConfig(100,
         TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), true, props);
     SparkRDDWriteClient client = getHoodieWriteClient(config);
