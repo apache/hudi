@@ -39,14 +39,6 @@ public class FlinkClientUtil {
   }
 
   /**
-   * Parses the file name from path.
-   */
-  public static String parseFileName(String path) {
-    int slash = path.lastIndexOf(Path.SEPARATOR);
-    return path.substring(slash + 1);
-  }
-
-  /**
    * Returns the hadoop configuration with possible hadoop conf paths.
    * E.G. the configurations under path $HADOOP_CONF_DIR and $HADOOP_HOME.
    */
