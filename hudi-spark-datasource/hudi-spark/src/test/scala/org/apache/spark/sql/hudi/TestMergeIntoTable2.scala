@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.spark.sql.Row
 
 class TestMergeIntoTable2 extends TestHoodieSqlBase {
 
@@ -172,4 +173,68 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
       )
     }
   }
+
+  test("Test Merge With Complex Data Type") {
+    withTempDir{tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  s_value struct<f0: int, f1: string>,
+           |  a_value array<string>,
+           |  m_value map<string, string>,
+           |  ts long
+           | ) using hudi
+           | options (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | location '${tmp.getCanonicalPath}'
+         """.stripMargin)
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |select
+           |  1 as id,
+           |  'a1' as name,
+           |  struct(1, '10') as s_value,
+           |  split('a0,a1', ',') as a_value,
+           |  map('k0', 'v0') as m_value,
+           |  1000 as ts
+           |) s0
+           |on h0.id = s0.id
+           |when not matched then insert *
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, s_value, a_value, m_value, ts from $tableName")(
+        Seq(1, "a1", Row(1, "10"), Seq("a0", "a1"), Map("k0" -> "v0"), 1000)
+      )
+      // update value
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |select
+           |  1 as id,
+           |  'a1' as name,
+           |  struct(1, '12') as s_value,
+           |  split('a0,a1,a2', ',') as a_value,
+           |  map('k1', 'v1') as m_value,
+           |  1000 as ts
+           |) s0
+           |on h0.id = s0.id
+           |when matched then update set *
+           |when not matched then insert *
+           |""".stripMargin)
+      checkAnswer(s"select id, name, s_value, a_value, m_value, ts from $tableName")(
+        Seq(1, "a1", Row(1, "12"), Seq("a0", "a1", "a2"), Map("k1" -> "v1"), 1000)
+      )
+    }
+  }
+
 }
