@@ -88,7 +88,7 @@ public class MarkerDirState implements Serializable {
   private transient HoodieEngineContext hoodieEngineContext;
   // Last underlying file index used, for finding the next file index
   // in a round-robin fashion
-  private int lastFileIndex = 0;
+  private int lastFileIndexUsed = 0;
   private boolean lazyInitComplete;
 
   public MarkerDirState(String markerDirPath, int markerBatchNumThreads, FileSystem fileSystem,
@@ -141,13 +141,13 @@ public class MarkerDirState implements Serializable {
   public int getNextFileIndexToUse() {
     int fileIndex = -1;
     synchronized (threadUseStatus) {
-      int nextIndex = (lastFileIndex + 1) % threadUseStatus.size();
+      int nextIndex = (lastFileIndexUsed + 1) % threadUseStatus.size();
       if (!threadUseStatus.get(nextIndex)) {
         fileIndex = nextIndex;
         threadUseStatus.set(nextIndex, true);
       } else {
         for (int i = 1; i < threadUseStatus.size(); i++) {
-          int index = (lastFileIndex + 1 + i) % threadUseStatus.size();
+          int index = (lastFileIndexUsed + 1 + i) % threadUseStatus.size();
           if (!threadUseStatus.get(index)) {
             fileIndex = index;
             threadUseStatus.set(index, true);
@@ -156,7 +156,7 @@ public class MarkerDirState implements Serializable {
         }
       }
       if (fileIndex >= 0) {
-        lastFileIndex = fileIndex;
+        lastFileIndexUsed = fileIndex;
       }
     }
     return fileIndex;

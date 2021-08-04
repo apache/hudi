@@ -76,7 +76,7 @@ public class MarkerHandler extends Handler {
   private final int parallelism;
   // Marker directory states, {markerDirPath -> MarkerDirState instance}
   private final Map<String, MarkerDirState> markerDirStateMap = new HashMap<>();
-  // A long-running thread to dispatch marker creation requests to batch processing threads
+  // A thread to dispatch marker creation requests to batch processing threads
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
   private final AtomicBoolean firstCreationRequestSeen;
   private transient HoodieEngineContext hoodieEngineContext;
@@ -155,7 +155,7 @@ public class MarkerHandler extends Handler {
     // Add the future to the list
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
     markerDirState.addMarkerCreationFuture(future);
-    if (firstCreationRequestSeen.getAndSet(true)) {
+    if (!firstCreationRequestSeen.getAndSet(true)) {
       dispatchingScheduledFuture = dispatchingExecutorService.scheduleAtFixedRate(markerCreationDispatchingRunnable,
           timelineServiceConfig.markerBatchIntervalMs, timelineServiceConfig.markerBatchIntervalMs,
           TimeUnit.MILLISECONDS);
@@ -179,9 +179,13 @@ public class MarkerHandler extends Handler {
     MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
     if (markerDirState == null) {
       synchronized (markerDirStateMap) {
-        markerDirState = new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads,
-            fileSystem, metricsRegistry, hoodieEngineContext, parallelism);
-        markerDirStateMap.put(markerDir, markerDirState);
+        if (markerDirStateMap.get(markerDir) == null) {
+          markerDirState = new MarkerDirState(markerDir, timelineServiceConfig.markerBatchNumThreads,
+              fileSystem, metricsRegistry, hoodieEngineContext, parallelism);
+          markerDirStateMap.put(markerDir, markerDirState);
+        } else {
+          markerDirState = markerDirStateMap.get(markerDir);
+        }
       }
     }
     return markerDirState;
