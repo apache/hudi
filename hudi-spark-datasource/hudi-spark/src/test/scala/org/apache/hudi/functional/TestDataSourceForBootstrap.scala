@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import collection.JavaConverters._
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
-import org.apache.hudi.client.TestBootstrap
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.fs.FSUtils
@@ -31,12 +30,13 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.api.io.TempDir
 
 import java.time.Instant
 import java.util.Collections
 
+@Tag("functional")
 class TestDataSourceForBootstrap {
 
   var spark: SparkSession = _

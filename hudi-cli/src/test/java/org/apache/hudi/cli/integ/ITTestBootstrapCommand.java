@@ -22,7 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
-import org.apache.hudi.client.TestBootstrap;
+import org.apache.hudi.functional.TestBootstrap;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 
