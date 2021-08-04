@@ -15,15 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.hudi
 
-import java.time.Instant
-import java.util
-import java.util.{Collections, Date, UUID}
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.client.{SparkRDDWriteClient, TestBootstrap}
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -31,21 +28,24 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
-import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext, SaveMode, SparkSession}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.{FunSuite, Matchers}
 
+import java.time.Instant
+import java.util
+import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConversions._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
