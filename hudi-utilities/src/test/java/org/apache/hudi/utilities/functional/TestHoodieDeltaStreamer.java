@@ -610,7 +610,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
         PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
     cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
     cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source.avsc");
-    cfg.configs.add(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY() + "=true");
+    cfg.configs.add(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH().key() + "=true");
     if (!useSchemaPostProcessor) {
       cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
     }
@@ -623,7 +623,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
         PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
     cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
     cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source_evolved.avsc");
-    cfg.configs.add(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY() + "=true");
+    cfg.configs.add(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH().key() + "=true");
     if (!useSchemaPostProcessor) {
       cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
     }
@@ -652,7 +652,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     if (!useSchemaPostProcessor) {
       cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
     }
-    cfg.configs.add(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY() + "=true");
+    cfg.configs.add(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH().key() + "=true");
     new HoodieDeltaStreamer(cfg, jsc).sync();
     // again, 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
     TestHelpers.assertRecordCount(1900, tableBasePath + "/*/*", sqlContext);

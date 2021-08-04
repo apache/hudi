@@ -17,19 +17,15 @@
 
 package org.apache.hudi.functional
 
-import java.sql.{Date, Timestamp}
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters._
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.testutils.RawTripTestPayload.deleteRecordsToStrings
+import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieUpsertException
-import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
+import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
@@ -41,6 +37,10 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+
+import java.sql.{Date, Timestamp}
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 
 /**
@@ -703,7 +703,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
   @Test def testSchemaEvolution(): Unit = {
     // open the schema validate
     val  opts = commonOpts ++ Map("hoodie.avro.schema.validate" -> "true") ++
-      Map(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY -> "true")
+      Map(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH.key() -> "true")
     // 1. write records with schema1
     val schema1 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, false)::
       StructField("timestamp", IntegerType, true) :: StructField("partition", IntegerType, true)::Nil)

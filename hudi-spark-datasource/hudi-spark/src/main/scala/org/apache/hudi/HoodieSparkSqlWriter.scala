@@ -162,7 +162,7 @@ object HoodieSparkSqlWriter {
             Array(classOf[org.apache.avro.generic.GenericData],
               classOf[org.apache.avro.Schema]))
           var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-          val handleSchemaMismatch = parameters(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY).toBoolean
+          val handleSchemaMismatch = parameters(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH.key()).toBoolean
           if (handleSchemaMismatch) {
             schema = getLatestSchema(fs, basePath, sparkContext, schema)
           }
@@ -220,7 +220,7 @@ object HoodieSparkSqlWriter {
 
           // Convert to RDD[HoodieKey]
           val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace,
-            parameters(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY).toBoolean)
+            parameters(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH.key()).toBoolean)
           val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
           if (!tableExists) {
