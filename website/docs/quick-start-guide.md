@@ -1,6 +1,5 @@
 ---
-title: "Quick Start Guide - Spark"
-sidebar_label: "Spark Guide"
+title: "Spark Guide"
 sidebar_position: 2
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00

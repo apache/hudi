@@ -46,6 +46,9 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
     font-size: 3em !important;
     max-width: fit-content;
   }
+  .button--lg {
+    --ifm-button-size-multiplier: 1;
+  }
 }
 
 .header-twitter-link:before {
