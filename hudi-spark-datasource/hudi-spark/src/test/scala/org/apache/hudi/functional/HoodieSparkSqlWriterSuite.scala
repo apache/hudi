@@ -46,7 +46,9 @@ import org.scalatest.{FunSuite, Matchers}
 
 import scala.collection.JavaConversions._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Tag
 
+@Tag("functional")
 class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
   var spark: SparkSession = _
