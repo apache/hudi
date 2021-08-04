@@ -35,25 +35,25 @@ public abstract class BucketAssigners {
   /**
    * Creates a {@code BucketAssigner}.
    *
-   * @param taskID         The task ID
-   * @param maxParallelism The max parallelism
-   * @param numTasks       The number of tasks
-   * @param overwrite      Whether the write operation is OVERWRITE
-   * @param tableType      The table type
-   * @param context        The engine context
-   * @param config         The configuration
+   * @param taskID           The task ID
+   * @param maxParallelism   The max parallelism
+   * @param numTasks         The number of tasks
+   * @param ignoreSmallFiles Whether to ignore the small files
+   * @param tableType        The table type
+   * @param context          The engine context
+   * @param config           The configuration
    * @return the bucket assigner instance
    */
   public static BucketAssigner create(
       int taskID,
       int maxParallelism,
       int numTasks,
-      boolean overwrite,
+      boolean ignoreSmallFiles,
       HoodieTableType tableType,
       HoodieFlinkEngineContext context,
       HoodieWriteConfig config) {
     boolean delta = tableType.equals(HoodieTableType.MERGE_ON_READ);
-    WriteProfile writeProfile = WriteProfiles.singleton(overwrite, delta, config, context);
+    WriteProfile writeProfile = WriteProfiles.singleton(ignoreSmallFiles, delta, config, context);
     return new BucketAssigner(taskID, maxParallelism, numTasks, writeProfile, config);
   }
 }

@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
@@ -144,6 +145,7 @@ public class StreamerUtil {
             .withEngineType(EngineType.FLINK)
             .withPath(conf.getString(FlinkOptions.PATH))
             .combineInput(conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS), true)
+            .withMergeAllowDuplicateOnInserts(allowDuplicateInserts(conf))
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
                     .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
@@ -323,5 +325,10 @@ public class StreamerUtil {
     } catch (Throwable e) {
       throw new IOException("Could not load transformer class(es) " + classNames, e);
     }
+  }
+
+  public static boolean allowDuplicateInserts(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.INSERT && conf.getBoolean(FlinkOptions.INSERT_ALLOW_DUP);
   }
 }
