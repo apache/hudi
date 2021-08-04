@@ -37,6 +37,7 @@ import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Comparator;
@@ -65,6 +66,11 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   @Override
   protected void setUp(Configuration conf) {
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+  }
+
+  @Test
+  public void testInsertAllowsDuplication() {
+    // ignore the test because only COW table supports INSERT duplication
   }
 
   @Override
