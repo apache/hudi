@@ -19,7 +19,7 @@
 
 package org.apache.hudi.examples.spark
 
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, TABLE_TYPE_OPT_KEY}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -86,11 +86,11 @@ object HoodieMorCompactionJob {
     val df = spark.read.json(spark.sparkContext.parallelize(inserts.asScala, 1))
     df.write.format("org.apache.hudi").
       options(getQuickstartWriteConfigs).
-      option(PRECOMBINE_FIELD_OPT_KEY.key, "ts").
-      option(RECORDKEY_FIELD_OPT_KEY.key, "uuid").
-      option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionpath").
+      option(PRECOMBINE_FIELD.key, "ts").
+      option(RECORDKEY_FIELD.key, "uuid").
+      option(PARTITIONPATH_FIELD.key, "partitionpath").
       option(TABLE_NAME.key, tableName).
-      option(TABLE_TYPE_OPT_KEY.key, tableType).
+      option(TABLE_TYPE.key, tableType).
       mode(Overwrite).
       save(tablePath)
   }
@@ -102,11 +102,11 @@ object HoodieMorCompactionJob {
     val df = spark.read.json(spark.sparkContext.parallelize(updates.asScala, 1))
     df.write.format("org.apache.hudi").
       options(getQuickstartWriteConfigs).
-      option(PRECOMBINE_FIELD_OPT_KEY.key, "ts").
-      option(RECORDKEY_FIELD_OPT_KEY.key, "uuid").
-      option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionpath").
+      option(PRECOMBINE_FIELD.key, "ts").
+      option(RECORDKEY_FIELD.key, "uuid").
+      option(PARTITIONPATH_FIELD.key, "partitionpath").
       option(TABLE_NAME.key, tableName).
-      option(TABLE_TYPE_OPT_KEY.key, tableType).
+      option(TABLE_TYPE.key, tableType).
       mode(Append).
       save(tablePath)
   }

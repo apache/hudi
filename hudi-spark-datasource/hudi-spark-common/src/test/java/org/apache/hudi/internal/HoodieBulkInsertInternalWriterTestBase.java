@@ -72,9 +72,9 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
   protected HoodieWriteConfig getWriteConfig(boolean populateMetaFields) {
     Properties properties = new Properties();
     if (!populateMetaFields) {
-      properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY().key(), SimpleKeyGenerator.class.getName());
-      properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME);
-      properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME);
+      properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(), SimpleKeyGenerator.class.getName());
+      properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME);
+      properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME);
       properties.setProperty(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), "false");
     }
     return getConfigBuilder(basePath).withProperties(properties).build();

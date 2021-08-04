@@ -44,7 +44,7 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
   override def getPartitionPath(record: GenericRecord): String = {
     val partitionPath = super.getPartitionPath(record)
     if (partitionSchema.isDefined) {
-      // we can split the partitionPath here because we enable the URL_ENCODE_PARTITIONING_OPT_KEY
+      // we can split the partitionPath here because we enable the URL_ENCODE_PARTITIONING_OPT
       // by default for sql.
       val partitionFragments = partitionPath.split(KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR)
       assert(partitionFragments.size == partitionSchema.get.size)

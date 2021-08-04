@@ -21,7 +21,7 @@ import java.util.Properties
 
 import scala.collection.JavaConverters._
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_OPT_KEY, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
@@ -77,7 +77,7 @@ case class HoodieFileIndex(
 
   @transient private val queryPath = new Path(options.getOrElse("path", "'path' option required"))
 
-  private val queryType = options(QUERY_TYPE_OPT_KEY.key())
+  private val queryType = options(QUERY_TYPE.key())
 
   private val tableType = metaClient.getTableType
 
@@ -370,7 +370,7 @@ case class HoodieFileIndex(
         } else { // If partitionSeqs.length == partitionSchema.fields.length
 
           // Append partition name to the partition value if the
-          // HIVE_STYLE_PARTITIONING_OPT_KEY is disable.
+          // HIVE_STYLE_PARTITIONING is disable.
           // e.g. convert "/xx/xx/2021/02" to "/xx/xx/year=2021/month=02"
           val partitionWithName =
           partitionFragments.zip(partitionSchema).map {

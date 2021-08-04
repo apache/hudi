@@ -119,7 +119,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
           + " Default strategy just rejects the update");
 
-  public static final ConfigProperty<String> ASYNC_CLUSTERING_ENABLE_OPT_KEY = ConfigProperty
+  public static final ConfigProperty<String> ASYNC_CLUSTERING_ENABLE = ConfigProperty
       .key("hoodie.clustering.async.enabled")
       .defaultValue("false")
       .sinceVersion("0.7.0")
@@ -210,7 +210,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withAsyncClustering(Boolean asyncClustering) {
-      clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE_OPT_KEY, String.valueOf(asyncClustering));
+      clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE, String.valueOf(asyncClustering));
       return this;
     }
 

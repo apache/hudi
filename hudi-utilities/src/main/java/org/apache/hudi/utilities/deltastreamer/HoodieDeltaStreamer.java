@@ -362,7 +362,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public boolean isAsyncClusteringEnabled() {
       return Boolean.parseBoolean(String.valueOf(UtilHelpers.getConfig(this.configs).getConfig()
-          .getOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY.key(), false)));
+          .getOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), false)));
     }
 
     public boolean isInlineClusteringEnabled() {
