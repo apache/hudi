@@ -342,6 +342,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   public void testLargeInsertUpsert() {}
 
   private static Stream<Arguments> testArguments() {
+    // Arguments : 1. Disk Map Type 2. isCompressionEnabled for BitCaskMap
     return Stream.of(
         arguments(ExternalSpillableMap.DiskMapType.BITCASK, false),
         arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false),
