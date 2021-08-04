@@ -395,6 +395,48 @@ public class TestData {
   }
 
   /**
+   * Checks the source data set are written as expected.
+   * Different with {@link #checkWrittenData}, it reads all the data files.
+   *
+   * <p>Note: Replace it with the Flink reader when it is supported.
+   *
+   * @param baseFile   The file base to check, should be a directory
+   * @param expected   The expected results mapping, the key should be the partition path
+   *                   and value should be values list with the key partition
+   * @param partitions The expected partition number
+   */
+  public static void checkWrittenAllData(
+      File baseFile,
+      Map<String, String> expected,
+      int partitions) throws IOException {
+    assert baseFile.isDirectory();
+    FileFilter filter = file -> !file.getName().startsWith(".");
+    File[] partitionDirs = baseFile.listFiles(filter);
+
+    assertNotNull(partitionDirs);
+    assertThat(partitionDirs.length, is(partitions));
+
+    for (File partitionDir : partitionDirs) {
+      File[] dataFiles = partitionDir.listFiles(filter);
+      assertNotNull(dataFiles);
+
+      List<String> readBuffer = new ArrayList<>();
+      for (File dataFile : dataFiles) {
+        ParquetReader<GenericRecord> reader = AvroParquetReader
+            .<GenericRecord>builder(new Path(dataFile.getAbsolutePath())).build();
+        GenericRecord nextRecord = reader.read();
+        while (nextRecord != null) {
+          readBuffer.add(filterOutVariables(nextRecord));
+          nextRecord = reader.read();
+        }
+      }
+
+      readBuffer.sort(Comparator.naturalOrder());
+      assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
+    }
+  }
+
+  /**
    * Checks the source data are written as expected.
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
