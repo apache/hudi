@@ -22,8 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
-import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
-import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
+import org.apache.hudi.table.action.compact.FlinkCompactHelpers;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -99,16 +98,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
   }
 
   private void doCompaction(String instantTime, CompactionOperation compactionOperation, Collector<CompactionCommitEvent> collector) throws IOException {
-    HoodieFlinkMergeOnReadTableCompactor compactor = new HoodieFlinkMergeOnReadTableCompactor();
-    List<WriteStatus> writeStatuses = compactor.compact(
-        new HoodieFlinkCopyOnWriteTable<>(
-            this.writeClient.getConfig(),
-            this.writeClient.getEngineContext(),
-            this.writeClient.getHoodieTable().getMetaClient()),
-        this.writeClient.getHoodieTable().getMetaClient(),
-        this.writeClient.getConfig(),
-        compactionOperation,
-        instantTime);
+    List<WriteStatus> writeStatuses = FlinkCompactHelpers.compact(writeClient, instantTime, compactionOperation);
     collector.collect(new CompactionCommitEvent(instantTime, writeStatuses, taskID));
   }
 
