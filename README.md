@@ -2,18 +2,9 @@
 
 This repo hosts the source code of [Apache Hudi Official Website](https://hudi.apache.org/).
 
-# Prerequisite
+## Prerequisite
 
 Install [npm](https://treehouse.github.io/installation-guides/mac/node-mac.html) for the first time.
-
-# Test Website
-
-Build from source
-```bash
-./website/scripts/build-site.sh
-```
-
-The results are moved to directory: `content`
 
 ## Installation
 
@@ -40,7 +31,7 @@ npm run build
 
 This command generates static content into the `build` directory and can be served using any static contents hosting service.
 
-## Testing your Build Locally {#testing-build-locally}
+## Testing your Build Locally
 
 It is important to test your build locally before deploying to production.
 
@@ -49,11 +40,20 @@ cd website
 npm run serve
 ```
 
+## Build script
+
+Build from source
+```bash
+./website/scripts/build-site.sh
+```
+
+The results are moved to directory: `content`
+
 ## To Add New Docs Version
 
 To better understand how versioning works and see if it suits your needs, you can read on below.
 
-## Directory structure {#directory-structure}
+## Directory structure
 
 ```shell
 website
@@ -81,7 +81,7 @@ The table below explains how a versioned file maps to its version and the genera
 | `versioned_docs/version-0.8.0/hello.md` | 0.8.0 (latest) | /docs/hello       |
 | `docs/hello.md`                         | next           | /docs/next/hello  |
 
-### Tagging a new version {#tagging-a-new-version}
+### Tagging a new version
 
 1. First, make sure your content in the `docs` directory is ready to be frozen as a version. A version always should be based from master.
 1. Enter a new version number.
@@ -96,9 +96,9 @@ When tagging a new version, the document versioning mechanism will:
 - Create a versioned sidebars file based from your current [sidebar](docs-introduction.md#sidebar) configuration (if it exists) - saved as `versioned_sidebars/version-<version>-sidebars.json`.
 - Append the new version number to `versions.json`.
 
-## Docs {#docs}
+## Docs
 
-### Creating new docs {#creating-new-docs}
+### Creating new docs
 
 1. Place the new file into the corresponding version folder.
 1. Include the reference for the new file into the corresponding sidebar file, according to version number.
@@ -123,7 +123,7 @@ versioned_docs/version-0.7.0/new.md
 versioned_sidebars/version-0.7.0-sidebars.json
 ```
 
-### Linking docs {#linking-docs}
+### Linking docs
 
 - Remember to include the `.md` extension.
 - Files will be linked to correct corresponding version.
@@ -135,11 +135,11 @@ The [@hello](hello.md#paginate) document is great!
 See the [Tutorial](../getting-started/tutorial.md) for more info.
 ```
 
-## Versions {#versions}
+## Versions
 
 Each directory in `versioned_docs/` will represent a documentation version.
 
-### Updating an existing version {#updating-an-existing-version}
+### Updating an existing version
 
 You can update multiple docs versions at the same time because each directory in `versioned_docs/` represents specific routes when published.
 
