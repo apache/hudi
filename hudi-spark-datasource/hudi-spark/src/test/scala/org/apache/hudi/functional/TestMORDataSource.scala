@@ -37,7 +37,7 @@ import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -46,7 +46,6 @@ import scala.collection.JavaConversions._
 /**
  * Tests on Spark DataSource for MOR table.
  */
-@Tag("functional")
 class TestMORDataSource extends HoodieClientTestBase {
 
   var spark: SparkSession = null

@@ -31,9 +31,8 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -41,7 +40,6 @@ import scala.concurrent.{Await, Future}
 /**
  * Basic tests on the spark datasource for structured streaming sink
  */
-@Tag("functional")
 class TestStructuredStreaming extends HoodieClientTestBase {
   private val log = LogManager.getLogger(getClass)
   var spark: SparkSession = null
