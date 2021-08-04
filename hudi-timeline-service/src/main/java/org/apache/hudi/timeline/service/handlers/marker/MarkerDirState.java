@@ -259,25 +259,32 @@ public class MarkerDirState implements Serializable {
    * Syncs all markers maintained in the underlying files under the marker directory in the file system.
    */
   private void syncMarkersFromFileSystem() {
-    Map<String, Set<String>> fileMarkersSetMap = FSUtils.parallelizeSubPathProcess(
-        hoodieEngineContext, fileSystem, new Path(markerDirPath), parallelism,
-        pathStr -> pathStr.contains(MARKERS_FILENAME_PREFIX),
-        pairOfSubPathAndConf -> {
-          String markersFilePathStr = pairOfSubPathAndConf.getKey();
-          SerializableConfiguration conf = pairOfSubPathAndConf.getValue();
-          return readMarkersFromFile(new Path(markersFilePathStr), conf);
-        });
+    Path dirPath = new Path(markerDirPath);
+    try {
+      if (fileSystem.exists(dirPath)) {
+        Map<String, Set<String>> fileMarkersSetMap = FSUtils.parallelizeSubPathProcess(
+            hoodieEngineContext, fileSystem, dirPath, parallelism,
+            pathStr -> pathStr.contains(MARKERS_FILENAME_PREFIX),
+            pairOfSubPathAndConf -> {
+              String markersFilePathStr = pairOfSubPathAndConf.getKey();
+              SerializableConfiguration conf = pairOfSubPathAndConf.getValue();
+              return readMarkersFromFile(new Path(markersFilePathStr), conf);
+            });
 
-    for (String markersFilePathStr: fileMarkersSetMap.keySet()) {
-      Set<String> fileMarkers = fileMarkersSetMap.get(markersFilePathStr);
-      if (!fileMarkers.isEmpty()) {
-        int index = parseMarkerFileIndex(markersFilePathStr);
+        for (String markersFilePathStr : fileMarkersSetMap.keySet()) {
+          Set<String> fileMarkers = fileMarkersSetMap.get(markersFilePathStr);
+          if (!fileMarkers.isEmpty()) {
+            int index = parseMarkerFileIndex(markersFilePathStr);
 
-        if (index >= 0) {
-          fileMarkersMap.put(index, new StringBuilder(StringUtils.join(",", fileMarkers)));
-          allMarkers.addAll(fileMarkers);
+            if (index >= 0) {
+              fileMarkersMap.put(index, new StringBuilder(StringUtils.join(",", fileMarkers)));
+              allMarkers.addAll(fileMarkers);
+            }
+          }
         }
       }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
     }
   }
 
