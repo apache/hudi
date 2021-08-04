@@ -56,6 +56,11 @@ df.write.format("org.apache.hudi").
   mode(Overwrite).
   save(basePath);
 ```
+**Note:** For non-partitioned table, set
+  ```
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+  ```
+ Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 **Step 4** : Query data. Load the data files into a DataFrame.
 
@@ -92,6 +97,11 @@ df.write.format("org.apache.hudi").
   mode(Append).
   save(basePath);
 ```
+**Note:** For non-partitioned table, set
+  ```
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+  ```
+ Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 **Step 7** : Reload the table and verify that the records are deleted
 
