@@ -43,22 +43,25 @@ public class SparkUpgradeDowngrade extends AbstractUpgradeDowngrade {
     } catch (IOException e) {
       throw new HoodieUpgradeDowngradeException("Error during upgrade/downgrade to version:" + toVersion, e);
     }
-
   }
 
   @Override
   protected void upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
-    if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
-      new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime);
-    } else {
-      throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
-    }
+      if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
+        new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime);
+      } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
+        new OneToTwoUpgradeHandler().upgrade(config, context, instantTime);
+      } else {
+        throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
+      }
   }
 
   @Override
   protected void downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
     if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.ZERO) {
       new OneToZeroDowngradeHandler().downgrade(config, context, instantTime);
+    } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {
+      new TwoToOneDowngradeHandler().downgrade(config, context, instantTime);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }

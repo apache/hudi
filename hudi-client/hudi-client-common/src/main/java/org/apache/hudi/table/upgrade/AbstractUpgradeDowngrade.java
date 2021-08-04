@@ -22,7 +22,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -114,14 +116,26 @@ public abstract class AbstractUpgradeDowngrade {
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
     if (fromVersion.versionCode() < toVersion.versionCode()) {
       // upgrade
-      upgrade(fromVersion, toVersion, instantTime);
+      while( fromVersion.versionCode() < toVersion.versionCode()) {
+        HoodieTableVersion nextVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() + 1);
+        upgrade(fromVersion, nextVersion, instantTime);
+        fromVersion = nextVersion;
+      }
     } else {
       // downgrade
-      downgrade(fromVersion, toVersion, instantTime);
+      while( fromVersion.versionCode() > toVersion.versionCode()) {
+        HoodieTableVersion prevVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() - 1);
+        downgrade(fromVersion, prevVersion, instantTime);
+        fromVersion = prevVersion;
+      }
     }
 
     // Write out the current version in hoodie.properties.updated file
+    // reinitialize the meta client so that latest props are picked up
+    metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
     metaClient.getTableConfig().setTableVersion(toVersion);
+
     createUpdatedFile(metaClient.getTableConfig().getProps());
 
     // because for different fs the fs.rename have different action,such as:
