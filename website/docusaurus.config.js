@@ -84,6 +84,11 @@ module.exports = {
     ],
   ],
   themeConfig: {
+    algolia: {
+      apiKey: 'e300f1558b703c001c515c0e7f8e0908',
+      indexName: 'apache_hudi',
+      contextualSearch: true,
+    },
     navbar: {
       logo: {
         alt: 'Apache Hudi',
