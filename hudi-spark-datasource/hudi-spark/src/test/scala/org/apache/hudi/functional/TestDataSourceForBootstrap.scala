@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import collection.JavaConverters._
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
-import org.apache.hudi.client.TestBootstrap
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.fs.FSUtils

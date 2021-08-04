@@ -15,8 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.functional;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,6 +38,7 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -59,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Tests {@link HoodieDatasetBulkInsertHelper}.
  */
+@Tag("functional")
 public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
 
   private String schemaStr;
