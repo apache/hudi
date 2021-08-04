@@ -185,6 +185,12 @@ Here we are using the default write operation : `upsert`. If you have a workload
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
 :::
 
+**Note:** For non-partitioned table, set
+ ```
+ option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+ ```
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
+
 ## Query data 
 
 Load the data files into a DataFrame.
@@ -454,6 +460,12 @@ roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
+
+**Note:** For non-partitioned table, set
+ ```
+ option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+ ```
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 </TabItem>
 <TabItem value="python">
