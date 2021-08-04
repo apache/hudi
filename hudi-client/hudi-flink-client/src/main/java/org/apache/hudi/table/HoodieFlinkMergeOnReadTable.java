@@ -34,6 +34,7 @@ import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.delta.FlinkUpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.compact.BaseScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.FlinkScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.rollback.FlinkMergeOnReadRollbackActionExecutor;
@@ -61,6 +62,18 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
         "MOR write handle should always be a FlinkAppendHandle");
     FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
     return new FlinkUpsertDeltaCommitActionExecutor<>(context, appendHandle, config, this, instantTime, hoodieRecords).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> preppedRecords) {
+    ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
+        "MOR write handle should always be a FlinkAppendHandle");
+    FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
+    return new FlinkUpsertPreppedDeltaCommitActionExecutor<>(context, appendHandle, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override

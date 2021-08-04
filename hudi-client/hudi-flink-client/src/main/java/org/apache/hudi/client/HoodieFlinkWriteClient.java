@@ -40,7 +40,9 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndex;
 import org.apache.hudi.index.HoodieIndex;
@@ -50,6 +52,8 @@ import org.apache.hudi.io.FlinkMergeAndReplaceHandle;
 import org.apache.hudi.io.FlinkMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.MiniBatchHandle;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -153,7 +157,15 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public List<WriteStatus> upsertPreppedRecords(List<HoodieRecord<T>> preppedRecords, String instantTime) {
-    throw new HoodieNotSupportedException("UpsertPrepped operation is not supported yet");
+    // only used for metadata table, the upsert happens in single thread
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        getTableAndInitCtx(WriteOperationType.UPSERT, instantTime);
+    table.validateUpsertSchema();
+    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+    final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(preppedRecords.get(0), getConfig(),
+        instantTime, table, preppedRecords.listIterator());
+    HoodieWriteMetadata<List<WriteStatus>> result = ((HoodieFlinkTable<T>) table).upsertPrepped(context, writeHandle, instantTime, preppedRecords);
+    return postWrite(result, instantTime, table);
   }
 
   @Override
@@ -355,7 +367,14 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected List<WriteStatus> compact(String compactionInstantTime, boolean shouldComplete) {
-    throw new HoodieNotSupportedException("Compaction is not supported yet");
+    // only used for metadata table, the compaction happens in single thread
+    try {
+      List<WriteStatus> writeStatuses = FlinkCompactHelpers.compact(compactionInstantTime, this);
+      commitCompaction(compactionInstantTime, writeStatuses, Option.empty());
+      return writeStatuses;
+    } catch (IOException e) {
+      throw new HoodieException("Error while compacting instant: " + compactionInstantTime);
+    }
   }
 
   @Override
@@ -368,6 +387,16 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     HoodieTableMetaClient metaClient = createMetaClient(true);
     new FlinkUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
     return getTableAndInitCtx(metaClient, operationType);
+  }
+
+  @Override
+  public void syncTableMetadata() {
+    // Open up the metadata table again, for syncing
+    try (HoodieTableMetadataWriter writer = FlinkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
+      LOG.info("Successfully synced to metadata table");
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Error syncing to metadata table.", e);
+    }
   }
 
   /**
