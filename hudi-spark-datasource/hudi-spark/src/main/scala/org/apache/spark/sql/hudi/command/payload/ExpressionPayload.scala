@@ -201,7 +201,7 @@ class ExpressionPayload(record: GenericRecord,
   }
 
   private def isMORTable(properties: Properties): Boolean = {
-    properties.getProperty(TABLE_TYPE_OPT_KEY.key, null) == MOR_TABLE_TYPE_OPT_VAL
+    properties.getProperty(TABLE_TYPE.key, null) == MOR_TABLE_TYPE_OPT_VAL
   }
 
   private def convertToRecord(values: Array[AnyRef], schema: Schema): IndexedRecord = {

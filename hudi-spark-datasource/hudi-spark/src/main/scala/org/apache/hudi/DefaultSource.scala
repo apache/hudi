@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
-import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION_OPT_KEY}
+import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -75,9 +75,9 @@ class DefaultSource extends RelationProvider
     val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(optParams)
 
     val path = parameters.get("path")
-    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
+    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
-      throw new HoodieException(s"'path' or '$READ_PATHS_OPT_KEY' or both must be specified.")
+      throw new HoodieException(s"'path' or '$READ_PATHS' or both must be specified.")
     }
 
     val readPaths = readPathsStr.map(p => p.split(",").toSeq).getOrElse(Seq())
@@ -89,7 +89,7 @@ class DefaultSource extends RelationProvider
     val enableFileIndex = optParams.get(ENABLE_HOODIE_FILE_INDEX.key)
       .map(_.toBoolean).getOrElse(ENABLE_HOODIE_FILE_INDEX.defaultValue)
     val useHoodieFileIndex = enableFileIndex && path.isDefined && !path.get.contains("*") &&
-      !parameters.contains(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
+      !parameters.contains(DataSourceReadOptions.READ_PATHS.key)
     val globPaths = if (useHoodieFileIndex) {
       None
     } else {
@@ -106,7 +106,7 @@ class DefaultSource extends RelationProvider
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
-    val queryType = parameters(QUERY_TYPE_OPT_KEY.key)
+    val queryType = parameters(QUERY_TYPE.key)
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
@@ -159,7 +159,7 @@ class DefaultSource extends RelationProvider
     val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
 
-    if (translatedOptions(OPERATION_OPT_KEY.key).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
+    if (translatedOptions(OPERATION.key).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
     } else {
       HoodieSparkSqlWriter.write(sqlContext, mode, translatedOptions, dfWithoutMetaCols)

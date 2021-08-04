@@ -117,8 +117,8 @@ public class BootstrapExecutor  implements Serializable {
     this.bootstrapBasePath = properties.getString(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH_PROP.key());
 
     // Add more defaults if full bootstrap requested
-    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY().key(),
-        DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY().defaultValue());
+    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS().key(),
+        DataSourceWriteOptions.PAYLOAD_CLASS().defaultValue());
     this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath)
