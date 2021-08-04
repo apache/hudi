@@ -28,6 +28,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
+import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -57,6 +58,10 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.apache.orc.OrcFile;
+import org.apache.orc.TypeDescription;
+import org.apache.orc.Writer;
+import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -76,6 +81,8 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.hudi.common.util.AvroOrcUtils.addAvroRecord;
 
 /**
  * Abstract test that provides a dfs & spark contexts.
@@ -304,6 +311,21 @@ public class UtilitiesTestBase {
           .build()) {
         for (GenericRecord record : records) {
           writer.write(record);
+        }
+      }
+    }
+
+    public static void saveORCToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.AVRO_SCHEMA);
+      saveORCToDFS(records, targetFile, orcSchema);
+    }
+
+    public static void saveORCToDFS(List<GenericRecord> records, Path targetFile, TypeDescription schema) throws IOException {
+      OrcFile.WriterOptions options = OrcFile.writerOptions(HoodieTestUtils.getDefaultHadoopConf()).setSchema(schema);
+      try (Writer writer = OrcFile.createWriter(targetFile, options)) {
+        VectorizedRowBatch batch = schema.createRowBatch();
+        for (GenericRecord record : records) {
+          addAvroRecord(batch, record, schema, records.size(), writer);
         }
       }
     }

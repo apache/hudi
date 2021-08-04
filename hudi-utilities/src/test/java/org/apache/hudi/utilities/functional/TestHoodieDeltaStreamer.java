@@ -54,6 +54,7 @@ import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.JdbcSource;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
+import org.apache.hudi.utilities.sources.ORCDFSSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
@@ -1296,6 +1297,46 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     testNum++;
   }
 
+  private void prepareORCDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+    prepareORCDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
+            PROPS_FILENAME_TEST_ORC, ORC_SOURCE_ROOT, false);
+  }
+
+  private void prepareORCDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
+                                       String propsFileName, String orcSourceRoot, boolean addCommonProps) throws IOException {
+    // Properties used for testing delta-streamer with orc source
+    TypedProperties orcProps = new TypedProperties();
+
+    if (addCommonProps) {
+      populateCommonProps(orcProps);
+    }
+
+    orcProps.setProperty("include", "base.properties");
+    orcProps.setProperty("hoodie.embed.timeline.server","false");
+    orcProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    orcProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    if (useSchemaProvider) {
+      orcProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + sourceSchemaFile);
+      if (hasTransformer) {
+        orcProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/" + targetSchemaFile);
+      }
+    }
+    orcProps.setProperty("hoodie.deltastreamer.source.dfs.root", orcSourceRoot);
+    UtilitiesTestBase.Helpers.savePropsToDFS(orcProps, dfs, dfsBasePath + "/" + propsFileName);
+  }
+
+  private void testORCDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
+    prepareORCDFSSource(useSchemaProvider, transformerClassNames != null);
+    String tableBasePath = dfsBasePath + "/test_orc_source_table" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+            TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ORCDFSSource.class.getName(),
+                    transformerClassNames, PROPS_FILENAME_TEST_ORC, false,
+                    useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(ORC_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
+    testNum++;
+  }
+
   private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName) throws IOException {
     // Properties used for testing delta-streamer with JsonKafka source
     TypedProperties props = new TypedProperties();
@@ -1433,6 +1474,26 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
   @Test
   public void testParquetDFSSourceWithSchemaFilesAndTransformer() throws Exception {
     testParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  }
+
+  @Test
+  public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
+    testORCDFSSource(false, null);
+  }
+
+  @Test
+  public void testORCDFSSourceWithoutSchemaProviderAndTransformer() throws Exception {
+    testORCDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  }
+
+  @Test
+  public void testORCDFSSourceWithSourceSchemaFileAndNoTransformer() throws Exception {
+    testORCDFSSource(true, null);
+  }
+
+  @Test
+  public void testORCDFSSourceWithSchemaFilesAndTransformer() throws Exception {
+    testORCDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
   private void prepareCsvDFSSource(

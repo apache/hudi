@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -37,7 +38,9 @@ import org.apache.avro.generic.GenericData;
 import java.nio.charset.StandardCharsets;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData.StringType;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
+import org.apache.orc.Writer;
 import org.apache.orc.storage.common.type.HiveDecimal;
 import org.apache.orc.storage.ql.exec.vector.BytesColumnVector;
 import org.apache.orc.storage.ql.exec.vector.ColumnVector;
@@ -49,6 +52,7 @@ import org.apache.orc.storage.ql.exec.vector.MapColumnVector;
 import org.apache.orc.storage.ql.exec.vector.StructColumnVector;
 import org.apache.orc.storage.ql.exec.vector.TimestampColumnVector;
 import org.apache.orc.storage.ql.exec.vector.UnionColumnVector;
+import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 import org.apache.orc.storage.serde2.io.DateWritable;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.orc.TypeDescription;
@@ -796,4 +800,32 @@ public class AvroOrcUtils {
       return Schema.createUnion(nonNullMembers);
     }
   }
+
+  public static void addAvroRecord(
+          VectorizedRowBatch batch,
+          GenericRecord record,
+          TypeDescription orcSchema,
+          int orcBatchSize,
+          Writer writer
+  ) throws IOException {
+
+    for (int c = 0; c < batch.numCols; c++) {
+      ColumnVector colVector = batch.cols[c];
+      final String thisField = orcSchema.getFieldNames().get(c);
+      final TypeDescription type = orcSchema.getChildren().get(c);
+
+      Object fieldValue = record.get(thisField);
+      Schema.Field avroField = record.getSchema().getField(thisField);
+      addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
+    }
+
+    batch.size++;
+
+    if (batch.size % orcBatchSize == 0 || batch.size == batch.getMaxSize()) {
+      writer.addRowBatch(batch);
+      batch.reset();
+      batch.size = 0;
+    }
+  }
+
 }
