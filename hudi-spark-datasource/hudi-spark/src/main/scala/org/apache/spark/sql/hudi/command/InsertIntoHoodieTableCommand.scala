@@ -27,6 +27,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
+import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{HoodieSparkSqlWriter, HoodieWriterUtils}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
@@ -244,6 +245,7 @@ object InsertIntoHoodieTableCommand {
         PARTITIONPATH_FIELD.key -> partitionFields,
         PAYLOAD_CLASS.key -> payloadClassName,
         META_SYNC_ENABLED.key -> enableHive.toString,
+        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",
         HIVE_DATABASE.key -> table.identifier.database.getOrElse("default"),
         HIVE_TABLE.key -> table.identifier.table,
