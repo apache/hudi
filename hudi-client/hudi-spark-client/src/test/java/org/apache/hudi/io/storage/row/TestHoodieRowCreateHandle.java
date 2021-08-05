@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -168,11 +169,15 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testInstantiationFailure() throws IOException {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).withPath("/dummypath/abc/").build();
+    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder("/dummypath/abc/")
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(false)
+            .build())
+        .build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
 
     try {
-      new HoodieRowCreateHandle(table, cfg, " def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+      new HoodieRowCreateHandle(table, cfg, "def", UUID.randomUUID().toString(), "001", RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
       fail("Should have thrown exception");
     } catch (HoodieInsertException ioe) {
       // expected

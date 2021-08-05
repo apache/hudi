@@ -70,10 +70,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP;
-
 public class HoodieInputFormatUtils {
 
   // These positions have to be deterministic across all tables
@@ -416,13 +412,6 @@ public class HoodieInputFormatUtils {
     return grouped;
   }
 
-  public static HoodieMetadataConfig buildMetadataConfig(Configuration conf) {
-    return HoodieMetadataConfig.newBuilder()
-        .enable(conf.getBoolean(METADATA_ENABLE_PROP.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
-        .validate(conf.getBoolean(METADATA_VALIDATE_PROP.key(), METADATA_VALIDATE_PROP.defaultValue()))
-        .build();
-  }
-
   public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
                                                                  List<Path> snapshotPaths) throws IOException {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
@@ -443,7 +432,8 @@ public class HoodieInputFormatUtils {
         HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
 
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
-            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
+            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient,
+                HoodieMetadataConfig.newBuilder().build(), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
         for (Path p : entry.getValue()) {
           String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);

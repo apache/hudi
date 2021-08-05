@@ -69,7 +69,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
     // Do the snapshot
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
     copier.snapshot(jsc(), basePath, outputPath, true,
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
+        HoodieMetadataConfig.METADATA_ENABLE_PROP.defaultValue(),
         HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue());
 
     // Nothing changed; we just bail out
@@ -123,7 +123,7 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
 
     // Do a snapshot copy
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc(), basePath, outputPath, false, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
+    copier.snapshot(jsc(), basePath, outputPath, false, HoodieMetadataConfig.METADATA_ENABLE_PROP.defaultValue(),
         HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue());
 
     // Check results

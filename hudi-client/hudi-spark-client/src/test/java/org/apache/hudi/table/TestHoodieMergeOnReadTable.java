@@ -1079,8 +1079,15 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
       HoodieSparkWriteableTestTable.of(table, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)
           .withLogAppends(updatedRecords);
-      // In writeRecordsToLogFiles, no commit files are getting added, so resetting file-system view state
-      ((SyncableFileSystemView) (table.getSliceView())).reset();
+
+      // Mark 2nd delta-instant as completed
+      metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT,
+          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime));
+      metaClient.getActiveTimeline().saveAsComplete(
+          new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      table = HoodieSparkTable.create(config, context, metaClient);
 
       // Verify that all data file has one log file
       for (String partitionPath : dataGen.getPartitionPaths()) {
@@ -1090,12 +1097,6 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
           assertEquals(1, fileSlice.getLogFiles().count(), "There should be 1 log file written for every data file");
         }
       }
-
-      // Mark 2nd delta-instant as completed
-      metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT,
-          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime));
-      metaClient.getActiveTimeline().saveAsComplete(
-          new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
       // Do a compaction
       String compactionInstantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();

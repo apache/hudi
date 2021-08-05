@@ -306,7 +306,7 @@ public class TimelineServerPerf implements Serializable {
     public Boolean waitForManualQueries = false;
 
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
-    public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+    public Boolean useFileListingFromMetadata = HoodieMetadataConfig.METADATA_ENABLE_PROP.defaultValue();
 
     @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
     public Boolean verifyMetadataFileListing = HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue();

@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
@@ -96,6 +97,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table").build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
@@ -109,7 +111,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 4).build())
         .forTable("test-trip-table").build();
-    HoodieTestUtils.init(hadoopConf, basePath);
+    initMetadataTable(cfg);
     // Requested Compaction
     HoodieTestDataGenerator.createCompactionAuxiliaryMetadata(basePath,
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100"), wrapperFs.getConf());
@@ -235,6 +237,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
         .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
@@ -301,6 +304,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
         .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
@@ -328,7 +332,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
         .build();
-
+    initMetadataTable(cfg);
     HoodieTestDataGenerator.createCommitFile(basePath, "100", wrapperFs.getConf());
     HoodieTestDataGenerator.createCommitFile(basePath, "101", wrapperFs.getConf());
     HoodieTestDataGenerator.createSavepointFile(basePath, "101", wrapperFs.getConf());
@@ -336,6 +340,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     HoodieTestDataGenerator.createCommitFile(basePath, "103", wrapperFs.getConf());
     HoodieTestDataGenerator.createCommitFile(basePath, "104", wrapperFs.getConf());
     HoodieTestDataGenerator.createCommitFile(basePath, "105", wrapperFs.getConf());
+
     HoodieTable table = HoodieSparkTable.create(cfg, context);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
 
@@ -359,6 +364,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
             .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
             .build();
+    initMetadataTable(cfg);
 
     createCommitAndRollbackFile("100", "101", false);
     createCommitAndRollbackFile("102", "103", false);
@@ -388,6 +394,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
         .build();
+    initMetadataTable(cfg);
+
     HoodieTestDataGenerator.createCommitFile(basePath, "100", wrapperFs.getConf());
     HoodieTestDataGenerator.createCompactionRequestedFile(basePath, "101", wrapperFs.getConf());
     HoodieTestDataGenerator.createCompactionAuxiliaryMetadata(basePath,
@@ -436,6 +444,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                     .withParallelism(2, 2).forTable("test-trip-table")
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
                     .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     HoodieTestDataGenerator.createCommitFile(basePath, "1", wrapperFs.getConf());
@@ -488,6 +497,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                     .withParallelism(2, 2).forTable("test-trip-table")
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
                     .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     createCleanMetadata("10", false);
@@ -513,6 +523,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                     .withParallelism(2, 2).forTable("test-trip-table")
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
                     .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     createCommitAndRollbackFile("6", "10", false);
@@ -543,6 +554,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                     .withParallelism(2, 2).forTable("test-trip-table")
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minInstants, maxInstants).build())
                     .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     for (int i = 0; i < maxInstants + 2; i++) {
       createCleanMetadata(i + "", false);
@@ -564,6 +576,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                     .withParallelism(2, 2).forTable("test-trip-table")
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minInstants, maxInstants).build())
                     .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     for (int i = 0; i < maxInstants; i++) {
       createCleanMetadata(i + "", false);
@@ -585,6 +598,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                     .withParallelism(2, 2).forTable("test-trip-table")
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minInstantsToKeep, maxInstantsToKeep).build())
                     .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     int startInstant = 1;
@@ -618,6 +632,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                     .withParallelism(2, 2).forTable("test-trip-table")
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
                     .build();
+    initMetadataTable(cfg);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     createCleanMetadata("10", false);
@@ -676,5 +691,12 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       HoodieTestTable.of(metaClient).addRollback(rollbackTime, hoodieRollbackMetadata);
     }
     return new HoodieInstant(inflight, "rollback", rollbackTime);
+  }
+
+  private void initMetadataTable(HoodieWriteConfig writeConfig) {
+    // Init the metadata table, so that commits/instants created externally can get synced later. Without
+    // instants getting synced, archival of those instants will not trigger.
+    SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig);
+    client.syncTableMetadata();
   }
 }

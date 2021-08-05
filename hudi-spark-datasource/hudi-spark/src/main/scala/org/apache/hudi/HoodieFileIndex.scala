@@ -124,7 +124,7 @@ case class HoodieFileIndex(
     // would be able to run SET hoodie.metadata.enable=true in the spark sql session to enable metadata listing.
     properties.put(HoodieMetadataConfig.METADATA_ENABLE_PROP,
       sqlConf.getConfString(HoodieMetadataConfig.METADATA_ENABLE_PROP.key(),
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
+        HoodieMetadataConfig.METADATA_ENABLE_PROP.defaultValue().toString))
     properties.put(HoodieMetadataConfig.METADATA_VALIDATE_PROP,
       sqlConf.getConfString(HoodieMetadataConfig.METADATA_VALIDATE_PROP.key(),
         HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue().toString))

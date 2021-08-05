@@ -88,7 +88,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     // calls in metrics as they are not part of normal HUDI operation.
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient.getBasePath(),
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false);
+        HoodieMetadataConfig.METADATA_ENABLE_PROP.defaultValue(), HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false);
     // Sort partition so we can pick last N partitions by default
     Collections.sort(partitionPaths);
     if (!partitionPaths.isEmpty()) {

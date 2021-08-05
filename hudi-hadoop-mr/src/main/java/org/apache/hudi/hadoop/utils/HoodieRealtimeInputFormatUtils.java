@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -105,7 +106,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         if (!fsCache.containsKey(metaClient)) {
           HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(conf);
           HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-              metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf));
+              metaClient, HoodieMetadataConfig.newBuilder().build());
           fsCache.put(metaClient, fsView);
         }
         HoodieTableFileSystemView fsView = fsCache.get(metaClient);
