@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
+import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, SubqueryAlias, UpdateTable}
@@ -104,6 +105,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
         OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
         META_SYNC_ENABLED.key -> enableHive.toString,
+        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",
         HIVE_DATABASE.key -> tableId.database.getOrElse("default"),
         HIVE_TABLE.key -> tableId.table,

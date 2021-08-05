@@ -122,7 +122,6 @@ object DataSourceReadOptions {
   * Options supported for writing hoodie tables.
   */
 object DataSourceWriteOptions {
-
   private val log = LogManager.getLogger(DataSourceWriteOptions.getClass)
 
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
@@ -349,9 +348,12 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .withDocumentation("")
 
+  // We should use HIVE_SYNC_MODE instead of this config from 0.9.0
+  @Deprecated
   val HIVE_USE_JDBC: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.use_jdbc")
     .defaultValue("true")
+    .deprecatedAfter("0.9.0")
     .withDocumentation("Use JDBC when hive synchronization is enabled")
 
   val HIVE_AUTO_CREATE_DATABASE: ConfigProperty[String] = ConfigProperty
@@ -400,6 +402,11 @@ object DataSourceWriteOptions {
     .key("hoodie.datasource.hive_sync.batch_num")
     .defaultValue(1000)
     .withDocumentation("The number of partitions one batch when synchronous partitions to hive.")
+
+  val HIVE_SYNC_MODE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.mode")
+    .noDefaultValue()
+    .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.")
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty

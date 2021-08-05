@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
+import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
@@ -437,6 +438,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
           PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
           PAYLOAD_CLASS.key -> classOf[ExpressionPayload].getCanonicalName,
           META_SYNC_ENABLED.key -> enableHive.toString,
+          HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
           HIVE_USE_JDBC.key -> "false",
           HIVE_DATABASE.key -> targetTableDb,
           HIVE_TABLE.key -> targetTableName,

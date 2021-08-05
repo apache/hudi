@@ -22,13 +22,13 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
+import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
-
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -69,14 +69,15 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     // disable jdbc and depend on metastore client for all hive registrations
     try {
       if (!StringUtils.isNullOrEmpty(cfg.syncMode)) {
-        switch (cfg.syncMode.toLowerCase()) {
-          case "hms":
+        HiveSyncMode syncMode = HiveSyncMode.of(cfg.syncMode);
+        switch (syncMode) {
+          case HMS:
             ddlExecutor = new HMSDDLExecutor(configuration, cfg, fs);
             break;
-          case "hiveql":
+          case HIVEQL:
             ddlExecutor = new HiveQueryDDLExecutor(cfg, fs, configuration);
             break;
-          case "jdbc":
+          case JDBC:
             ddlExecutor = new JDBCExecutor(cfg, fs);
             break;
           default:
