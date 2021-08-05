@@ -530,7 +530,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime)),
           Option.empty());
       try {
-        List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(rollbackMetadata, instantTime, metadata.getSyncedInstantTime());
+        // Is this rollback of an instant that has been synced to the metadata table?
+        String rollbackInstant = rollbackMetadata.getCommitsRollback().get(0);
+        boolean wasSynced = metaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, rollbackInstant));
+        if (!wasSynced) {
+          // A compaction may have taken place on metadata table which would have included this instant being rolled back.
+          Option<String> latestCompaction = metadata.getLatestCompactionTime();
+          if (latestCompaction.isPresent()) {
+            wasSynced = HoodieTimeline.compareTimestamps(rollbackInstant, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCompaction.get());
+          }
+        }
+
+        List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(rollbackMetadata, instantTime,
+            metadata.getSyncedInstantTime(), wasSynced);
         commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
       } finally {
         this.txnManager.endTransaction();

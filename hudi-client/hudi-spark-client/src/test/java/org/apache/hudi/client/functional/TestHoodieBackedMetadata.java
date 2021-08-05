@@ -523,7 +523,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       client.clean(newCommitTime);
       validateMetadata(client);
       client.rollback(newCommitTime);
-      // TODO client.syncTableMetadata();
       validateMetadata(client);
     }
 
@@ -537,7 +536,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       client.rollback(newCommitTime);
-      // TODO client.syncTableMetadata();
       validateMetadata(client);
     }
 
@@ -551,7 +549,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       client.rollback(newCommitTime);
-      // TODO client.syncTableMetadata();
       validateMetadata(client);
     }
   }
@@ -666,7 +663,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
 
       validateMetadata(client);
-      // TODO assertTrue(metadata(client).isInSync());
     }
 
     // Various table operations without metadata table enabled
@@ -739,7 +735,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
       // Restore cannot be done until the metadata table is in sync. See HUDI-1502 for details
-      // TODO client.syncTableMetadata();
 
       // Table should sync only before the inflightActionTimestamp
       HoodieBackedTableMetadataWriter writer =
@@ -905,7 +900,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       // Ensure no more compactions took place due to the leftover inflight commit
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 1);
-      assertEquals(metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 2 * maxDeltaCommitsBeforeCompaction + 4 /* cleans */);
+      assertEquals(metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 2 * maxDeltaCommitsBeforeCompaction + 1 /* clean */);
 
       // Complete commit
       FileCreateUtils.createCommit(basePath, inflightCommitTime);
@@ -919,7 +914,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       // Ensure compactions took place
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 2);
-      assertEquals(metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 2 * maxDeltaCommitsBeforeCompaction + 1 + 5 /* cleans */);
+      assertEquals(metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 2 * maxDeltaCommitsBeforeCompaction + 2 /* cleans */);
 
       assertTrue(datasetMetaClient.getArchivedTimeline().reload().countInstants() > 0);
 
@@ -1191,7 +1186,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
             .sum();
         assertEquals(metadataFilenames.size(), numFiles);
       } catch (IOException e) {
-        // TODO Auto-generated catch block
         e.printStackTrace();
         assertTrue(false, "Exception should not be raised: " + e);
       }
@@ -1205,7 +1199,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     assertFalse(metadataWriteConfig.useFileListingMetadata(), "No metadata table for metadata table");
 
     // Metadata table should be in sync with the dataset
-    //TODO assertTrue(metadata(client).isInSync());
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
 
     // Metadata table is MOR

@@ -37,7 +37,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
-
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -61,57 +61,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 public class HoodieTableMetadataUtil {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetadataUtil.class);
-
-  /**
-   * Converts a timeline instant to metadata table records.
-   *
-   * @param datasetMetaClient The meta client associated with the timeline instant
-   * @param instant to fetch and convert to metadata table records
-   * @return a list of metadata table records
-   * @throws IOException
-   */
-  public static Option<List<HoodieRecord>> convertInstantToMetaRecords(HoodieTableMetaClient datasetMetaClient, HoodieInstant instant, Option<String> lastSyncTs) throws IOException {
-    HoodieTimeline timeline = datasetMetaClient.getActiveTimeline();
-    Option<List<HoodieRecord>> records = Option.empty();
-    ValidationUtils.checkArgument(instant.isCompleted(), "Only completed instants can be synced.");
-
-    switch (instant.getAction()) {
-      case HoodieTimeline.CLEAN_ACTION:
-        HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(datasetMetaClient, instant);
-        records = Option.of(convertMetadataToRecords(cleanMetadata, instant.getTimestamp()));
-        break;
-      case HoodieTimeline.DELTA_COMMIT_ACTION:
-      case HoodieTimeline.COMMIT_ACTION:
-      case HoodieTimeline.COMPACTION_ACTION:
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        records = Option.of(convertMetadataToRecords(commitMetadata, instant.getTimestamp()));
-        break;
-      case HoodieTimeline.ROLLBACK_ACTION:
-        HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-            timeline.getInstantDetails(instant).get());
-        records = Option.of(convertMetadataToRecords(rollbackMetadata, instant.getTimestamp(), lastSyncTs));
-        break;
-      case HoodieTimeline.RESTORE_ACTION:
-        HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
-            timeline.getInstantDetails(instant).get());
-        records = Option.of(convertMetadataToRecords(restoreMetadata, instant.getTimestamp(), lastSyncTs));
-        break;
-      case HoodieTimeline.SAVEPOINT_ACTION:
-        // Nothing to be done here
-        break;
-      case HoodieTimeline.REPLACE_COMMIT_ACTION:
-        HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
-            timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
-        // Note: we only add new files created here. Replaced files are removed from metadata later by cleaner.
-        records = Option.of(convertMetadataToRecords(replaceMetadata, instant.getTimestamp()));
-        break;
-      default:
-        throw new HoodieException("Unknown type of action " + instant.getAction());
-    }
-
-    return records;
-  }
 
   /**
    * Finds all new files/partitions created as part of commit and creates metadata table records for them.
@@ -228,11 +177,17 @@ public class HoodieTableMetadataUtil {
     return convertFilesToRecords(partitionToDeletedFiles, partitionToAppendedFiles, instantTime, "Restore");
   }
 
-  public static List<HoodieRecord> convertMetadataToRecords(HoodieRollbackMetadata rollbackMetadata, String instantTime, Option<String> lastSyncTs) {
+  public static List<HoodieRecord> convertMetadataToRecords(HoodieRollbackMetadata rollbackMetadata, String instantTime,
+      Option<String> lastSyncTs, boolean wasSynced) {
 
     Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
     processRollbackMetadata(rollbackMetadata, partitionToDeletedFiles, partitionToAppendedFiles, lastSyncTs);
+    if (!wasSynced) {
+      // Since the instant-being-rolled-back was never committed to the metadata table, the files added there
+      // need not be deleted. For MOR Table, the rollback appends logBlocks so we need to keep the appended files.
+      partitionToDeletedFiles.clear();
+    }
     return convertFilesToRecords(partitionToDeletedFiles, partitionToAppendedFiles, instantTime, "Rollback");
   }
 
@@ -344,6 +299,37 @@ public class HoodieTableMetadataUtil {
         + ", #files_deleted=" + fileChangeCount[0] + ", #files_appended=" + fileChangeCount[1]);
 
     return records;
+  }
+
+  /**
+   * Returns a list of commits which were rolled back as part of a Rollback or Restore operation.
+   *
+   * @param instant The Rollback operation to read
+   * @param timeline
+   */
+  public static List<String> getCommitsRolledback(HoodieInstant instant, HoodieActiveTimeline timeline) {
+    try {
+      if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
+        HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
+            timeline.getInstantDetails(instant).get());
+        return rollbackMetadata.getCommitsRollback();
+      }
+
+      List<String> commitsRolledback = new LinkedList<>();
+
+      if (instant.getAction().equals(HoodieTimeline.RESTORE_ACTION)) {
+        // Restore is made up of several rollbacks
+        HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
+            timeline.getInstantDetails(instant).get());
+        restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> {
+          rms.forEach(rm -> commitsRolledback.addAll(rm.getCommitsRollback()));
+        });
+      }
+
+      return commitsRolledback;
+    } catch (IOException e) {
+      throw new HoodieMetadataException("Error retrieving rollback commits for instant " + instant, e);
+    }
   }
 
   /**

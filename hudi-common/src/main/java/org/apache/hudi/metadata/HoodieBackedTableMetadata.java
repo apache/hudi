@@ -31,7 +31,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -52,6 +54,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -209,8 +212,22 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
         // Only those log files which have a corresponding completed instant on the dataset should be read
         // This is because the metadata table is updated before the dataset instants are committed.
-        Set<String> validInstantTimestamps = datasetMetaClient.getActiveTimeline().filterCompletedInstants().getInstants()
+        HoodieActiveTimeline datasetTimeline = datasetMetaClient.getActiveTimeline();
+        Set<String> validInstantTimestamps = datasetTimeline.filterCompletedInstants().getInstants()
             .map(i -> i.getTimestamp()).collect(Collectors.toSet());
+
+        // For any rollbacks and restores, we cannot neglect the instants that they are rolling back.
+        // The rollback instant should be more recent than the start of the timeline for it to have rolled back any
+        // instant which we have a log block for.
+        final String minInstantTime = validInstantTimestamps.isEmpty() ? SOLO_COMMIT_TIMESTAMP : Collections.min(validInstantTimestamps);
+        datasetTimeline.getRollbackAndRestoreTimeline().filterCompletedInstants().getInstants()
+            .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, minInstantTime))
+            .forEach(instant -> {
+              validInstantTimestamps.addAll(HoodieTableMetadataUtil.getCommitsRolledback(instant, datasetTimeline));
+            });
+
+        // SOLO_COMMIT_TIMESTAMP is used during bootstrap so it is a valid timestamp
+        validInstantTimestamps.add(SOLO_COMMIT_TIMESTAMP);
 
         Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
         String latestMetaInstantTimestamp = lastInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);

@@ -77,7 +77,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   private static final Logger LOG = LogManager.getLogger(SparkRDDWriteClient.class);
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
+    this(context, clientConfig, Option.empty());
   }
 
   @Deprecated
