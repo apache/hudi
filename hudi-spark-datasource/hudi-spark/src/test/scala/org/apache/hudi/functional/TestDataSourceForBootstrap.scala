@@ -30,12 +30,13 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.api.io.TempDir
 
 import java.time.Instant
 import java.util.Collections
 
+@Tag("functional")
 class TestDataSourceForBootstrap {
 
   var spark: SparkSession = _

@@ -38,7 +38,7 @@ import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -46,6 +46,7 @@ import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 /**
  * Basic tests on the spark datasource for COW table.
  */
+@Tag("functional")
 class TestCOWDataSource extends HoodieClientTestBase {
   var spark: SparkSession = null
   val commonOpts = Map(
