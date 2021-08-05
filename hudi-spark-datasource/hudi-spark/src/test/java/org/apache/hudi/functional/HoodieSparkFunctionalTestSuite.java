@@ -15,23 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sql;
+package org.apache.hudi.functional;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
+import org.junit.platform.runner.JUnitPlatform;
+import org.junit.platform.suite.api.IncludeTags;
+import org.junit.platform.suite.api.SelectPackages;
+import org.junit.runner.RunWith;
 
-/***
- * A interface for CodeGen to execute expressions on the record.
- */
-public interface IExpressionEvaluator {
+@RunWith(JUnitPlatform.class)
+@SelectPackages("org.apache.hudi.hive.functional")
+@IncludeTags("functional")
+public class HoodieSparkFunctionalTestSuite {
 
-  /**
-   * Evaluate the result of the expressions based on the record.
-   */
-  GenericRecord eval(IndexedRecord record);
-
-  /**
-   * Get the code of the expressions. This is used for debug.
-   */
-  String getCode();
 }

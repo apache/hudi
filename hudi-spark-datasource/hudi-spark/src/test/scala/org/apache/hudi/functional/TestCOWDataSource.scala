@@ -18,7 +18,6 @@
 package org.apache.hudi.functional
 
 import java.sql.{Date, Timestamp}
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -47,7 +46,6 @@ import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 /**
  * Basic tests on the spark datasource for COW table.
  */
-
 class TestCOWDataSource extends HoodieClientTestBase {
   var spark: SparkSession = null
   val commonOpts = Map(

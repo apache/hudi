@@ -62,7 +62,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     Configuration conf = (Configuration) helper.getOptions();
     TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
-    validateRequiredFields(conf, schema);
+    sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
 
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
@@ -79,7 +79,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   public DynamicTableSink createDynamicTableSink(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
-    validateRequiredFields(conf, schema);
+    sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
     return new HoodieTableSink(conf, schema);
   }
@@ -103,12 +103,13 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   //  Utilities
   // -------------------------------------------------------------------------
 
-  /** Validate required options. For e.g, record key and pre_combine key.
+  /**
+   * The sanity check.
    *
    * @param conf The table options
    * @param schema The table schema
    */
-  private void validateRequiredFields(Configuration conf, TableSchema schema) {
+  private void sanityCheck(Configuration conf, TableSchema schema) {
     List<String> fields = Arrays.stream(schema.getFieldNames()).collect(Collectors.toList());
 
     // validate record key in pk absence.
@@ -127,6 +128,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!fields.contains(preCombineField)) {
       throw new ValidationException("Field " + preCombineField + " does not exist in the table schema."
           + "Please check 'write.precombine.field' option.");
+    }
+
+    if (conf.getString(FlinkOptions.TABLE_TYPE).toUpperCase().equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        && conf.getBoolean(FlinkOptions.INSERT_ALLOW_DUP)) {
+      throw new ValidationException("Option 'write.insert.allow_dup' is only allowed for COPY_ON_WRITE table.");
     }
   }
 

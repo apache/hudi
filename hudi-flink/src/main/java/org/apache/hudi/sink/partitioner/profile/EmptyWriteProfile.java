@@ -26,13 +26,18 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * WriteProfile for INSERT OVERWRITE and INSERT OVERWRITE TABLE operations,
- * this WriteProfile always skip the existing small files because of the 'OVERWRITE' semantics.
+ * WriteProfile that always return empty small files.
+ *
+ * <p>This write profile is used for cases:
+ * i). INSERT OVERWRITE and INSERT OVERWRITE TABLE operations,
+ * the existing small files are ignored because of the 'OVERWRITE' semantics;
+ * ii). INSERT operation when data file merge is disabled.
+ *
  *
  * <p>Note: assumes the index can always index log files for Flink write.
  */
-public class OverwriteWriteProfile extends WriteProfile {
-  public OverwriteWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+public class EmptyWriteProfile extends WriteProfile {
+  public EmptyWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     super(config, context);
   }
 
