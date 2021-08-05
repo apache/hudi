@@ -1,5 +1,5 @@
 ---
-title: "Apache Hudi - The Streaming Data Lake Platform"
+title: "Apache Hudi - The Data Lake Platform"
 excerpt: "It's been called many things. But, we have always been building a data lake platform"
 author: vinoth
 category: blog

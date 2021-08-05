@@ -9,8 +9,8 @@ const allDocHomesPaths = [
 
 /** @type {import('@docusaurus/types').DocusaurusConfig} */
 module.exports = {
-  title: 'Welcome to Apache Hudi!',
-  tagline: 'Hudi is the Streaming Data Lake Platform!',
+  title: 'Apache Hudi!',
+  tagline: 'Hudi brings transactions, record-level updates/deletes and change streams to data lakes!',
   url: 'https://hudi.apache.org',
   baseUrl: '/',
   onBrokenLinks: 'throw',
