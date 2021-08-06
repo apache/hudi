@@ -27,6 +27,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
+import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{HoodieSparkSqlWriter, HoodieWriterUtils}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
@@ -188,7 +189,7 @@ object InsertIntoHoodieTableCommand {
     }
     val parameters = HoodieOptionConfig.mappingSqlOptionToHoodieParam(table.storage.properties)
 
-    val tableType = parameters.getOrElse(TABLE_TYPE_OPT_KEY.key, TABLE_TYPE_OPT_KEY.defaultValue)
+    val tableType = parameters.getOrElse(TABLE_TYPE.key, TABLE_TYPE.defaultValue)
 
     val partitionFields = table.partitionColumnNames.mkString(",")
     val path = getTableLocation(table, sparkSession)
@@ -205,8 +206,8 @@ object InsertIntoHoodieTableCommand {
     }
 
     val dropDuplicate = sparkSession.conf
-      .getOption(INSERT_DROP_DUPS_OPT_KEY.key)
-      .getOrElse(INSERT_DROP_DUPS_OPT_KEY.defaultValue)
+      .getOption(INSERT_DROP_DUPS.key)
+      .getOrElse(INSERT_DROP_DUPS.defaultValue)
       .toBoolean
 
     val operation = if (isOverwrite) {
@@ -235,23 +236,24 @@ object InsertIntoHoodieTableCommand {
     withSparkConf(sparkSession, options) {
       Map(
         "path" -> path,
-        TABLE_TYPE_OPT_KEY.key -> tableType,
+        TABLE_TYPE.key -> tableType,
         TABLE_NAME.key -> table.identifier.table,
-        PRECOMBINE_FIELD_OPT_KEY.key -> tableSchema.fields.last.name,
-        OPERATION_OPT_KEY.key -> operation,
-        KEYGENERATOR_CLASS_OPT_KEY.key -> keyGenClass,
-        RECORDKEY_FIELD_OPT_KEY.key -> primaryColumns.mkString(","),
-        PARTITIONPATH_FIELD_OPT_KEY.key -> partitionFields,
-        PAYLOAD_CLASS_OPT_KEY.key -> payloadClassName,
-        META_SYNC_ENABLED_OPT_KEY.key -> enableHive.toString,
-        HIVE_USE_JDBC_OPT_KEY.key -> "false",
-        HIVE_DATABASE_OPT_KEY.key -> table.identifier.database.getOrElse("default"),
-        HIVE_TABLE_OPT_KEY.key -> table.identifier.table,
+        PRECOMBINE_FIELD.key -> tableSchema.fields.last.name,
+        OPERATION.key -> operation,
+        KEYGENERATOR_CLASS.key -> keyGenClass,
+        RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
+        PARTITIONPATH_FIELD.key -> partitionFields,
+        PAYLOAD_CLASS.key -> payloadClassName,
+        META_SYNC_ENABLED.key -> enableHive.toString,
+        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
+        HIVE_USE_JDBC.key -> "false",
+        HIVE_DATABASE.key -> table.identifier.database.getOrElse("default"),
+        HIVE_TABLE.key -> table.identifier.table,
         HIVE_SUPPORT_TIMESTAMP.key -> "true",
-        HIVE_STYLE_PARTITIONING_OPT_KEY.key -> "true",
-        HIVE_PARTITION_FIELDS_OPT_KEY.key -> partitionFields,
-        HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-        URL_ENCODE_PARTITIONING_OPT_KEY.key -> "true",
+        HIVE_STYLE_PARTITIONING.key -> "true",
+        HIVE_PARTITION_FIELDS.key -> partitionFields,
+        HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+        URL_ENCODE_PARTITIONING.key -> "true",
         HoodieWriteConfig.INSERT_PARALLELISM.key -> "200",
         HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> table.partitionSchema.toDDL
@@ -261,7 +263,7 @@ object InsertIntoHoodieTableCommand {
 }
 
 /**
- * Validate the duplicate key for insert statement without enable the INSERT_DROP_DUPS_OPT_KEY
+ * Validate the duplicate key for insert statement without enable the INSERT_DROP_DUPS_OPT
  * config.
  */
 class ValidateDuplicateKeyPayload(record: GenericRecord, orderingVal: Comparable[_])

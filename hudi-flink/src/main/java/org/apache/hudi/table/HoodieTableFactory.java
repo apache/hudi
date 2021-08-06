@@ -23,6 +23,7 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -62,7 +63,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     Configuration conf = (Configuration) helper.getOptions();
     TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
-    validateRequiredFields(conf, schema);
+    sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
 
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
@@ -79,7 +80,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   public DynamicTableSink createDynamicTableSink(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
-    validateRequiredFields(conf, schema);
+    sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
     return new HoodieTableSink(conf, schema);
   }
@@ -103,12 +104,13 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   //  Utilities
   // -------------------------------------------------------------------------
 
-  /** Validate required options. For e.g, record key and pre_combine key.
+  /**
+   * The sanity check.
    *
    * @param conf The table options
    * @param schema The table schema
    */
-  private void validateRequiredFields(Configuration conf, TableSchema schema) {
+  private void sanityCheck(Configuration conf, TableSchema schema) {
     List<String> fields = Arrays.stream(schema.getFieldNames()).collect(Collectors.toList());
 
     // validate record key in pk absence.
@@ -207,6 +209,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
       // if compaction schedule is on, tweak the target io to 500GB
       conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
+    }
+    if (StreamerUtil.allowDuplicateInserts(conf)) {
+      // no need for compaction if insert duplicates is allowed
+      conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+      conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     }
   }
 

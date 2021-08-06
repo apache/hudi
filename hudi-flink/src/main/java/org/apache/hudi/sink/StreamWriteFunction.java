@@ -324,13 +324,7 @@ public class StreamWriteFunction<K, I, O>
   }
 
   private void sendBootstrapEvent() {
-    WriteMetadataEvent event = WriteMetadataEvent.builder()
-        .taskID(taskID)
-        .writeStatus(Collections.emptyList())
-        .instantTime("")
-        .bootstrap(true)
-        .build();
-    this.eventGateway.sendEventToCoordinator(event);
+    this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }
 

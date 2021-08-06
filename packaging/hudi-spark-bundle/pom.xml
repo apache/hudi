@@ -115,8 +115,6 @@
                   <include>org.apache.curator:curator-client</include>
                   <include>org.apache.curator:curator-recipes</include>
                   <include>commons-codec:commons-codec</include>
-                  <include>org.json:json</include>
-                  <include>org.apache.calcite:calcite-core</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -368,18 +366,6 @@
       <groupId>org.apache.curator</groupId>
       <artifactId>curator-recipes</artifactId>
       <version>${zk-curator.version}</version>
-    </dependency>
-<!--    import json to fix the crash when sync meta in spark-->
-    <dependency>
-      <groupId>org.json</groupId>
-      <artifactId>json</artifactId>
-      <version>${json.version}</version>
-    </dependency>
-<!--    import calcite to support hive3 & spark 3-->
-    <dependency>
-      <groupId>org.apache.calcite</groupId>
-      <artifactId>calcite-core</artifactId>
-      <version>${calcite.version}</version>
     </dependency>
     <!-- TODO: Reinvestigate PR 633 -->
   </dependencies>

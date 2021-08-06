@@ -884,7 +884,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP.key(), inlineClusterMaxCommit));
     }
     if (!StringUtils.isNullOrEmpty(asyncCluster)) {
-      configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY.key(), asyncCluster));
+      configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), asyncCluster));
     }
     if (!StringUtils.isNullOrEmpty(asyncClusterMaxCommit)) {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMIT_PROP.key(), asyncClusterMaxCommit));

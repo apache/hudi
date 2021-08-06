@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -32,6 +33,8 @@ import java.util.Objects;
  */
 public class WriteMetadataEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
+
+  public static final String BOOTSTRAP_INSTANT = "";
 
   private List<WriteStatus> writeStatuses;
   private int taskID;
@@ -57,11 +60,11 @@ public class WriteMetadataEvent implements OperatorEvent {
    * @param taskID        The task ID
    * @param instantTime   The instant time under which to write the data
    * @param writeStatuses The write statues list
-   * @param lastBatch   Whether the event reports the last batch
+   * @param lastBatch     Whether the event reports the last batch
    *                      within an checkpoint interval,
    *                      if true, the whole data set of the checkpoint
    *                      has been flushed successfully
-   * @param bootstrap   Whether the event comes from the bootstrap
+   * @param bootstrap     Whether the event comes from the bootstrap
    */
   private WriteMetadataEvent(
       int taskID,
@@ -79,7 +82,8 @@ public class WriteMetadataEvent implements OperatorEvent {
   }
 
   // default constructor for efficient serialization
-  public WriteMetadataEvent() {}
+  public WriteMetadataEvent() {
+  }
 
   /**
    * Returns the builder for {@link WriteMetadataEvent}.
@@ -157,6 +161,25 @@ public class WriteMetadataEvent implements OperatorEvent {
    */
   public boolean isReady(String currentInstant) {
     return lastBatch && this.instantTime.equals(currentInstant);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  /**
+   * Creates empty bootstrap event for task {@code taskId}.
+   *
+   * <p>The event indicates that the new instant can start directly,
+   * there is no old instant write statuses to recover.
+   */
+  public static WriteMetadataEvent emptyBootstrap(int taskId) {
+    return WriteMetadataEvent.builder()
+        .taskID(taskId)
+        .instantTime(BOOTSTRAP_INSTANT)
+        .writeStatus(Collections.emptyList())
+        .bootstrap(true)
+        .build();
   }
 
   // -------------------------------------------------------------------------

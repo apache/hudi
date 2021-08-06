@@ -16,28 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.partitioner.profile;
-
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.action.commit.SmallFile;
-
-import java.util.Collections;
-import java.util.List;
+package org.apache.hudi.exception;
 
 /**
- * WriteProfile for INSERT OVERWRITE and INSERT OVERWRITE TABLE operations,
- * this WriteProfile always skip the existing small files because of the 'OVERWRITE' semantics.
- *
- * <p>Note: assumes the index can always index log files for Flink write.
+ * <p>
+ * Exception thrown for validation failures.
+ * </p>
  */
-public class OverwriteWriteProfile extends WriteProfile {
-  public OverwriteWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
-    super(config, context);
+public class HoodieValidationException extends HoodieException {
+
+  public HoodieValidationException(String msg, Throwable t) {
+    super(msg, t);
   }
 
-  @Override
-  protected List<SmallFile> smallFilesProfile(String partitionPath) {
-    return Collections.emptyList();
+  public HoodieValidationException(String msg) {
+    super(msg);
   }
 }

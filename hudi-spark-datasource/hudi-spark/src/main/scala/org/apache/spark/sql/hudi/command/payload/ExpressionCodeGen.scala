@@ -18,15 +18,15 @@
 package org.apache.spark.sql.hudi.command.payload
 
 import java.util.UUID
-
-import org.apache.avro.generic.IndexedRecord
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.executor.InputMetrics
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.avro.AvroSerializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
 import org.apache.spark.sql.catalyst.expressions.codegen._
-import org.apache.spark.sql.catalyst.expressions.{BoundReference, Expression, LeafExpression, UnsafeArrayData, UnsafeMapData, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{BoundReference, Expression, GenericInternalRow, LeafExpression, UnsafeArrayData, UnsafeMapData, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.hudi.command.payload.ExpressionCodeGen.RECORD_NAME
 import org.apache.spark.sql.types.{DataType, Decimal}
@@ -53,7 +53,7 @@ object ExpressionCodeGen extends Logging {
    * @return An IExpressionEvaluator generate by CodeGen which take a IndexedRecord as input
    *         param and return a Array of results for each expression.
    */
-  def doCodeGen(exprs: Seq[Expression]): IExpressionEvaluator = {
+  def doCodeGen(exprs: Seq[Expression], serializer: AvroSerializer): IExpressionEvaluator = {
     val ctx = new CodegenContext()
     // Set the input_row to null as we do not use row as the input object but Record.
     ctx.INPUT_ROW = null
@@ -65,13 +65,15 @@ object ExpressionCodeGen extends Logging {
       s"""
          |private Object[] references;
          |private String code;
+         |private AvroSerializer serializer;
          |
-         |public $className(Object references, String code) {
+         |public $className(Object references, String code, AvroSerializer serializer) {
          |  this.references = (Object[])references;
          |  this.code = code;
+         |  this.serializer = serializer;
          |}
          |
-         |public Object[] eval(IndexedRecord $RECORD_NAME) {
+         |public GenericRecord eval(IndexedRecord $RECORD_NAME) {
          |    ${resultVars.map(_.code).mkString("\n")}
          |    Object[] results = new Object[${resultVars.length}];
          |    ${
@@ -85,7 +87,8 @@ object ExpressionCodeGen extends Logging {
                        """.stripMargin
                  }).mkString("\n")
               }
-              return results;
+              InternalRow row = new GenericInternalRow(results);
+              return (GenericRecord) serializer.serialize(row);
          |  }
          |
          |public String getCode() {
@@ -115,7 +118,10 @@ object ExpressionCodeGen extends Logging {
       classOf[TaskContext].getName,
       classOf[TaskKilledException].getName,
       classOf[InputMetrics].getName,
-      classOf[IndexedRecord].getName
+      classOf[IndexedRecord].getName,
+      classOf[AvroSerializer].getName,
+      classOf[GenericRecord].getName,
+      classOf[GenericInternalRow].getName
     )
     evaluator.setImplementedInterfaces(Array(classOf[IExpressionEvaluator]))
     try {
@@ -133,8 +139,8 @@ object ExpressionCodeGen extends Logging {
     val referenceArray = ctx.references.toArray.map(_.asInstanceOf[Object])
     val expressionSql = exprs.map(_.sql).mkString("  ")
 
-    evaluator.getClazz.getConstructor(classOf[Object], classOf[String])
-      .newInstance(referenceArray, s"Expressions is: [$expressionSql]\nCodeBody is: {\n$codeBody\n}")
+    evaluator.getClazz.getConstructor(classOf[Object], classOf[String], classOf[AvroSerializer])
+      .newInstance(referenceArray, s"Expressions is: [$expressionSql]\nCodeBody is: {\n$codeBody\n}", serializer)
       .asInstanceOf[IExpressionEvaluator]
   }
 

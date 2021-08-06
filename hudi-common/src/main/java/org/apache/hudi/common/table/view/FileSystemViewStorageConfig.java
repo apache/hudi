@@ -72,7 +72,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> FILESYSTEM_VIEW_SPILLABLE_DIR = ConfigProperty
       .key("hoodie.filesystem.view.spillable.dir")
-      .defaultValue("/tmp/view_map/")
+      .defaultValue("/tmp/")
       .withDocumentation("Path on local storage to use, when file system view is held in a spillable map.");
 
   public static final ConfigProperty<Long> FILESYSTEM_VIEW_SPILLABLE_MEM = ConfigProperty

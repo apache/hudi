@@ -53,8 +53,8 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   public CustomKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key()).split(",")).map(String::trim).collect(Collectors.toList());
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD.key()).split(",")).map(String::trim).collect(Collectors.toList());
     customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
   }
 

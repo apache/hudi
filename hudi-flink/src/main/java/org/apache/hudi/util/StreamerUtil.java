@@ -22,10 +22,12 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -151,6 +153,7 @@ public class StreamerUtil {
             .withEngineType(EngineType.FLINK)
             .withPath(conf.getString(FlinkOptions.PATH))
             .combineInput(conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS), true)
+            .withMergeAllowDuplicateOnInserts(allowDuplicateInserts(conf))
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
                     .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
@@ -176,6 +179,10 @@ public class StreamerUtil {
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
                 .logFileMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
+                .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
                 .build())
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
@@ -275,8 +282,15 @@ public class StreamerUtil {
   /**
    * Creates the meta client.
    */
+  public static HoodieTableMetaClient createMetaClient(String basePath) {
+    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(FlinkClientUtil.getHadoopConf()).build();
+  }
+
+  /**
+   * Creates the meta client.
+   */
   public static HoodieTableMetaClient createMetaClient(Configuration conf) {
-    return HoodieTableMetaClient.builder().setBasePath(conf.getString(FlinkOptions.PATH)).setConf(FlinkClientUtil.getHadoopConf()).build();
+    return createMetaClient(conf.getString(FlinkOptions.PATH));
   }
 
   /**
@@ -289,6 +303,15 @@ public class StreamerUtil {
             new FlinkTaskContextSupplier(runtimeContext));
 
     return new HoodieFlinkWriteClient<>(context, getHoodieClientConfig(conf));
+  }
+
+  /**
+   * Creates the Flink write client.
+   *
+   * <p>The task context supplier is a constant: the write token is always '0-1-0'.
+   */
+  public static HoodieFlinkWriteClient createWriteClient(Configuration conf) {
+    return new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, getHoodieClientConfig(conf));
   }
 
   /**
@@ -347,5 +370,10 @@ public class StreamerUtil {
     }
 
     return fileStatus.getLen() > 0;
+  }
+  
+  public static boolean allowDuplicateInserts(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkOptions.INSERT_DEDUP);
   }
 }

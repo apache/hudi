@@ -30,6 +30,7 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -94,6 +95,11 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Fetch list of all partition paths, per the latest snapshot of the metadata.
    */
   List<String> getAllPartitionPaths() throws IOException;
+
+  /**
+   * Fetch all files for given partition paths.
+   */
+  Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

@@ -54,22 +54,22 @@ public class WriteProfiles {
 
   private WriteProfiles() {}
 
-  public static synchronized  WriteProfile singleton(
-      boolean overwrite,
+  public static synchronized WriteProfile singleton(
+      boolean ignoreSmallFiles,
       boolean delta,
       HoodieWriteConfig config,
       HoodieFlinkEngineContext context) {
     return PROFILES.computeIfAbsent(config.getBasePath(),
-        k -> getWriteProfile(overwrite, delta, config, context));
+        k -> getWriteProfile(ignoreSmallFiles, delta, config, context));
   }
 
   private static WriteProfile getWriteProfile(
-      boolean overwrite,
+      boolean ignoreSmallFiles,
       boolean delta,
       HoodieWriteConfig config,
       HoodieFlinkEngineContext context) {
-    if (overwrite) {
-      return new OverwriteWriteProfile(config, context);
+    if (ignoreSmallFiles) {
+      return new EmptyWriteProfile(config, context);
     } else if (delta) {
       return new DeltaWriteProfile(config, context);
     } else {
