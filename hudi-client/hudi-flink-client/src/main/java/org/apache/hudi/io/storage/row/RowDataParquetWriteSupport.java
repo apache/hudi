@@ -18,8 +18,9 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.flink.formats.parquet.row.ParquetRowDataWriter;
-import org.apache.flink.formats.parquet.utils.ParquetSchemaConverter;
+import org.apache.hudi.io.storage.row.parquet.ParquetRowDataWriter;
+import org.apache.hudi.io.storage.row.parquet.ParquetSchemaConverter;
+
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
