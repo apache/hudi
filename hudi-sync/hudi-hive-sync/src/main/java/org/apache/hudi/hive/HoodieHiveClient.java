@@ -32,11 +32,10 @@ import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.ql.metadata.Hive;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -58,7 +57,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private final PartitionValueExtractor partitionValueExtractor;
   private final HoodieTimeline activeTimeline;
   DDLExecutor ddlExecutor;
-  private IMetaStoreClient client;
+  private HiveMetastoreClientWrapper client;
   private final HiveSyncConfig syncConfig;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
@@ -85,17 +84,17 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       } else {
         ddlExecutor = cfg.useJdbc ? new JDBCExecutor(cfg, fs) : new HiveQueryDDLExecutor(cfg, fs, configuration);
       }
-      this.client = Hive.get(configuration).getMSC();
+      this.client = HiveMetastoreClientFactory.create(configuration, cfg.hiveVersion == null ? HiveShimLoader.getHiveVersion() : cfg.hiveVersion);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
 
     try {
       this.partitionValueExtractor =
-          (PartitionValueExtractor) Class.forName(cfg.partitionValueExtractorClass).newInstance();
+              (PartitionValueExtractor) Class.forName(cfg.partitionValueExtractorClass).newInstance();
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + cfg.partitionValueExtractorClass, e);
+              "Failed to initialize PartitionValueExtractor class " + cfg.partitionValueExtractorClass, e);
     }
 
     activeTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
@@ -137,7 +136,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       client.alter_table(syncConfig.databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table properties for table: "
-          + tableName, e);
+              + tableName, e);
     }
   }
 
@@ -150,7 +149,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
       String fullTablePartitionPath =
-          Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
+              Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
     }
 
@@ -197,7 +196,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   public Map<String, String> getTableSchema(String tableName) {
     if (!doesTableExist(tableName)) {
       throw new IllegalArgumentException(
-          "Failed to get schema for table " + tableName + " does not exist");
+              "Failed to get schema for table " + tableName + " does not exist");
     }
     return ddlExecutor.getTableSchema(tableName);
   }
@@ -262,7 +261,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     if (!activeTimeline.filterCompletedInstants().getInstants()
             .anyMatch(i -> i.getTimestamp().equals(timeStamp))) {
       throw new HoodieHiveSyncException(
-          "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
+              "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
     }
     try {
       Table table = client.getTable(syncConfig.databaseName, tableName);
@@ -270,7 +269,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       client.alter_table(syncConfig.databaseName, tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
-          "Failed to update last replicated time to " + timeStamp + " for " + tableName, e);
+              "Failed to update last replicated time to " + timeStamp + " for " + tableName, e);
     }
   }
 
@@ -286,7 +285,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       // this is ok the table doesn't even exist.
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
-          "Failed to delete last replicated timestamp for " + tableName, e);
+              "Failed to delete last replicated timestamp for " + tableName, e);
     }
   }
 

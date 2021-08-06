@@ -119,6 +119,7 @@ public class HiveTestUtil {
     hiveSyncConfig.assumeDatePartitioning = true;
     hiveSyncConfig.usePreApacheInputFormat = false;
     hiveSyncConfig.partitionFields = Collections.singletonList("datestr");
+    hiveSyncConfig.hiveVersion = "2.3.1";
 
     dtfOut = DateTimeFormat.forPattern("yyyy/MM/dd");
     ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, fileSystem, getHiveConf());

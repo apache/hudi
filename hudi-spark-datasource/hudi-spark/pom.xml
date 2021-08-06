@@ -278,6 +278,16 @@
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-hive_${scala.binary.version}</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.spark-project.hive</groupId>
+          <artifactId>hive-exec</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.spark-project.hive</groupId>
+          <artifactId>hive-metastore</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>

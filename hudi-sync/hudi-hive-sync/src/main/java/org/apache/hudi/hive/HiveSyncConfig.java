@@ -120,6 +120,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
   public int sparkSchemaLengthThreshold = 4000;
 
+  @Parameter(names = {"--hive-version"}, description = "hive version that hudi use, not suggests user to specific", required = false)
+  public String hiveVersion;
+
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -143,6 +146,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.batchSyncNum = cfg.batchSyncNum;
     newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
     newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
+    newConfig.hiveVersion = cfg.hiveVersion;
     return newConfig;
   }
 
@@ -174,6 +178,7 @@ public class HiveSyncConfig implements Serializable {
       + ", createManagedTable=" + createManagedTable
       + ", syncAsSparkDataSourceTable=" + syncAsSparkDataSourceTable
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
+      + ", hiveVersion=" + hiveVersion
       + '}';
   }
 }

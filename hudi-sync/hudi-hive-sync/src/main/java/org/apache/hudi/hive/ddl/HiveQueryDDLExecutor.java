@@ -19,12 +19,14 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.hive.HiveMetastoreClientWrapper;
+import org.apache.hudi.hive.HiveMetastoreClientFactory;
+import org.apache.hudi.hive.HiveShimLoader;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -51,14 +53,15 @@ import java.util.stream.Collectors;
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
   private final HiveSyncConfig config;
-  private final IMetaStoreClient metaStoreClient;
+  private final HiveMetastoreClientWrapper client;
   private SessionState sessionState = null;
   private Driver hiveDriver = null;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, FileSystem fs, HiveConf configuration) throws HiveException, MetaException {
     super(config, fs);
     this.config = config;
-    this.metaStoreClient = Hive.get(configuration).getMSC();
+    this.client = HiveMetastoreClientFactory.create(configuration, config.hiveVersion == null ? HiveShimLoader.getHiveVersion() : config.hiveVersion);
+
     try {
       this.sessionState = new SessionState(configuration,
           UserGroupInformation.getCurrentUser().getShortUserName());
@@ -108,7 +111,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.
       final long start = System.currentTimeMillis();
-      Table table = metaStoreClient.getTable(config.databaseName, tableName);
+      Table table = client.getTable(config.databaseName, tableName);
       Map<String, String> partitionKeysMap =
           table.getPartitionKeys().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
 
@@ -128,7 +131,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void close() {
-    if (metaStoreClient != null) {
+    if (client != null) {
       Hive.closeCurrent();
     }
   }

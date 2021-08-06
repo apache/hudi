@@ -567,6 +567,7 @@ public class TestHiveSyncTool {
 
     hiveSyncConfig.syncMode = syncMode;
     HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
+    HiveTestUtil.hiveSyncConfig.hiveVersion = "2.3.1";
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     HoodieHiveClient hiveClient =
@@ -938,8 +939,8 @@ public class TestHiveSyncTool {
 
   @Test
   public void testConnectExceptionIgnoreConfigSet() throws IOException, URISyntaxException, HiveException, MetaException {
-    hiveSyncConfig.useJdbc = true;
-    HiveTestUtil.hiveSyncConfig.useJdbc = true;
+    hiveSyncConfig.useJdbc = false;
+    HiveTestUtil.hiveSyncConfig.useJdbc = false;
     HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, false);
