@@ -52,7 +52,7 @@ case class CompactionHoodiePathCommand(path: String,
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(
         HoodieSqlUtils.withSparkConf(sparkSession, Map.empty)(
           Map(
-            DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key() -> HoodieTableType.MERGE_ON_READ.name()
+            DataSourceWriteOptions.TABLE_TYPE.key() -> HoodieTableType.MERGE_ON_READ.name()
           )
         )
       )
