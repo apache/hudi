@@ -340,24 +340,6 @@ public class TestHoodieTableFactory {
     assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
   }
 
-  @Test
-  void testMorTableInsertAllowDuplication() {
-    TableSchema schema = TableSchema.builder()
-        .field("f0", DataTypes.INT().notNull())
-        .field("f1", DataTypes.VARCHAR(20))
-        .field("f2", DataTypes.TIMESTAMP(3))
-        .field("ts", DataTypes.TIMESTAMP(3))
-        .primaryKey("f0")
-        .build();
-    // overwrite the operation
-    this.conf.setString(FlinkOptions.OPERATION.key(), "insert");
-    this.conf.setString(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-
-    final MockContext sinkContext = MockContext.getInstance(this.conf, schema, "f2");
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sinkContext),
-        "Option 'write.insert.allow_dup' is only allowed for COPY_ON_WRITE table.");
-  }
-
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
