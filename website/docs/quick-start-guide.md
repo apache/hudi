@@ -185,6 +185,12 @@ Here we are using the default write operation : `upsert`. If you have a workload
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
 :::
 
+**Note:** For non-partitioned table, set
+  ```
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+  ```
+ Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
+
 ## Query data 
 
 Load the data files into a DataFrame.
@@ -503,6 +509,12 @@ Only `Append` mode is supported for delete operation.
 :::
 
 See the [deletion section](/docs/writing_data#deletes) of the writing data page for more details.
+
+**Note:** For non-partitioned table, set
+  ```
+  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+  ```
+ Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 ## Insert Overwrite Table
 
