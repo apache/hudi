@@ -108,7 +108,9 @@ public class RequestHandler {
   }
 
   public void stop() {
-    markerHandler.stop();
+    if (markerHandler != null) {
+      markerHandler.stop();
+    }
   }
 
   /**
