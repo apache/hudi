@@ -63,7 +63,7 @@ public class MarkerCreationCompletableFuture extends CompletableFuture<String> {
   }
 
   public void setResult(boolean result) {
-    LOG.debug("Request queued for " + timer.startTimer() + " ms");
+    LOG.debug("Request queued for " + timer.endTimer() + " ms");
     this.result = result;
   }
 }
