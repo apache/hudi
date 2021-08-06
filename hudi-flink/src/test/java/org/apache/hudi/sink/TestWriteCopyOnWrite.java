@@ -538,6 +538,7 @@ public class TestWriteCopyOnWrite {
     // reset the config option
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
     conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+    conf.setBoolean(FlinkOptions.INSERT_DEDUP, false);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data

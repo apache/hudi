@@ -209,11 +209,11 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
-  public static final ConfigOption<Boolean> INSERT_ALLOW_DUP = ConfigOptions
-          .key("write.insert.allow_dup")
+  public static final ConfigOption<Boolean> INSERT_DEDUP = ConfigOptions
+          .key("write.insert.deduplicate")
           .booleanType()
           .defaultValue(true)
-          .withDescription("Whether to allow data duplication for INSERT operation, if enabled, writes the base files directly, default true");
+          .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")

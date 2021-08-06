@@ -82,10 +82,12 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
       List<HoodieRecord<T>> hoodieRecords) {
-    ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
-        "MOR write handle should always be a FlinkAppendHandle");
-    FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
-    return new FlinkUpsertDeltaCommitActionExecutor<>(context, appendHandle, config, this, instantTime, hoodieRecords).execute();
+    if (writeHandle instanceof FlinkAppendHandle) {
+      FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
+      return new FlinkUpsertDeltaCommitActionExecutor<>(context, appendHandle, config, this, instantTime, hoodieRecords).execute();
+    } else {
+      return super.insert(context, writeHandle, instantTime, hoodieRecords);
+    }
   }
 
   @Override

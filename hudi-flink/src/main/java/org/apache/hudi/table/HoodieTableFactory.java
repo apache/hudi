@@ -23,6 +23,7 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -129,11 +130,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       throw new ValidationException("Field " + preCombineField + " does not exist in the table schema."
           + "Please check 'write.precombine.field' option.");
     }
-
-    if (conf.getString(FlinkOptions.TABLE_TYPE).toUpperCase().equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
-        && conf.getBoolean(FlinkOptions.INSERT_ALLOW_DUP)) {
-      throw new ValidationException("Option 'write.insert.allow_dup' is only allowed for COPY_ON_WRITE table.");
-    }
   }
 
   /**
@@ -213,6 +209,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
       // if compaction schedule is on, tweak the target io to 500GB
       conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
+    }
+    if (StreamerUtil.allowDuplicateInserts(conf)) {
+      // no need for compaction if insert duplicates is allowed
+      conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+      conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     }
   }
 
