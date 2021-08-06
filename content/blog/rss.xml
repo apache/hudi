@@ -3,14 +3,14 @@
     <channel>
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
-        <description>Welcome to Apache Hudi! Blog</description>
+        <description>Apache Hudi! Blog</description>
         <lastBuildDate>Wed, 21 Jul 2021 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <item>
-            <title><![CDATA[Apache Hudi - The Streaming Data Lake Platform]]></title>
+            <title><![CDATA[Apache Hudi - The Data Lake Platform]]></title>
             <link>https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform</link>
-            <guid>Apache Hudi - The Streaming Data Lake Platform</guid>
+            <guid>Apache Hudi - The Data Lake Platform</guid>
             <pubDate>Wed, 21 Jul 2021 00:00:00 GMT</pubDate>
             <description><![CDATA[As early as 2016, we set out a bold, new vision reimagining batch data processing through a new “incremental” data processing stack - alongside the existing batch and streaming stacks.]]></description>
         </item>

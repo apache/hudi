@@ -43,7 +43,8 @@ function DataLake() {
                 </AnchoredH2>
 
                 <div className="sub-title" className="text--center text--semibold">
-                    Hudi brings stream processing to data lakes, providing fresh data while being an order of magnitude efficient over traditional batch processing.
+                    Hudi is a rich platform to build streaming data lakes with incremental data pipelines <br/>
+                    on a self-managing database layer, while being optimized for lake engines and regular batch processing.
                 </div>
 
                 <img className="hudi-lake text-center" src={require('/assets/images/hudi-lake.png').default} alt="Hudi Data Lake" />
