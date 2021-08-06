@@ -39,9 +39,11 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Marker file operations of directly accessing the file system to create and delete
@@ -71,7 +73,31 @@ public class DirectMarkerFiles extends MarkerFiles {
    * @param parallelism parallelism for deletion.
    */
   public boolean deleteMarkerDir(HoodieEngineContext context, int parallelism) {
-    return FSUtils.deleteDir(context, fs, markerDirPath, parallelism);
+    try {
+      if (fs.exists(markerDirPath)) {
+        FileStatus[] fileStatuses = fs.listStatus(markerDirPath);
+        List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
+                .map(fileStatus -> fileStatus.getPath().toString())
+                .collect(Collectors.toList());
+
+        if (markerDirSubPaths.size() > 0) {
+          SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
+          parallelism = Math.min(markerDirSubPaths.size(), parallelism);
+          context.foreach(markerDirSubPaths, subPathStr -> {
+            Path subPath = new Path(subPathStr);
+            FileSystem fileSystem = subPath.getFileSystem(conf.get());
+            fileSystem.delete(subPath, true);
+          }, parallelism);
+        }
+
+        boolean result = fs.delete(markerDirPath, true);
+        LOG.info("Removing marker directory at " + markerDirPath);
+        return result;
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+    return false;
   }
 
   /**
