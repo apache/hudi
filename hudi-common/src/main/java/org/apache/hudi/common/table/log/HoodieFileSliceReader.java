@@ -45,8 +45,8 @@ public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Ite
     while (baseIterator.hasNext()) {
       GenericRecord record = (GenericRecord) baseIterator.next();
       HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = simpleKeyGenFieldsOpt.isPresent()
-          ? SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, simpleKeyGenFieldsOpt.get())
-          : SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass);
+          ? SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, simpleKeyGenFieldsOpt.get(), scanner.isWithOperationField())
+          : SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, scanner.isWithOperationField());
       scanner.processNextRecord(hoodieRecord);
     }
     return new HoodieFileSliceReader(scanner.iterator());

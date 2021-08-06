@@ -47,7 +47,7 @@ public class TestRowDataKeyGen {
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1"));
 
     // null record key and partition path
-    final RowData rowData2 = insertRow(null, StringData.fromString("Danny"), 23,
+    final RowData rowData2 = insertRow(TestConfigurations.ROW_TYPE, null, StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), null);
     assertThrows(HoodieKeyException.class, () -> keyGen1.getRecordKey(rowData2));
     assertThat(keyGen1.getPartitionPath(rowData2), is("default"));
@@ -77,7 +77,7 @@ public class TestRowDataKeyGen {
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1/1970-01-01T00:00:00.001"));
 
     // null record key and partition path
-    final RowData rowData2 = insertRow(null, null, 23, null, null);
+    final RowData rowData2 = insertRow(TestConfigurations.ROW_TYPE,null, null, 23, null, null);
     assertThrows(HoodieKeyException.class, () -> keyGen1.getRecordKey(rowData2));
     assertThat(keyGen1.getPartitionPath(rowData2), is("default/default"));
     // empty record key and partition path

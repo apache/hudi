@@ -204,13 +204,17 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
           return avroRecord;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
+        GenericRecord rewriteRecord = rewriteRecord((GenericRecord) avroRecord.get());
+        avroRecord = Option.of(rewriteRecord);
         String seqId =
             HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
         if (config.populateMetaFields()) {
-          HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
+          HoodieAvroUtils.addHoodieKeyToRecord(rewriteRecord, hoodieRecord.getRecordKey(),
               hoodieRecord.getPartitionPath(), fileId);
-          HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
+          HoodieAvroUtils.addCommitMetadataToRecord(rewriteRecord, instantTime, seqId);
+        }
+        if (config.allowOperationMetadataField()) {
+          HoodieAvroUtils.addOperationToRecord(rewriteRecord, hoodieRecord.getOperation());
         }
         if (isUpdateRecord(hoodieRecord)) {
           updatedRecordsWritten++;

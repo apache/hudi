@@ -71,13 +71,12 @@ public class PayloadCreation implements Serializable {
     return new PayloadCreation(shouldCombine, constructor, preCombineField);
   }
 
-  public HoodieRecordPayload<?> createPayload(GenericRecord record, boolean isDelete) throws Exception {
+  public HoodieRecordPayload<?> createPayload(GenericRecord record) throws Exception {
     if (shouldCombine) {
       ValidationUtils.checkState(preCombineField != null);
       Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
           preCombineField, false);
-      return (HoodieRecordPayload<?>) constructor.newInstance(
-          isDelete ? null : record, orderingVal);
+      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
     } else {
       return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
     }
