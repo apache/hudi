@@ -5,11 +5,11 @@
     <updated>2021-07-21T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
-    <subtitle>Welcome to Apache Hudi! Blog</subtitle>
+    <subtitle>Apache Hudi! Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
     <entry>
-        <title type="html"><![CDATA[Apache Hudi - The Streaming Data Lake Platform]]></title>
-        <id>Apache Hudi - The Streaming Data Lake Platform</id>
+        <title type="html"><![CDATA[Apache Hudi - The Data Lake Platform]]></title>
+        <id>Apache Hudi - The Data Lake Platform</id>
         <link href="https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform"/>
         <updated>2021-07-21T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[As early as 2016, we set out a bold, new vision reimagining batch data processing through a new “incremental” data processing stack - alongside the existing batch and streaming stacks.]]></summary>
