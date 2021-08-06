@@ -55,10 +55,16 @@ import org.apache.parquet.schema.MessageType;
 public class TableSchemaResolver {
 
   private static final Logger LOG = LogManager.getLogger(TableSchemaResolver.class);
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
+  private final boolean withOperationField;
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
+    this(metaClient, false);
+  }
+
+  public TableSchemaResolver(HoodieTableMetaClient metaClient, boolean withOperationField) {
     this.metaClient = metaClient;
+    this.withOperationField = withOperationField;
   }
 
   /**
@@ -170,7 +176,7 @@ public class TableSchemaResolver {
     Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
     if (schemaFromTableConfig.isPresent()) {
       if (includeMetadataFields) {
-        return HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get());
+        return HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get(), withOperationField);
       } else {
         return schemaFromTableConfig.get();
       }
@@ -256,7 +262,7 @@ public class TableSchemaResolver {
 
       Schema schema = new Schema.Parser().parse(existingSchemaStr);
       if (includeMetadataFields) {
-        schema = HoodieAvroUtils.addMetadataFields(schema);
+        schema = HoodieAvroUtils.addMetadataFields(schema, withOperationField);
       }
       return Option.of(schema);
     } catch (Exception e) {
