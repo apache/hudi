@@ -19,12 +19,13 @@ package org.apache.spark.sql.hudi
 
 import scala.collection.JavaConverters._
 import java.net.URI
-import java.util.Locale
+import java.util.{Date, Locale}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
@@ -37,9 +38,12 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 
+import java.text.SimpleDateFormat
 import scala.collection.immutable.Map
 
 object HoodieSqlUtils extends SparkAdapterSupport {
+  private val defaultDateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+  private val defaultDateFormat = new SimpleDateFormat("yyyy-MM-dd")
 
   def isHoodieTable(table: CatalogTable): Boolean = {
     table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
@@ -224,4 +228,26 @@ object HoodieSqlUtils extends SparkAdapterSupport {
 
   def isEnableHive(sparkSession: SparkSession): Boolean =
     "hive" == sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)
+
+  /**
+   * Convert different query instant time format to the commit time format.
+   * Currently we support three kinds of instant time format for time travel query:
+   * 1、yyyy-MM-dd HH:mm:ss
+   * 2、yyyy-MM-dd
+   *   This will convert to 'yyyyMMdd000000'.
+   * 3、yyyyMMddHHmmss
+   */
+  def formatQueryInstant(queryInstant: String): String = {
+    if (queryInstant.length == 19) { // for yyyy-MM-dd HH:mm:ss
+      HoodieActiveTimeline.COMMIT_FORMATTER.format(defaultDateTimeFormat.parse(queryInstant))
+    } else if (queryInstant.length == 14) { // for yyyyMMddHHmmss
+      HoodieActiveTimeline.COMMIT_FORMATTER.parse(queryInstant) // validate the format
+      queryInstant
+    } else if (queryInstant.length == 10) { // for yyyy-MM-dd
+      HoodieActiveTimeline.COMMIT_FORMATTER.format(defaultDateFormat.parse(queryInstant))
+    } else {
+      throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
+        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss' or 'yyyy-MM-dd' or 'yyyyMMddHHmmss'")
+    }
+  }
 }
