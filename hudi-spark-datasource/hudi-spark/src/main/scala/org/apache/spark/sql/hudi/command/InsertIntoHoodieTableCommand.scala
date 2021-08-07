@@ -193,7 +193,6 @@ object InsertIntoHoodieTableCommand {
 
     val partitionFields = table.partitionColumnNames.mkString(",")
     val path = getTableLocation(table, sparkSession)
-      .getOrElse(s"Missing location for table ${table.identifier}")
 
     val tableSchema = table.schema
     val options = table.storage.properties

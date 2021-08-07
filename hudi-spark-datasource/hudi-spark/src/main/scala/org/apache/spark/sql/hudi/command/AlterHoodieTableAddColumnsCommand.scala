@@ -103,7 +103,6 @@ object AlterHoodieTableAddColumnsCommand {
    */
   def commitWithSchema(schema: Schema, table: CatalogTable, sparkSession: SparkSession): Unit = {
     val path = getTableLocation(table, sparkSession)
-      .getOrElse(s"missing location for ${table.identifier}")
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(jsc, schema.toString,

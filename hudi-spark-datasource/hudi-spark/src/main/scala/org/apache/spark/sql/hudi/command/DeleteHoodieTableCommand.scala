@@ -59,7 +59,6 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
     val targetTable = sparkSession.sessionState.catalog
       .getTableMetadata(tableId)
     val path = getTableLocation(targetTable, sparkSession)
-      .getOrElse(s"missing location for $tableId")
 
     val primaryColumns = HoodieOptionConfig.getPrimaryColumns(targetTable.storage.properties)
 
