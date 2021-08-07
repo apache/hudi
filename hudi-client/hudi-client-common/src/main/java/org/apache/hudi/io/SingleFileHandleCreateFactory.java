@@ -21,18 +21,26 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
-public class CreateHandleFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> {
+import java.util.concurrent.atomic.AtomicBoolean;
 
-  private boolean preserveMetadata = false;
+/**
+ * A SingleFileHandleCreateFactory is used to write all data in the spark partition into a single data file.
+ * <p>
+ * Please use this with caution. This can end up creating very large files if not used correctly.
+ */
+public class SingleFileHandleCreateFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> {
 
-  public CreateHandleFactory() {
-    this(false);
-  }
+  private AtomicBoolean isHandleCreated = new AtomicBoolean(false);
+  private String fileId;
+  private boolean preserveHoodieMetadata;
 
-  public CreateHandleFactory(boolean preserveMetadata) {
-    this.preserveMetadata = preserveMetadata;
+  public SingleFileHandleCreateFactory(String fileId, boolean preserveHoodieMetadata) {
+    super();
+    this.fileId = fileId;
+    this.preserveHoodieMetadata = preserveHoodieMetadata;
   }
 
   @Override
@@ -40,7 +48,12 @@ public class CreateHandleFactory<T extends HoodieRecordPayload, I, K, O> extends
                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
                                               final String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
 
-    return new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        getNextFileId(fileIdPrefix), taskContextSupplier, preserveMetadata);
+    if (isHandleCreated.compareAndSet(false, true)) {
+      return new HoodieUnboundedCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
+          fileId, // ignore idPfx, always use same fileId
+          taskContextSupplier, preserveHoodieMetadata);
+    }
+
+    throw new HoodieIOException("Fixed handle create is only expected to be invoked once");
   }
 }
