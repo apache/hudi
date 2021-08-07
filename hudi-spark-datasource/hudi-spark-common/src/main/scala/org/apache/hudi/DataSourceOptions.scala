@@ -116,6 +116,13 @@ object DataSourceReadOptions {
     .defaultValue("")
     .withDocumentation("For the use-cases like users only want to incremental pull from certain partitions "
       + "instead of the full table. This option allows using glob pattern to directly filter on path.")
+
+  val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = ConfigProperty
+    .key("as.of.instant")
+    .noDefaultValue()
+    .withDocumentation("The query instant for time travel. Without specified this option," +
+      " we query the latest snapshot.")
+
 }
 
 /**
