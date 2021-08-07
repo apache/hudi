@@ -85,7 +85,6 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
     val targetTable = sparkSession.sessionState.catalog
       .getTableMetadata(tableId)
     val path = getTableLocation(targetTable, sparkSession)
-      .getOrElse(s"missing location for $tableId")
 
     val primaryColumns = HoodieOptionConfig.getPrimaryColumns(targetTable.storage.properties)
 
