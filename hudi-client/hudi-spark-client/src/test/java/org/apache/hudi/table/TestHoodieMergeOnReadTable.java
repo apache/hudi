@@ -152,6 +152,15 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
   }
 
+  private static Stream<Arguments> populateMetaFieldsAndPreserveMetadataParams() {
+    return Arrays.stream(new Boolean[][] {
+        {true, true},
+        {false, true},
+        {true, false},
+        {false, false}
+    }).map(Arguments::of);
+  }
+
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testSimpleInsertAndUpdate(boolean populateMetaFields) throws Exception {
@@ -254,25 +263,25 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testSimpleClusteringNoUpdates(boolean populateMetaFields) throws Exception {
+  @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
+  public void testSimpleClusteringNoUpdates(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
     clean();
     init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
-    testClustering(false, populateMetaFields);
+    testClustering(false, populateMetaFields, preserveCommitMetadata);
   }
 
   @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testSimpleClusteringWithUpdates(boolean populateMetaFields) throws Exception {
+  @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
+  public void testSimpleClusteringWithUpdates(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
     clean();
     init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
-    testClustering(true, populateMetaFields);
+    testClustering(true, populateMetaFields, preserveCommitMetadata);
   }
 
-  private void testClustering(boolean doUpdates, boolean populateMetaFields) throws Exception {
+  private void testClustering(boolean doUpdates, boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
     // set low compaction small File Size to generate more file groups.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withPreserveHoodieCommitMetadata(preserveCommitMetadata).build();
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true, 10L, clusteringConfig);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
