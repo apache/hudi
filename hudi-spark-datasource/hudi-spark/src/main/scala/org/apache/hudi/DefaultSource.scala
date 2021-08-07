@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
-import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
