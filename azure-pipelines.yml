@@ -33,6 +33,7 @@ stages:
     displayName: "Run tests"
     jobs:
       - job: unit_tests_spark_client
+        condition: false
         steps:
           - task: Cache@2
             inputs:
@@ -57,6 +58,7 @@ stages:
               jdkArchitectureOption: 'x64'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: unit_tests_utilities
+        condition: false
         steps:
           - task: Cache@2
             inputs:
@@ -105,10 +107,12 @@ stages:
               jdkArchitectureOption: 'x64'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: functional_tests
+        condition: false
         steps:
           - script: |
               mvn $(MAVEN_OPTS) -Pfunctional-tests test
       - job: integration_tests
+        condition: false
         steps:
           - script: |
               echo 'Downloading spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)'
