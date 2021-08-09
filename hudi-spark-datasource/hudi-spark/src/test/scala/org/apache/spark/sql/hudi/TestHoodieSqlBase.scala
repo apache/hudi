@@ -42,7 +42,7 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.delete.shuffle.parallelism", "4")
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .getOrCreate()
-  spark.sparkContext.setLogLevel("ERROR");
+  spark.sparkContext.setLogLevel("WARN")
 
   private var tableId = 0
 

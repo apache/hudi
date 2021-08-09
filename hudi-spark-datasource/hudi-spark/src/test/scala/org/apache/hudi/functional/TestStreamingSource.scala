@@ -38,6 +38,7 @@ class TestStreamingSource extends StreamTest {
   private val columns = Seq("id", "name", "price", "ts")
 
   override protected def sparkConf = {
+    super.spark.sparkContext.setLogLevel("WARN")
     super.sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
   }
 
