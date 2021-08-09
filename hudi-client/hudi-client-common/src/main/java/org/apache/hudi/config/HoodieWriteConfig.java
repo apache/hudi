@@ -777,6 +777,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.CLUSTERING_TARGET_PARTITIONS);
   }
 
+  public int getSkipPartitionsFromLatestForClustering() {
+    return getInt(HoodieClusteringConfig.CLUSTERING_SKIP_PARTITIONS_FROM_LATEST);
+  }
+
   public String getClusteringSortColumns() {
     return getString(HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY);
   }
