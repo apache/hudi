@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi
 
 import java.io.File
 
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.scalactic.source
@@ -32,15 +33,20 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     dir
   }
 
+  private val sparkConf = new SparkConf()
+    .setMaster("local[1]")
+    .setAppName("hoodie sql test")
+    .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    .set("hoodie.insert.shuffle.parallelism", "4")
+    .set("hoodie.upsert.shuffle.parallelism", "4")
+    .set("hoodie.delete.shuffle.parallelism", "4")
+    .set("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
+
+  SparkContext.getOrCreate(sparkConf).setLogLevel("WARN")
+
   protected lazy val spark: SparkSession = SparkSession.builder()
-    .master("local[1]")
-    .appName("hoodie sql test")
+    .config(sparkConf)
     .withExtensions(new HoodieSparkSessionExtension)
-    .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    .config("hoodie.insert.shuffle.parallelism", "4")
-    .config("hoodie.upsert.shuffle.parallelism", "4")
-    .config("hoodie.delete.shuffle.parallelism", "4")
-    .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .getOrCreate()
   spark.sparkContext.setLogLevel("WARN")
 
