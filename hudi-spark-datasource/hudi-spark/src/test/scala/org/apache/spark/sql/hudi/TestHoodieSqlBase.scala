@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi
 
 import java.io.File
 
-import org.apache.spark.SparkContext
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.scalactic.source
