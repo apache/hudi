@@ -20,12 +20,26 @@ jdk:
   - openjdk8
 jobs:
   include:
-    - name: "Unit tests for hudi-spark-client"
-      env: MODE=unit MODULES=hudi-client/hudi-spark-client HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-client"
+      env: MODE=unit MODULES='hudi-client/hudi-client-common,hudi-client/hudi-java-client,hudi-client/hudi-spark-client,hudi-client/hudi-flink-client' HUDI_QUIETER_LOGGING=1
     - name: "Unit tests for hudi-utilities"
       env: MODE=unit MODULES=hudi-utilities HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-common"
+      env: MODE=unit MODULES=hudi-common HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-cli"
+      env: MODE=unit MODULES=hudi-cli HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-hadoop-mr"
+      env: MODE=unit MODULES=hudi-hadoop-mr HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-spark-datasource"
+      env: MODE=unit MODULES='hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark2,hudi-spark-datasource/hudi-spark3,hudi-spark-datasource/hudi-spark-common' HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-timeline-service"
+      env: MODE=unit MODULES=hudi-timeline-service HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-sync"
+      env: MODE=unit MODULES='hudi-sync/hudi-sync-common,hudi-sync/hudi-hive-sync,hudi-sync/hudi-dla-sync' HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-flink"
+      env: MODE=unit MODULES=hudi-flink HUDI_QUIETER_LOGGING=1
     - name: "All other unit tests"
-      env: MODE=unit MODULES='!hudi-utilities,!hudi-client/hudi-spark-client' HUDI_QUIETER_LOGGING=1
+      env: MODE=unit MODULES='!hudi-utilities,!hudi-client,!hudi-common,!hudi-cli,!hudi-hadoop-mr,!hudi-spark-datasource,!hudi-timeline-service,!hudi-sync,!hudi-flink' HUDI_QUIETER_LOGGING=1
     - name: "Functional tests"
       env: MODE=functional HUDI_QUIETER_LOGGING=1
     - name: "Integration tests"
