@@ -80,6 +80,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
 
+  public static final ConfigProperty<String> CLUSTERING_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
+          .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
+          .defaultValue("0")
+          .sinceVersion("0.9.0")
+          .withDocumentation("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
+
   public static final ConfigProperty<String> CLUSTERING_PLAN_SMALL_FILE_LIMIT = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
       .defaultValue(String.valueOf(600 * 1024 * 1024L))
@@ -162,6 +168,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withClusteringTargetPartitions(int clusteringTargetPartitions) {
       clusteringConfig.setValue(CLUSTERING_TARGET_PARTITIONS, String.valueOf(clusteringTargetPartitions));
+      return this;
+    }
+
+    public Builder withClusteringSkipPartitionsFromLatest(int clusteringSkipPartitionsFromLatest) {
+      clusteringConfig.setValue(CLUSTERING_SKIP_PARTITIONS_FROM_LATEST, String.valueOf(clusteringSkipPartitionsFromLatest));
       return this;
     }
 
