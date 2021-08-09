@@ -114,7 +114,7 @@ object HoodieOptionConfig {
 
   /**
    * Mapping the sql options to the hoodie table config which used to store to the hoodie
-   * .properites when create the table.
+   * .properties when create the table.
    * @param options
    * @return
    */
