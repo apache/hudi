@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -51,9 +52,12 @@ import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Preconditions;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.orc.OrcFile;
+import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,6 +72,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
+import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
 
 /**
@@ -348,6 +355,23 @@ public class StreamerUtil {
     }
   }
 
+  public static boolean isValidFile(FileStatus fileStatus) {
+    final String extension = FSUtils.getFileExtension(fileStatus.getPath().toString());
+    if (PARQUET.getFileExtension().equals(extension)) {
+      return fileStatus.getLen() > ParquetFileWriter.MAGIC.length;
+    }
+
+    if (ORC.getFileExtension().equals(extension)) {
+      return fileStatus.getLen() > OrcFile.MAGIC.length();
+    }
+
+    if (HOODIE_LOG.getFileExtension().equals(extension)) {
+      return fileStatus.getLen() > HoodieLogFormat.MAGIC.length;
+    }
+
+    return fileStatus.getLen() > 0;
+  }
+  
   public static boolean allowDuplicateInserts(Configuration conf) {
     WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
     return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkOptions.INSERT_DEDUP);
