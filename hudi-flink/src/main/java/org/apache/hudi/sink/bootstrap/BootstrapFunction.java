@@ -57,6 +57,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.util.StreamerUtil.isValidFile;
 
 /**
  * The function to load index from existing hoodieTable.
@@ -179,7 +180,7 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         // load parquet records
         fileSlice.getBaseFile().ifPresent(baseFile -> {
           // filter out crushed files
-          if (baseFile.getFileSize() <= 0) {
+          if (!isValidFile(baseFile.getFileStatus())) {
             return;
           }
 
@@ -199,7 +200,7 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         // load avro log records
         List<String> logPaths = fileSlice.getLogFiles()
                 // filter out crushed files
-                .filter(logFile -> logFile.getFileSize() > 0)
+                .filter(logFile -> isValidFile(logFile.getFileStatus()))
                 .map(logFile -> logFile.getPath().toString())
                 .collect(toList());
         HoodieMergedLogRecordScanner scanner = FormatUtils.scanLog(logPaths, schema, latestCommitTime.get().getTimestamp(),
