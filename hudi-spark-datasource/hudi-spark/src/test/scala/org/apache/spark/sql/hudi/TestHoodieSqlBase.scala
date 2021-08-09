@@ -26,6 +26,8 @@ import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
 class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
 
+  Utils.setLogLevel(org.apache.log4j.Level.toLevel("WARN"))
+
   private lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()
     Utils.deleteRecursively(dir)
@@ -40,10 +42,9 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
-    .config("spark.driver.extraJavaOptions", "-Dlog4j.configuration=log4j-surefire-quiet.properties")
-    .config("spark.executor.extraJavaOptions", "-Dlog4j.configuration=log4j-surefire-quiet.properties")
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .getOrCreate()
+  Utils.setLogLevel(org.apache.log4j.Level.toLevel("WARN"))
 
   private var tableId = 0
 
