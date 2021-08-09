@@ -38,7 +38,7 @@ class TestStreamingSource extends StreamTest {
   )
   private val columns = Seq("id", "name", "price", "ts")
 
-  org.apache.log4j.Logger.getRootLogger().setLevel(Level.WARN)
+  org.apache.log4j.Logger.getRootLogger.setLevel(Level.WARN)
 
   override protected def sparkConf = {
     super.sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
