@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi
 
 import java.io.File
 
-import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.scalactic.source
@@ -41,9 +40,10 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
+    .config("spark.driver.extraJavaOptions", "-Dlog4j.configuration=log4j-surefire-quiet.properties")
+    .config("spark.executor.extraJavaOptions", "-Dlog4j.configuration=log4j-surefire-quiet.properties")
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .getOrCreate()
-  Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
 
   private var tableId = 0
 
