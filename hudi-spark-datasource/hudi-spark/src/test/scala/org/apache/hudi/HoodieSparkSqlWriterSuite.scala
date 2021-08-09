@@ -525,7 +525,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
             DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
             DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
             DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
-            DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH.key -> "true"
+            DataSourceWriteOptions.RECONCILE_SCHEMA.key -> "true"
           )
           val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 

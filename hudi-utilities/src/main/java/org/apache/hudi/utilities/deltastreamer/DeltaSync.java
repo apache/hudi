@@ -377,32 +377,38 @@ public class DeltaSync implements Serializable {
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
 
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
-      boolean handleSchemaMismatch = props.getBoolean(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH().key());
+      boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
-                t, this.userProvidedSchemaProvider.getTargetSchema(),
-                HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE,
-                handleSchemaMismatch).toJavaRDD());
+                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                Option.of(this.userProvidedSchemaProvider.getTargetSchema())
+            ).toJavaRDD());
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
         // Use Transformed Row's schema if not overridden. If target schema is not specified
         // default to RowBasedSchemaProvider
         schemaProvider =
             transformed
-                .map(r -> (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
-                    dataAndCheckpoint.getSchemaProvider(),
-                    handleSchemaMismatch
-                        ? UtilHelpers.createLatestSchemaProvider(r.schema(), jssc, fs, cfg.targetBasePath) :
-                        UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc)))
+                .map(r -> {
+                  // determine the targetSchemaProvider. use latestTableSchema if reconcileSchema is enabled.
+                  SchemaProvider targetSchemaProvider = null;
+                  if (reconcileSchema) {
+                    targetSchemaProvider = UtilHelpers.createLatestSchemaProvider(r.schema(), jssc, fs, cfg.targetBasePath);
+                  } else {
+                    targetSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc);
+                  }
+                  return (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
+                    dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
-                t, schemaProvider.getTargetSchema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE,
-                handleSchemaMismatch).toJavaRDD());
+                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                Option.ofNullable(schemaProvider.getTargetSchema())
+            ).toJavaRDD());
       }
     } else {
       // Pull the data from the source & prepare the write

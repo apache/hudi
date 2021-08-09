@@ -162,16 +162,16 @@ object HoodieSparkSqlWriter {
             Array(classOf[org.apache.avro.generic.GenericData],
               classOf[org.apache.avro.Schema]))
           var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-          val handleSchemaMismatch = parameters(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH.key()).toBoolean
-          if (handleSchemaMismatch) {
-            schema = getLatestSchema(fs, basePath, sparkContext, schema)
+          val reconcileSchema = parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean
+          if (reconcileSchema) {
+            schema = getLatestTableSchema(fs, basePath, sparkContext, schema)
           }
           sparkContext.getConf.registerAvroSchemas(schema)
           log.info(s"Registered avro schema : ${schema.toString(true)}")
 
           // Convert to RDD[HoodieRecord]
-          val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, schema, structName, nameSpace,
-            handleSchemaMismatch)
+          val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
+            org.apache.hudi.common.util.Option.of(schema))
           val shouldCombine = parameters(INSERT_DROP_DUPS.key()).toBoolean ||
             operation.equals(WriteOperationType.UPSERT) ||
             parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT_PROP.key(),
@@ -220,7 +220,7 @@ object HoodieSparkSqlWriter {
 
           // Convert to RDD[HoodieKey]
           val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace,
-            parameters(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH.key()).toBoolean)
+            parameters(DataSourceWriteOptions.RECONCILE_SCHEMA.key()).toBoolean)
           val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
           if (!tableExists) {
@@ -258,7 +258,7 @@ object HoodieSparkSqlWriter {
   }
 
   /**
-   * Checks if schema needs upgrade (if incoming records's schema is old while table schema got evolved).
+   * Checks if schema needs upgrade (if incoming record's write schema is old while table schema got evolved).
    *
    * @param fs           instance of FileSystem.
    * @param basePath     base path.
@@ -266,7 +266,7 @@ object HoodieSparkSqlWriter {
    * @param schema       incoming record's schema.
    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
    */
-  def getLatestSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext, schema: Schema): Schema = {
+  def getLatestTableSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext, schema: Schema): Schema = {
     var latestSchema: Schema = schema
     if (FSUtils.isTableExists(basePath.toString, fs)) {
       val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()

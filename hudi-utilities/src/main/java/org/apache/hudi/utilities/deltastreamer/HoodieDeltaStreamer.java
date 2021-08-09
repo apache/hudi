@@ -148,8 +148,8 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   private TypedProperties setDefaults(TypedProperties props) {
-    if (!props.containsKey(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH().key())) {
-      props.setProperty(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH().key(), DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH().defaultValue().toString());
+    if (!props.containsKey(DataSourceWriteOptions.RECONCILE_SCHEMA().key())) {
+      props.setProperty(DataSourceWriteOptions.RECONCILE_SCHEMA().key(), DataSourceWriteOptions.RECONCILE_SCHEMA().defaultValue().toString());
     }
     return props;
   }

@@ -446,15 +446,15 @@ public class UtilHelpers {
   public static SchemaProvider createLatestSchemaProvider(StructType structType,
                                                           JavaSparkContext jssc, FileSystem fs, String basePath) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
-    Schema incomingSchema = rowSchemaProvider.getTargetSchema();
-    Schema latestSchema = incomingSchema;
+    Schema writeSchema = rowSchemaProvider.getTargetSchema();
+    Schema latestTableSchema = writeSchema;
 
     try {
       if (FSUtils.isTableExists(basePath, fs)) {
         HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder().setConf(jssc.sc().hadoopConfiguration()).setBasePath(basePath).build();
         TableSchemaResolver
             tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
-        latestSchema = tableSchemaResolver.getLatestSchema(incomingSchema, true, (Function1<Schema, Schema>) v1 -> AvroConversionUtils.convertStructTypeToAvroSchema(
+        latestTableSchema = tableSchemaResolver.getLatestSchema(writeSchema, true, (Function1<Schema, Schema>) v1 -> AvroConversionUtils.convertStructTypeToAvroSchema(
             AvroConversionUtils.convertAvroSchemaToStructType(v1), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME,
             RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE));
       }
@@ -462,8 +462,8 @@ public class UtilHelpers {
       LOG.warn("Could not fetch table schema. Falling back to writer schema");
     }
 
-    final Schema finalLatestSchema = latestSchema;
-    return new SchemaProvider(null) {
+    final Schema finalLatestTableSchema = latestTableSchema;
+    return new SchemaProvider(new TypedProperties()) {
       @Override
       public Schema getSourceSchema() {
         return rowSchemaProvider.getSourceSchema();
@@ -471,7 +471,7 @@ public class UtilHelpers {
 
       @Override
       public Schema getTargetSchema() {
-        return finalLatestSchema;
+        return finalLatestTableSchema;
       }
     };
   }

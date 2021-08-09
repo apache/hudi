@@ -703,7 +703,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
   @Test def testSchemaEvolution(): Unit = {
     // open the schema validate
     val  opts = commonOpts ++ Map("hoodie.avro.schema.validate" -> "true") ++
-      Map(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH.key() -> "true")
+      Map(DataSourceWriteOptions.RECONCILE_SCHEMA.key() -> "true")
     // 1. write records with schema1
     val schema1 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, false)::
       StructField("timestamp", IntegerType, true) :: StructField("partition", IntegerType, true)::Nil)
