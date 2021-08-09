@@ -43,6 +43,7 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .set("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
 
   SparkContext.getOrCreate(sparkConf).setLogLevel("WARN")
+  Utils.setLogLevel(org.apache.log4j.Level.toLevel("WARN"))
 
   protected lazy val spark: SparkSession = SparkSession.builder()
     .config(sparkConf)
