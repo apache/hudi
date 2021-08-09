@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM, INSERT_PARALLELISM, TABLE_NAME, UPSERT_PARALLELISM}
+import org.apache.spark.SparkContext
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.{Row, SaveMode}
 
@@ -37,11 +38,11 @@ class TestStreamingSource extends StreamTest {
   )
   private val columns = Seq("id", "name", "price", "ts")
 
-  spark.sparkContext.setLogLevel("WARN")
-
   override protected def sparkConf = {
     super.sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
   }
+
+  SparkContext.getOrCreate(sparkConf).setLogLevel("WARN")
 
   test("test cow stream source") {
     withTempDir { inputDir =>
