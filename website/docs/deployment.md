@@ -13,7 +13,6 @@ Specifically, we will cover the following aspects.
  - [Upgrading Versions](#upgrading) : Picking up new releases of Hudi, guidelines and general best-practices.
  - [Migrating to Hudi](#migrating) : How to migrate your existing tables to Apache Hudi.
  - [Interacting via CLI](#cli) : Using the CLI to perform maintenance or deeper introspection.
- - [Monitoring](#monitoring) : Tracking metrics from your hudi tables using popular tools.
  - [Troubleshooting](#troubleshooting) : Uncovering, triaging and resolving issues in production.
  
 ## Deploying
