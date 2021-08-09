@@ -40,6 +40,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
@@ -60,6 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * Test Cases for {@link CompactionCommand}.
  */
+@Disabled
 public class TestCompactionCommand extends AbstractShellIntegrationTest {
 
   private String tableName;
