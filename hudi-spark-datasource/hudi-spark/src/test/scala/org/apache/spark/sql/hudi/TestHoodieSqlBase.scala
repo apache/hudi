@@ -79,12 +79,15 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def checkException(sql: String)(errorMsg: String): Unit = {
+    var hasException = false
     try {
       spark.sql(sql)
     } catch {
       case e: Throwable =>
         assertResult(errorMsg)(e.getMessage)
+        hasException = true
     }
+    assertResult(true)(hasException)
   }
 
   protected def removeQuotes(value: Any): Any = {

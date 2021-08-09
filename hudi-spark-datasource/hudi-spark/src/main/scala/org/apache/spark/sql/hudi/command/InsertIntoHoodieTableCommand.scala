@@ -28,10 +28,12 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
-import org.apache.hudi.{HoodieSparkSqlWriter, HoodieWriterUtils}
+import org.apache.hudi.sql.InsertMode
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -58,7 +60,7 @@ case class InsertIntoHoodieTableCommand(
   }
 }
 
-object InsertIntoHoodieTableCommand {
+object InsertIntoHoodieTableCommand extends Logging {
   /**
    * Run the insert query. We support both dynamic partition insert and static partition insert.
    * @param sparkSession The spark session.
@@ -71,12 +73,14 @@ object InsertIntoHoodieTableCommand {
    *                         , it is None in the map.
    * @param overwrite Whether to overwrite the table.
    * @param refreshTable Whether to refresh the table after insert finished.
+   * @param extraOptions Extra options for insert.
    */
   def run(sparkSession: SparkSession, table: CatalogTable, query: LogicalPlan,
           insertPartitions: Map[String, Option[String]],
-          overwrite: Boolean, refreshTable: Boolean = true): Boolean = {
+          overwrite: Boolean, refreshTable: Boolean = true,
+          extraOptions: Map[String, String] = Map.empty): Boolean = {
 
-    val config = buildHoodieInsertConfig(table, sparkSession, overwrite, insertPartitions)
+    val config = buildHoodieInsertConfig(table, sparkSession, overwrite, insertPartitions, extraOptions)
 
     val mode = if (overwrite && table.partitionColumnNames.isEmpty) {
       // insert overwrite non-partition table
@@ -165,7 +169,7 @@ object InsertIntoHoodieTableCommand {
         Alias(castAttr, f.name)()
       })
     }
-    // Remove the hoodie meta fileds from the projects as we do not need these to write
+    // Remove the hoodie meta fields from the projects as we do not need these to write
     val withoutMetaFieldDataProjects = dataProjects.filter(c => !HoodieSqlUtils.isMetaField(c.name))
     val alignedProjects = withoutMetaFieldDataProjects ++ partitionProjects
     Project(alignedProjects, query)
@@ -179,7 +183,8 @@ object InsertIntoHoodieTableCommand {
       table: CatalogTable,
       sparkSession: SparkSession,
       isOverwrite: Boolean,
-      insertPartitions: Map[String, Option[String]] = Map.empty): Map[String, String] = {
+      insertPartitions: Map[String, Option[String]] = Map.empty,
+      extraOptions: Map[String, String]): Map[String, String] = {
 
     if (insertPartitions.nonEmpty &&
       (insertPartitions.keys.toSet != table.partitionColumnNames.toSet)) {
@@ -187,7 +192,7 @@ object InsertIntoHoodieTableCommand {
         s"[${insertPartitions.keys.mkString(" " )}]" +
         s" not equal to the defined partition in table[${table.partitionColumnNames.mkString(",")}]")
     }
-    val parameters = HoodieOptionConfig.mappingSqlOptionToHoodieParam(table.storage.properties)
+    val parameters = withSparkConf(sparkSession, table.storage.properties)() ++ extraOptions
 
     val tableType = parameters.getOrElse(TABLE_TYPE.key, TABLE_TYPE.defaultValue)
 
@@ -209,28 +214,49 @@ object InsertIntoHoodieTableCommand {
       .getOrElse(INSERT_DROP_DUPS.defaultValue)
       .toBoolean
 
-    val operation = if (isOverwrite) {
-      if (table.partitionColumnNames.nonEmpty) {
-        INSERT_OVERWRITE_OPERATION_OPT_VAL  // overwrite partition
-      } else {
-        INSERT_OPERATION_OPT_VAL
-      }
-    } else {
-      if (primaryColumns.nonEmpty && !dropDuplicate) {
-        UPSERT_OPERATION_OPT_VAL
-      } else {
-        INSERT_OPERATION_OPT_VAL
-      }
-    }
+    val enableBulkInsert = parameters.getOrElse(DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key,
+      DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
+    val isPartitionedTable = table.partitionColumnNames.nonEmpty
+    val isPrimaryKeyTable = primaryColumns.nonEmpty
+    val insertMode = InsertMode.of(parameters.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
+      DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
+    val isNonStrictMode = insertMode == InsertMode.NON_STRICT
 
-    val payloadClassName = if (primaryColumns.nonEmpty && !dropDuplicate &&
-      tableType == COW_TABLE_TYPE_OPT_VAL) {
+    val operation =
+      (isPrimaryKeyTable, enableBulkInsert, isOverwrite, dropDuplicate) match {
+        case (true, true, _, _) if !isNonStrictMode =>
+          throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
+        case (_, true, true, _) if isPartitionedTable =>
+          throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
+        case (_, true, _, true) =>
+          throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
+            s" Please disable $INSERT_DROP_DUPS and try again.")
+        // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
+        case (_, true, true, _) if !isPartitionedTable => BULK_INSERT_OPERATION_OPT_VAL
+        // insert overwrite partition
+        case (_, _, true, _) if isPartitionedTable => INSERT_OVERWRITE_OPERATION_OPT_VAL
+        // insert overwrite table
+        case (_, _, true, _) if !isPartitionedTable => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+        // if it is pk table and the dropDuplicate has disable, use the upsert operation for strict and upsert mode.
+        case (true, false, false, false) if !isNonStrictMode => UPSERT_OPERATION_OPT_VAL
+        // if enableBulkInsert is true and the table is non-primaryKeyed, use the bulk insert operation
+        case (false, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL
+        // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
+        case (true, true, _, _) if isNonStrictMode => BULK_INSERT_OPERATION_OPT_VAL
+        // for the rest case, use the insert operation
+        case (_, _, _, _) => INSERT_OPERATION_OPT_VAL
+      }
+
+    val payloadClassName = if (operation ==  UPSERT_OPERATION_OPT_VAL &&
+      tableType == COW_TABLE_TYPE_OPT_VAL && insertMode == InsertMode.STRICT) {
       // Only validate duplicate key for COW, for MOR it will do the merge with the DefaultHoodieRecordPayload
       // on reading.
       classOf[ValidateDuplicateKeyPayload].getCanonicalName
     } else {
       classOf[DefaultHoodieRecordPayload].getCanonicalName
     }
+    logInfo(s"insert statement use write operation type: $operation, payloadClass: $payloadClassName")
+
     val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, options) {
       Map(
@@ -243,6 +269,8 @@ object InsertIntoHoodieTableCommand {
         RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
         PARTITIONPATH_FIELD.key -> partitionFields,
         PAYLOAD_CLASS.key -> payloadClassName,
+        ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
+        HoodieWriteConfig.COMBINE_BEFORE_INSERT_PROP.key -> isPrimaryKeyTable.toString,
         META_SYNC_ENABLED.key -> enableHive.toString,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",

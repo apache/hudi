@@ -256,6 +256,22 @@ object DataSourceWriteOptions {
     .withDocumentation("When set to true, will perform write operations directly using the spark native " +
       "`Row` representation, avoiding any additional conversion costs.")
 
+  /**
+   * Enable the bulk insert for sql insert statement.
+   */
+  val SQL_ENABLE_BULK_INSERT:ConfigProperty[String] = ConfigProperty
+    .key("hoodie.sql.bulk.insert.enable")
+    .defaultValue("false")
+    .withDocumentation("When set to true, the sql insert statement will use bulk insert.")
+
+  val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.sql.insert.mode")
+    .defaultValue("upsert")
+    .withDocumentation("Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict." +
+      "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
+      "For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record." +
+      "While for non-strict mode, hudi just do the insert operation for the pk-table.")
+
   val COMMIT_METADATA_KEYPREFIX: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.commitmeta.key.prefix")
     .defaultValue("_")
