@@ -346,6 +346,7 @@ class TestInsertTable extends TestHoodieSqlBase {
   test("Test bulk insert") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach {tableType =>
+        // Test bulk insert for single partition
         val tableName = generateTableName
         spark.sql(
           s"""
@@ -377,6 +378,41 @@ class TestInsertTable extends TestHoodieSqlBase {
         checkAnswer(s"select id, name, price, dt from $tableName order by id")(
           Seq(1, "a1", 10.0, "2021-07-18"),
           Seq(2, "a2", 10.0, "2021-07-18")
+        )
+
+        // Test bulk insert for multi-level partition
+        val tableMultiPartition = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableMultiPartition (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  dt string,
+             |  hh string
+             |) using hudi
+             | options (
+             |  type = '$tableType'
+             | )
+             | partitioned by (dt, hh)
+             | location '${tmp.getCanonicalPath}/$tableMultiPartition'
+       """.stripMargin)
+
+        // Enable the bulk insert
+        spark.sql("set hoodie.sql.bulk.insert.enable = true")
+        spark.sql(s"insert into $tableMultiPartition values(1, 'a1', 10, '2021-07-18', '12')")
+
+        checkAnswer(s"select id, name, price, dt, hh from $tableMultiPartition")(
+          Seq(1, "a1", 10.0, "2021-07-18", "12")
+        )
+        // Disable the bulk insert
+        spark.sql("set hoodie.sql.bulk.insert.enable = false")
+        spark.sql(s"insert into $tableMultiPartition " +
+          s"values(2, 'a2', 10, '2021-07-18','12')")
+
+        checkAnswer(s"select id, name, price, dt, hh from $tableMultiPartition order by id")(
+          Seq(1, "a1", 10.0, "2021-07-18", "12"),
+          Seq(2, "a2", 10.0, "2021-07-18", "12")
         )
         // Test bulk insert for non-partitioned table
         val nonPartitionedTable = generateTableName
