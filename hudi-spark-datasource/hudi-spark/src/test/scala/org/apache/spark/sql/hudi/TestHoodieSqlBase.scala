@@ -35,8 +35,6 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     dir
   }
 
-  private val sc = new SparkContext().setLogLevel("warn")
-
   protected lazy val spark: SparkSession = SparkSession.builder()
     .master("local[1]")
     .appName("hoodie sql test")
