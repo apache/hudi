@@ -77,7 +77,7 @@ class TestMORDataSource extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
+  @ValueSource(booleans = Array(false))
   def testMergeOnReadStorage(isMetadataEnabled: Boolean) {
 
     val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
