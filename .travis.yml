@@ -30,14 +30,8 @@ jobs:
       env: MODE=unit MODULES=hudi-cli HUDI_QUIETER_LOGGING=1
     - name: "Unit tests for hudi-hadoop-mr"
       env: MODE=unit MODULES=hudi-hadoop-mr HUDI_QUIETER_LOGGING=1
-    - name: "Unit tests for hudi-spark"
-      env: MODE=unit MODULES='hudi-spark-datasource/hudi-spark' HUDI_QUIETER_LOGGING=1
-    - name: "Unit tests for hudi-spark2"
-      env: MODE=unit MODULES='hudi-spark-datasource/hudi-spark2' HUDI_QUIETER_LOGGING=1
-    - name: "Unit tests for hudi-spark3"
-      env: MODE=unit MODULES='hudi-spark-datasource/hudi-spark3' HUDI_QUIETER_LOGGING=1
-    - name: "Unit tests for hudi-spark-common"
-      env: MODE=unit MODULES='hudi-spark-datasource/hudi-spark-common' HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-spark-datasource"
+      env: MODE=unit MODULES='hudi-spark-datasource/hudi-spark-common,hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark2,hudi-spark-datasource/hudi-spark3' HUDI_QUIETER_LOGGING=1
     - name: "Unit tests for hudi-timeline-service"
       env: MODE=unit MODULES=hudi-timeline-service HUDI_QUIETER_LOGGING=1
     - name: "Unit tests for hudi-sync"
