@@ -34,6 +34,7 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Tests {@link UpgradeOrDowngradeCommand}.
  */
+@Disabled
 public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
 
   private String tablePath;
