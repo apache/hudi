@@ -48,7 +48,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -64,13 +64,13 @@ public class HoodieConfigDocGenerator {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConfigDocGenerator.class);
   private static final String NEWLINE = "\n";
-  private static final String LINE_BREAK = "<br>\n";
+  private static final String LINE_BREAK = "<br></br>\n";
   private static final String DOUBLE_NEWLINE = "\n\n";
   private static final String SUMMARY = "This page covers the different ways of configuring " +
       "your job to write/read Hudi tables. " +
       "At a high level, you can control behaviour at few levels.";
   private static final String FLINK_CONFIG_CLASS_NAME = "org.apache.hudi.configuration.FlinkOptions";
-  private static final String CONFIG_PATH = "/tmp/confid_doc.md";
+  private static final String CONFIG_PATH = "/tmp/configurations.md";
 
   public static void main(String[] args) {
     Reflections reflections = new Reflections("org.apache.hudi");
@@ -138,7 +138,7 @@ public class HoodieConfigDocGenerator {
     /*
       ---
       title: Configurations
-      keywords: garbage collection, hudi, jvm, configs, tuning
+      keywords: [configurations, default, flink options, spark, configs, parameters]
       permalink: /docs/configurations.html
       summary: This section offers an overview of tools available to operate an ecosystem of Hudi
       toc: true
@@ -148,7 +148,7 @@ public class HoodieConfigDocGenerator {
     LocalDateTime now = LocalDateTime.now();
     builder.append(new HorizontalRule()).append(NEWLINE)
         .append("title: ").append("Configurations").append(NEWLINE)
-        .append("keywords: garbage collection, hudi, jvm, configs, tuning").append(NEWLINE)
+        .append("keywords: [ configurations, default, flink options, spark, configs, parameters ] ").append(NEWLINE)
         .append("permalink: /docs/configurations.html").append(NEWLINE)
         .append("summary: " + SUMMARY).append(NEWLINE)
         .append("toc: true").append(NEWLINE)
@@ -164,7 +164,7 @@ public class HoodieConfigDocGenerator {
         new Link(new BoldText(groupName.name),
             "#" + groupName.name())
             + ": " + ConfigGroups.getDescription(groupName)));
-    Map<ConfigGroups.Names, StringBuilder> contentMap = new HashMap<>();
+    Map<ConfigGroups.Names, StringBuilder> contentMap = new LinkedHashMap<>();
     EnumSet.allOf(ConfigGroups.Names.class).forEach(groupName -> {
       StringBuilder stringBuilder = new StringBuilder();
       stringBuilder.append("## ")
