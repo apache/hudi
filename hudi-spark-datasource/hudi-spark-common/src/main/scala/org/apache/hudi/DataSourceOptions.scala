@@ -308,6 +308,13 @@ object DataSourceWriteOptions {
     .defaultValue(classOf[HiveSyncTool].getName)
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
+  val RECONCILE_SCHEMA: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.write.reconcile.schema")
+    .defaultValue(false)
+    .withDocumentation("When a new batch of write has records with old schema, but latest table schema got "
+      + "evolved, this config will upgrade the records to leverage latest table schema(default values will be "
+      + "injected to missing fields). If not, the write batch would fail.")
+
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset

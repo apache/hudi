@@ -109,6 +109,16 @@ public class FSUtils {
     return getFs(path, conf);
   }
 
+  /**
+   * Check if table already exists in the given path.
+   * @param path base path of the table.
+   * @param fs instance of {@link FileSystem}.
+   * @return {@code true} if table exists. {@code false} otherwise.
+   */
+  public static boolean isTableExists(String path, FileSystem fs) throws IOException {
+    return fs.exists(new Path(path + "/" + HoodieTableMetaClient.METAFOLDER_NAME));
+  }
+
   public static Path addSchemeIfLocalPath(String path) {
     Path providedPath = new Path(path);
     File localFile = new File(path);
