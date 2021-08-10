@@ -43,8 +43,6 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
 
 ```
 
-
-
 ### KS3 Libs
 
 KS3 hadoop libraries to add to our classpath
