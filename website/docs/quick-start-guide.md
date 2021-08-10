@@ -274,6 +274,30 @@ insert overwrite h_p0 partition(dt = '2021-01-02') select 1, 'a1';
   insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh;
 ```
 
+**NOTICE**
+
+1. Insert mode
+
+Hudi support three insert modes when inserting data to a table with primary key(we call it pk-table as followed):
+- upsert
+  
+  This it the default insert mode. For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record
+- strict
+
+For strict mode, insert statement will keep the primary key uniqueness constraint for COW table which do not allow duplicate record.
+If inserting a record which the primary key is already exists to the table, a HoodieDuplicateKeyException will throw out
+for COW table. For MOR table, it has the same behavior with "upsert" mode.
+
+- non-strict
+
+For non-strict mode, hudi just do the insert operation for the pk-table.
+
+We can set the inset mode by the config: **hoodie.sql.insert.mode**
+
+2. Bulk Insert
+By default, hudi use the normal insert operation for insert statement. We can set **hoodie.sql.bulk.insert.enable** to true to enable 
+the bulk insert for insert statement.
+   
 </TabItem>
 <TabItem value="python">
 
@@ -338,6 +362,29 @@ tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where fare > 20.0").show()
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
 ```
+
+**Time Travel Query**
+
+Hudi support time travel query since 0.9.0. Currently three query time format are supported:
+```scala
+spark.read.
+  format("hudi").
+  option("as.of.instant", "20210728141108").
+  load(basePath)
+
+spark.read.
+  format("hudi").
+  option("as.of.instant", "2021-07-28 14: 11: 08").
+  load(basePath)
+
+// It is equal to "as.of.instant = 2021-07-28 00:00:00"
+spark.read.
+  format("hudi").
+  option("as.of.instant", "2021-07-28").
+  load(basePath)
+
+```
+
 
 </TabItem>
 <TabItem value="sparksql">
@@ -777,7 +824,7 @@ spark.
 
 **NOTICE**
 
-The insert overwrite non-partitioned table statement will convert to the ***insert_overwrite_table*** operation.
+The insert overwrite non-partitioned table sql statement will convert to the ***insert_overwrite_table*** operation.
 
 ## Insert Overwrite 
 
@@ -819,7 +866,7 @@ spark.
 ```
 **NOTICE**
 
-The insert overwrite partitioned table statement will convert to the ***insert_overwrite*** operation.
+The insert overwrite partitioned table sql statement will convert to the ***insert_overwrite*** operation.
 
 ## Other Spark Sql Command
 
