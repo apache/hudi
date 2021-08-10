@@ -41,7 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
@@ -171,7 +171,7 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!getWriteConfig().populateMetaFields()) {
       try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getWriteConfig().getProps())));
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getWriteConfig().getProps())));
       } catch (IOException e) {
         throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
       }

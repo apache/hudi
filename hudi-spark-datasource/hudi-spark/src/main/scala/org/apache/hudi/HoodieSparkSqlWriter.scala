@@ -36,19 +36,20 @@ import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRo
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.index.SparkHoodieIndex
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.log4j.LogManager
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkContext}
-
 import java.util
 import java.util.Properties
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
 
@@ -106,7 +107,7 @@ object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path.get, hoodieTableConfigOpt)
-    val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(toProperties(parameters))
+    val keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(toProperties(parameters))
 
     if (mode == SaveMode.Ignore && tableExists) {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")

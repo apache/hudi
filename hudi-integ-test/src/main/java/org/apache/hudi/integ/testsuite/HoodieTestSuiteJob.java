@@ -42,7 +42,7 @@ import org.apache.hudi.integ.testsuite.helpers.ZookeeperServiceProvider;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
@@ -106,7 +106,7 @@ public class HoodieTestSuiteJob {
     this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
     log.info("Creating workload generator with configs : {}", props.toString());
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
-    this.keyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    this.keyGenerator = (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
     metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)

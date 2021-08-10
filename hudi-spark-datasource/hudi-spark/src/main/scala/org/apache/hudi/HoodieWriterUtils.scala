@@ -20,14 +20,14 @@ package org.apache.hudi
 import java.util.Properties
 
 import scala.collection.JavaConverters._
-import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
-
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.mapAsScalaMapConverter
+
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP
 import org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 
 /**
@@ -96,7 +96,7 @@ object HoodieWriterUtils {
   def getPartitionColumns(parameters: Map[String, String]): String = {
     val props = new TypedProperties()
     props.putAll(parameters.asJava)
-    val keyGen = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
+    val keyGen = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props)
     getPartitionColumns(keyGen)
   }
 

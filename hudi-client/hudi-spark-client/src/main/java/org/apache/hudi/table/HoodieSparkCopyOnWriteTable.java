@@ -45,7 +45,7 @@ import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitActionExecutor;
@@ -217,7 +217,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!config.populateMetaFields()) {
       try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
       } catch (IOException e) {
         throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
             + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);

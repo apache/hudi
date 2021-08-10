@@ -52,7 +52,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
@@ -218,7 +218,7 @@ public class DeltaSync implements Serializable {
     registerAvroSchemas(schemaProvider);
 
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
-    this.keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    this.keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
 

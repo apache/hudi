@@ -25,7 +25,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -134,7 +134,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   public void testSimpleKeyGenerator(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
-        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+        (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
@@ -158,7 +158,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   public void testTimestampBasedKeyGenerator(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
-        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+        (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
@@ -183,7 +183,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   public void testNonPartitionedKeyGenerator(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
-        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+        (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
@@ -210,7 +210,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   public void testInvalidPartitionKeyType(TypedProperties props) {
     try {
       BuiltinKeyGenerator keyGenerator =
-          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+          (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when invalid PartitionKeyType is provided!");
@@ -220,7 +220,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
     try {
       BuiltinKeyGenerator keyGenerator =
-          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+          (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
@@ -245,7 +245,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     TypedProperties propsWithoutRecordKeyFieldProps = getPropsWithoutRecordKeyFieldProps(useKeyGeneratorClassName);
     try {
       BuiltinKeyGenerator keyGenerator =
-          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
+          (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
 
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when record key field is not provided!");
@@ -266,7 +266,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
     try {
       BuiltinKeyGenerator keyGenerator =
-          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
+          (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
 
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
@@ -300,7 +300,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   public void testPartitionFieldsInImproperFormat(TypedProperties props) {
     try {
       BuiltinKeyGenerator keyGenerator =
-          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+          (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when partition key field is provided in improper format!");
@@ -310,7 +310,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
     try {
       BuiltinKeyGenerator keyGenerator =
-          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+          (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
@@ -333,7 +333,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   public void testComplexRecordKeyWithSimplePartitionPath(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
-        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+        (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
@@ -360,7 +360,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   public void testComplexRecordKeysWithComplexPartitionPath(TypedProperties props) throws IOException {
     BuiltinKeyGenerator keyGenerator =
-        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+        (BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
 
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);

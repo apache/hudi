@@ -37,7 +37,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -104,7 +104,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
 
     List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(partitionRecordsMap.keySet()), context, hoodieTable);
 
-    BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getPropertiesForKeyGen()));
+    BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getPropertiesForKeyGen()));
 
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
       HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2),

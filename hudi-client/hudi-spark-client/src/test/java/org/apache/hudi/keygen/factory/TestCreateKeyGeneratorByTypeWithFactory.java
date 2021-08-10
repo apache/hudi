@@ -74,7 +74,7 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
     props.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), keyGenType);
     KeyGeneratorType keyType = KeyGeneratorType.valueOf(keyGenType);
 
-    KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
     switch (keyType) {
       case SIMPLE:
         Assertions.assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator.getClass().getName());

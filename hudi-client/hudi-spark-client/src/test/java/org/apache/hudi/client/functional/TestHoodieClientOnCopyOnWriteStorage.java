@@ -83,7 +83,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -618,7 +618,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         HoodieMergeHandle handle = new HoodieMergeHandle(cfg, instantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
-                Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
+                Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
         writeStatus.setStat(new HoodieWriteStat());
         writeStatus.getStat().setNumWrites(0);
@@ -634,7 +634,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         HoodieMergeHandle handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFilePath.getName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
-                Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
+                Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()))));
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
         writeStatus.setStat(new HoodieWriteStat());
         writeStatus.getStat().setNumWrites(0);
@@ -1685,7 +1685,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         assertTrue(expectedKeys.contains(recordKey));
       }
     } else {
-      KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()));
+      KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps()));
       for (GenericRecord record : records) {
         String recordKey = keyGenerator.getKey(record).getRecordKey();
         if (!populateMetadataField) {

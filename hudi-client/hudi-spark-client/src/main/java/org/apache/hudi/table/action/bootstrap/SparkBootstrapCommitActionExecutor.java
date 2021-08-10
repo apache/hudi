@@ -63,7 +63,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -394,7 +394,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
 
     KeyGeneratorInterface keyGenerator;
     try {
-      keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
+      keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(properties);
     } catch (IOException e) {
       throw new HoodieKeyGeneratorException("Init keyGenerator failed ", e);
     }

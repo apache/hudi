@@ -36,7 +36,7 @@ import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.index.SparkHoodieIndex;
 import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -154,7 +154,7 @@ public class SparkHoodieSimpleIndex<T extends HoodieRecordPayload> extends Spark
 
     try {
       Option<BaseKeyGenerator> keyGeneratorOpt = config.populateMetaFields() ? Option.empty()
-          : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+          : Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
       return jsc.parallelize(baseFiles, fetchParallelism)
         .flatMapToPair(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
                 .locations().map(x -> Tuple2.apply(((Pair)x).getLeft(), ((Pair)x).getRight())).iterator());

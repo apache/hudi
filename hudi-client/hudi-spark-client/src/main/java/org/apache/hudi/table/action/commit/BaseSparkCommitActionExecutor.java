@@ -48,7 +48,7 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.io.storage.HoodieConcatHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -107,7 +107,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   private void initKeyGenIfNeeded(boolean populateMetaFields) {
     if (!populateMetaFields) {
       try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
       } catch (IOException e) {
         throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
       }

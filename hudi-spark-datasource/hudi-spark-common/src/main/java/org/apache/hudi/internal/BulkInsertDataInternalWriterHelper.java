@@ -30,7 +30,7 @@ import org.apache.hudi.io.storage.row.HoodieRowCreateHandle;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
@@ -110,7 +110,7 @@ public class BulkInsertDataInternalWriterHelper {
       return Option.empty(); // Do not instantiate NonPartitionKeyGen
     } else {
       try {
-        return Option.of((BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
+        return Option.of((BuiltinKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(typedProperties));
       } catch (ClassCastException cce) {
         throw new HoodieIOException("Only those key generators implementing BuiltInKeyGenerator interface is supported with virtual keys");
       } catch (IOException e) {
