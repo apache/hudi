@@ -121,8 +121,8 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BLOOM_INDEX_FILTER_TYPE = ConfigProperty
       .key("hoodie.bloom.index.filter.type")
-      .defaultValue(BloomFilterTypeCode.SIMPLE.name())
-      .withDocumentation("Filter type used. Default is BloomFilterTypeCode.SIMPLE. "
+      .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
+      .withDocumentation("Filter type used. Default is BloomFilterTypeCode.DYNAMIC_V0. "
           + "Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. "
           + "Dynamic bloom filters auto size themselves based on number of keys.");
 
