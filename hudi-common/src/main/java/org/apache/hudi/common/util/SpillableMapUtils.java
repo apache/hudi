@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
@@ -31,6 +32,8 @@ import org.apache.avro.generic.GenericRecord;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.zip.CRC32;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
 
 /**
  * A utility class supports spillable map.
@@ -110,18 +113,23 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
-    return convertToHoodieRecordPayload(rec, payloadClazz, Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, boolean withOperationField) {
+    return convertToHoodieRecordPayload(rec, payloadClazz, Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD), withOperationField);
   }
 
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, Pair<String, String> recordKeyPartitionPathPair) {
+  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz,
+                                                   Pair<String, String> recordKeyPartitionPathPair,
+                                                   boolean withOperationField) {
     String recKey = rec.get(recordKeyPartitionPathPair.getLeft()).toString();
     String partitionPath = rec.get(recordKeyPartitionPathPair.getRight()).toString();
+    HoodieOperation operation = withOperationField
+        ? HoodieOperation.fromName(getNullableValAsString(rec, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
-        ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.of(rec)}, Option.class));
+        ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.of(rec)}, Option.class), operation);
+
     return (R) hoodieRecord;
   }
 

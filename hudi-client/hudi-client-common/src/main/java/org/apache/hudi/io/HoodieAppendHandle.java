@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -197,20 +198,26 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
       // Whether it is a update or insert record.
       boolean isUpdateRecord = isUpdateRecord(hoodieRecord);
+      // If the format can not record the operation field, nullify the DELETE payload manually.
+      boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
-      Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
+      Option<IndexedRecord> avroRecord = nullifyPayload ? Option.empty() : hoodieRecord.getData().getInsertValue(tableSchema, recordProperties);
       if (avroRecord.isPresent()) {
         if (avroRecord.get().equals(IGNORE_RECORD)) {
           return avroRecord;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
+        GenericRecord rewriteRecord = rewriteRecord((GenericRecord) avroRecord.get());
+        avroRecord = Option.of(rewriteRecord);
         String seqId =
             HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
         if (config.populateMetaFields()) {
-          HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
+          HoodieAvroUtils.addHoodieKeyToRecord(rewriteRecord, hoodieRecord.getRecordKey(),
               hoodieRecord.getPartitionPath(), fileId);
-          HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
+          HoodieAvroUtils.addCommitMetadataToRecord(rewriteRecord, instantTime, seqId);
+        }
+        if (config.allowOperationMetadataField()) {
+          HoodieAvroUtils.addOperationToRecord(rewriteRecord, hoodieRecord.getOperation());
         }
         if (isUpdateRecord(hoodieRecord)) {
           updatedRecordsWritten++;

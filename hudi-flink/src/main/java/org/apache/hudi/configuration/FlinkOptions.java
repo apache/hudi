@@ -76,6 +76,17 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
+  public static final ConfigOption<Boolean> CHANGELOG_ENABLED = ConfigOptions
+      .key("changelog.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to keep all the intermediate changes, "
+          + "we try to keep all the changes of a record when enabled:\n"
+          + "1). The sink accept the UPDATE_BEFORE message;\n"
+          + "2). The source try to emit every changes of a record.\n"
+          + "The semantics is best effort because the compaction job would finally merge all changes of a record into one.\n"
+          + " default false to have UPSERT semantics");
+
   // ------------------------------------------------------------------------
   //  Metadata table Options
   // ------------------------------------------------------------------------

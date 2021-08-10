@@ -71,7 +71,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
 
   public HoodieDLAClient(DLASyncConfig syncConfig, FileSystem fs) {
     super(syncConfig.basePath, syncConfig.assumeDatePartitioning, syncConfig.useFileListingFromMetadata,
-        syncConfig.verifyMetadataFileListing, fs);
+        syncConfig.verifyMetadataFileListing, false, fs);
     this.dlaConfig = syncConfig;
     try {
       this.partitionValueExtractor =
