@@ -20,8 +20,6 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
@@ -57,26 +55,14 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
   /**
    * Compaction instant time.
    */
-  private String compactionInstantTime;
-
-  /**
-   * Hoodie flink table.
-   */
-  private HoodieFlinkTable<?> table;
+  private final String compactionInstantTime;
 
   /**
    * The compaction plan.
    */
-  private HoodieCompactionPlan compactionPlan;
+  private final HoodieCompactionPlan compactionPlan;
 
-  /**
-   * Hoodie instant.
-   */
-  private HoodieInstant instant;
-
-  public CompactionPlanSourceFunction(HoodieFlinkTable<?> table, HoodieInstant instant, HoodieCompactionPlan compactionPlan, String compactionInstantTime) {
-    this.table = table;
-    this.instant = instant;
+  public CompactionPlanSourceFunction(HoodieCompactionPlan compactionPlan, String compactionInstantTime) {
     this.compactionPlan = compactionPlan;
     this.compactionInstantTime = compactionInstantTime;
   }

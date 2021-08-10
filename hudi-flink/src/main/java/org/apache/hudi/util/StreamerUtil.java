@@ -186,6 +186,7 @@ public class StreamerUtil {
                 .build())
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
+            .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
 
     builder = builder.withSchema(getSourceSchema(conf).toString());

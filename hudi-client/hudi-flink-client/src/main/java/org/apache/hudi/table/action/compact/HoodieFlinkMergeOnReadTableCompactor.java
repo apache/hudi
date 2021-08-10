@@ -86,7 +86,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
   @Override
   public List<WriteStatus> compact(HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
-                                      HoodieTable hoodieTable, HoodieWriteConfig config, String compactionInstantTime) throws IOException {
+                                   HoodieTable hoodieTable, HoodieWriteConfig config, String compactionInstantTime) throws IOException {
     throw new UnsupportedOperationException("HoodieFlinkMergeOnReadTableCompactor does not support compact directly, "
         + "the function works as a separate pipeline");
   }
@@ -98,7 +98,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
                                    String instantTime) throws IOException {
     FileSystem fs = metaClient.getFs();
 
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
+    Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
     // TODO - FIX THIS

@@ -373,6 +373,13 @@ public class HoodieWriteConfig extends HoodieConfig {
        .withDocumentation("Whether to allow generation of empty commits, even if no data was written in the commit. "
           + "It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data");
 
+  public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
+      .key("hoodie.allow.operation.metadata.field")
+      .defaultValue(false)
+      .sinceVersion("0.9")
+      .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
+          + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -1309,6 +1316,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(ALLOW_EMPTY_COMMIT);
   }
 
+  public boolean allowOperationMetadataField() {
+    return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -1612,6 +1623,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       writeConfig.setValue(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      return this;
+    }
+
+    public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
+      writeConfig.setValue(ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
       return this;
     }
 

@@ -117,7 +117,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     try {
       String seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
       HoodieRowData rowData = new HoodieRowData(instantTime, seqId, recordKey, partitionPath, path.getName(),
-          record);
+          record, writeConfig.allowOperationMetadataField());
       try {
         fileWriter.writeRow(recordKey, rowData);
         writeStatus.markSuccess(recordKey);
@@ -131,7 +131,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   }
 
   /**
-   * @returns {@code true} if this handle can take in more writes. else {@code false}.
+   * Returns {@code true} if this handle can take in more writes. else {@code false}.
    */
   public boolean canWrite() {
     return fileWriter.canWrite();
