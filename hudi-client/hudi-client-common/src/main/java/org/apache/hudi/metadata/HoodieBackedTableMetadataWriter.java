@@ -248,7 +248,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       if (!latestMetadataInstant.isPresent()) {
         LOG.warn("Metadata Table will need to be re-bootstrapped as no instants were found");
         rebootstrap = true;
-      } else if (datasetMetaClient.getActiveTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
+      } else if (!latestMetadataInstant.get().getTimestamp().equals(SOLO_COMMIT_TIMESTAMP)
+          && datasetMetaClient.getActiveTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
         LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
             + " latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
             + ", latestDatasetInstant=" + datasetMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());

@@ -152,8 +152,7 @@
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
-    <json.version>20200518</json.version>
-    <calcite.version>1.16.0</calcite.version>
+    <antlr.version>4.7</antlr.version>
   </properties>
 
   <scm>

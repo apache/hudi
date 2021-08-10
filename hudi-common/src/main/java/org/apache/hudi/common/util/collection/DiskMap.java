@@ -18,8 +18,16 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.common.util.FileIOUtils;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
@@ -29,21 +37,72 @@ import java.util.stream.Stream;
  * @param <T> The generic type of the keys
  * @param <R> The generic type of the values
  */
-public interface DiskMap<T extends Serializable, R extends Serializable> extends Map<T, R>, Iterable<R> {
+public abstract class DiskMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
+
+  private static final Logger LOG = LogManager.getLogger(DiskMap.class);
+  private static final String SUBFOLDER_PREFIX = "hudi";
+  private final File diskMapPathFile;
+  private transient Thread shutdownThread = null;
+
+  // Base path for the write file
+  protected final String diskMapPath;
+
+  public DiskMap(String basePath, String prefix) throws IOException {
+    this.diskMapPath =
+        String.format("%s/%s-%s-%s", basePath, SUBFOLDER_PREFIX, prefix, UUID.randomUUID().toString());
+    diskMapPathFile = new File(diskMapPath);
+    FileIOUtils.deleteDirectory(diskMapPathFile);
+    FileIOUtils.mkdir(diskMapPathFile);
+    // Make sure the folder is deleted when JVM exits
+    diskMapPathFile.deleteOnExit();
+    addShutDownHook();
+  }
+
+  /**
+   * Register shutdown hook to force flush contents of the data written to FileOutputStream from OS page cache
+   * (typically 4 KB) to disk.
+   */
+  private void addShutDownHook() {
+    shutdownThread = new Thread(this::cleanup);
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
+  }
 
   /**
    * @returns a stream of the values stored in the disk.
    */
-  Stream<R> valueStream();
+  abstract Stream<R> valueStream();
 
   /**
    * Number of bytes spilled to disk.
    */
-  long sizeOfFileOnDiskInBytes();
+  abstract long sizeOfFileOnDiskInBytes();
 
   /**
-   * Cleanup.
+   * Close and cleanup the Map.
    */
-  void close();
+  public void close() {
+    cleanup(false);
+  }
 
+  /**
+   * Cleanup all resources, files and folders
+   * triggered by shutdownhook.
+   */
+  private void cleanup() {
+    cleanup(true);
+  }
+
+  /**
+   * Cleanup all resources, files and folders.
+   */
+  private void cleanup(boolean isTriggeredFromShutdownHook) {
+    try {
+      FileIOUtils.deleteDirectory(diskMapPathFile);
+    } catch (IOException exception) {
+      LOG.warn("Error while deleting the disk map directory=" + diskMapPath, exception);
+    }
+    if (!isTriggeredFromShutdownHook && shutdownThread != null) {
+      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    }
+  }
 }

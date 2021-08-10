@@ -31,7 +31,9 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -49,6 +51,9 @@ public class HoodieClusteringJob {
   private transient FileSystem fs;
   private TypedProperties props;
   private final JavaSparkContext jsc;
+  public static final String EXECUTE = "execute";
+  public static final String SCHEDULE = "schedule";
+  public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
 
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
     this.cfg = cfg;
@@ -71,8 +76,8 @@ public class HoodieClusteringJob {
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
-    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only need when cluster. "
-        + "And schedule clustering can generate it.", required = false)
+    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only need when set --mode execute. "
+            + "When set \"--mode scheduleAndExecute\" this instant-time will be ignored.", required = false)
     public String clusteringInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
     public int parallelism = 1;
@@ -83,8 +88,14 @@ public class HoodieClusteringJob {
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
 
-    @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering")
+    @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
     public Boolean runSchedule = false;
+
+    @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a cluster plan; "
+            + "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; "
+            + "Set \"scheduleAndExecute\" means make a cluster plan first and execute that plan immediately", required = false)
+    public String runningMode = null;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -101,15 +112,17 @@ public class HoodieClusteringJob {
   public static void main(String[] args) {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0 || (!cfg.runSchedule && cfg.clusteringInstantTime == null)) {
+
+    if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
     }
+
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
     HoodieClusteringJob clusteringJob = new HoodieClusteringJob(jsc, cfg);
     int result = clusteringJob.cluster(cfg.retry);
-    String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runSchedule: %s",
-        cfg.basePath, cfg.tableName, cfg.runSchedule);
+    String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runningMode: %s",
+        cfg.basePath, cfg.tableName, cfg.runningMode);
     if (result == -1) {
       LOG.error(resultMsg + " failed");
     } else {
@@ -118,20 +131,46 @@ public class HoodieClusteringJob {
     jsc.stop();
   }
 
+  // make sure that cfg.runningMode couldn't be null
+  private static void validateRunningMode(Config cfg) {
+    // --mode has a higher priority than --schedule
+    // If we remove --schedule option in the future we need to change runningMode default value to EXECUTE
+    if (StringUtils.isNullOrEmpty(cfg.runningMode)) {
+      cfg.runningMode = cfg.runSchedule ? SCHEDULE : EXECUTE;
+    }
+
+    if (cfg.runningMode.equalsIgnoreCase(EXECUTE) && cfg.clusteringInstantTime == null) {
+      throw new RuntimeException("--instant-time couldn't be null when executing clustering plan.");
+    }
+  }
+
   public int cluster(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
+    // need to do validate in case that users call cluster() directly without setting cfg.runningMode
+    validateRunningMode(cfg);
     int ret = UtilHelpers.retry(retry, () -> {
-      if (cfg.runSchedule) {
-        LOG.info("Do schedule");
-        Option<String> instantTime = doSchedule(jsc);
-        int result = instantTime.isPresent() ? 0 : -1;
-        if (result == 0) {
-          LOG.info("The schedule instant time is " + instantTime.get());
+      switch (cfg.runningMode.toLowerCase()) {
+        case SCHEDULE: {
+          LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
+          Option<String> instantTime = doSchedule(jsc);
+          int result = instantTime.isPresent() ? 0 : -1;
+          if (result == 0) {
+            LOG.info("The schedule instant time is " + instantTime.get());
+          }
+          return result;
         }
-        return result;
-      } else {
-        LOG.info("Do cluster");
-        return doCluster(jsc);
+        case SCHEDULE_AND_EXECUTE: {
+          LOG.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
+          return doScheduleAndCluster(jsc);
+        }
+        case EXECUTE: {
+          LOG.info("Running Mode: [" + EXECUTE + "]; Do cluster");
+          return doCluster(jsc);
+        }
+        default: {
+          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          return -1;
+        }
       }
     }, "Cluster failed");
     return ret;
@@ -164,11 +203,37 @@ public class HoodieClusteringJob {
   private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
     String schemaStr = getSchemaFromLatestInstant();
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
-      if (cfg.clusteringInstantTime != null) {
-        client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
-        return Option.of(cfg.clusteringInstantTime);
-      }
-      return client.scheduleClustering(Option.empty());
+      return doSchedule(client);
     }
   }
+
+  private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
+    if (cfg.clusteringInstantTime != null) {
+      client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
+      return Option.of(cfg.clusteringInstantTime);
+    }
+    return client.scheduleClustering(Option.empty());
+  }
+
+  public int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
+    LOG.info("Step 1: Do schedule");
+    String schemaStr = getSchemaFromLatestInstant();
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+
+      Option<String> instantTime = doSchedule(client);
+      int result = instantTime.isPresent() ? 0 : -1;
+
+      if (result == -1) {
+        LOG.info("Couldn't generate cluster plan");
+        return result;
+      }
+
+      LOG.info("The schedule instant time is " + instantTime.get());
+      LOG.info("Step 2: Do cluster");
+      JavaRDD<WriteStatus> writeResponse =
+              (JavaRDD<WriteStatus>) client.cluster(instantTime.get(), true).getWriteStatuses();
+      return UtilHelpers.handleErrors(jsc, instantTime.get(), writeResponse);
+    }
+  }
+
 }

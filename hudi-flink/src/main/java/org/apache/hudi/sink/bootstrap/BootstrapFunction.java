@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -56,6 +57,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.util.StreamerUtil.isValidFile;
 
 /**
  * The function to load index from existing hoodieTable.
@@ -178,7 +180,7 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         // load parquet records
         fileSlice.getBaseFile().ifPresent(baseFile -> {
           // filter out crushed files
-          if (baseFile.getFileSize() <= 0) {
+          if (!isValidFile(baseFile.getFileStatus())) {
             return;
           }
 
@@ -198,10 +200,11 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         // load avro log records
         List<String> logPaths = fileSlice.getLogFiles()
                 // filter out crushed files
-                .filter(logFile -> logFile.getFileSize() > 0)
+                .filter(logFile -> isValidFile(logFile.getFileStatus()))
                 .map(logFile -> logFile.getPath().toString())
                 .collect(toList());
-        HoodieMergedLogRecordScanner scanner = scanLog(logPaths, schema, latestCommitTime.get().getTimestamp());
+        HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(logPaths, schema, latestCommitTime.get().getTimestamp(),
+            writeConfig, hadoopConf);
 
         try {
           for (String recordKey : scanner.getRecords().keySet()) {
@@ -209,6 +212,8 @@ public class BootstrapFunction<I, O extends HoodieRecord>
           }
         } catch (Exception e) {
           throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
+        } finally {
+          scanner.close();
         }
       }
     }
@@ -216,27 +221,6 @@ public class BootstrapFunction<I, O extends HoodieRecord>
     long cost = System.currentTimeMillis() - start;
     LOG.info("Task [{}}:{}}] finish loading the index under partition {} and sending them to downstream, time cost: {} milliseconds.",
         this.getClass().getSimpleName(), taskID, partitionPath, cost);
-  }
-
-  private HoodieMergedLogRecordScanner scanLog(
-          List<String> logPaths,
-          Schema logSchema,
-          String latestInstantTime) {
-    String basePath = this.hoodieTable.getMetaClient().getBasePath();
-    return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(FSUtils.getFs(basePath, this.hadoopConf))
-        .withBasePath(basePath)
-        .withLogFilePaths(logPaths)
-        .withReaderSchema(logSchema)
-        .withLatestInstantTime(latestInstantTime)
-        .withReadBlocksLazily(this.writeConfig.getCompactionLazyBlockReadEnabled())
-        .withReverseReader(false)
-        .withBufferSize(this.writeConfig.getMaxDFSStreamBufferSize())
-        .withMaxMemorySizeInBytes(this.writeConfig.getMaxMemoryPerPartitionMerge())
-        .withSpillableMapBasePath(this.writeConfig.getSpillableMapBasePath())
-        .withDiskMapType(this.writeConfig.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(this.writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .build();
   }
 
   @SuppressWarnings("unchecked")

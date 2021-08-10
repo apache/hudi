@@ -354,7 +354,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
           dataFileToBeMerged, taskContextSupplier, Option.empty());
     } else {
       return new HoodieMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged,taskContextSupplier, Option.empty());
+          dataFileToBeMerged, taskContextSupplier, Option.empty());
     }
   }
 

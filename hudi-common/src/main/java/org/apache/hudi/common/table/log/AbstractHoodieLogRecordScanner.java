@@ -18,15 +18,11 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -37,8 +33,15 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -80,6 +83,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
+  // simple key gen fields
+  private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
   protected final List<String> logFilePaths;
   // Read Lazily flag
@@ -91,6 +96,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final int bufferSize;
   // optional instant range for incremental block filtering
   private final Option<InstantRange> instantRange;
+  // Read the operation metadata field from the avro record
+  private final boolean withOperationField;
   // FileSystem
   private final FileSystem fs;
   // Total log files read - for metrics
@@ -109,12 +116,17 @@ public abstract class AbstractHoodieLogRecordScanner {
   private float progress = 0.0f;
 
   protected AbstractHoodieLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-      String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize, Option<InstantRange> instantRange) {
+                                           String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
+                                           int bufferSize, Option<InstantRange> instantRange, boolean withOperationField) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
+    HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
+    if (!tableConfig.populateMetaFields()) {
+      this.simpleKeyGenFields = Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
+    }
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.readBlocksLazily = readBlocksLazily;
@@ -122,6 +134,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.fs = fs;
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
+    this.withOperationField = withOperationField;
   }
 
   /**
@@ -285,7 +298,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   private boolean isNewInstantBlock(HoodieLogBlock logBlock) {
     return currentInstantLogBlocks.size() > 0 && currentInstantLogBlocks.peek().getBlockType() != CORRUPT_BLOCK
         && !logBlock.getLogBlockHeader().get(INSTANT_TIME)
-            .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME));
+        .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME));
   }
 
   /**
@@ -302,7 +315,11 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
-    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
+    if (!simpleKeyGenFields.isPresent()) {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.withOperationField);
+    } else {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.simpleKeyGenFields.get(), this.withOperationField);
+    }
   }
 
   /**
@@ -379,6 +396,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     return totalCorruptBlocks.get();
   }
 
+  public boolean isWithOperationField() {
+    return withOperationField;
+  }
+
   /**
    * Builder used to build {@code AbstractHoodieLogRecordScanner}.
    */
@@ -401,6 +422,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     public abstract Builder withBufferSize(int bufferSize);
 
     public Builder withInstantRange(Option<InstantRange> instantRange) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withOperationField(boolean withOperationField) {
       throw new UnsupportedOperationException();
     }
 

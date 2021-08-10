@@ -48,9 +48,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   private val log = LogManager.getLogger(classOf[HoodieStreamingSink])
 
-  private val retryCnt = options(DataSourceWriteOptions.STREAMING_RETRY_CNT_OPT_KEY.key).toInt
-  private val retryIntervalMs = options(DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS_OPT_KEY.key).toLong
-  private val ignoreFailedBatch = options(DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY.key).toBoolean
+  private val retryCnt = options(DataSourceWriteOptions.STREAMING_RETRY_CNT.key).toInt
+  private val retryIntervalMs = options(DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS.key).toLong
+  private val ignoreFailedBatch = options(DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key).toBoolean
 
   private var isAsyncCompactorServiceShutdownAbnormally = false
   private var isAsyncClusteringServiceShutdownAbnormally = false
@@ -113,7 +113,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
           log.error(s"Micro batch id=$batchId threw following exception: ", e)
           if (ignoreFailedBatch) {
             log.info(s"Ignore the exception and move on streaming as per " +
-              s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY.key} configuration")
+              s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key} configuration")
             Success((true, None, None))
           } else {
             if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")
@@ -127,7 +127,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
             }))
           if (ignoreFailedBatch) {
             log.info(s"Ignore the errors and move on streaming as per " +
-              s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY.key} configuration")
+              s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key} configuration")
             Success((true, None, None))
           } else {
             if (retryCnt > 1) log.info(s"Retrying the failed micro batch id=$batchId ...")

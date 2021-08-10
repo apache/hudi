@@ -15,8 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.functional;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -35,6 +38,7 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -59,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Tests {@link HoodieDatasetBulkInsertHelper}.
  */
+@Tag("functional")
 public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
 
   private String schemaStr;
@@ -209,18 +214,18 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   private Map<String, String> getProps(boolean setAll, boolean setKeyGen, boolean setRecordKey, boolean setPartitionPath) {
     Map<String, String> props = new HashMap<>();
     if (setAll) {
-      props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
-      props.put(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), "_row_key");
-      props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "partition");
+      props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
+      props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+      props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition");
     } else {
       if (setKeyGen) {
-        props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
+        props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
       }
       if (setRecordKey) {
-        props.put(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), "_row_key");
+        props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
       }
       if (setPartitionPath) {
-        props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "partition");
+        props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition");
       }
     }
     return props;

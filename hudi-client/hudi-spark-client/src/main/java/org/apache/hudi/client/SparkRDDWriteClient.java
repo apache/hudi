@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client;
 
-import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -48,8 +46,8 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -58,6 +56,9 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.SparkCompactHelpers;
 import org.apache.hudi.table.upgrade.AbstractUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
+
+import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -69,6 +70,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
@@ -356,11 +358,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   private void completeClustering(HoodieReplaceCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                     String clusteringCommitTime) {
+    
+    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
+        e.getValue().stream()).collect(Collectors.toList());
 
-    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
-    if (!writeStatuses.filter(WriteStatus::hasErrors).isEmpty()) {
+    if (writeStats.stream().mapToLong(s -> s.getTotalWriteErrors()).sum() > 0) {
       throw new HoodieClusteringException("Clustering failed to write to files:"
-          + writeStatuses.filter(WriteStatus::hasErrors).map(WriteStatus::getFileId).collect());
+          + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(s -> s.getFileId()).collect(Collectors.joining(",")));
     }
     finalizeWrite(table, clusteringCommitTime, writeStats);
     try {
@@ -481,5 +485,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
       HoodieWrapperFileSystem.setMetricsRegistry(registry, registryMeta);
     }
+  }
+
+  @Override
+  protected void releaseResources() {
+    ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
+        .forEach(rdd -> rdd.unpersist());
   }
 }

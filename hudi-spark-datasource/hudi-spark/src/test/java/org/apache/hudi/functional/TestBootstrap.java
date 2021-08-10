@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.functional;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -26,6 +26,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
@@ -79,6 +80,7 @@ import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -108,9 +110,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests Bootstrap Client functionality.
  */
+@Tag("functional")
 public class TestBootstrap extends HoodieClientTestBase {
 
-  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,"
+  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,double,double,double,double,"
       + "struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
   @TempDir
@@ -550,8 +553,8 @@ public class TestBootstrap extends HoodieClientTestBase {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, IndexType.BLOOM)
         .withExternalSchemaTrasformation(true);
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), "_row_key");
-    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "datestr");
+    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "datestr");
     builder = builder.withProps(properties);
     return builder;
   }
@@ -576,11 +579,11 @@ public class TestBootstrap extends HoodieClientTestBase {
     if (isPartitioned) {
       df = df.withColumn("datestr", callUDF("partgen", new Column("_row_key")));
       // Order the columns to ensure generated avro schema aligns with Hive schema
-      df = df.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon",
+      df = df.select("timestamp", "_row_key", "partition_path", "rider", "driver", "begin_lat", "begin_lon",
           "end_lat", "end_lon", "fare", "tip_history", "_hoodie_is_deleted", "datestr");
     } else {
       // Order the columns to ensure generated avro schema aligns with Hive schema
-      df = df.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon",
+      df = df.select("timestamp", "_row_key", "partition_path", "rider", "driver", "begin_lat", "begin_lon",
           "end_lat", "end_lon", "fare", "tip_history", "_hoodie_is_deleted");
     }
     return df;

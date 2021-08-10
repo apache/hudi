@@ -133,9 +133,8 @@ public class HoodieFlinkCompactor {
 
     // Mark instant as compaction inflight
     table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
-    table.getMetaClient().reloadActiveTimeline();
 
-    env.addSource(new CompactionPlanSourceFunction(table, instant, compactionPlan, compactionInstantTime))
+    env.addSource(new CompactionPlanSourceFunction(compactionPlan, compactionInstantTime))
         .name("compaction_source")
         .uid("uid_compaction_source")
         .rebalance()

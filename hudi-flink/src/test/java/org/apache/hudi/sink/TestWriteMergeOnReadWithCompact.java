@@ -22,8 +22,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.configuration.Configuration;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,10 +37,9 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
   }
 
-  @Disabled
-  @Test
-  public void testIndexStateBootstrap() {
-    // Ignore the index bootstrap because we only support parquet load now.
+  @Override
+  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
+    return EXPECTED1;
   }
 
   protected Map<String, String> getMiniBatchExpected() {

@@ -367,6 +367,19 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, records in older schema are rewritten into newer schema during upsert,delete and background"
           + " compaction,clustering operations.");
 
+  public static final ConfigProperty<Boolean> ALLOW_EMPTY_COMMIT = ConfigProperty
+       .key("hoodie.allow.empty.commit")
+       .defaultValue(true)
+       .withDocumentation("Whether to allow generation of empty commits, even if no data was written in the commit. "
+          + "It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data");
+
+  public static final ConfigProperty<Boolean> ALLOW_OPERATION_METADATA_FIELD = ConfigProperty
+      .key("hoodie.allow.operation.metadata.field")
+      .defaultValue(false)
+      .sinceVersion("0.9")
+      .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
+          + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -691,7 +704,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isAsyncClusteringEnabled() {
-    return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY);
+    return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
+  }
+
+  public boolean isPreserveHoodieCommitMetadata() {
+    return getBoolean(HoodieClusteringConfig.CLUSTERING_PRESERVE_HOODIE_COMMIT_METADATA);
   }
 
   public boolean isClusteringEnabled() {
@@ -761,6 +778,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getTargetPartitionsForClustering() {
     return getInt(HoodieClusteringConfig.CLUSTERING_TARGET_PARTITIONS);
+  }
+
+  public int getSkipPartitionsFromLatestForClustering() {
+    return getInt(HoodieClusteringConfig.CLUSTERING_SKIP_PARTITIONS_FROM_LATEST);
   }
 
   public String getClusteringSortColumns() {
@@ -1274,6 +1295,30 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getWriteMetaKeyPrefixes() {
     return getString(WRITE_META_KEY_PREFIXES_PROP);
   }
+  
+  public String getPreCommitValidators() {
+    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS);
+  }
+
+  public String getPreCommitValidatorEqualitySqlQueries() {
+    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_EQUALITY_SQL_QUERIES);
+  }
+
+  public String getPreCommitValidatorSingleResultSqlQueries() {
+    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_SINGLE_VALUE_SQL_QUERIES);
+  }
+
+  public String getPreCommitValidatorInequalitySqlQueries() {
+    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_INEQUALITY_SQL_QUERIES);
+  }
+
+  public boolean allowEmptyCommit() {
+    return getBooleanOrDefault(ALLOW_EMPTY_COMMIT);
+  }
+
+  public boolean allowOperationMetadataField() {
+    return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
+  }
 
   public static class Builder {
 
@@ -1292,6 +1337,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isPayloadConfigSet = false;
     private boolean isMetadataConfigSet = false;
     private boolean isLockConfigSet = false;
+    private boolean isPreCommitValidationConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -1441,6 +1487,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withPreCommitValidatorConfig(HoodiePreCommitValidatorConfig validatorConfig) {
+      writeConfig.getProps().putAll(validatorConfig.getProps());
+      isPreCommitValidationConfigSet = true;
+      return this;
+    }
+
     public Builder withMetricsConfig(HoodieMetricsConfig metricsConfig) {
       writeConfig.getProps().putAll(metricsConfig.getProps());
       isMetricsConfigSet = true;
@@ -1574,6 +1626,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
+      writeConfig.setValue(ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.writeConfig.getProps().putAll(properties);
       return this;
@@ -1610,7 +1667,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieMetadataConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isLockConfigSet,
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
-
+      writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
+          HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
     }
 
