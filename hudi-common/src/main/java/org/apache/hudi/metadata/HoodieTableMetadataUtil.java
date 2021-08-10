@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -40,6 +41,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -340,4 +342,18 @@ public class HoodieTableMetadataUtil {
 
     return records;
   }
+
+  public static List<HoodieRecord> convertMetadataToRecords(Map<String, Collection<HoodieColumnRangeMetadata<Comparable>>> fileToColumnRangeInfo,
+                                                            String instantTime,
+                                                            Option<String> lastSyncTs) {
+
+    List<HoodieRecord> rangeRecords = fileToColumnRangeInfo.entrySet().stream().flatMap(fileRangeEntry ->
+        HoodieMetadataPayload.createRangeRecords(fileRangeEntry.getKey(), fileRangeEntry.getValue())
+    ).collect(Collectors.toList());
+
+    LOG.info("Creating " + rangeRecords.size() + " records for column ranges from " + fileToColumnRangeInfo.keySet().size()
+        + " files created as part of instant " + instantTime + ". Last metadata sync: " + lastSyncTs);
+    return rangeRecords;
+  }
+
 }

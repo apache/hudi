@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -61,6 +62,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -494,6 +496,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (enabled) {
       List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(rollbackMetadata, instantTime, metadata.getSyncedInstantTime());
       commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
+    }
+  }
+
+  /**
+   * Update column range info for new files created by instant.
+   */
+  @Override
+  public void update(Map<String, Collection<HoodieColumnRangeMetadata<Comparable>>> fileToColumnRangeInfo, String instantTime) {
+    if (enabled) {
+      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(fileToColumnRangeInfo, instantTime, metadata.getSyncedInstantTime());
+      commit(records, MetadataPartitionType.RANGE_INDEX.partitionPath(), instantTime);
     }
   }
 

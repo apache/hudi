@@ -51,6 +51,41 @@
                     ]
                 }
             }]
-        }
+        },
+        {   "name": "rangeIndexMetadata",
+            "doc": "Contains information about column ranges for all data files in the table",
+            "type": ["null", {
+                  "type": "record",
+                  "name": "HoodieRangeIndexInfo",
+                  "fields": [
+                        {
+                           "name": "columnName",
+                           "type": "string",
+                           "doc": "Column name represented as dot string for nested columns"
+                        },
+                        {
+                           "name": "rangeLow",
+                           "type": "string",
+                           "doc": "Low end of the range. For now, this is a String, but we need to support other types"
+                        },
+                        {
+                           "name": "rangeHigh",
+                           "type": "string",
+                           "doc": "High end of the range. For now, this is a String, but we need to support other types"
+                        },
+                        {
+                           "name": "filePath",
+                           "type": "string",
+                           "doc": "relative file path from basePath. Includes partition name and full fileName"
+                        },
+                        {
+                           "name": "isDeleted",
+                           "type": "boolean",
+                           "doc": "True if this file has been deleted"
+                        }
+                  ]
+               }
+            ]
+         }
     ]
 }

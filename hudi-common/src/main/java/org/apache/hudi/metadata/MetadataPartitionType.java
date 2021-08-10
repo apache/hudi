@@ -19,7 +19,8 @@
 package org.apache.hudi.metadata;
 
 public enum MetadataPartitionType {
-  FILES("files");
+  FILES("files"),
+  RANGE_INDEX("rangeIndex");
 
   private final String partitionPath;
 

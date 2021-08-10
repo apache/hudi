@@ -22,10 +22,13 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
+import java.util.Collection;
+import java.util.Map;
 
 /**
  * Interface that supports updating metadata for a given table, as actions complete.
@@ -41,6 +44,8 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
   void update(HoodieRestoreMetadata restoreMetadata, String instantTime);
 
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
+
+  void update(Map<String, Collection<HoodieColumnRangeMetadata<Comparable>>> fileToColumnRangeInfo, String instantTime);
 
   /**
    * Return the timestamp of the latest instant synced to the metadata table.

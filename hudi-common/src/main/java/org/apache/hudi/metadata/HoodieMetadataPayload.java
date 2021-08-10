@@ -20,6 +20,8 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.avro.model.HoodieRangeIndexInfo;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -36,6 +38,8 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,10 +69,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   // This can be an enum in the schema but Avro 1.8 has a bug - https://issues.apache.org/jira/browse/AVRO-1810
   private static final int PARTITION_LIST = 1;
   private static final int FILE_LIST = 2;
+  private static final int RANGE_INDEX = 3;
 
   private String key = null;
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
+  private HoodieRangeIndexInfo rangeIndexMetadata = null;
 
   public HoodieMetadataPayload(Option<GenericRecord> record) {
     if (record.isPresent()) {
@@ -83,6 +89,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           filesystemMetadata.put(k.toString(), new HoodieMetadataFileInfo((Long)v.get("size"), (Boolean)v.get("isDeleted")));
         });
       }
+
+      if (record.get().get("rangeIndexMetadata") != null) {
+        rangeIndexMetadata = (HoodieRangeIndexInfo) record.get().get("rangeIndexMetadata");
+      }
     }
   }
 
@@ -91,6 +101,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
   }
+
+  private HoodieMetadataPayload(String key, int type,
+                                Map<String, HoodieMetadataFileInfo> filesystemMetadata,
+                                HoodieRangeIndexInfo rangeIndexInfo) {
+    this.key = key;
+    this.type = type;
+    this.filesystemMetadata = filesystemMetadata;
+    this.rangeIndexMetadata = rangeIndexInfo;
+  }
+
 
   /**
    * Create and return a {@code HoodieMetadataPayload} to save list of partitions.
@@ -132,17 +152,21 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         "Cannot combine " + previousRecord.type  + " with " + type);
 
     Map<String, HoodieMetadataFileInfo> combinedFileInfo = null;
+    HoodieRangeIndexInfo combinedRangeInfo = null;
 
     switch (type) {
       case PARTITION_LIST:
       case FILE_LIST:
         combinedFileInfo = combineFilesystemMetadata(previousRecord);
         break;
+      case RANGE_INDEX:
+        combinedRangeInfo = combineRangeMetadata(previousRecord);
+        break;
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
 
-    return new HoodieMetadataPayload(key, type, combinedFileInfo);
+    return new HoodieMetadataPayload(key, type, combinedFileInfo, combinedRangeInfo);
   }
 
   @Override
@@ -158,7 +182,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata);
+    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, rangeIndexMetadata);
     return Option.of(record);
   }
 
@@ -222,6 +246,30 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     return combinedFileInfo;
+  }
+
+  private HoodieRangeIndexInfo combineRangeMetadata(HoodieMetadataPayload previousRecord) {
+    // files are immutable and range is not expected to change. TODO Figure out deletions
+    return previousRecord.rangeIndexMetadata;
+  }
+
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to save list of ranges for given set of files.
+   */
+  public static Stream<HoodieRecord<HoodieMetadataPayload>> createRangeRecords(String filePath, Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeInfo) {
+    return columnRangeInfo.stream().map(columnRange -> {
+      HoodieKey key = new HoodieKey(filePath + columnRange.getColumnName(), MetadataPartitionType.RANGE_INDEX.partitionPath());
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), RANGE_INDEX, Collections.emptyMap(),
+          HoodieRangeIndexInfo.newBuilder()
+              .setRangeHigh(columnRange.getMaxValue().toString()) //TODO: we are storing everything as string. add support for other primitive types
+              .setRangeLow(columnRange.getMaxValue().toString())
+              .setColumnName(columnRange.getColumnName())
+              .setFilePath(filePath)
+              .setIsDeleted(false)
+              .build());
+
+      return new HoodieRecord<>(key, payload);
+    });
   }
 
   @Override
