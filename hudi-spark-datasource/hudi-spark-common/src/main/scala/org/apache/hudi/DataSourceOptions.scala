@@ -252,7 +252,7 @@ object DataSourceWriteOptions {
    */
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.row.writer.enable")
-    .defaultValue("false")
+    .defaultValue("true")
     .withDocumentation("When set to true, will perform write operations directly using the spark native " +
       "`Row` representation, avoiding any additional conversion costs.")
 
