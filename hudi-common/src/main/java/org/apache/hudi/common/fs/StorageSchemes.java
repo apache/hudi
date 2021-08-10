@@ -60,7 +60,7 @@ public enum StorageSchemes {
   COS("cos", false),
   // Huawei Cloud Object Storage
   OBS("obs", false),
-  // Kingsoft Standard Storage Service
+  // Kingsoft Standard Storage
   KS3("ks3", false),
   // Baidu Object Storage
   BOS("bos", false);
