@@ -412,13 +412,15 @@ class TestMORDataSource extends HoodieClientTestBase {
     // First Operation:
     // Producing parquet files to three default partitions.
     // SNAPSHOT view on MOR table with parquet files only.
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val hoodieRecords1 = dataGen.generateInserts("001", 100)
+    val records1 = recordsToStrings(hoodieRecords1).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.PAYLOAD_CLASS.key, classOf[DefaultHoodieRecordPayload].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
@@ -484,6 +486,16 @@ class TestMORDataSource extends HoodieClientTestBase {
     verifyShow(hudiIncDF1)
     verifyShow(hudiIncDF2)
     verifyShow(hudiIncDF1Skipmerge)
+
+    val record3 = recordsToStrings(dataGen.generateUpdatesWithTS("003", hoodieRecords1, -1))
+    spark.read.json(spark.sparkContext.parallelize(record3, 2))
+      .write.format("org.apache.hudi").options(commonOpts)
+      .mode(SaveMode.Append).save(basePath)
+    val hudiSnapshotDF3 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .load(basePath + "/*/*/*/*")
+    assertEquals(100, hudiSnapshotDF3.count())
+    assertEquals(0, hudiSnapshotDF3.filter("rider = 'rider-003'").count())
   }
 
   @Test
