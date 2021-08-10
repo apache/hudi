@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -176,7 +177,11 @@ public class MergeOnReadInputFormat
       }
     } else if (!split.getBasePath().isPresent()) {
       // log files only
-      this.iterator = new LogFileOnlyIterator(getLogFileIterator(split));
+      if (conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)) {
+        this.iterator = new LogFileOnlyIterator(getUnMergedLogFileIterator(split));
+      } else {
+        this.iterator = new LogFileOnlyIterator(getLogFileIterator(split));
+      }
     } else if (split.getMergeType().equals(FlinkOptions.REALTIME_SKIP_MERGE)) {
       this.iterator = new SkipMergeIterator(
           getRequiredSchemaReader(split.getBasePath().get()),
@@ -190,6 +195,9 @@ public class MergeOnReadInputFormat
           new Schema.Parser().parse(this.tableState.getAvroSchema()),
           new Schema.Parser().parse(this.tableState.getRequiredAvroSchema()),
           this.requiredPos,
+          this.emitDelete,
+          this.conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED),
+          this.tableState.getOperationPos(),
           getFullSchemaReader(split.getBasePath().get()));
     } else {
       throw new HoodieException("Unable to select an Iterator to read the Hoodie MOR File Split for "
@@ -298,7 +306,7 @@ public class MergeOnReadInputFormat
     final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
     final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
         AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-    final HoodieMergedLogRecordScanner scanner = FormatUtils.scanLog(split, tableSchema, hadoopConf);
+    final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, hadoopConf, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
     final Iterator<String> logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
     final int[] pkOffset = tableState.getPkOffsetsInRequired();
     // flag saying whether the pk semantics has been dropped by user specified
@@ -335,18 +343,20 @@ public class MergeOnReadInputFormat
               }
               delete.setRowKind(RowKind.DELETE);
 
-              this.currentRecord =  delete;
+              this.currentRecord = delete;
               return true;
             }
             // skipping if the condition is unsatisfied
             // continue;
           } else {
+            final IndexedRecord avroRecord = curAvroRecord.get();
             GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
-                curAvroRecord.get(),
+                avroRecord,
                 requiredSchema,
                 requiredPos,
                 recordBuilder);
             currentRecord = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
+            FormatUtils.setRowKind(currentRecord, avroRecord, tableState.getOperationPos());
             return true;
           }
         }
@@ -361,6 +371,55 @@ public class MergeOnReadInputFormat
       @Override
       public void close() {
         scanner.close();
+      }
+    };
+  }
+
+  private ClosableIterator<RowData> getUnMergedLogFileIterator(MergeOnReadInputSplit split) {
+    final Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
+    final Schema requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
+    final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
+    final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
+        AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
+    final FormatUtils.BoundedMemoryRecords records = new FormatUtils.BoundedMemoryRecords(split, tableSchema, hadoopConf);
+    final Iterator<HoodieRecord<?>> recordsIterator = records.getRecordsIterator();
+
+    return new ClosableIterator<RowData>() {
+      private RowData currentRecord;
+
+      @Override
+      public boolean hasNext() {
+        while (recordsIterator.hasNext()) {
+          Option<IndexedRecord> curAvroRecord = null;
+          final HoodieRecord<?> hoodieRecord = recordsIterator.next();
+          try {
+            curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
+          } catch (IOException e) {
+            throw new HoodieException("Get avro insert value error for key: " + hoodieRecord.getRecordKey(), e);
+          }
+          if (curAvroRecord.isPresent()) {
+            final IndexedRecord avroRecord = curAvroRecord.get();
+            GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
+                avroRecord,
+                requiredSchema,
+                requiredPos,
+                recordBuilder);
+            currentRecord = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
+            FormatUtils.setRowKind(currentRecord, avroRecord, tableState.getOperationPos());
+            return true;
+          }
+        }
+        return false;
+      }
+
+      @Override
+      public RowData next() {
+        return currentRecord;
+      }
+
+      @Override
+      public void close() {
+        records.close();
       }
     };
   }
@@ -544,6 +603,8 @@ public class MergeOnReadInputFormat
     private final Schema tableSchema;
     private final Schema requiredSchema;
     private final int[] requiredPos;
+    private final boolean emitDelete;
+    private final int operationPos;
     private final RowDataToAvroConverters.RowDataToAvroConverter rowDataToAvroConverter;
     private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
     private final GenericRecordBuilder recordBuilder;
@@ -557,7 +618,7 @@ public class MergeOnReadInputFormat
     // refactor it out once FLINK-22370 is resolved.
     private boolean readLogs = false;
 
-    private Set<String> keyToSkip = new HashSet<>();
+    private final Set<String> keyToSkip = new HashSet<>();
 
     private RowData currentRecord;
 
@@ -569,13 +630,18 @@ public class MergeOnReadInputFormat
         Schema tableSchema,
         Schema requiredSchema,
         int[] requiredPos,
+        boolean emitDelete,
+        boolean withOperationField,
+        int operationPos,
         ParquetColumnarRowSplitReader reader) { // the reader should be with full schema
       this.tableSchema = tableSchema;
       this.reader = reader;
-      this.scanner = FormatUtils.scanLog(split, tableSchema, hadoopConf);
+      this.scanner = FormatUtils.logScanner(split, tableSchema, hadoopConf, withOperationField);
       this.logKeysIterator = scanner.getRecords().keySet().iterator();
       this.requiredSchema = requiredSchema;
       this.requiredPos = requiredPos;
+      this.emitDelete = emitDelete;
+      this.operationPos = operationPos;
       this.recordBuilder = new GenericRecordBuilder(requiredSchema);
       this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableRowType);
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
@@ -602,12 +668,13 @@ public class MergeOnReadInputFormat
             // deleted
             continue;
           } else {
-            GenericRecord record = buildAvroRecordBySchema(
+            GenericRecord avroRecord = buildAvroRecordBySchema(
                 mergedAvroRecord.get(),
                 requiredSchema,
                 requiredPos,
                 recordBuilder);
-            this.currentRecord = (RowData) avroToRowDataConverter.convert(record);
+            this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
+            FormatUtils.setRowKind(this.currentRecord, mergedAvroRecord.get(), this.operationPos);
             return false;
           }
         }
@@ -620,21 +687,29 @@ public class MergeOnReadInputFormat
       while (logKeysIterator.hasNext()) {
         final String curKey = logKeysIterator.next();
         if (!keyToSkip.contains(curKey)) {
-          Option<IndexedRecord> insertAvroRecord =
-              scanner.getRecords().get(curKey).getData().getInsertValue(tableSchema);
+          Option<IndexedRecord> insertAvroRecord = getInsertValue(curKey);
           if (insertAvroRecord.isPresent()) {
             // the record is a DELETE if insertAvroRecord not present, skipping
-            GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
+            GenericRecord avroRecord = buildAvroRecordBySchema(
                 insertAvroRecord.get(),
                 requiredSchema,
                 requiredPos,
                 recordBuilder);
-            this.currentRecord = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
+            this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
+            FormatUtils.setRowKind(this.currentRecord, insertAvroRecord.get(), this.operationPos);
             return false;
           }
         }
       }
       return true;
+    }
+
+    private Option<IndexedRecord> getInsertValue(String curKey) throws IOException {
+      final HoodieRecord<?> record = scanner.getRecords().get(curKey);
+      if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
+        return Option.empty();
+      }
+      return record.getData().getInsertValue(tableSchema);
     }
 
     @Override
@@ -655,8 +730,12 @@ public class MergeOnReadInputFormat
     private Option<IndexedRecord> mergeRowWithLog(
         RowData curRow,
         String curKey) throws IOException {
+      final HoodieRecord<?> record = scanner.getRecords().get(curKey);
+      if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
+        return Option.empty();
+      }
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      return scanner.getRecords().get(curKey).getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
+      return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
     }
   }
 

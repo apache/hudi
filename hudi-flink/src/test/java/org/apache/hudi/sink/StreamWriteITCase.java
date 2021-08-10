@@ -38,9 +38,9 @@ import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
+import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.sink.transform.Transformer;
-import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
@@ -84,6 +84,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test for Flink Hoodie stream sink.
@@ -200,7 +202,9 @@ public class StreamWriteITCase extends TestLogger {
     // To compute the compaction instant time and do compaction.
     String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
     HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
-    writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+    boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+
+    assertTrue(scheduled, "The compaction plan should be scheduled");
 
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
     // generate compaction plan
@@ -209,8 +213,10 @@ public class StreamWriteITCase extends TestLogger {
         table.getMetaClient(), compactionInstantTime);
 
     HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+    // Mark instant as compaction inflight
+    table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
-    env.addSource(new CompactionPlanSourceFunction(table, instant, compactionPlan, compactionInstantTime))
+    env.addSource(new CompactionPlanSourceFunction(compactionPlan, compactionInstantTime))
         .name("compaction_source")
         .uid("uid_compaction_source")
         .rebalance()

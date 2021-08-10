@@ -203,7 +203,7 @@ public class BootstrapFunction<I, O extends HoodieRecord>
                 .filter(logFile -> isValidFile(logFile.getFileStatus()))
                 .map(logFile -> logFile.getPath().toString())
                 .collect(toList());
-        HoodieMergedLogRecordScanner scanner = FormatUtils.scanLog(logPaths, schema, latestCommitTime.get().getTimestamp(),
+        HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(logPaths, schema, latestCommitTime.get().getTimestamp(),
             writeConfig, hadoopConf);
 
         try {

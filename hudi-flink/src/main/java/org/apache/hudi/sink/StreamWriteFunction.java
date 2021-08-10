@@ -21,6 +21,7 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -360,23 +361,26 @@ public class StreamWriteFunction<K, I, O>
     private final String key; // record key
     private final String instant; // 'U' or 'I'
     private final HoodieRecordPayload<?> data; // record payload
+    private final HoodieOperation operation; // operation
 
-    private DataItem(String key, String instant, HoodieRecordPayload<?> data) {
+    private DataItem(String key, String instant, HoodieRecordPayload<?> data, HoodieOperation operation) {
       this.key = key;
       this.instant = instant;
       this.data = data;
+      this.operation = operation;
     }
 
     public static DataItem fromHoodieRecord(HoodieRecord<?> record) {
       return new DataItem(
           record.getRecordKey(),
           record.getCurrentLocation().getInstantTime(),
-          record.getData());
+          record.getData(),
+          record.getOperation());
     }
 
     public HoodieRecord<?> toHoodieRecord(String partitionPath) {
       HoodieKey hoodieKey = new HoodieKey(this.key, partitionPath);
-      HoodieRecord<?> record = new HoodieRecord<>(hoodieKey, data);
+      HoodieRecord<?> record = new HoodieRecord<>(hoodieKey, data, operation);
       HoodieRecordLocation loc = new HoodieRecordLocation(instant, null);
       record.setCurrentLocation(loc);
       return record;
@@ -417,7 +421,7 @@ public class StreamWriteFunction<K, I, O>
     public void preWrite(List<HoodieRecord> records) {
       // rewrite the first record with expected fileID
       HoodieRecord<?> first = records.get(0);
-      HoodieRecord<?> record = new HoodieRecord<>(first.getKey(), first.getData());
+      HoodieRecord<?> record = new HoodieRecord<>(first.getKey(), first.getData(), first.getOperation());
       HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
       record.setCurrentLocation(newLoc);
 

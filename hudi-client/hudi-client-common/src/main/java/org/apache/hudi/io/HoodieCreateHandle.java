@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -127,6 +128,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
   @Override
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord) {
     Option recordMetadata = record.getData().getMetadata();
+    if (HoodieOperation.isDelete(record.getOperation())) {
+      avroRecord = Option.empty();
+    }
     try {
       if (avroRecord.isPresent()) {
         if (avroRecord.get().equals(IGNORE_RECORD)) {

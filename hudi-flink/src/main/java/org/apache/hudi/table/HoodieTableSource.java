@@ -37,6 +37,7 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -196,7 +197,12 @@ public class HoodieTableSource implements
 
   @Override
   public ChangelogMode getChangelogMode() {
-    return ChangelogMode.insertOnly();
+    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
+        && !conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)
+        ? ChangelogModes.FULL
+        // when all the changes are persisted or read as batch,
+        // use INSERT mode.
+        : ChangelogMode.insertOnly();
   }
 
   @Override
@@ -309,7 +315,7 @@ public class HoodieTableSource implements
       return new CollectionInputFormat<>(Collections.emptyList(), null);
     }
 
-    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
     final Schema tableAvroSchema;
     try {
       tableAvroSchema = schemaUtil.getTableAvroSchema();
