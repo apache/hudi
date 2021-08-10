@@ -19,12 +19,14 @@ package org.apache.spark.sql.hudi
 
 import java.io.File
 
+import org.apache.log4j.Level
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
 class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
+  org.apache.log4j.Logger.getRootLogger.setLevel(Level.WARN)
 
   private lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()
