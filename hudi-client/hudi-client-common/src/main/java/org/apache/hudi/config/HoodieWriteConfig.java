@@ -108,7 +108,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS = ConfigProperty
       .key("hoodie.rollback.using.markers")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned off by default.");
 

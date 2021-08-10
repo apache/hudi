@@ -203,7 +203,7 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).withRollbackUsingMarkers(false).build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
 
@@ -292,7 +292,7 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build()).build();
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build()).withRollbackUsingMarkers(false).build();
 
     final String commitTime4 = "20160506030621";
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
@@ -308,7 +308,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
     // Set Failed Writes rollback to EAGER
     config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).withRollbackUsingMarkers(false).build();
     final String commitTime5 = "20160506030631";
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       client.startCommitWithTime(commitTime5);

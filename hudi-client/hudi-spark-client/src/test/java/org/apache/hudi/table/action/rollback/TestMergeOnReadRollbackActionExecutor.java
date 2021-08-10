@@ -163,7 +163,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   @Test
   public void testRollbackWhenFirstCommitFail() throws Exception {
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withRollbackUsingMarkers(false).build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       client.startCommitWithTime("001");
