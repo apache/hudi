@@ -71,7 +71,7 @@ public class BulkInsertWriterHelper {
     this.taskPartitionId = taskPartitionId;
     this.taskId = taskId;
     this.taskEpochId = taskEpochId;
-    this.rowType = addMetadataFields(rowType); // patch up with metadata fields
+    this.rowType = addMetadataFields(rowType, writeConfig.allowOperationMetadataField()); // patch up with metadata fields
     this.arePartitionRecordsSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_BY_PARTITION);
     this.fileIdPrefix = UUID.randomUUID().toString();
     this.keyGen = RowDataKeyGen.instance(conf, rowType);
@@ -141,7 +141,7 @@ public class BulkInsertWriterHelper {
   /**
    * Adds the Hoodie metadata fields to the given row type.
    */
-  private static RowType addMetadataFields(RowType rowType) {
+  private static RowType addMetadataFields(RowType rowType, boolean withOperationField) {
     List<RowType.RowField> mergedFields = new ArrayList<>();
 
     LogicalType metadataFieldType = DataTypes.STRING().getLogicalType();
@@ -155,15 +155,19 @@ public class BulkInsertWriterHelper {
         new RowType.RowField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, metadataFieldType, "partition path");
     RowType.RowField fileNameField =
         new RowType.RowField(HoodieRecord.FILENAME_METADATA_FIELD, metadataFieldType, "field name");
-    RowType.RowField operationField =
-        new RowType.RowField(HoodieRecord.OPERATION_METADATA_FIELD, metadataFieldType, "operation");
 
     mergedFields.add(commitTimeField);
     mergedFields.add(commitSeqnoField);
     mergedFields.add(recordKeyField);
     mergedFields.add(partitionPathField);
     mergedFields.add(fileNameField);
-    mergedFields.add(operationField);
+
+    if (withOperationField) {
+      RowType.RowField operationField =
+          new RowType.RowField(HoodieRecord.OPERATION_METADATA_FIELD, metadataFieldType, "operation");
+      mergedFields.add(operationField);
+    }
+
     mergedFields.addAll(rowType.getFields());
 
     return new RowType(false, mergedFields);
