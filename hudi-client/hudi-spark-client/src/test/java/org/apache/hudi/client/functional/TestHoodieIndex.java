@@ -106,6 +106,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         : getPropertiesForKeyGen());
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
+        .withRollbackUsingMarkers(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .build()).withAutoCommit(false).build();
     writeClient = getHoodieWriteClient(config);

@@ -346,7 +346,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
       // Write 1 (Bulk insert)
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -456,7 +457,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
       // Initialize table with metadata
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -466,7 +468,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       validateMetadata(client);
     }
     String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, false, false).withRollbackUsingMarkers(false).build())) {
       // Commit with metadata disabled
       client.startCommitWithTime(newCommitTime);
       List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, 10);
@@ -475,7 +478,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       client.rollback(newCommitTime);
     }
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
       assertFalse(metadata(client).isInSync());
       client.syncTableMetadata();
       validateMetadata(client);
@@ -699,7 +703,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     // TESTCASE: If commit on the metadata table succeeds but fails on the dataset, then on next init the metadata table
     // should be rolled back to last valid commit.
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build(), true)) {
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
@@ -720,7 +725,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
           commitInstantFileName), false));
     }
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build(), true)) {
       String newCommitTime = client.startCommit();
       // Next insert
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 5);

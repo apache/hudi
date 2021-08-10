@@ -88,7 +88,8 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
         .withBaseFilesInPartitions(partitionAndFileId);
     // generate two rollback
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withRollbackUsingMarkers(false).build();
 
     try (AbstractHoodieWriteClient client = getHoodieWriteClient(config)) {
       // Rollback inflight commit3 and commit2
