@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -134,9 +135,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
       // done when a delete (empty payload) is encountered before or after an insert/update.
 
-      // Always use the natural order now.
-      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(records.get(key).getData());
-      records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, hoodieRecord.getOperation()));
+      HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
+      HoodieRecordPayload oldValue = oldRecord.getData();
+      HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue);
+      boolean choosePrev = combinedValue.equals(oldValue);
+      HoodieOperation operation = choosePrev ? oldRecord.getOperation() : hoodieRecord.getOperation();
+      records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
     } else {
       // Put the record as is
       records.put(key, hoodieRecord);
