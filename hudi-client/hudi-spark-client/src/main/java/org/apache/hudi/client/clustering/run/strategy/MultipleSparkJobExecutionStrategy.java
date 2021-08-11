@@ -176,6 +176,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
               tableConfig.getPayloadClass(),
+              tableConfig.getPreCombineField(),
               tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
                   tableConfig.getPartitionFieldProp()))));
         } catch (IOException e) {
