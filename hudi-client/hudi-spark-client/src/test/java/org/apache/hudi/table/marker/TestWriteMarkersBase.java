@@ -47,7 +47,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   protected JavaSparkContext jsc;
   protected HoodieSparkEngineContext context;
 
-  private void createSomeMarkerFiles() {
+  private void createSomeMarkers() {
     writeMarkers.create("2020/06/01", "file1", IOType.MERGE);
     writeMarkers.create("2020/06/02", "file2", IOType.APPEND);
     writeMarkers.create("2020/06/03", "file3", IOType.CREATE);
@@ -68,7 +68,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   @Test
   public void testCreation() throws Exception {
     // when
-    createSomeMarkerFiles();
+    createSomeMarkers();
 
     // then
     assertTrue(fs.exists(markerFolderPath));
@@ -97,7 +97,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   @Test
   public void testDataPathsWhenCreatingOrMerging() throws IOException {
     // add markfiles
-    createSomeMarkerFiles();
+    createSomeMarkers();
     // add invalid file
     createInvalidFile("2020/06/01", "invalid_file3");
     int fileSize = FileSystemTestUtils.listRecursive(fs, markerFolderPath).size();
@@ -113,7 +113,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   @Test
   public void testAllMarkerPaths() throws IOException {
     // given
-    createSomeMarkerFiles();
+    createSomeMarkers();
 
     // then
     assertIterableEquals(CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",

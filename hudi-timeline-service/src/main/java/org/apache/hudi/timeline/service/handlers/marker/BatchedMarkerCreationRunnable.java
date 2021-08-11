@@ -31,9 +31,9 @@ import java.util.List;
 public class BatchedMarkerCreationRunnable implements Runnable {
   private static final Logger LOG = LogManager.getLogger(BatchedMarkerCreationRunnable.class);
 
-  private final List<MarkerCreationRequestContext> requestContextList;
+  private final List<BatchedMarkerCreationContext> requestContextList;
 
-  public BatchedMarkerCreationRunnable(List<MarkerCreationRequestContext> requestContextList) {
+  public BatchedMarkerCreationRunnable(List<BatchedMarkerCreationContext> requestContextList) {
     this.requestContextList = requestContextList;
   }
 
@@ -42,7 +42,7 @@ public class BatchedMarkerCreationRunnable implements Runnable {
     LOG.debug("Start processing create marker requests");
     HoodieTimer timer = new HoodieTimer().startTimer();
 
-    for (MarkerCreationRequestContext requestContext : requestContextList) {
+    for (BatchedMarkerCreationContext requestContext : requestContextList) {
       requestContext.getMarkerDirState().processMarkerCreationRequests(
           requestContext.getFutures(), requestContext.getFileIndex());
     }

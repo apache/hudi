@@ -23,7 +23,7 @@ import java.util.List;
 /**
  * Input of batch processing of marker creation requests for a single marker directory.
  */
-public class MarkerCreationRequestContext {
+public class BatchedMarkerCreationContext {
   private final String markerDir;
   private final MarkerDirState markerDirState;
   // List of marker creation futures to process
@@ -31,7 +31,7 @@ public class MarkerCreationRequestContext {
   // File index to use to write markers
   private final int fileIndex;
 
-  public MarkerCreationRequestContext(String markerDir, MarkerDirState markerDirState,
+  public BatchedMarkerCreationContext(String markerDir, MarkerDirState markerDirState,
                                       List<MarkerCreationFuture> futures, int fileIndex) {
     this.markerDir = markerDir;
     this.markerDirState = markerDirState;

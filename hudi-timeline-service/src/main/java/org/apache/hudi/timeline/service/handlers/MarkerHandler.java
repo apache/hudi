@@ -43,7 +43,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /**
@@ -59,10 +58,10 @@ import java.util.stream.Collectors;
  * time, a marker file is touched by at most one thread to guarantee consistency.
  * Below is an example of running batch processing threads.
  *
- *           |-----| batch interval
- * Thread 1  |-------------------------->| writing to MARKERS1
- * Thread 2        |-------------------------->| writing to MARKERS2
- * Thread 3               |-------------------------->| writing to MARKERS3
+ *                  |-----| batch interval
+ * Worker Thread 1  |-------------------------->| writing to MARKERS0
+ * Worker Thread 2        |-------------------------->| writing to MARKERS1
+ * Worker Thread 3               |-------------------------->| writing to MARKERS2
  */
 public class MarkerHandler extends Handler {
   private static final Logger LOG = LogManager.getLogger(MarkerHandler.class);

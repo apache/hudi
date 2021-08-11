@@ -62,7 +62,7 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
    */
   @Override
   public void run() {
-    List<MarkerCreationRequestContext> requestContextList = new ArrayList<>();
+    List<BatchedMarkerCreationContext> requestContextList = new ArrayList<>();
 
     // Only fetch pending marker creation requests that can be processed,
     // i.e., that markers can be written to a underlying file
@@ -79,7 +79,7 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
         continue;
       }
       requestContextList.add(
-          new MarkerCreationRequestContext(markerDir, markerDirState, futures, fileIndex.get()));
+          new BatchedMarkerCreationContext(markerDir, markerDirState, futures, fileIndex.get()));
     }
 
     if (requestContextList.size() > 0) {

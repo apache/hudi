@@ -62,35 +62,35 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
       commits.remove(instantTime);
     }
     for (String commit : commits) {
-      // for every pending commit, delete old marker files and re-create marker files in new format
-      recreateMarkerFiles(commit, table, context, config.getMarkersType(), config.getMarkersDeleteParallelism());
+      // for every pending commit, delete old markers and re-create markers in new format
+      recreateMarkers(commit, table, context, config.getMarkersType(), config.getMarkersDeleteParallelism());
     }
   }
 
   /**
-   * Recreate marker files in new format.
-   * Step1: Delete existing marker files
+   * Recreate markers in new format.
+   * Step1: Delete existing markers
    * Step2: Collect all rollback file info.
-   * Step3: recreate marker files for all interested files.
+   * Step3: recreate markers for all interested files.
    *
-   * @param commitInstantTime instant of interest for which marker files need to be recreated.
+   * @param commitInstantTime instant of interest for which markers need to be recreated.
    * @param table instance of {@link HoodieFlinkTable} to use
    * @param context instance of {@link HoodieEngineContext} to use
    * @param markerType marker type to use
    * @throws HoodieRollbackException on any exception during upgrade.
    */
-  private static void recreateMarkerFiles(final String commitInstantTime,
-                                          HoodieFlinkTable table,
-                                          HoodieEngineContext context,
-                                          MarkerType markerType,
-                                          int parallelism) throws HoodieRollbackException {
+  private static void recreateMarkers(final String commitInstantTime,
+                                      HoodieFlinkTable table,
+                                      HoodieEngineContext context,
+                                      MarkerType markerType,
+                                      int parallelism) throws HoodieRollbackException {
     try {
       // fetch hoodie instant
       Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
           .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
           .findFirst());
       if (commitInstantOpt.isPresent()) {
-        // delete existing marker files
+        // delete existing markers
         WriteMarkers writeMarkers = WriteMarkersFactory.get(markerType, table, commitInstantTime);
         writeMarkers.quietDeleteMarkerDir(context, parallelism);
 
@@ -104,7 +104,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
         List<HoodieRollbackStat> rollbackStats = new ListingBasedRollbackHelper(table.getMetaClient(), table.getConfig())
             .collectRollbackStats(context, commitInstantOpt.get(), rollbackRequests);
 
-        // recreate marker files adhering to marker based rollback
+        // recreate markers adhering to marker based rollback
         for (HoodieRollbackStat rollbackStat : rollbackStats) {
           for (String path : rollbackStat.getSuccessDeleteFiles()) {
             String dataFileName = path.substring(path.lastIndexOf("/") + 1);

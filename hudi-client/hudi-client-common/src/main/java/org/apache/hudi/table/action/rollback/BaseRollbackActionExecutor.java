@@ -111,7 +111,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       finishRollback(rollbackMetadata);
     }
 
-    // Finally, remove the marker files post rollback.
+    // Finally, remove the markers post rollback.
     WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp())
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
 

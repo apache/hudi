@@ -25,7 +25,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * A factory to generate {@code MarkerFiles} instance based on the {@code MarkerType}.
+ * A factory to generate {@code WriteMarkers} instance based on the {@code MarkerType}.
  */
 public class WriteMarkersFactory {
   private static final Logger LOG = LogManager.getLogger(WriteMarkersFactory.class);
@@ -34,7 +34,7 @@ public class WriteMarkersFactory {
    * @param markerType the type of markers to use
    * @param table {@code HoodieTable} instance
    * @param instantTime current instant time
-   * @return  {@code MarkerFiles} instance based on the {@code MarkerIOMode}
+   * @return  {@code WriteMarkers} instance based on the {@code MarkerType}
    */
   public static WriteMarkers get(MarkerType markerType, HoodieTable table, String instantTime) {
     LOG.debug("Instantiated MarkerFiles with marker type: " + markerType.toString());

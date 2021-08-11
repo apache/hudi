@@ -69,7 +69,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
     // In some rare cases, the task was pulled up again with same write file name,
     // for e.g, reuse the small log files from last commit instant.
 
-    // Just skip the marker file creation if it already exists, the new data would append to
+    // Just skip the marker creation if it already exists, the new data would append to
     // the file directly.
     writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }

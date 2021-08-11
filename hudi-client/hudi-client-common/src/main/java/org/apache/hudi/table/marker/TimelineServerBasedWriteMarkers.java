@@ -50,7 +50,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PAT
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
 
 /**
- * Marker file operations of using timeline server as a proxy to create and delete marker files.
+ * Marker operations of using timeline server as a proxy to create and delete markers.
  * Each data file has a corresponding marker entry, which is stored in a limited number of
  * underlying files maintained by the timeline server (each file contains multiple marker
  * entries).

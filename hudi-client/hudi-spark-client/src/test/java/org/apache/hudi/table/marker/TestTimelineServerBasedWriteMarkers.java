@@ -94,7 +94,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
 
   @Override
   void verifyMarkersInFileSystem() throws IOException {
-    List<String> markerFiles = FileSystemTestUtils.listRecursive(fs, markerFolderPath)
+    List<String> allMarkers = FileSystemTestUtils.listRecursive(fs, markerFolderPath)
         .stream().filter(status -> status.getPath().getName().contains(MarkerDirState.MARKERS_FILENAME_PREFIX))
         .flatMap(status -> {
           // Read all markers stored in each marker file maintained by the timeline service
@@ -115,12 +115,12 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
         })
         .sorted()
         .collect(Collectors.toList());
-    assertEquals(3, markerFiles.size());
+    assertEquals(3, allMarkers.size());
     assertIterableEquals(CollectionUtils.createImmutableList(
         "2020/06/01/file1.marker.MERGE",
         "2020/06/02/file2.marker.APPEND",
         "2020/06/03/file3.marker.CREATE"),
-        markerFiles);
+        allMarkers);
   }
 
   /**

@@ -99,6 +99,7 @@ public class MarkerDirState implements Serializable {
     this.parallelism = parallelism;
     this.threadUseStatus =
         Stream.generate(() -> false).limit(markerBatchNumThreads).collect(Collectors.toList());
+    // Lazy initialization of markers by reading MARKERS* files on the file system
     syncMarkersFromFileSystem();
   }
 
@@ -138,7 +139,7 @@ public class MarkerDirState implements Serializable {
    */
   public Option<Integer> getNextFileIndexToUse() {
     int fileIndex = -1;
-    synchronized (threadUseStatus) {
+    synchronized (markerCreationProcessingLock) {
       // Scans for the next free file index to use after {@code lastFileIndexUsed}
       for (int i = 0; i < threadUseStatus.size(); i++) {
         int index = (lastFileIndexUsed + 1 + i) % threadUseStatus.size();
@@ -163,7 +164,7 @@ public class MarkerDirState implements Serializable {
    * @param fileIndex file index
    */
   public void markFileAsAvailable(int fileIndex) {
-    synchronized (threadUseStatus) {
+    synchronized (markerCreationProcessingLock) {
       threadUseStatus.set(fileIndex, false);
     }
   }
