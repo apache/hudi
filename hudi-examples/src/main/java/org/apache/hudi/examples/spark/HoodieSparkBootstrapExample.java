@@ -39,19 +39,15 @@ public class HoodieSparkBootstrapExample {
 
 
   public static void main(String[] args) throws Exception {
-    if (args.length < 3) {
+    if (args.length < 5) {
       System.err.println("Usage: HoodieWriteClientExample <tablePath> <tableName>");
       System.exit(1);
     }
-    String tablePath = args[0];
+    String recordKey = args[0];
     String tableName = args[1];
-    String fileFormat = args[2];
-    String tableTy = args[3];
-
-    if (tableTy.equals("MOR"))
-      tableType = HoodieTableType.MERGE_ON_READ.name();
-    else
-      tableType = HoodieTableType.COPY_ON_WRITE.name();
+    String partitionPath = args[2];
+    String preCombineField = args[3];
+    String basePath = args[4];
 
     SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
 
@@ -62,16 +58,15 @@ public class HoodieSparkBootstrapExample {
             .enableHiveSupport()
             .getOrCreate();
 
-
     Dataset df =  spark.emptyDataFrame();
 
     df.write().format("hudi").option(HoodieWriteConfig.TABLE_NAME.key(), tableName)
             .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
-            .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "sno")
-            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "observationdate")
-            .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "observationdate")
+            .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey)
+            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionPath)
+            .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), preCombineField)
             .option(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.key(), HoodieFileFormat.ORC.name())
-            .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key(), "/user/hive/warehouse/"+tableName)
+            .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key(), basePath)
             .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key(), NonpartitionedKeyGenerator.class.getCanonicalName())
             .mode(SaveMode.Overwrite).save("/hudi/"+tableName);
 
