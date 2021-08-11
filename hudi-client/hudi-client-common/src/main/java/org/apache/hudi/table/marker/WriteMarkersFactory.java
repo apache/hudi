@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.marker;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -42,6 +44,12 @@ public class WriteMarkersFactory {
       case DIRECT:
         return new DirectWriteMarkers(table, instantTime);
       case TIMELINE_SERVER_BASED:
+        String basePath = table.getMetaClient().getBasePath();
+        if (StorageSchemes.HDFS.getScheme().equals(
+            FSUtils.getFs(basePath, table.getContext().getHadoopConf().newCopy()).getScheme())) {
+          throw new HoodieException("Timeline-server-based markers are not supported for HDFS: "
+              + "base path " + basePath);
+        }
         return new TimelineServerBasedWriteMarkers(table, instantTime);
       default:
         throw new HoodieException("The marker type \"" + markerType.name() + "\" is not supported.");
