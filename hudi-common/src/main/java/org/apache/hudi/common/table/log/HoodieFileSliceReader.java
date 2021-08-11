@@ -40,13 +40,13 @@ public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Ite
 
   public static <R extends IndexedRecord, T> HoodieFileSliceReader getFileSliceReader(
       HoodieFileReader<R> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass,
-      Option<Pair<String,String>> simpleKeyGenFieldsOpt) throws IOException {
+      String preCombineField, Option<Pair<String,String>> simpleKeyGenFieldsOpt) throws IOException {
     Iterator<R> baseIterator = baseFileReader.getRecordIterator(schema);
     while (baseIterator.hasNext()) {
       GenericRecord record = (GenericRecord) baseIterator.next();
       HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = simpleKeyGenFieldsOpt.isPresent()
-          ? SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, simpleKeyGenFieldsOpt.get(), scanner.isWithOperationField())
-          : SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, scanner.isWithOperationField());
+          ? SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), scanner.isWithOperationField())
+          : SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, preCombineField, scanner.isWithOperationField());
       scanner.processNextRecord(hoodieRecord);
     }
     return new HoodieFileSliceReader(scanner.iterator());

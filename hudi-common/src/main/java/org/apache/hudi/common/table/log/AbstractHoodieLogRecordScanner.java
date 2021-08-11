@@ -83,6 +83,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
+  // preCombine field
+  private final String preCombineField;
   // simple key gen fields
   private Option<Pair<String, String>> simpleKeyGenFields = Option.empty();
   // Log File Paths
@@ -123,6 +125,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
+    this.preCombineField = this.hoodieTableMetaClient.getTableConfig().getPreCombineField();
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     if (!tableConfig.populateMetaFields()) {
       this.simpleKeyGenFields = Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
@@ -316,9 +319,9 @@ public abstract class AbstractHoodieLogRecordScanner {
 
   protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
     if (!simpleKeyGenFields.isPresent()) {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.withOperationField);
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.preCombineField, this.withOperationField);
     } else {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.simpleKeyGenFields.get(), this.withOperationField);
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.preCombineField, this.simpleKeyGenFields.get(), this.withOperationField);
     }
   }
 
