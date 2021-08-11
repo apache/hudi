@@ -58,6 +58,7 @@ import java.io.FileFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -254,6 +255,29 @@ public class TestData {
       // DELETE
       deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
           TimestampData.fromEpochMillis(5), StringData.fromString("par1"))
+  );
+
+  public static List<RowData> DATA_SET_SINGLE_INSERT = Collections.singletonList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+
+  public static List<RowData> DATA_SET_DISORDER_UPDATE_DELETE = Arrays.asList(
+      // DISORDER UPDATE
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 21,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 20,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 20,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 21,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      // DISORDER DELETE
+      deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
   );
 
   /**
