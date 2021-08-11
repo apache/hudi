@@ -22,13 +22,11 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.client.ReplaceArchivalHelper;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -40,7 +38,6 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -303,11 +300,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
-        // TODO HUDI-1518 Cleaner now takes care of removing replaced file groups. This call to deleteReplacedFileGroups can be removed.
-        boolean deleteSuccess = deleteReplacedFileGroups(context, hoodieInstant);
-        if (!deleteSuccess) {
-          LOG.warn("Unable to delete file(s) for " + hoodieInstant.getFileName() + ", replaced files possibly deleted by cleaner");
-        }
         try {
           deleteAnyLeftOverMarkers(context, hoodieInstant);
           records.add(convertToAvroRecord(hoodieInstant));
@@ -331,29 +323,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instant.getTimestamp());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
       LOG.info("Cleaned up left over marker directory for instant :" + instant);
-    }
-  }
-
-  private boolean deleteReplacedFileGroups(HoodieEngineContext context, HoodieInstant instant) {
-    if (!instant.isCompleted() || !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
-      // only delete files for completed replace instants
-      return true;
-    }
-
-    TableFileSystemView fileSystemView = this.table.getFileSystemView();
-    List<String> replacedPartitions = getReplacedPartitions(instant);
-    return ReplaceArchivalHelper.deleteReplacedFileGroups(context, metaClient, fileSystemView, instant, replacedPartitions);
-  }
-
-  private List<String> getReplacedPartitions(HoodieInstant instant) {
-    try {
-      HoodieReplaceCommitMetadata metadata = HoodieReplaceCommitMetadata.fromBytes(
-          metaClient.getActiveTimeline().getInstantDetails(instant).get(),
-          HoodieReplaceCommitMetadata.class);
-
-      return new ArrayList<>(metadata.getPartitionToReplaceFileIds().keySet());
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to archive because cannot delete replace files", e);
     }
   }
 
