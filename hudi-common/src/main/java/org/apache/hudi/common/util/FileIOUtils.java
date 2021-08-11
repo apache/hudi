@@ -18,7 +18,11 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -34,7 +38,7 @@ import java.util.Comparator;
  * Bunch of utility methods for working with files and byte streams.
  */
 public class FileIOUtils {
-
+  public static final Logger LOG = LogManager.getLogger(FileIOUtils.class);
   public static final long KB = 1024;
 
   public static void deleteDirectory(File directory) throws IOException {
@@ -90,5 +94,21 @@ public class FileIOUtils {
     out.println(str);
     out.flush();
     out.close();
+  }
+
+  /**
+   * Closes {@code Closeable} quietly.
+   *
+   * @param closeable {@code Closeable} to close
+   */
+  public static void closeQuietly(Closeable closeable) {
+    if (closeable == null) {
+      return;
+    }
+    try {
+      closeable.close();
+    } catch (IOException e) {
+      LOG.warn("IOException during close", e);
+    }
   }
 }

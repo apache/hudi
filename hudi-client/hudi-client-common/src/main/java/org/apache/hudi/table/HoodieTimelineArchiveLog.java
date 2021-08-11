@@ -49,6 +49,9 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -306,7 +309,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
           LOG.warn("Unable to delete file(s) for " + hoodieInstant.getFileName() + ", replaced files possibly deleted by cleaner");
         }
         try {
-          deleteAnyLeftOverMarkerFiles(context, hoodieInstant);
+          deleteAnyLeftOverMarkers(context, hoodieInstant);
           records.add(convertToAvroRecord(hoodieInstant));
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
             writeToFile(wrapperSchema, records);
@@ -324,9 +327,9 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  private void deleteAnyLeftOverMarkerFiles(HoodieEngineContext context, HoodieInstant instant) {
-    MarkerFiles markerFiles = new MarkerFiles(table, instant.getTimestamp());
-    if (markerFiles.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
+  private void deleteAnyLeftOverMarkers(HoodieEngineContext context, HoodieInstant instant) {
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instant.getTimestamp());
+    if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
       LOG.info("Cleaned up left over marker directory for instant :" + instant);
     }
   }
