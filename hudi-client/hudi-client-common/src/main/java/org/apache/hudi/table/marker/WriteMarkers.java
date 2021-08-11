@@ -35,20 +35,20 @@ import java.io.Serializable;
 import java.util.Set;
 
 /**
- * Operates on marker files for a given write action (commit, delta commit, compaction).
+ * Operates on markers for a given write action (commit, delta commit, compaction).
  *
- * This abstract class provides abstract methods of different marker file operations, so that
- * different marker file mechanism can be implemented.
+ * This abstract class provides abstract methods of different marker operations, so that
+ * different marker write mechanism can be implemented.
  */
-public abstract class MarkerFiles implements Serializable {
+public abstract class WriteMarkers implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(MarkerFiles.class);
+  private static final Logger LOG = LogManager.getLogger(WriteMarkers.class);
 
   protected final String basePath;
   protected final transient Path markerDirPath;
   protected final String instantTime;
 
-  public MarkerFiles(String basePath, String markerFolderPath, String instantTime) {
+  public WriteMarkers(String basePath, String markerFolderPath, String instantTime) {
     this.basePath = basePath;
     this.markerDirPath = new Path(markerFolderPath);
     this.instantTime = instantTime;

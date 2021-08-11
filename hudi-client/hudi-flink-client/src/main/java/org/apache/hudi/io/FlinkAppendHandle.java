@@ -24,8 +24,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.MarkerFiles;
-import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -50,7 +50,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
 
   private boolean isClosed = false;
-  private final MarkerFiles markerFiles;
+  private final WriteMarkers writeMarkers;
 
   public FlinkAppendHandle(
       HoodieWriteConfig config,
@@ -61,7 +61,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
-    this.markerFiles = MarkerFilesFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    this.writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
   }
 
   @Override
@@ -71,7 +71,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
 
     // Just skip the marker file creation if it already exists, the new data would append to
     // the file directly.
-    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
+    writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override

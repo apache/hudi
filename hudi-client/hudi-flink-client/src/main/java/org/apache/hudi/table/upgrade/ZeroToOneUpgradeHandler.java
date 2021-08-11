@@ -35,8 +35,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackHelper;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackRequest;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
-import org.apache.hudi.table.marker.MarkerFiles;
-import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.marker.MarkerType;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -91,8 +91,8 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
           .findFirst());
       if (commitInstantOpt.isPresent()) {
         // delete existing marker files
-        MarkerFiles markerFiles = MarkerFilesFactory.get(markerType, table, commitInstantTime);
-        markerFiles.quietDeleteMarkerDir(context, parallelism);
+        WriteMarkers writeMarkers = WriteMarkersFactory.get(markerType, table, commitInstantTime);
+        writeMarkers.quietDeleteMarkerDir(context, parallelism);
 
         // generate rollback stats
         List<ListingBasedRollbackRequest> rollbackRequests;
@@ -109,10 +109,10 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
           for (String path : rollbackStat.getSuccessDeleteFiles()) {
             String dataFileName = path.substring(path.lastIndexOf("/") + 1);
             // not feasible to differentiate MERGE from CREATE. hence creating with MERGE IOType for all base files.
-            markerFiles.create(rollbackStat.getPartitionPath(), dataFileName, IOType.MERGE);
+            writeMarkers.create(rollbackStat.getPartitionPath(), dataFileName, IOType.MERGE);
           }
           for (FileStatus fileStatus : rollbackStat.getCommandBlocksCount().keySet()) {
-            markerFiles.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(fileStatus.getPath().toString(), table), IOType.APPEND);
+            writeMarkers.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(fileStatus.getPath().toString(), table), IOType.APPEND);
           }
         }
       }

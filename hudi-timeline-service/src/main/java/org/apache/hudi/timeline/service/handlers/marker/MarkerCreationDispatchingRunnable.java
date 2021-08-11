@@ -18,6 +18,8 @@
 
 package org.apache.hudi.timeline.service.handlers.marker;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -27,7 +29,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 /**
- * A runnable / worker for scheduling batch processing of marker creation requests.
+ * A runnable that performs periodic, batched creation of markers for write operations.
  */
 public class MarkerCreationDispatchingRunnable implements Runnable {
   public static final Logger LOG = LogManager.getLogger(MarkerCreationDispatchingRunnable.class);
@@ -60,28 +62,29 @@ public class MarkerCreationDispatchingRunnable implements Runnable {
    */
   @Override
   public void run() {
-    List<MarkerDirRequestContext> requestContextList = new ArrayList<>();
+    List<MarkerCreationRequestContext> requestContextList = new ArrayList<>();
 
     // Only fetch pending marker creation requests that can be processed,
     // i.e., that markers can be written to a underlying file
     for (String markerDir : markerDirStateMap.keySet()) {
       MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
-      int fileIndex = markerDirState.getNextFileIndexToUse();
-      if (fileIndex < 0) {
+      Option<Integer> fileIndex = markerDirState.getNextFileIndexToUse();
+      if (!fileIndex.isPresent()) {
         LOG.debug("All marker files are busy, skip batch processing of create marker requests in " + markerDir);
         continue;
       }
-      List<MarkerCreationCompletableFuture> futures = markerDirState.fetchPendingMarkerCreationRequests();
+      List<MarkerCreationFuture> futures = markerDirState.fetchPendingMarkerCreationRequests();
       if (futures.isEmpty()) {
-        markerDirState.markFileAsAvailable(fileIndex);
+        markerDirState.markFileAsAvailable(fileIndex.get());
         continue;
       }
-      requestContextList.add(new MarkerDirRequestContext(markerDir, markerDirState, futures, fileIndex));
+      requestContextList.add(
+          new MarkerCreationRequestContext(markerDir, markerDirState, futures, fileIndex.get()));
     }
 
     if (requestContextList.size() > 0) {
       executorService.execute(
-          new MarkerCreationBatchingRunnable(requestContextList));
+          new BatchedMarkerCreationRunnable(requestContextList));
     }
   }
 }

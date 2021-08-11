@@ -60,7 +60,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.FlinkCompactHelpers;
-import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngrade;
 import org.apache.hudi.util.FlinkClientUtil;
 
@@ -316,7 +316,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
                             Option<Map<String, String>> extraMetadata) {
     try {
       // Delete the marker directory for the instant.
-      MarkerFilesFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
+      WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);

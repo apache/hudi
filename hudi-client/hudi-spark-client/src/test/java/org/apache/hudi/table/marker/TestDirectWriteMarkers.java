@@ -37,18 +37,18 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
-public class TestDirectMarkerFiles extends TestMarkerFilesBase {
+public class TestDirectWriteMarkers extends TestWriteMarkersBase {
 
   @BeforeEach
   public void setup() throws IOException {
     initPath();
     initMetaClient();
     this.jsc = new JavaSparkContext(
-        HoodieClientTestUtils.getSparkConfForTest(TestDirectMarkerFiles.class.getName()));
+        HoodieClientTestUtils.getSparkConfForTest(TestDirectWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
     this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
     this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
-    this.markerFiles = new DirectMarkerFiles(
+    this.writeMarkers = new DirectWriteMarkers(
         fs, metaClient.getBasePath(), markerFolderPath.toString(), "000");
   }
 

@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.MarkerFiles;
-import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
@@ -103,8 +103,8 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    MarkerFiles markerFiles = MarkerFilesFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override

@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -138,7 +138,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     secondPartitionRollBackLogFiles.removeAll(secondPartitionCommit2LogFiles);
     assertEquals(1, secondPartitionRollBackLogFiles.size());
 
-    assertFalse(MarkerFilesFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
   }
 
   @Test

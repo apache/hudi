@@ -49,17 +49,17 @@ import java.util.stream.Collectors;
  * Marker file operations of directly accessing the file system to create and delete
  * marker files.  Each data file has a corresponding marker file.
  */
-public class DirectMarkerFiles extends MarkerFiles {
+public class DirectWriteMarkers extends WriteMarkers {
 
-  private static final Logger LOG = LogManager.getLogger(DirectMarkerFiles.class);
+  private static final Logger LOG = LogManager.getLogger(DirectWriteMarkers.class);
   private final transient FileSystem fs;
 
-  public DirectMarkerFiles(FileSystem fs, String basePath, String markerFolderPath, String instantTime) {
+  public DirectWriteMarkers(FileSystem fs, String basePath, String markerFolderPath, String instantTime) {
     super(basePath, markerFolderPath, instantTime);
     this.fs = fs;
   }
 
-  public DirectMarkerFiles(HoodieTable table, String instantTime) {
+  public DirectWriteMarkers(HoodieTable table, String instantTime) {
     this(table.getMetaClient().getFs(),
         table.getMetaClient().getBasePath(),
         table.getMetaClient().getMarkerFolderPath(instantTime),

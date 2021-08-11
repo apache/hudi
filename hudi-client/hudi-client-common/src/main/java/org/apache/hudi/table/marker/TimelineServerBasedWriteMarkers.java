@@ -55,14 +55,14 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PA
  * underlying files maintained by the timeline server (each file contains multiple marker
  * entries).
  */
-public class TimelineServerBasedMarkerFiles extends MarkerFiles {
-  private static final Logger LOG = LogManager.getLogger(TimelineServerBasedMarkerFiles.class);
+public class TimelineServerBasedWriteMarkers extends WriteMarkers {
+  private static final Logger LOG = LogManager.getLogger(TimelineServerBasedWriteMarkers.class);
   private final ObjectMapper mapper;
   private final String timelineServerHost;
   private final int timelineServerPort;
   private final int timeoutSecs;
 
-  public TimelineServerBasedMarkerFiles(HoodieTable table, String instantTime) {
+  public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
     this(table.getMetaClient().getBasePath(),
         table.getMetaClient().getMarkerFolderPath(instantTime), instantTime,
         table.getConfig().getViewStorageConfig().getRemoteViewServerHost(),
@@ -70,8 +70,8 @@ public class TimelineServerBasedMarkerFiles extends MarkerFiles {
         table.getConfig().getViewStorageConfig().getRemoteTimelineClientTimeoutSecs());
   }
 
-  TimelineServerBasedMarkerFiles(String basePath, String markerFolderPath, String instantTime,
-                                 String timelineServerHost, int timelineServerPort, int timeoutSecs) {
+  TimelineServerBasedWriteMarkers(String basePath, String markerFolderPath, String instantTime,
+                                  String timelineServerHost, int timelineServerPort, int timeoutSecs) {
     super(basePath, markerFolderPath, instantTime);
     this.mapper = new ObjectMapper();
     this.timelineServerHost = timelineServerHost;
@@ -107,7 +107,7 @@ public class TimelineServerBasedMarkerFiles extends MarkerFiles {
     try {
       Set<String> markerPaths = executeRequestToTimelineServer(
           CREATE_AND_MERGE_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
-      return markerPaths.stream().map(MarkerFiles::stripMarkerSuffix).collect(Collectors.toSet());
+      return markerPaths.stream().map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get CREATE and MERGE data file paths in "
           + markerDirPath.toString(), e);

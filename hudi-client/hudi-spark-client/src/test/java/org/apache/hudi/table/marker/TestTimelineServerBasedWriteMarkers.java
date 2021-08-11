@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
-public class TestTimelineServerBasedMarkerFiles extends TestMarkerFilesBase {
+public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
   TimelineService timelineService;
 
   @BeforeEach
@@ -59,7 +59,7 @@ public class TestTimelineServerBasedMarkerFiles extends TestMarkerFilesBase {
     initPath();
     initMetaClient();
     this.jsc = new JavaSparkContext(
-        HoodieClientTestUtils.getSparkConfForTest(TestTimelineServerBasedMarkerFiles.class.getName()));
+        HoodieClientTestUtils.getSparkConfForTest(TestTimelineServerBasedWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
     this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
     this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
@@ -79,7 +79,7 @@ public class TestTimelineServerBasedMarkerFiles extends TestMarkerFilesBase {
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
-    this.markerFiles = new TimelineServerBasedMarkerFiles(
+    this.writeMarkers = new TimelineServerBasedWriteMarkers(
         metaClient.getBasePath(), markerFolderPath.toString(), "000", "localhost", timelineService.getServerPort(), 300);
   }
 

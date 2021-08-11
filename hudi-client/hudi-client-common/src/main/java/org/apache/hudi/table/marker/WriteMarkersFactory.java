@@ -27,8 +27,8 @@ import org.apache.log4j.Logger;
 /**
  * A factory to generate {@code MarkerFiles} instance based on the {@code MarkerType}.
  */
-public class MarkerFilesFactory {
-  private static final Logger LOG = LogManager.getLogger(MarkerFilesFactory.class);
+public class WriteMarkersFactory {
+  private static final Logger LOG = LogManager.getLogger(WriteMarkersFactory.class);
 
   /**
    * @param markerType the type of markers to use
@@ -36,13 +36,13 @@ public class MarkerFilesFactory {
    * @param instantTime current instant time
    * @return  {@code MarkerFiles} instance based on the {@code MarkerIOMode}
    */
-  public static MarkerFiles get(MarkerType markerType, HoodieTable table, String instantTime) {
+  public static WriteMarkers get(MarkerType markerType, HoodieTable table, String instantTime) {
     LOG.debug("Instantiated MarkerFiles with marker type: " + markerType.toString());
     switch (markerType) {
       case DIRECT:
-        return new DirectMarkerFiles(table, instantTime);
+        return new DirectWriteMarkers(table, instantTime);
       case TIMELINE_SERVER_BASED:
-        return new TimelineServerBasedMarkerFiles(table, instantTime);
+        return new TimelineServerBasedWriteMarkers(table, instantTime);
       default:
         throw new HoodieException("The marker type \"" + markerType.name() + "\" is not supported.");
     }

@@ -29,15 +29,15 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Future for async marker creation request.
  */
-public class MarkerCreationCompletableFuture extends CompletableFuture<String> {
-  private static final Logger LOG = LogManager.getLogger(MarkerCreationCompletableFuture.class);
+public class MarkerCreationFuture extends CompletableFuture<String> {
+  private static final Logger LOG = LogManager.getLogger(MarkerCreationFuture.class);
   private final Context context;
   private final String markerDirPath;
   private final String markerName;
   private boolean result;
   private final HoodieTimer timer;
 
-  public MarkerCreationCompletableFuture(Context context, String markerDirPath, String markerName) {
+  public MarkerCreationFuture(Context context, String markerDirPath, String markerName) {
     super();
     this.timer = new HoodieTimer().startTimer();
     this.context = context;
@@ -58,7 +58,7 @@ public class MarkerCreationCompletableFuture extends CompletableFuture<String> {
     return markerName;
   }
 
-  public boolean getResult() {
+  public boolean isSuccessful() {
     return result;
   }
 

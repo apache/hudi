@@ -39,18 +39,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public abstract class TestMarkerFilesBase extends HoodieCommonTestHarness {
+public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
 
-  protected MarkerFiles markerFiles;
+  protected WriteMarkers writeMarkers;
   protected FileSystem fs;
   protected Path markerFolderPath;
   protected JavaSparkContext jsc;
   protected HoodieSparkEngineContext context;
 
   private void createSomeMarkerFiles() {
-    markerFiles.create("2020/06/01", "file1", IOType.MERGE);
-    markerFiles.create("2020/06/02", "file2", IOType.APPEND);
-    markerFiles.create("2020/06/03", "file3", IOType.CREATE);
+    writeMarkers.create("2020/06/01", "file1", IOType.MERGE);
+    writeMarkers.create("2020/06/02", "file2", IOType.APPEND);
+    writeMarkers.create("2020/06/03", "file3", IOType.CREATE);
   }
 
   private void createInvalidFile(String partitionPath, String invalidFileName) {
@@ -78,20 +78,20 @@ public abstract class TestMarkerFilesBase extends HoodieCommonTestHarness {
   @Test
   public void testDeletionWhenMarkerDirExists() throws IOException {
     //when
-    markerFiles.create("2020/06/01", "file1", IOType.MERGE);
+    writeMarkers.create("2020/06/01", "file1", IOType.MERGE);
 
     // then
-    assertTrue(markerFiles.doesMarkerDirExist());
-    assertTrue(markerFiles.deleteMarkerDir(context, 2));
-    assertFalse(markerFiles.doesMarkerDirExist());
+    assertTrue(writeMarkers.doesMarkerDirExist());
+    assertTrue(writeMarkers.deleteMarkerDir(context, 2));
+    assertFalse(writeMarkers.doesMarkerDirExist());
   }
 
   @Test
   public void testDeletionWhenMarkerDirNotExists() throws IOException {
     // then
-    assertFalse(markerFiles.doesMarkerDirExist());
-    assertTrue(markerFiles.allMarkerFilePaths().isEmpty());
-    assertFalse(markerFiles.deleteMarkerDir(context, 2));
+    assertFalse(writeMarkers.doesMarkerDirExist());
+    assertTrue(writeMarkers.allMarkerFilePaths().isEmpty());
+    assertFalse(writeMarkers.deleteMarkerDir(context, 2));
   }
 
   @Test
@@ -106,7 +106,7 @@ public abstract class TestMarkerFilesBase extends HoodieCommonTestHarness {
     // then
     assertIterableEquals(CollectionUtils.createImmutableList(
         "2020/06/01/file1", "2020/06/03/file3"),
-        markerFiles.createdAndMergedDataPaths(context, 2).stream().sorted().collect(Collectors.toList())
+        writeMarkers.createdAndMergedDataPaths(context, 2).stream().sorted().collect(Collectors.toList())
     );
   }
 
@@ -118,7 +118,7 @@ public abstract class TestMarkerFilesBase extends HoodieCommonTestHarness {
     // then
     assertIterableEquals(CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",
         "2020/06/02/file2.marker.APPEND", "2020/06/03/file3.marker.CREATE"),
-        markerFiles.allMarkerFilePaths().stream().sorted().collect(Collectors.toList())
+        writeMarkers.allMarkerFilePaths().stream().sorted().collect(Collectors.toList())
     );
   }
 
@@ -129,6 +129,6 @@ public abstract class TestMarkerFilesBase extends HoodieCommonTestHarness {
     final String markerFilePath = pathPrefix + ".marker.APPEND";
 
     // when-then
-    assertEquals(pathPrefix, MarkerFiles.stripMarkerSuffix(markerFilePath));
+    assertEquals(pathPrefix, WriteMarkers.stripMarkerSuffix(markerFilePath));
   }
 }

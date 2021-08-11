@@ -23,8 +23,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.marker.MarkerFiles;
-import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,8 +42,8 @@ public  class OneToZeroDowngradeHandler implements DowngradeHandler {
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant commitInstant : commits) {
       // delete existing marker files
-      MarkerFiles markerFiles = MarkerFilesFactory.get(config.getMarkersType(), table, commitInstant.getTimestamp());
-      markerFiles.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, commitInstant.getTimestamp());
+      writeMarkers.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     }
   }
 }

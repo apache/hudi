@@ -28,12 +28,12 @@ import java.util.List;
 /**
  * A runnable for batch processing marker creation requests.
  */
-public class MarkerCreationBatchingRunnable implements Runnable {
-  private static final Logger LOG = LogManager.getLogger(MarkerCreationBatchingRunnable.class);
+public class BatchedMarkerCreationRunnable implements Runnable {
+  private static final Logger LOG = LogManager.getLogger(BatchedMarkerCreationRunnable.class);
 
-  private final List<MarkerDirRequestContext> requestContextList;
+  private final List<MarkerCreationRequestContext> requestContextList;
 
-  public MarkerCreationBatchingRunnable(List<MarkerDirRequestContext> requestContextList) {
+  public BatchedMarkerCreationRunnable(List<MarkerCreationRequestContext> requestContextList) {
     this.requestContextList = requestContextList;
   }
 
@@ -42,7 +42,7 @@ public class MarkerCreationBatchingRunnable implements Runnable {
     LOG.debug("Start processing create marker requests");
     HoodieTimer timer = new HoodieTimer().startTimer();
 
-    for (MarkerDirRequestContext requestContext : requestContextList) {
+    for (MarkerCreationRequestContext requestContext : requestContextList) {
       requestContext.getMarkerDirState().processMarkerCreationRequests(
           requestContext.getFutures(), requestContext.getFileIndex());
     }

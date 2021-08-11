@@ -23,7 +23,7 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.timeline.service.TimelineService;
-import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationCompletableFuture;
+import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
@@ -78,9 +78,10 @@ public class MarkerHandler extends Handler {
   private final Map<String, MarkerDirState> markerDirStateMap = new HashMap<>();
   // A thread to dispatch marker creation requests to batch processing threads
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
-  private final AtomicBoolean firstCreationRequestSeen;
+  private final Object firstCreationRequestSeenLock = new Object();
   private transient HoodieEngineContext hoodieEngineContext;
-  private ScheduledFuture<?> dispatchingScheduledFuture;
+  private ScheduledFuture<?> dispatchingThreadFuture;
+  private boolean firstCreationRequestSeen;
 
   public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
@@ -96,15 +97,15 @@ public class MarkerHandler extends Handler {
     this.batchingExecutorService = Executors.newFixedThreadPool(timelineServiceConfig.markerBatchNumThreads);
     this.markerCreationDispatchingRunnable =
         new MarkerCreationDispatchingRunnable(markerDirStateMap, batchingExecutorService);
-    this.firstCreationRequestSeen = new AtomicBoolean(false);
+    this.firstCreationRequestSeen = false;
   }
 
   /**
    * Stops the dispatching of marker creation requests.
    */
   public void stop() {
-    if (dispatchingScheduledFuture != null) {
-      dispatchingScheduledFuture.cancel(true);
+    if (dispatchingThreadFuture != null) {
+      dispatchingThreadFuture.cancel(true);
     }
     dispatchingExecutorService.shutdown();
     batchingExecutorService.shutdown();
@@ -151,14 +152,19 @@ public class MarkerHandler extends Handler {
    */
   public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName) {
     LOG.info("Request: create marker " + markerDir + " " + markerName);
-    MarkerCreationCompletableFuture future = new MarkerCreationCompletableFuture(context, markerDir, markerName);
+    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     // Add the future to the list
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
     markerDirState.addMarkerCreationFuture(future);
-    if (!firstCreationRequestSeen.getAndSet(true)) {
-      dispatchingScheduledFuture = dispatchingExecutorService.scheduleAtFixedRate(markerCreationDispatchingRunnable,
-          timelineServiceConfig.markerBatchIntervalMs, timelineServiceConfig.markerBatchIntervalMs,
-          TimeUnit.MILLISECONDS);
+    if (!firstCreationRequestSeen) {
+      synchronized (firstCreationRequestSeenLock) {
+        if (!firstCreationRequestSeen) {
+          dispatchingThreadFuture = dispatchingExecutorService.scheduleAtFixedRate(markerCreationDispatchingRunnable,
+              timelineServiceConfig.markerBatchIntervalMs, timelineServiceConfig.markerBatchIntervalMs,
+              TimeUnit.MILLISECONDS);
+          firstCreationRequestSeen = true;
+        }
+      }
     }
     return future;
   }

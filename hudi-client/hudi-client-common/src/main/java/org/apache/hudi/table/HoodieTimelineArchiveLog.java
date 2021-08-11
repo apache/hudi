@@ -49,8 +49,8 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.table.marker.MarkerFiles;
-import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -328,8 +328,8 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   }
 
   private void deleteAnyLeftOverMarkerFiles(HoodieEngineContext context, HoodieInstant instant) {
-    MarkerFiles markerFiles = MarkerFilesFactory.get(config.getMarkersType(), table, instant.getTimestamp());
-    if (markerFiles.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instant.getTimestamp());
+    if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
       LOG.info("Cleaned up left over marker directory for instant :" + instant);
     }
   }

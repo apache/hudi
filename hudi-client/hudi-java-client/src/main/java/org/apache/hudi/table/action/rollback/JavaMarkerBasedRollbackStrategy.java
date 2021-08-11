@@ -30,8 +30,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.MarkerFiles;
-import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,18 +49,18 @@ public class JavaMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> exte
   @Override
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     try {
-      MarkerFiles markerFiles =
-          MarkerFilesFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp());
-      List<HoodieRollbackStat> rollbackStats = context.map(new ArrayList<>(markerFiles.allMarkerFilePaths()), markerFilePath -> {
+      WriteMarkers writeMarkers =
+          WriteMarkersFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp());
+      List<HoodieRollbackStat> rollbackStats = context.map(new ArrayList<>(writeMarkers.allMarkerFilePaths()), markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
         switch (type) {
           case MERGE:
-            return undoMerge(MarkerFiles.stripMarkerSuffix(markerFilePath));
+            return undoMerge(WriteMarkers.stripMarkerSuffix(markerFilePath));
           case APPEND:
-            return undoAppend(MarkerFiles.stripMarkerSuffix(markerFilePath), instantToRollback);
+            return undoAppend(WriteMarkers.stripMarkerSuffix(markerFilePath), instantToRollback);
           case CREATE:
-            return undoCreate(MarkerFiles.stripMarkerSuffix(markerFilePath));
+            return undoCreate(WriteMarkers.stripMarkerSuffix(markerFilePath));
           default:
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
         }
