@@ -239,7 +239,7 @@ public class FSUtils {
   /**
    * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
    * are skipped
-   * 
+   *
    * @param fs File System
    * @param basePathStr Base-Path
    * @param consumer Callback for processing
@@ -440,6 +440,13 @@ public class FSUtils {
   public static boolean isLogFile(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
     return matcher.find() && logPath.getName().contains(".log");
+  }
+
+  /**
+   * Returns true if the given path is a Base file or a Log file.
+   */
+  public static boolean isDataFile(Path path) {
+    return HoodieFileFormat.isBaseFile(path) || FSUtils.isLogFile(path);
   }
 
   /**

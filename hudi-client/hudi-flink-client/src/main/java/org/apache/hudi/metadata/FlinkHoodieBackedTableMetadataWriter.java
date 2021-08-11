@@ -38,6 +38,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -150,5 +151,30 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       r.setCurrentLocation(new HoodieRecordLocation(instantTime, slice.getFileId()));
       return r;
     }).collect(Collectors.toList());
+  }
+
+  @Override
+  protected void commit(List<DirectoryInfo> dirInfoList, String createInstantTime, boolean canTriggerTableService) {
+    // The following implementation creates HoodieRecord in memory which may OOM for very large number of files
+    List<String> partitions = dirInfoList.stream().map(p -> p.getRelativePath()).collect(Collectors.toList());
+    final int totalFiles = dirInfoList.stream().mapToInt(p -> p.getTotalFiles()).sum();
+
+    // Record which saves the list of all partitions
+    List<HoodieRecord> records = new ArrayList<>(partitions.size() + 1);
+    HoodieRecord partitionListRrecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
+    records.add(partitionListRrecord);
+    if (!dirInfoList.isEmpty()) {
+      dirInfoList.forEach(dirInfo -> {
+        // Record which saves files within a partition
+        HoodieRecord fileListRecord = HoodieMetadataPayload.createPartitionFilesRecord(
+            dirInfo.getRelativePath(), Option.of(dirInfo.getFileMap()), Option.empty());
+        records.add(fileListRecord);
+
+      });
+    }
+
+    LOG.info("Committing " + partitions.size() + " partitions and " + totalFiles + " files to metadata");
+    ValidationUtils.checkState(records.size() == (partitions.size() + 1));
+    commit(records, MetadataPartitionType.FILES.partitionPath(), createInstantTime, canTriggerTableService);
   }
 }

@@ -42,7 +42,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
@@ -104,6 +106,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void commit(List<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService) {
+    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+    commit(jsc.parallelize(records, 1), partitionName, instantTime, canTriggerTableService);
+  }
+
+  private void commit(JavaRDD<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
     JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
 
@@ -147,15 +154,39 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    *
    * The record is tagged with respective file slice's location based on its record key.
    */
-  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int numFileGroups) {
+  private JavaRDD<HoodieRecord> prepRecords(JavaRDD<HoodieRecord> recordsRDD, String partitionName, int numFileGroups) {
     List<FileSlice> fileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
     ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
 
-    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
-    return jsc.parallelize(records, 1).map(r -> {
+    return recordsRDD.map(r -> {
       FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups));
       r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       return r;
     });
+  }
+
+  @Override
+  protected void commit(List<DirectoryInfo> partitionInfoList, String createInstantTime, boolean canTriggerTableService) {
+    ValidationUtils.checkState(!partitionInfoList.isEmpty());
+
+    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+    List<String> partitions = partitionInfoList.stream().map(p -> p.getRelativePath()).collect(Collectors.toList());
+    final int totalFiles = partitionInfoList.stream().mapToInt(p -> p.getTotalFiles()).sum();
+
+    // Record which saves the list of all partitions
+    HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
+    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record), 1);
+    if (!partitionInfoList.isEmpty()) {
+      JavaRDD<HoodieRecord> fileListRecords = jsc.parallelize(partitionInfoList, partitionInfoList.size()).map(pinfo -> {
+        // Record which saves files within a partition
+        return HoodieMetadataPayload.createPartitionFilesRecord(
+            pinfo.getRelativePath(), Option.of(pinfo.getFileMap()), Option.empty());
+      });
+      recordRDD = recordRDD.union(fileListRecords);
+    }
+
+    LOG.info("Committing " + partitions.size() + " partitions and " + totalFiles + " files to metadata");
+    ValidationUtils.checkState(recordRDD.count() == (partitions.size() + 1));
+    commit(recordRDD, MetadataPartitionType.FILES.partitionPath(), createInstantTime, canTriggerTableService);
   }
 }
