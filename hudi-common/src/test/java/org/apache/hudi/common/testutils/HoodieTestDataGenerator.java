@@ -208,8 +208,13 @@ public class HoodieTestDataGenerator {
    */
   public static RawTripTestPayload generateRandomValue(
       HoodieKey key, String instantTime, boolean isFlattened) throws IOException {
+    return generateRandomValue(key, instantTime, isFlattened, 0);
+  }
+
+  public static RawTripTestPayload generateRandomValue(
+      HoodieKey key, String instantTime, boolean isFlattened, int ts) throws IOException {
     GenericRecord rec = generateGenericRecord(
-        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
+        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, ts,
         false, isFlattened);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
@@ -586,6 +591,16 @@ public class HoodieTestDataGenerator {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       HoodieRecord record = generateUpdateRecord(baseRecord.getKey(), instantTime);
+      updates.add(record);
+    }
+    return updates;
+  }
+
+  public List<HoodieRecord> generateUpdatesWithTS(String instantTime, List<HoodieRecord> baseRecords, int ts) throws IOException {
+    List<HoodieRecord> updates = new ArrayList<>();
+    for (HoodieRecord baseRecord : baseRecords) {
+      HoodieRecord record = new HoodieRecord(baseRecord.getKey(),
+          generateRandomValue(baseRecord.getKey(), instantTime, false, ts));
       updates.add(record);
     }
     return updates;
