@@ -1973,6 +1973,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false)
             .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
                 .withConsistencyCheckEnabled(true)
+                .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard)
                 .withOptimisticConsistencyGuardSleepTimeMs(1).build())
             .withProperties(properties).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
@@ -2204,6 +2205,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build())
         .build()) : (getConfigBuilder().withAutoCommit(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
+            .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard)
             .withOptimisticConsistencyGuardSleepTimeMs(1).build())
         .build());
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);

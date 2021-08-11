@@ -177,7 +177,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
   @Test
   public void testTagLocation() throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withBloomIndexUpdatePartitionPath(false).build()).build();
     SparkHoodieGlobalBloomIndex index = new SparkHoodieGlobalBloomIndex(config);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);

@@ -121,8 +121,8 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BLOOM_INDEX_FILTER_TYPE = ConfigProperty
       .key("hoodie.bloom.index.filter.type")
-      .defaultValue(BloomFilterTypeCode.SIMPLE.name())
-      .withDocumentation("Filter type used. Default is BloomFilterTypeCode.SIMPLE. "
+      .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
+      .withDocumentation("Filter type used. Default is BloomFilterTypeCode.DYNAMIC_V0. "
           + "Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. "
           + "Dynamic bloom filters auto size themselves based on number of keys.");
 
@@ -183,7 +183,7 @@ public class HoodieIndexConfig extends HoodieConfig {
    */
   public static final ConfigProperty<String> BLOOM_INDEX_UPDATE_PARTITION_PATH = ConfigProperty
       .key("hoodie.bloom.index.update.partition.path")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Only applies if index type is GLOBAL_BLOOM. "
           + "When set to true, an update including the partition path of a record that already exists will result in "
           + "inserting the incoming record into the new partition and deleting the original record in the old partition. "
@@ -191,7 +191,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SIMPLE_INDEX_UPDATE_PARTITION_PATH = ConfigProperty
       .key("hoodie.simple.index.update.partition.path")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH + ", but for simple index.");
 
   private EngineType engineType;
