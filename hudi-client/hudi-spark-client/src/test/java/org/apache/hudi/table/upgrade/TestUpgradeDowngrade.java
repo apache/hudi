@@ -39,7 +39,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
@@ -58,6 +59,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -126,8 +128,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieInstant commitInstant = table.getPendingCommitTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
-    MarkerFiles markerFiles = new MarkerFiles(table, commitInstant.getTimestamp());
-    List<String> markerPaths = markerFiles.allMarkerFilePaths();
+    WriteMarkers writeMarkers =
+        WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+    List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
       table.getMetaClient().getFs().delete(new Path(table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp() + "/" + toDeleteMarkerFile));
@@ -182,8 +185,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieInstant commitInstant = table.getPendingCommitTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
-    MarkerFiles markerFiles = new MarkerFiles(table, commitInstant.getTimestamp());
-    List<String> markerPaths = markerFiles.allMarkerFilePaths();
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+    List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
       table.getMetaClient().getFs().delete(new Path(table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp() + "/" + toDeleteMarkerFile));
@@ -212,21 +215,21 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant) throws IOException {
     // Verify recreated marker files are as expected
-    MarkerFiles markerFiles = new MarkerFiles(table, commitInstant.getTimestamp());
-    assertFalse(markerFiles.doesMarkerDirExist());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+    assertFalse(writeMarkers.doesMarkerDirExist());
   }
 
   private void assertMarkerFilesForUpgrade(HoodieTable table, HoodieInstant commitInstant, List<FileSlice> firstPartitionCommit2FileSlices,
                                            List<FileSlice> secondPartitionCommit2FileSlices) throws IOException {
     // Verify recreated marker files are as expected
-    MarkerFiles markerFiles = new MarkerFiles(table, commitInstant.getTimestamp());
-    assertTrue(markerFiles.doesMarkerDirExist());
-    List<String> files = markerFiles.allMarkerFilePaths();
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+    assertTrue(writeMarkers.doesMarkerDirExist());
+    Set<String> files = writeMarkers.allMarkerFilePaths();
 
     assertEquals(2, files.size());
     List<String> actualFiles = new ArrayList<>();
     for (String file : files) {
-      String fileName = MarkerFiles.stripMarkerSuffix(file);
+      String fileName = WriteMarkers.stripMarkerSuffix(file);
       actualFiles.add(fileName);
     }
 
