@@ -594,25 +594,25 @@ public class FlinkOptions extends HoodieConfig {
           + "Disabled by default for backward compatibility.");
 
   public static final ConfigOption<Boolean> CONSISTENCY_CHECK_ENABLED_PROP = ConfigOptions
-          .key("hoodie.consistency.check.enabled")
+          .key("consistency.check.enabled")
           .booleanType()
           .defaultValue(false)
           .withDescription("When there is a delay in file system metadata, you can choose to enable this configuration.");
 
   public static final ConfigOption<Integer> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP = ConfigOptions
-          .key("hoodie.consistency.check.initial_interval_ms")
+          .key("consistency.check.initial_interval_ms")
           .intType()
           .defaultValue(400)
           .withDescription("Amount of time (in ms) to wait, before checking for consistency after an operation on storage.");
 
   public static final ConfigOption<Integer> MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP = ConfigOptions
-          .key("hoodie.consistency.check.max_interval_ms")
+          .key("consistency.check.max_interval_ms")
           .intType()
           .defaultValue(20000)
           .withDescription("Maximum amount of time (in ms), to wait for consistency checking.");
 
   public static final ConfigOption<Integer> MAX_CONSISTENCY_CHECKS_PROP = ConfigOptions
-          .key("hoodie.consistency.check.max_checks")
+          .key("consistency.check.max_checks")
           .intType()
           .defaultValue(6)
           .withDescription("Maximum number of consistency checks to perform, with exponential backoff.");
