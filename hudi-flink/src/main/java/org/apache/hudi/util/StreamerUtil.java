@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -187,6 +188,13 @@ public class StreamerUtil {
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
+            .withConsistencyGuardConfig(
+                ConsistencyGuardConfig.newBuilder()
+                        .withConsistencyCheckEnabled(conf.getBoolean(FlinkOptions.CONSISTENCY_CHECK_ENABLED_PROP))
+                        .withMaxConsistencyChecks(conf.getInteger(FlinkOptions.MAX_CONSISTENCY_CHECKS_PROP))
+                        .withInitialConsistencyCheckIntervalMs(conf.getInteger(FlinkOptions.INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP))
+                        .withMaxConsistencyCheckIntervalMs(conf.getInteger(FlinkOptions.MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP))
+                        .build())
             .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
 
     builder = builder.withSchema(getSourceSchema(conf).toString());

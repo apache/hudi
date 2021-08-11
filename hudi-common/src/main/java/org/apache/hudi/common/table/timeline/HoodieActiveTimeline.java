@@ -392,7 +392,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
-    transitionState(fromInstant, toInstant, data, false);
+    transitionState(fromInstant, toInstant, data, this.metaClient.getConsistencyGuardConfig().isConsistencyCheckEnabled());
   }
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
