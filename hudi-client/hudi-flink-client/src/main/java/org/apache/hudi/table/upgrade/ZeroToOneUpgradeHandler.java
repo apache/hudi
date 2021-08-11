@@ -32,10 +32,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackHelper;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackRequest;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.table.marker.MarkerType;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -60,35 +62,37 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
       commits.remove(instantTime);
     }
     for (String commit : commits) {
-      // for every pending commit, delete old marker files and re-create marker files in new format
-      recreateMarkerFiles(commit, table, context, config.getMarkersDeleteParallelism());
+      // for every pending commit, delete old markers and re-create markers in new format
+      recreateMarkers(commit, table, context, config.getMarkersType(), config.getMarkersDeleteParallelism());
     }
   }
 
   /**
-   * Recreate marker files in new format.
-   * Step1: Delete existing marker files
+   * Recreate markers in new format.
+   * Step1: Delete existing markers
    * Step2: Collect all rollback file info.
-   * Step3: recreate marker files for all interested files.
+   * Step3: recreate markers for all interested files.
    *
-   * @param commitInstantTime instant of interest for which marker files need to be recreated.
+   * @param commitInstantTime instant of interest for which markers need to be recreated.
    * @param table instance of {@link HoodieFlinkTable} to use
    * @param context instance of {@link HoodieEngineContext} to use
+   * @param markerType marker type to use
    * @throws HoodieRollbackException on any exception during upgrade.
    */
-  private static void recreateMarkerFiles(final String commitInstantTime,
-                                          HoodieFlinkTable table,
-                                          HoodieEngineContext context,
-                                          int parallelism) throws HoodieRollbackException {
+  private static void recreateMarkers(final String commitInstantTime,
+                                      HoodieFlinkTable table,
+                                      HoodieEngineContext context,
+                                      MarkerType markerType,
+                                      int parallelism) throws HoodieRollbackException {
     try {
       // fetch hoodie instant
       Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
           .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
           .findFirst());
       if (commitInstantOpt.isPresent()) {
-        // delete existing marker files
-        MarkerFiles markerFiles = new MarkerFiles(table, commitInstantTime);
-        markerFiles.quietDeleteMarkerDir(context, parallelism);
+        // delete existing markers
+        WriteMarkers writeMarkers = WriteMarkersFactory.get(markerType, table, commitInstantTime);
+        writeMarkers.quietDeleteMarkerDir(context, parallelism);
 
         // generate rollback stats
         List<ListingBasedRollbackRequest> rollbackRequests;
@@ -100,15 +104,15 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
         List<HoodieRollbackStat> rollbackStats = new ListingBasedRollbackHelper(table.getMetaClient(), table.getConfig())
             .collectRollbackStats(context, commitInstantOpt.get(), rollbackRequests);
 
-        // recreate marker files adhering to marker based rollback
+        // recreate markers adhering to marker based rollback
         for (HoodieRollbackStat rollbackStat : rollbackStats) {
           for (String path : rollbackStat.getSuccessDeleteFiles()) {
             String dataFileName = path.substring(path.lastIndexOf("/") + 1);
             // not feasible to differentiate MERGE from CREATE. hence creating with MERGE IOType for all base files.
-            markerFiles.create(rollbackStat.getPartitionPath(), dataFileName, IOType.MERGE);
+            writeMarkers.create(rollbackStat.getPartitionPath(), dataFileName, IOType.MERGE);
           }
           for (FileStatus fileStatus : rollbackStat.getCommandBlocksCount().keySet()) {
-            markerFiles.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(fileStatus.getPath().toString(), table), IOType.APPEND);
+            writeMarkers.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(fileStatus.getPath().toString(), table), IOType.APPEND);
           }
         }
       }

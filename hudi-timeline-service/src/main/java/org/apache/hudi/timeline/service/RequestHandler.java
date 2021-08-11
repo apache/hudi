@@ -18,7 +18,9 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.table.marker.MarkerOperation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
@@ -35,6 +37,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
+import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -43,6 +46,7 @@ import io.javalin.Context;
 import io.javalin.Handler;
 import io.javalin.Javalin;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -50,6 +54,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -63,35 +68,49 @@ public class RequestHandler {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final Logger LOG = LogManager.getLogger(RequestHandler.class);
 
+  private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
   private final Javalin app;
   private final TimelineHandler instantHandler;
   private final FileSliceHandler sliceHandler;
   private final BaseFileHandler dataFileHandler;
+  private final MarkerHandler markerHandler;
   private Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
-  private final boolean useAsync;
 
-  public RequestHandler(Javalin app, Configuration conf, FileSystemViewManager viewManager, boolean useAsync) throws IOException {
+  public RequestHandler(Javalin app, Configuration conf, TimelineService.Config timelineServiceConfig,
+                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
+                        FileSystemViewManager viewManager) throws IOException {
+    this.timelineServiceConfig = timelineServiceConfig;
     this.viewManager = viewManager;
     this.app = app;
-    this.instantHandler = new TimelineHandler(conf, viewManager);
-    this.sliceHandler = new FileSliceHandler(conf, viewManager);
-    this.dataFileHandler = new BaseFileHandler(conf, viewManager);
-    this.useAsync = useAsync;
-    if (useAsync) {
+    this.instantHandler = new TimelineHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    this.sliceHandler = new FileSliceHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    if (timelineServiceConfig.enableMarkerRequests) {
+      this.markerHandler = new MarkerHandler(
+          conf, timelineServiceConfig, hoodieEngineContext, fileSystem, viewManager, metricsRegistry);
+    } else {
+      this.markerHandler = null;
+    }
+    if (timelineServiceConfig.async) {
       asyncResultService = Executors.newSingleThreadScheduledExecutor();
     }
-  }
-
-  public RequestHandler(Javalin app, Configuration conf, FileSystemViewManager viewManager) throws IOException {
-    this(app, conf, viewManager, false);
   }
 
   public void register() {
     registerDataFilesAPI();
     registerFileSlicesAPI();
     registerTimelineAPI();
+    if (markerHandler != null) {
+      registerMarkerAPI();
+    }
+  }
+
+  public void stop() {
+    if (markerHandler != null) {
+      markerHandler.stop();
+    }
   }
 
   /**
@@ -147,40 +166,50 @@ public class RequestHandler {
   }
 
   private void writeValueAsString(Context ctx, Object obj) throws JsonProcessingException {
-    if (useAsync) {
+    if (timelineServiceConfig.async) {
       writeValueAsStringAsync(ctx, obj);
     } else {
       writeValueAsStringSync(ctx, obj);
     }
   }
 
-  private void writeValueAsStringSync(Context ctx, Object obj) throws JsonProcessingException {
+  /**
+   * Serializes the result into JSON String.
+   *
+   * @param ctx Javalin context
+   * @param obj object to serialize
+   * @param metricsRegistry {@code Registry} instance for storing metrics
+   * @param objectMapper JSON object mapper
+   * @param logger {@code Logger} instance
+   * @return JSON String from the input object
+   * @throws JsonProcessingException
+   */
+  public static String jsonifyResult(
+      Context ctx, Object obj, Registry metricsRegistry, ObjectMapper objectMapper, Logger logger)
+      throws JsonProcessingException {
     HoodieTimer timer = new HoodieTimer().startTimer();
     boolean prettyPrint = ctx.queryParam("pretty") != null;
     String result =
-        prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj) : OBJECT_MAPPER.writeValueAsString(obj);
+        prettyPrint ? objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj)
+            : objectMapper.writeValueAsString(obj);
     final long jsonifyTime = timer.endTimer();
-    ctx.result(result);
     metricsRegistry.add("WRITE_VALUE_CNT", 1);
     metricsRegistry.add("WRITE_VALUE_TIME", jsonifyTime);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Jsonify TimeTaken=" + jsonifyTime);
+    if (logger.isDebugEnabled()) {
+      logger.debug("Jsonify TimeTaken=" + jsonifyTime);
     }
+    return result;
   }
 
-  private void writeValueAsStringAsync(Context ctx, Object obj) throws JsonProcessingException {
+  private void writeValueAsStringSync(Context ctx, Object obj) throws JsonProcessingException {
+    String result = jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
+    ctx.result(result);
+  }
+
+  private void writeValueAsStringAsync(Context ctx, Object obj) {
     ctx.result(CompletableFuture.supplyAsync(() -> {
-      HoodieTimer timer = new HoodieTimer().startTimer();
-      boolean prettyPrint = ctx.queryParam("pretty") != null;
       try {
-        String result = prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj) : OBJECT_MAPPER.writeValueAsString(obj);
-        final long jsonifyTime = timer.endTimer();
-        metricsRegistry.add("WRITE_VALUE_CNT", 1);
-        metricsRegistry.add("WRITE_VALUE_TIME", jsonifyTime);
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Jsonify TimeTaken=" + jsonifyTime);
-        }
-        return result;
+        return jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
       } catch (JsonProcessingException e) {
         throw new HoodieException("Failed to JSON encode the value", e);
       }
@@ -390,6 +419,44 @@ public class RequestHandler {
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
+  }
+
+  private void registerMarkerAPI() {
+    app.get(MarkerOperation.ALL_MARKERS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("ALL_MARKERS", 1);
+      Set<String> markers = markerHandler.getAllMarkers(
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
+      writeValueAsString(ctx, markers);
+    }, false));
+
+    app.get(MarkerOperation.CREATE_AND_MERGE_MARKERS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("CREATE_AND_MERGE_MARKERS", 1);
+      Set<String> markers = markerHandler.getCreateAndMergeMarkers(
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
+      writeValueAsString(ctx, markers);
+    }, false));
+
+    app.get(MarkerOperation.MARKERS_DIR_EXISTS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("MARKERS_DIR_EXISTS", 1);
+      boolean exist = markerHandler.doesMarkerDirExist(
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
+      writeValueAsString(ctx, exist);
+    }, false));
+
+    app.post(MarkerOperation.CREATE_MARKER_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("CREATE_MARKER", 1);
+      ctx.result(markerHandler.createMarker(
+          ctx,
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""),
+          ctx.queryParam(MarkerOperation.MARKER_NAME_PARAM, "")));
+    }, false));
+
+    app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("DELETE_MARKER_DIR", 1);
+      boolean success = markerHandler.deleteMarkers(
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
+      writeValueAsString(ctx, success);
+    }, false));
   }
 
   private static boolean isRefreshCheckDisabledInQuery(Context ctxt) {

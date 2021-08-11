@@ -16,20 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.exception;
-
-import java.io.IOException;
+package org.apache.hudi.table.marker;
 
 /**
- * Hoodie remote exception.
+ * Marker type indicating how markers are stored in the file system.
  */
-public class HoodieRemoteException extends RuntimeException {
-
-  public HoodieRemoteException(IOException t) {
-    super(t.getMessage(), t);
-  }
-
-  public HoodieRemoteException(String message, IOException t) {
-    super(message + "\n" + t.getMessage(), t);
-  }
+public enum MarkerType {
+  DIRECT,
+  TIMELINE_SERVER_BASED
 }

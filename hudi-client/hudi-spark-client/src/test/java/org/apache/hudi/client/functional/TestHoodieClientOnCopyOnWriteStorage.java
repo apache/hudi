@@ -87,9 +87,9 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkWriteHelper;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
@@ -2220,11 +2220,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             path -> path.toString().contains(HoodieTableMetaClient.MARKER_EXTN)))
         .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
 
-    Path markerFilePath = new MarkerFiles(fs, basePath, metaClient.getMarkerFolderPath(instantTime), instantTime)
+    Option<Path> markerFilePath = WriteMarkersFactory.get(
+        cfg.getMarkersType(), getHoodieTable(metaClient, cfg), instantTime)
         .create(partitionPath,
             FSUtils.makeDataFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
             IOType.MERGE);
-    LOG.info("Created a dummy marker path=" + markerFilePath);
+    LOG.info("Created a dummy marker path=" + markerFilePath.get());
 
     if (!enableOptimisticConsistencyGuard) {
       Exception e = assertThrows(HoodieCommitException.class, () -> {
@@ -2235,7 +2236,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       // with optimistic CG, commit should succeed
       client.commit(instantTime, result);
     }
-    return Pair.of(markerFilePath, result);
+    return Pair.of(markerFilePath.get(), result);
   }
 
   @ParameterizedTest

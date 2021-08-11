@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -25,18 +25,13 @@ import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.HoodieClientTestUtils;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,35 +39,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestMarkerFiles extends HoodieCommonTestHarness {
+public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
 
-  private MarkerFiles markerFiles;
-  private FileSystem fs;
-  private Path markerFolderPath;
-  private JavaSparkContext jsc;
-  private HoodieSparkEngineContext context;
+  protected WriteMarkers writeMarkers;
+  protected FileSystem fs;
+  protected Path markerFolderPath;
+  protected JavaSparkContext jsc;
+  protected HoodieSparkEngineContext context;
 
-  @BeforeEach
-  public void setup() throws IOException {
-    initPath();
-    initMetaClient();
-    this.jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(TestMarkerFiles.class.getName()));
-    this.context = new HoodieSparkEngineContext(jsc);
-    this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
-    this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
-    this.markerFiles = new MarkerFiles(fs, metaClient.getBasePath(), markerFolderPath.toString(), "000");
-  }
-
-  @AfterEach
-  public void cleanup() {
-    jsc.stop();
-    context = null;
-  }
-
-  private void createSomeMarkerFiles() {
-    markerFiles.create("2020/06/01", "file1", IOType.MERGE);
-    markerFiles.create("2020/06/02", "file2", IOType.APPEND);
-    markerFiles.create("2020/06/03", "file3", IOType.CREATE);
+  private void createSomeMarkers() {
+    writeMarkers.create("2020/06/01", "file1", IOType.MERGE);
+    writeMarkers.create("2020/06/02", "file2", IOType.APPEND);
+    writeMarkers.create("2020/06/03", "file3", IOType.CREATE);
   }
 
   private void createInvalidFile(String partitionPath, String invalidFileName) {
@@ -85,48 +63,41 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
     }
   }
 
+  abstract void verifyMarkersInFileSystem() throws IOException;
+
   @Test
   public void testCreation() throws Exception {
     // when
-    createSomeMarkerFiles();
+    createSomeMarkers();
 
     // then
     assertTrue(fs.exists(markerFolderPath));
-    List<FileStatus> markerFiles = FileSystemTestUtils.listRecursive(fs, markerFolderPath)
-        .stream().filter(status -> status.getPath().getName().contains(".marker"))
-        .sorted().collect(Collectors.toList());
-    assertEquals(3, markerFiles.size());
-    assertIterableEquals(CollectionUtils.createImmutableList(
-        "file:" + markerFolderPath.toString() + "/2020/06/01/file1.marker.MERGE",
-        "file:" + markerFolderPath.toString() + "/2020/06/02/file2.marker.APPEND",
-        "file:" + markerFolderPath.toString() + "/2020/06/03/file3.marker.CREATE"),
-        markerFiles.stream().map(m -> m.getPath().toString()).collect(Collectors.toList())
-    );
+    verifyMarkersInFileSystem();
   }
 
   @Test
   public void testDeletionWhenMarkerDirExists() throws IOException {
     //when
-    markerFiles.create("2020/06/01", "file1", IOType.MERGE);
+    writeMarkers.create("2020/06/01", "file1", IOType.MERGE);
 
     // then
-    assertTrue(markerFiles.doesMarkerDirExist());
-    assertTrue(markerFiles.deleteMarkerDir(context, 2));
-    assertFalse(markerFiles.doesMarkerDirExist());
+    assertTrue(writeMarkers.doesMarkerDirExist());
+    assertTrue(writeMarkers.deleteMarkerDir(context, 2));
+    assertFalse(writeMarkers.doesMarkerDirExist());
   }
 
   @Test
   public void testDeletionWhenMarkerDirNotExists() throws IOException {
     // then
-    assertFalse(markerFiles.doesMarkerDirExist());
-    assertTrue(markerFiles.allMarkerFilePaths().isEmpty());
-    assertFalse(markerFiles.deleteMarkerDir(context, 2));
+    assertFalse(writeMarkers.doesMarkerDirExist());
+    assertTrue(writeMarkers.allMarkerFilePaths().isEmpty());
+    assertFalse(writeMarkers.deleteMarkerDir(context, 2));
   }
 
   @Test
   public void testDataPathsWhenCreatingOrMerging() throws IOException {
     // add markfiles
-    createSomeMarkerFiles();
+    createSomeMarkers();
     // add invalid file
     createInvalidFile("2020/06/01", "invalid_file3");
     int fileSize = FileSystemTestUtils.listRecursive(fs, markerFolderPath).size();
@@ -135,19 +106,19 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
     // then
     assertIterableEquals(CollectionUtils.createImmutableList(
         "2020/06/01/file1", "2020/06/03/file3"),
-        markerFiles.createdAndMergedDataPaths(context, 2).stream().sorted().collect(Collectors.toList())
+        writeMarkers.createdAndMergedDataPaths(context, 2).stream().sorted().collect(Collectors.toList())
     );
   }
 
   @Test
   public void testAllMarkerPaths() throws IOException {
     // given
-    createSomeMarkerFiles();
+    createSomeMarkers();
 
     // then
     assertIterableEquals(CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",
         "2020/06/02/file2.marker.APPEND", "2020/06/03/file3.marker.CREATE"),
-        markerFiles.allMarkerFilePaths().stream().sorted().collect(Collectors.toList())
+        writeMarkers.allMarkerFilePaths().stream().sorted().collect(Collectors.toList())
     );
   }
 
@@ -158,6 +129,6 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
     final String markerFilePath = pathPrefix + ".marker.APPEND";
 
     // when-then
-    assertEquals(pathPrefix, MarkerFiles.stripMarkerSuffix(markerFilePath));
+    assertEquals(pathPrefix, WriteMarkers.stripMarkerSuffix(markerFilePath));
   }
 }
