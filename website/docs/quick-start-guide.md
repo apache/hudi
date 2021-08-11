@@ -29,17 +29,17 @@ values={[
 ```scala
 // spark-shell for spark 3
 spark-shell \
-  --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
 // spark-shell for spark 2 with scala 2.12
 spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:2.4.4 \
+  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
 // spark-shell for spark 2 with scala 2.11
 spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.9.0,org.apache.spark:spark-avro_2.11:2.4.4 \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -74,17 +74,17 @@ export PYSPARK_PYTHON=$(which python3)
 
 # for spark3
 pyspark
---packages org.apache.hudi:hudi-spark3-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:3.0.1
+--packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark2 with scala 2.12
 pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:2.4.4
+--packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:2.4.4
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark2 with scala 2.11
 pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.11:0.9.0,org.apache.spark:spark-avro_2.11:2.4.4
+--packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:2.4.4
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -147,6 +147,9 @@ can generate sample inserts and updates based on the the sample trip schema [her
 Hudi support create table using spark-sql.
 
 **Create Non-Partitioned Table**
+
+Here is an example of creating a non-partitioned COW managed table with a primary key 'id'.
+
 ```sql
 -- create a managed cow table
 create table if not exists h0(
@@ -158,7 +161,12 @@ options (
   type = 'cow',
   primaryKey = 'id'
 );
+```
 
+This is an example of creating an MOR external table which specified the table's location. The **preCombineField** option
+is used to specify the preCombine field for merge.
+
+```sql
 -- creae an external mor table
 create table if not exists h1(
   id int, 
@@ -173,7 +181,11 @@ options (
   preCombineField = 'ts' 
 )
 ;
+```
 
+Here is the example of creating a COW table without primary key.
+
+```sql
 -- create a non-primary key table
 create table if not exists h2(
   id int, 
@@ -212,6 +224,26 @@ We can create a table on an exists hudi table path. This is useful to read/write
  )
  partitioned by (dt)
  location '/path/to/hudi'
+```
+
+**CTAS**
+
+Hudi support CTAS on spark sql. For better performance to loading data to hudi table, CTAS use the **bulk insert** 
+write operation.
+```sql
+-- create a partitioned COW table
+create table h2 using hudi
+options (type = 'cow', primaryKey = 'id')
+partitioned by (dt)
+as
+select 1 as id, 'a1' as name, 10 as price, 1000 as dt
+;
+
+-- create a non-partitioned COW table.
+create table h3 using hudi
+as
+select 1 as id, 'a1' as name, 10 as price
+;
 ```
 
 **Create Table Options**
@@ -292,7 +324,7 @@ for COW table. For MOR table, it has the same behavior with "upsert" mode.
 
 For non-strict mode, hudi just do the insert operation for the pk-table.
 
-We can set the inset mode by the config: **hoodie.sql.insert.mode**
+We can set the insert mode by the config: **hoodie.sql.insert.mode**
 
 2. Bulk Insert
 By default, hudi use the normal insert operation for insert statement. We can set **hoodie.sql.bulk.insert.enable** to true to enable 
@@ -502,17 +534,19 @@ when not matched then insert (id,name,price) values(id, name, price)
 ```
 **Notice**
 
-1、The merge-on condition must be the primary keys.
-2、Merge-On-Read table do not support partial. e.g.
+1、The merge-on condition must be the primary keys currently.
+2、Merge-On-Read table has not support partial update.
+e.g.
 ```sql
  merge into h0 using s0
  on h0.id = s0.id
  when matched then update set price = s0.price * 2
 ```
-This works well for Cow-On-Write table which support update only the **price** field. But it do not work
-for Merge-ON-READ table.
+This works well for Cow-On-Write table which support update only the **price** field. 
+For Merge-ON-READ table this will be supported in the future.
 
-3、Target table's fields cannot be the right-value of the update expression for Merge-On-Read table. e.g.
+3、Target table's fields cannot be the right-value of the update expression for Merge-On-Read table.
+e.g.
 ```sql
  merge into h0 using s0
  on h0.id = s0.id
@@ -520,7 +554,7 @@ for Merge-ON-READ table.
                    name = h0.name,
                    price = s0.price + h0.price
 ```
-This can work well for Cow-On-Write table but not for Merge-On-Read table.
+This can work well for Cow-On-Write table,  for Merge-ON-READ table this will be supported in the future.
 
 ### Update
 **Syntax**
@@ -825,6 +859,10 @@ spark.
 **NOTICE**
 
 The insert overwrite non-partitioned table sql statement will convert to the ***insert_overwrite_table*** operation.
+e.g.
+```sql
+insert overwrite table h0 select 1, 'a1', 20;
+```
 
 ## Insert Overwrite 
 
@@ -867,7 +905,10 @@ spark.
 **NOTICE**
 
 The insert overwrite partitioned table sql statement will convert to the ***insert_overwrite*** operation.
-
+e.g.
+```sql
+insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh;
+```
 ## Other Spark Sql Command
 
 ### AlterTable
