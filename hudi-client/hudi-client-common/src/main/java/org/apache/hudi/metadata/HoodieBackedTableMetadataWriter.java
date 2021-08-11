@@ -38,7 +38,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -421,7 +420,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         LOG.info("Syncing instant " + instant + " to metadata table");
 
         Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient,
-            metaClient.getActiveTimeline(), instant, getLatestSyncedInstantTime());
+            metaClient.getActiveTimeline(), instant, metadata.getSyncedInstantTime());
         if (records.isPresent()) {
           commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
         }
@@ -511,18 +510,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
-  /**
-   * Return the timestamp of the latest synced instant.
-   */
-  @Override
-  public Option<String> getLatestSyncedInstantTime() {
-    if (!enabled) {
-      return Option.empty();
-    }
-
-    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
-    return timeline.getDeltaCommitTimeline().filterCompletedInstants()
-        .lastInstant().map(HoodieInstant::getTimestamp);
+  public HoodieBackedTableMetadata getMetadataReader() {
+    return metadata;
   }
 
   /**

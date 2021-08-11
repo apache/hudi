@@ -78,7 +78,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   public void sync() {
     // Sync the tableMetadata first as super.sync() may call listPartition
     if (tableMetadata != null) {
-      BaseTableMetadata baseMetadata = (BaseTableMetadata)tableMetadata;
+      BaseTableMetadata baseMetadata = (BaseTableMetadata) tableMetadata;
       tableMetadata = HoodieTableMetadata.create(baseMetadata.getEngineContext(), baseMetadata.getMetadataConfig(),
           metaClient.getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
     }

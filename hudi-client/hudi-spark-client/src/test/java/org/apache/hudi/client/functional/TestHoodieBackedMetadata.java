@@ -809,12 +809,12 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
       writer =
           (HoodieBackedTableMetadataWriter)SparkHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context);
-      assertEquals(writer.getLatestSyncedInstantTime().get(), newCommitTime);
+      assertEquals(writer.getMetadataReader().getSyncedInstantTime().get(), newCommitTime);
 
       // Reader should sync to all the completed instants
       metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
           client.getConfig().getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
-      assertEquals(metadata.getSyncedInstantTime().get(), newCommitTime);
+      assertEquals(writer.getMetadataReader().getSyncedInstantTime().get(), newCommitTime);
     }
 
     // Enable metadata table and ensure it is synced
