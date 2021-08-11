@@ -18,10 +18,8 @@
 
 package org.apache.hudi.utilities.functional;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.util.ConcurrentModificationException;
-import java.util.concurrent.ExecutorService;
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -33,6 +31,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -49,6 +48,7 @@ import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -64,6 +64,7 @@ import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -93,11 +94,15 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -106,6 +111,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
+import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
+import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -116,6 +123,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
  */
+
 public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
@@ -158,7 +166,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
 
   protected HoodieClusteringJob initialHoodieClusteringJob(String tableBasePath, String clusteringInstantTime, boolean runSchedule, String scheduleAndExecute) {
     HoodieClusteringJob.Config scheduleClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
-            clusteringInstantTime, runSchedule, scheduleAndExecute);
+        clusteringInstantTime, runSchedule, scheduleAndExecute);
     return new HoodieClusteringJob(jsc, scheduleClusteringConfig);
   }
 
@@ -227,7 +235,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
         cfg.payloadClassName = payloadClassName;
       }
       if (useSchemaProviderClass) {
-        cfg.schemaProviderClassName = FilebasedSchemaProvider.class.getName();
+        cfg.schemaProviderClassName = defaultSchemaProviderClassName;
       }
       return cfg;
     }
@@ -392,6 +400,23 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     return base;
   }
 
+  /**
+   * args for schema evolution test.
+   *
+   * @return
+   */
+  private static Stream<Arguments> schemaEvolArgs() {
+    return Stream.of(
+        Arguments.of(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL(), true, true),
+        Arguments.of(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL(), true, false),
+        Arguments.of(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL(), false, true),
+        Arguments.of(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL(), false, false),
+        Arguments.of(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL(), true, true),
+        Arguments.of(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL(), true, false),
+        Arguments.of(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL(), false, true),
+        Arguments.of(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL(), false, false));
+  }
+
   private static Stream<Arguments> provideValidCliArgs() {
 
     HoodieDeltaStreamer.Config base = getBaseConfig();
@@ -426,41 +451,41 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     conf.enableHiveSync = true;
     conf.configs = Arrays.asList(HOODIE_CONF_VALUE1, HOODIE_CONF_VALUE2);
 
-    String[] allConfig = new String[]{TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE, SOURCE_LIMIT_PARAM,
+    String[] allConfig = new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE, SOURCE_LIMIT_PARAM,
         SOURCE_LIMIT_VALUE, TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
         BASE_FILE_FORMAT_PARAM, BASE_FILE_FORMAT_VALUE, ENABLE_HIVE_SYNC_PARAM, HOODIE_CONF_PARAM, HOODIE_CONF_VALUE1,
         HOODIE_CONF_PARAM, HOODIE_CONF_VALUE2};
 
     return Stream.of(
-            // Base
-            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
-                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE}, base),
-            // String
-            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
-                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
-                BASE_FILE_FORMAT_PARAM, BASE_FILE_FORMAT_VALUE}, conf1),
-            // Integer
-            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
-                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
-                SOURCE_LIMIT_PARAM, SOURCE_LIMIT_VALUE}, conf2),
-            // Boolean
-            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
-                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
-                ENABLE_HIVE_SYNC_PARAM}, conf3),
-            // Array List 1
-            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
-                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
-                HOODIE_CONF_PARAM, HOODIE_CONF_VALUE1}, conf4),
-            // Array List with comma
-            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
-                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
-                HOODIE_CONF_PARAM, HOODIE_CONF_VALUE2}, conf5),
-            // Array list with multiple values
-            Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
-                TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
-                HOODIE_CONF_PARAM, HOODIE_CONF_VALUE1, HOODIE_CONF_PARAM, HOODIE_CONF_VALUE2}, conf6),
-            // All
-            Arguments.of(allConfig, conf)
+        // Base
+        Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+            TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE}, base),
+        // String
+        Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+            TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+            BASE_FILE_FORMAT_PARAM, BASE_FILE_FORMAT_VALUE}, conf1),
+        // Integer
+        Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+            TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+            SOURCE_LIMIT_PARAM, SOURCE_LIMIT_VALUE}, conf2),
+        // Boolean
+        Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+            TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+            ENABLE_HIVE_SYNC_PARAM}, conf3),
+        // Array List 1
+        Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+            TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+            HOODIE_CONF_PARAM, HOODIE_CONF_VALUE1}, conf4),
+        // Array List with comma
+        Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+            TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+            HOODIE_CONF_PARAM, HOODIE_CONF_VALUE2}, conf5),
+        // Array list with multiple values
+        Arguments.of(new String[] {TGT_BASE_PATH_PARAM, TGT_BASE_PATH_VALUE,
+            TABLE_TYPE_PARAM, TABLE_TYPE_VALUE, TARGET_TABLE_PARAM, TARGET_TABLE_VALUE,
+            HOODIE_CONF_PARAM, HOODIE_CONF_VALUE1, HOODIE_CONF_PARAM, HOODIE_CONF_VALUE2}, conf6),
+        // All
+        Arguments.of(allConfig, conf)
     );
   }
 
@@ -495,7 +520,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
   @Test
   public void testPropsWithInvalidKeyGenerator() throws Exception {
     Exception e = assertThrows(IOException.class, () -> {
-      String tableBasePath = dfsBasePath + "/test_table";
+      String tableBasePath = dfsBasePath + "/test_table_invalid_key_gen";
       HoodieDeltaStreamer deltaStreamer =
           new HoodieDeltaStreamer(TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
               Collections.singletonList(TripsWithDistanceTransformer.class.getName()), PROPS_FILENAME_TEST_INVALID, false), jsc);
@@ -549,8 +574,8 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     // Perform bootstrap with tableBasePath as source
     String bootstrapSourcePath = dfsBasePath + "/src_bootstrapped";
     Dataset<Row> sourceDf = sqlContext.read()
-                              .format("org.apache.hudi")
-                              .load(tableBasePath + "/*/*.parquet");
+        .format("org.apache.hudi")
+        .load(tableBasePath + "/*/*.parquet");
     sourceDf.write().format("parquet").save(bootstrapSourcePath);
 
     String newDatasetBasePath = dfsBasePath + "/test_dataset_bootstrapped";
@@ -574,6 +599,83 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     assertEquals(expectedFieldNames.size(), fields.length);
     assertTrue(fieldNames.containsAll(HoodieRecord.HOODIE_META_COLUMNS));
     assertTrue(fieldNames.containsAll(expectedFieldNames));
+  }
+
+  @ParameterizedTest
+  @MethodSource("schemaEvolArgs")
+  public void testSchemaEvolution(String tableType, boolean useUserProvidedSchema, boolean useSchemaPostProcessor) throws Exception {
+    String tableBasePath = dfsBasePath + "/test_table_schema_evolution" + tableType + "_" + useUserProvidedSchema + "_" + useSchemaPostProcessor;
+    defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
+    // Insert data produced with Schema A, pass Schema A
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
+        PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
+    if (!useSchemaPostProcessor) {
+      cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
+    }
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(1000, tableBasePath + "/*/*", sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, dfs, 1);
+
+    // Upsert data produced with Schema B, pass Schema B
+    cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TripsWithEvolvedOptionalFieldTransformer.class.getName()),
+        PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source_evolved.avsc");
+    cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
+    if (!useSchemaPostProcessor) {
+      cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
+    }
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    // out of 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
+    TestHelpers.assertRecordCount(1450, tableBasePath + "/*/*", sqlContext);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
+    List<Row> counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*", sqlContext);
+    assertEquals(1450, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath + "/*/*").createOrReplaceTempView("tmp_trips");
+    long recordCount =
+        sqlContext.sparkSession().sql("select * from tmp_trips where evoluted_optional_union_field is not NULL").count();
+    assertEquals(950, recordCount);
+
+    // Upsert data produced with Schema A, pass Schema B
+    if (!useUserProvidedSchema) {
+      defaultSchemaProviderClassName = TestFileBasedSchemaProviderNullTargetSchema.class.getName();
+    }
+    cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
+        PROPS_FILENAME_TEST_SOURCE, false, true, false, null, tableType);
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
+    if (useUserProvidedSchema) {
+      cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source_evolved.avsc");
+    }
+    if (!useSchemaPostProcessor) {
+      cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
+    }
+    cfg.configs.add(DataSourceWriteOptions.RECONCILE_SCHEMA().key() + "=true");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    // again, 1000 new records, 500 are inserts, 450 are updates and 50 are deletes.
+    TestHelpers.assertRecordCount(1900, tableBasePath + "/*/*", sqlContext);
+    TestHelpers.assertCommitMetadata("00002", tableBasePath, dfs, 3);
+    counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*", sqlContext);
+    assertEquals(1900, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(dfs.getConf()).build());
+    Schema tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields();
+    assertNotNull(tableSchema);
+
+    Schema expectedSchema = new Schema.Parser().parse(dfs.open(new Path(dfsBasePath + "/source_evolved.avsc")));
+    if (!useUserProvidedSchema || useSchemaPostProcessor) {
+      expectedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+          AvroConversionUtils.convertAvroSchemaToStructType(expectedSchema), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+    }
+    assertEquals(tableSchema, expectedSchema);
+
+    // clean up and reinit
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(FSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration()), dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE);
+    writeCommonPropsToFile();
+    defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   }
 
   @Test
@@ -783,8 +885,8 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
   }
 
   private void runJobsInParallel(String tableBasePath, HoodieTableType tableType, int totalRecords,
-      HoodieDeltaStreamer ingestionJob, HoodieDeltaStreamer.Config cfgIngestionJob, HoodieDeltaStreamer backfillJob,
-      HoodieDeltaStreamer.Config cfgBackfillJob, boolean expectConflict) throws Exception {
+                                 HoodieDeltaStreamer ingestionJob, HoodieDeltaStreamer.Config cfgIngestionJob, HoodieDeltaStreamer backfillJob,
+                                 HoodieDeltaStreamer.Config cfgBackfillJob, boolean expectConflict) throws Exception {
     ExecutorService service = Executors.newFixedThreadPool(2);
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(dfs.getConf()).setBasePath(tableBasePath).build();
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
@@ -1263,7 +1365,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
-      String propsFileName, String parquetSourceRoot, boolean addCommonProps) throws IOException {
+                                       String propsFileName, String parquetSourceRoot, boolean addCommonProps) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
 
@@ -1272,7 +1374,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     }
 
     parquetProps.setProperty("include", "base.properties");
-    parquetProps.setProperty("hoodie.embed.timeline.server","false");
+    parquetProps.setProperty("hoodie.embed.timeline.server", "false");
     parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     parquetProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
     if (useSchemaProvider) {
@@ -1342,7 +1444,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     TypedProperties props = new TypedProperties();
     populateAllCommonProps(props);
     props.setProperty("include", "base.properties");
-    props.setProperty("hoodie.embed.timeline.server","false");
+    props.setProperty("hoodie.embed.timeline.server", "false");
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
     props.setProperty("hoodie.deltastreamer.source.dfs.root", JSON_KAFKA_SOURCE_ROOT);
@@ -1357,6 +1459,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
 
   /**
    * Tests Deltastreamer with parquet dfs source and transitions to JsonKafkaSource.
+   *
    * @param autoResetToLatest true if auto reset value to be set to LATEST. false to leave it as default(i.e. EARLIEST)
    * @throws Exception
    */
@@ -1366,7 +1469,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     int parquetRecords = 10;
     prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
 
-    prepareParquetDFSSource(true, false,"source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
+    prepareParquetDFSSource(true, false, "source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false);
     // delta streamer w/ parquest source
     String tableBasePath = dfsBasePath + "/test_dfs_to_kakfa" + testNum;
@@ -1429,19 +1532,19 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName);
     String tableBasePath = dfsBasePath + "/test_json_kafka_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-            TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-                    Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
-                    true, 100000, false, null,
-                    null, "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+            Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
+            true, 100000, false, null,
+            null, "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
 
     prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName);
     deltaStreamer = new HoodieDeltaStreamer(
-            TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-                    Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
-                    true, 100000, false, null, null,
-                    "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+            Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
+            true, 100000, false, null, null,
+            "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath + "/*/*.parquet", sqlContext);
   }
@@ -1479,16 +1582,6 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
   @Test
   public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
     testORCDFSSource(false, null);
-  }
-
-  @Test
-  public void testORCDFSSourceWithoutSchemaProviderAndTransformer() throws Exception {
-    testORCDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
-  }
-
-  @Test
-  public void testORCDFSSourceWithSourceSchemaFileAndNoTransformer() throws Exception {
-    testORCDFSSource(true, null);
   }
 
   @Test
@@ -1778,8 +1871,36 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
 
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
-        TypedProperties properties) {
+                              TypedProperties properties) {
       return rowDataset;
     }
   }
+
+  /**
+   * Add new field evoluted_optional_union_field with value of the field rider.
+   */
+  public static class TripsWithEvolvedOptionalFieldTransformer implements Transformer {
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                              TypedProperties properties) {
+      return rowDataset.withColumn("evoluted_optional_union_field", functions.col("rider"));
+    }
+  }
+
+  /**
+   * {@link FilebasedSchemaProvider} to be used in tests where target schema is null.
+   */
+  public static class TestFileBasedSchemaProviderNullTargetSchema extends FilebasedSchemaProvider {
+
+    public TestFileBasedSchemaProviderNullTargetSchema(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema getTargetSchema() {
+      return null;
+    }
+  }
+
 }

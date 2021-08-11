@@ -17,10 +17,12 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, HIVE_SUPPORT_TIMESTAMP, KEYGENERATOR_CLASS, OPERATION, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
+import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, SubqueryAlias}
 import org.apache.spark.sql.execution.command.RunnableCommand
@@ -32,10 +34,7 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
 
   private val table = deleteTable.table
 
-  private val tableId = table match {
-    case SubqueryAlias(name, _) => sparkAdapter.toTableIdentify(name)
-    case _ => throw new IllegalArgumentException(s"Illegal table: $table")
-  }
+  private val tableId = getTableIdentify(table)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute delete command for $tableId")
@@ -60,7 +59,6 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
     val targetTable = sparkSession.sessionState.catalog
       .getTableMetadata(tableId)
     val path = getTableLocation(targetTable, sparkSession)
-      .getOrElse(s"missing location for $tableId")
 
     val primaryColumns = HoodieOptionConfig.getPrimaryColumns(targetTable.storage.properties)
 
@@ -73,6 +71,7 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
         TABLE_NAME.key -> tableId.table,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
+        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_SUPPORT_TIMESTAMP.key -> "true",
         HIVE_STYLE_PARTITIONING.key -> "true",
         HoodieWriteConfig.DELETE_PARALLELISM.key -> "200",

@@ -46,7 +46,8 @@ public class CommitUtils {
    * For example, INSERT_OVERWRITE/INSERT_OVERWRITE_TABLE operations have REPLACE commit action type.
    */
   public static String getCommitActionType(WriteOperationType operation, HoodieTableType tableType) {
-    if (operation == WriteOperationType.INSERT_OVERWRITE || operation == WriteOperationType.INSERT_OVERWRITE_TABLE) {
+    if (operation == WriteOperationType.INSERT_OVERWRITE || operation == WriteOperationType.INSERT_OVERWRITE_TABLE
+        || operation == WriteOperationType.DELETE_PARTITION) {
       return HoodieTimeline.REPLACE_COMMIT_ACTION;
     } else {
       return getCommitActionType(tableType);

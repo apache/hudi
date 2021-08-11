@@ -22,7 +22,8 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.HoodieConfig
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
@@ -36,7 +37,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.sql.{DataFrame, Row, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
@@ -48,7 +49,6 @@ import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConversions._
 
 class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
-
   var spark: SparkSession = _
   var sc: SparkContext = _
   var sqlContext: SQLContext = _
@@ -82,15 +82,11 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     }
   }
 
-
   test("throw hoodie exception when there already exist a table with different name with Append Save mode") {
-
     initSparkContext("test_append_mode")
     val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
     try {
-
       val hoodieFooTableName = "hoodie_foo_tbl"
-
       //create a new table
       val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
         HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
@@ -149,20 +145,14 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     })
 
   def testBulkInsertWithSortMode(sortMode: BulkInsertSortMode, path: java.nio.file.Path, populateMetaFields : Boolean = true) : Unit = {
-
     val hoodieFooTableName = "hoodie_foo_tbl"
     //create a new table
-    val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-    HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
-    DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-    "hoodie.bulkinsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-    DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> "true",
-    HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields),
-    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      HoodieWriteConfig.BULKINSERT_SORT_MODE.key() -> sortMode.name(),
-    DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+    val fooTableModifier = getCommonParams(path, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+      .updated("hoodie.bulkinsert.shuffle.parallelism", "4")
+      .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
+      .updated(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields))
+      .updated(HoodieWriteConfig.BULKINSERT_SORT_MODE.key(), sortMode.name())
     val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
     // generate the inserts
@@ -174,7 +164,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val toUpdateDataset = sqlContext.createDataFrame(DataSourceTestUtils.getUniqueRows(inserts, 40), structType)
     val updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset)
     val records = inserts.union(updates)
-
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
@@ -191,19 +180,11 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
     // fetch all records from parquet files generated from write to hudi
     val actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
-
     if (!populateMetaFields) {
-      assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(0)).filter(entry => !(entry.mkString(",").equals(""))).count())
-      assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(1)).filter(entry => !(entry.mkString(",").equals(""))).count())
-      assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(2)).filter(entry => !(entry.mkString(",").equals(""))).count())
-      assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(3)).filter(entry => !(entry.mkString(",").equals(""))).count())
-      assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(4)).filter(entry => !(entry.mkString(",").equals(""))).count())
+      List(0, 1, 2, 3, 4).foreach(i => assertEquals(0, actualDf.select(HoodieRecord.HOODIE_META_COLUMNS.get(i)).filter(entry => !(entry.mkString(",").equals(""))).count()))
     }
     // remove metadata columns so that expected and actual DFs can be compared as is
-    val trimmedDf = actualDf.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
-    .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
-    .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
-
+    val trimmedDf = dropMetaFields(actualDf)
     assert(df.except(trimmedDf).count() == 0)
   }
 
@@ -212,20 +193,14 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
     try {
       testBulkInsertWithSortMode(BulkInsertSortMode.NONE, path, false)
-
       // enabling meta fields back should throw exception
       val hoodieFooTableName = "hoodie_foo_tbl"
       //create a new table
-      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-        HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
-        DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-        "hoodie.bulkinsert.shuffle.parallelism" -> "4",
-        DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-        DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> "true",
-        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-        HoodieWriteConfig.BULKINSERT_SORT_MODE.key() -> BulkInsertSortMode.NONE.name(),
-        DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+      val fooTableModifier = getCommonParams(path, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+        .updated("hoodie.bulkinsert.shuffle.parallelism", "4")
+        .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+        .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
+        .updated(HoodieWriteConfig.BULKINSERT_SORT_MODE.key(), BulkInsertSortMode.NONE.name())
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
       // generate the inserts
@@ -250,20 +225,13 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     initSparkContext("test_append_mode")
     val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
     try {
-
       val hoodieFooTableName = "hoodie_foo_tbl"
-
       //create a new table
-      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-        HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
-        DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
-        "hoodie.bulkinsert.shuffle.parallelism" -> "4",
-        DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-        DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> "true",
-        INSERT_DROP_DUPS.key -> "true",
-        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-        DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+      val fooTableModifier = getCommonParams(path, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+        .updated("hoodie.bulkinsert.shuffle.parallelism", "4")
+        .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+        .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
+        .updated(INSERT_DROP_DUPS.key, "true")
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
       // generate the inserts
@@ -287,20 +255,13 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     initSparkContext("test_bulk_insert_datasource")
     val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
     try {
-
       val sqlContext = spark.sqlContext
       val sc = spark.sparkContext
       val hoodieFooTableName = "hoodie_foo_tbl"
-
       //create a new table
-      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-        HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
-        "hoodie.bulkinsert.shuffle.parallelism" -> "1",
-        DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-        DataSourceWriteOptions.INSERT_DROP_DUPS.key -> "false",
-        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-        DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+      val fooTableModifier = getCommonParams(path, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+        .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
       // generate the inserts
@@ -323,12 +284,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
       // fetch all records from parquet files generated from write to hudi
       val actualDf = spark.sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
-
       // remove metadata columns so that expected and actual DFs can be compared as is
-      val trimmedDf = actualDf.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
-        .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
-        .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
-
+      val trimmedDf = dropMetaFields(actualDf)
       assert(df.except(trimmedDf).count() == 0)
     } finally {
       spark.stop()
@@ -340,18 +297,11 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     initSparkContext("test_bulk_insert_datasource")
     val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
     try {
-
       val hoodieFooTableName = "hoodie_foo_tbl"
-
-      //create a new table
-      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-        HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
-        "hoodie.bulkinsert.shuffle.parallelism" -> "4",
-        DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
-        DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> "true",
-        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-        DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+      val fooTableModifier = getCommonParams(path, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+        .updated("hoodie.bulkinsert.shuffle.parallelism", "4")
+        .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+        .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
       val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
@@ -375,12 +325,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
         // Fetch records from entire dataset
         val actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
-
         // remove metadata columns so that expected and actual DFs can be compared as is
-        val trimmedDf = actualDf.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
-          .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
-          .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
-
+        val trimmedDf = dropMetaFields(actualDf)
         // find total df (union from multiple rounds)
         totalExpectedDf = totalExpectedDf.union(df)
         // find mismatch between actual and expected df
@@ -405,7 +351,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
         try {
           val hoodieFooTableName = "hoodie_foo_tbl"
-          //create a new table
           val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
             HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
             HoodieWriteConfig.BASE_FILE_FORMAT.key -> baseFileFormat,
@@ -433,7 +378,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
             hoodieFooTableName,
             mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
-          // write to Hudi
           HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df, Option.empty,
             Option(client))
           // Verify that asynchronous compaction is not scheduled
@@ -457,12 +401,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           } else if (baseFileFormat.equalsIgnoreCase(HoodieFileFormat.ORC.name())) {
             actualDf = sqlContext.read.orc(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
           }
-
           // remove metadata columns so that expected and actual DFs can be compared as is
-          val trimmedDf = actualDf.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
-            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
-            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
-
+          val trimmedDf = dropMetaFields(actualDf)
           assert(df.except(trimmedDf).count() == 0)
         } finally {
           spark.stop()
@@ -477,14 +417,10 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         initSparkContext("test_bootstrap_datasource")
         val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
         val srcPath = java.nio.file.Files.createTempDirectory("hoodie_bootstrap_source_path")
-
         try {
-
           val hoodieFooTableName = "hoodie_foo_tbl"
-
           val sourceDF = TestBootstrap.generateTestRawTripDataset(Instant.now.toEpochMilli, 0, 100, Collections.emptyList(), sc,
             spark.sqlContext)
-
           // Write source data non-partitioned
           sourceDF.write
             .format("parquet")
@@ -514,7 +450,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
           // Verify that HoodieWriteClient is closed correctly
           verify(client, times(1)).close()
-
           // fetch all records from parquet files generated from write to hudi
           val actualDf = sqlContext.read.parquet(path.toAbsolutePath.toString)
           assert(actualDf.count == 100)
@@ -534,14 +469,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         try {
           val hoodieFooTableName = "hoodie_foo_tbl_schema_evolution_" + tableType
           //create a new table
-          val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-            HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
-            "hoodie.insert.shuffle.parallelism" -> "1",
-            "hoodie.upsert.shuffle.parallelism" -> "1",
-            DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-            DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-            DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-            DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+          val fooTableModifier = getCommonParams(path, hoodieFooTableName, tableType)
+            .updated(DataSourceWriteOptions.RECONCILE_SCHEMA.key, "true")
           val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
           // generate the inserts
@@ -550,7 +479,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           var records = DataSourceTestUtils.generateRandomRows(10)
           var recordsSeq = convertRowListToSeq(records)
           var df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-          // write to Hudi
           HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
 
           val snapshotDF1 = spark.read.format("org.apache.hudi")
@@ -558,17 +486,12 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           assertEquals(10, snapshotDF1.count())
 
           // remove metadata columns so that expected and actual DFs can be compared as is
-          val trimmedDf1 = snapshotDF1.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
-            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
-            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
-
+          val trimmedDf1 = dropMetaFields(snapshotDF1)
           assert(df1.except(trimmedDf1).count() == 0)
 
           // issue updates so that log files are created for MOR table
-          var updates = DataSourceTestUtils.generateUpdates(records, 5);
-          var updatesSeq = convertRowListToSeq(updates)
-          var updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
-          // write updates to Hudi
+          val updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
+          val updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
           HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
 
           val snapshotDF2 = spark.read.format("org.apache.hudi")
@@ -576,19 +499,16 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           assertEquals(10, snapshotDF2.count())
 
           // remove metadata columns so that expected and actual DFs can be compared as is
-          val trimmedDf2 = snapshotDF1.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
-            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
-            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
-
+          val trimmedDf2 = dropMetaFields(snapshotDF2)
           // ensure 2nd batch of updates matches.
           assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
 
           // getting new schema with new column
-          schema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
-          structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+          val evolSchema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
+          val evolStructType = AvroConversionUtils.convertAvroSchemaToStructType(evolSchema)
           records = DataSourceTestUtils.generateRandomRowsEvolvedSchema(5)
           recordsSeq = convertRowListToSeq(records)
-          val df3 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+          val df3 = spark.createDataFrame(sc.parallelize(recordsSeq), evolStructType)
           // write to Hudi with new column
           HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df3)
 
@@ -597,13 +517,27 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           assertEquals(15, snapshotDF3.count())
 
           // remove metadata columns so that expected and actual DFs can be compared as is
-          val trimmedDf3 = snapshotDF3.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
-            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
-            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
-
+          val trimmedDf3 = dropMetaFields(snapshotDF3)
           // ensure 2nd batch of updates matches.
           assert(df3.intersect(trimmedDf3).except(df3).count() == 0)
 
+          // ingest new batch with old schema.
+          records = DataSourceTestUtils.generateRandomRows(10)
+          recordsSeq = convertRowListToSeq(records)
+          val df4 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+          HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df4)
+
+          val snapshotDF4 = spark.read.format("org.apache.hudi")
+            .load(path.toAbsolutePath.toString + "/*/*/*/*")
+          assertEquals(25, snapshotDF4.count())
+
+          val tableMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration)
+            .setBasePath(path.toAbsolutePath.toString).build()
+          val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
+          assertTrue(actualSchema != null)
+          val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
+          val expectedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(evolStructType, structName, nameSpace)
+          assertEquals(expectedSchema, actualSchema)
         } finally {
           spark.stop()
           FileUtils.deleteDirectory(path.toFile)
@@ -613,8 +547,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
   test("Test build sync config for spark sql") {
     initSparkContext("test build sync config")
-    val schema = DataSourceTestUtils.getStructTypeExampleSchema
-    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val basePath = "/tmp/hoodie_test"
     val params = Map(
       "path" -> basePath,
@@ -641,7 +573,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
   test("Test build sync config for skip Ro Suffix vals") {
     initSparkContext("test build sync config for skip Ro suffix vals")
-    val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val basePath = "/tmp/hoodie_test"
     val params = Map(
       "path" -> basePath,
@@ -650,7 +581,6 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-
     val buildSyncConfigMethod =
       HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
         classOf[HoodieConfig], classOf[SQLConf])
@@ -712,15 +642,14 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           .mode(SaveMode.Append).save(basePath)
 
         val currentCommits = spark.read.format("hudi").load(basePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
-        val incrementalKeyIdNum = spark.read.format("hudi").option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        val incrementalKeyIdNum = spark.read.format("hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "0000")
           .option(DataSourceReadOptions.END_INSTANTTIME.key, currentCommits(0))
           .load(basePath).select("keyid").orderBy("keyid").count
         assert(incrementalKeyIdNum == 1000)
 
-        // add bootstap test
         df.write.mode(SaveMode.Overwrite).save(baseBootStrapPath)
-        // boostrap table
         spark.emptyDataFrame.write.format("hudi")
           .options(options)
           .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key, baseBootStrapPath)
@@ -736,7 +665,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           .mode(SaveMode.Append).save(basePath)
 
         val currentCommitsBootstrap = spark.read.format("hudi").load(basePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
-        val incrementalKeyIdNumBootstrap = spark.read.format("hudi").option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        val incrementalKeyIdNumBootstrap = spark.read.format("hudi")
+          .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "0000")
           .option(DataSourceReadOptions.END_INSTANTTIME.key, currentCommitsBootstrap(0))
           .load(basePath).select("keyid").orderBy("keyid").count
@@ -747,6 +677,79 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         FileUtils.deleteDirectory(bootStrapPath.toFile)
       }
     }
+  }
+
+  test("test delete partitions") {
+    initSparkContext("test_delete_partitions")
+    val path = java.nio.file.Files.createTempDirectory("hoodie_test_path_delete_partitions")
+    try {
+      val hoodieFooTableName = "hoodie_foo_tbl_delete_partitions"
+      val fooTableModifier = getCommonParams(path, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+      val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+      val schema = DataSourceTestUtils.getStructTypeExampleSchema
+      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+      val records = DataSourceTestUtils.generateRandomRows(10)
+      val recordsSeq = convertRowListToSeq(records)
+      val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+      // write to Hudi
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
+
+      val snapshotDF1 = spark.read.format("org.apache.hudi")
+        .load(path.toAbsolutePath.toString + "/*/*/*/*")
+      assertEquals(10, snapshotDF1.count())
+      // remove metadata columns so that expected and actual DFs can be compared as is
+      val trimmedDf1 = dropMetaFields(snapshotDF1)
+      assert(df1.except(trimmedDf1).count() == 0)
+
+      // issue updates so that log files are created for MOR table
+      var updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
+      var updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
+      // write updates to Hudi
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
+      val snapshotDF2 = spark.read.format("org.apache.hudi")
+        .load(path.toAbsolutePath.toString + "/*/*/*/*")
+      assertEquals(10, snapshotDF2.count())
+
+      // remove metadata columns so that expected and actual DFs can be compared as is
+      val trimmedDf2 = dropMetaFields(snapshotDF2)
+      // ensure 2nd batch of updates matches.
+      assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
+
+      // delete partitions
+      val recordsToDelete = df1.filter(entry => {
+        val partitionPath : String = entry.getString(1)
+        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) || partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+      })
+      val updatedParams = fooTableParams.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete)
+
+      val snapshotDF3 = spark.read.format("org.apache.hudi")
+        .load(path.toAbsolutePath.toString + "/*/*/*/*")
+      assertEquals(0, snapshotDF3.filter(entry => {
+        val partitionPath = entry.getString(3)
+        !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+      }).count())
+    } finally {
+      spark.stop()
+      FileUtils.deleteDirectory(path.toFile)
+    }
+  }
+
+  def dropMetaFields(df: Dataset[Row]) : Dataset[Row] = {
+    df.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
+      .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
+      .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
+  }
+
+  def getCommonParams(path: java.nio.file.Path, hoodieFooTableName: String, tableType: String) : Map[String, String] = {
+    Map("path" -> path.toAbsolutePath.toString,
+      HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
   }
 
   test("test Non partition table with metatable support") {

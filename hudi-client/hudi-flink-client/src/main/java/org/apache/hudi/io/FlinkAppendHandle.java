@@ -79,6 +79,9 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   protected boolean isUpdateRecord(HoodieRecord<T> hoodieRecord) {
+    // do not use the HoodieRecord operation because hoodie writer has its own
+    // INSERT/MERGE bucket for 'UPSERT' semantics. For e.g, a hoodie record with fresh new key
+    // and operation HoodieCdcOperation.DELETE would be put into either an INSERT bucket or UPDATE bucket.
     return hoodieRecord.getCurrentLocation() != null
         && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
   }

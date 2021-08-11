@@ -17,18 +17,15 @@
 
 package org.apache.hudi
 
-import java.util.Properties
-
-import scala.collection.JavaConverters._
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.config.HoodieMetadataConfig.{METADATA_ENABLE_PROP, METADATA_VALIDATE_PROP}
 import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
-
-import scala.collection.JavaConversions.mapAsJavaMap
-import scala.collection.JavaConverters.mapAsScalaMapConverter
-import org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP
-import org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
+
+import java.util.Properties
+import scala.collection.JavaConversions.mapAsJavaMap
+import scala.collection.JavaConverters.{mapAsScalaMapConverter, _}
 
 /**
  * WriterUtils to assist in write path in Datasource and tests.
@@ -78,7 +75,8 @@ object HoodieWriterUtils {
       ASYNC_COMPACT_ENABLE.key -> ASYNC_COMPACT_ENABLE.defaultValue,
       INLINE_CLUSTERING_ENABLE.key -> INLINE_CLUSTERING_ENABLE.defaultValue,
       ASYNC_CLUSTERING_ENABLE.key -> ASYNC_CLUSTERING_ENABLE.defaultValue,
-      ENABLE_ROW_WRITER.key -> ENABLE_ROW_WRITER.defaultValue
+      ENABLE_ROW_WRITER.key -> ENABLE_ROW_WRITER.defaultValue,
+      RECONCILE_SCHEMA.key -> RECONCILE_SCHEMA.defaultValue.toString
     ) ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 

@@ -114,7 +114,7 @@ object HoodieOptionConfig {
 
   /**
    * Mapping the sql options to the hoodie table config which used to store to the hoodie
-   * .properites when create the table.
+   * .properties when create the table.
    * @param options
    * @return
    */
@@ -126,12 +126,9 @@ object HoodieOptionConfig {
 
   /**
    * Mapping the table config (loaded from the hoodie.properties) to the sql options.
-   * @param options
-   * @return
    */
   def mappingTableConfigToSqlOption(options: Map[String, String]): Map[String, String] = {
-    options.filterKeys(k => tableConfigKeyToSqlKey.contains(k))
-      .map(kv => tableConfigKeyToSqlKey(kv._1) -> reverseValueMapping.getOrElse(kv._2, kv._2))
+    options.map(kv => tableConfigKeyToSqlKey.getOrElse(kv._1, kv._1) -> reverseValueMapping.getOrElse(kv._2, kv._2))
   }
 
   private lazy val defaultTableConfig: Map[String, String] = {

@@ -61,6 +61,7 @@ import org.apache.log4j.Logger;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
+import org.apache.orc.storage.ql.exec.vector.ColumnVector;
 import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
@@ -81,8 +82,6 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
-import static org.apache.hudi.common.util.AvroOrcUtils.addAvroRecord;
 
 /**
  * Abstract test that provides a dfs & spark contexts.
@@ -250,6 +249,12 @@ public class UtilitiesTestBase {
       os.close();
     }
 
+    public static void deleteFileFromDfs(FileSystem fs, String targetPath) throws IOException {
+      if (fs.exists(new Path(targetPath))) {
+        fs.delete(new Path(targetPath), true);
+      }
+    }
+
     public static void savePropsToDFS(TypedProperties props, FileSystem fs, String targetPath) throws IOException {
       String[] lines = props.keySet().stream().map(k -> String.format("%s=%s", k, props.get(k))).toArray(String[]::new);
       saveStringsToDFS(lines, fs, targetPath);
@@ -380,5 +385,32 @@ public class UtilitiesTestBase {
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
     }
+
+    public static void addAvroRecord(
+            VectorizedRowBatch batch,
+            GenericRecord record,
+            TypeDescription orcSchema,
+            int orcBatchSize,
+            Writer writer
+    ) throws IOException {
+      for (int c = 0; c < batch.numCols; c++) {
+        ColumnVector colVector = batch.cols[c];
+        final String thisField = orcSchema.getFieldNames().get(c);
+        final TypeDescription type = orcSchema.getChildren().get(c);
+
+        Object fieldValue = record.get(thisField);
+        Schema.Field avroField = record.getSchema().getField(thisField);
+        AvroOrcUtils.addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
+      }
+
+      batch.size++;
+
+      if (batch.size % orcBatchSize == 0 || batch.size == batch.getMaxSize()) {
+        writer.addRowBatch(batch);
+        batch.reset();
+        batch.size = 0;
+      }
+    }
+
   }
 }

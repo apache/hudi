@@ -800,32 +800,4 @@ public class AvroOrcUtils {
       return Schema.createUnion(nonNullMembers);
     }
   }
-
-  public static void addAvroRecord(
-          VectorizedRowBatch batch,
-          GenericRecord record,
-          TypeDescription orcSchema,
-          int orcBatchSize,
-          Writer writer
-  ) throws IOException {
-
-    for (int c = 0; c < batch.numCols; c++) {
-      ColumnVector colVector = batch.cols[c];
-      final String thisField = orcSchema.getFieldNames().get(c);
-      final TypeDescription type = orcSchema.getChildren().get(c);
-
-      Object fieldValue = record.get(thisField);
-      Schema.Field avroField = record.getSchema().getField(thisField);
-      addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
-    }
-
-    batch.size++;
-
-    if (batch.size % orcBatchSize == 0 || batch.size == batch.getMaxSize()) {
-      writer.addRowBatch(batch);
-      batch.reset();
-      batch.size = 0;
-    }
-  }
-
 }

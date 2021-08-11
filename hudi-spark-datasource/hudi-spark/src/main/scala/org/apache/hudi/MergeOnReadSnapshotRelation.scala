@@ -32,6 +32,7 @@ import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
@@ -97,6 +98,9 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
 
   override def needConversion: Boolean = false
 
+  private val specifiedQueryInstant = optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
+    .map(HoodieSqlUtils.formatQueryInstant)
+
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     log.debug(s" buildScan requiredColumns = ${requiredColumns.mkString(",")}")
     log.debug(s" buildScan filters = ${filters.mkString(",")}")
@@ -118,7 +122,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       dataSchema = tableStructSchema,
       partitionSchema = StructType(Nil),
       requiredSchema = tableStructSchema,
-      filters = filters,
+      filters = Seq.empty,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
@@ -159,7 +163,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
         if (!lastInstant.isPresent) { // Return empty list if the table has no commit
           List.empty
         } else {
-          val latestCommit = lastInstant.get().getTimestamp
+          val queryInstant = specifiedQueryInstant.getOrElse(lastInstant.get().getTimestamp)
           val baseAndLogsList = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, partitionPaths.asJava).asScala
           val fileSplits = baseAndLogsList.map(kv => {
             val baseFile = kv.getLeft
@@ -174,7 +178,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
             } else {
               None
             }
-            HoodieMergeOnReadFileSplit(baseDataPath, logPaths, latestCommit,
+            HoodieMergeOnReadFileSplit(baseDataPath, logPaths, queryInstant,
               metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
           }).toList
           fileSplits
@@ -203,8 +207,9 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
         List.empty[HoodieMergeOnReadFileSplit]
       } else {
         val fileSplits = fileSlices.values.flatten.map(fileSlice => {
-          val latestCommit = metaClient.getActiveTimeline.getCommitsTimeline
+          val latestInstant = metaClient.getActiveTimeline.getCommitsTimeline
             .filterCompletedInstants.lastInstant().get().getTimestamp
+          val queryInstant = specifiedQueryInstant.getOrElse(latestInstant)
 
           val partitionedFile = if (fileSlice.getBaseFile.isPresent) {
             val baseFile = fileSlice.getBaseFile.get()
@@ -217,7 +222,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
           val logPaths = fileSlice.getLogFiles.sorted(HoodieLogFile.getLogFileComparator).iterator().asScala
             .map(logFile => MergeOnReadSnapshotRelation.getFilePath(logFile.getPath)).toList
           val logPathsOptional = if (logPaths.isEmpty) Option.empty else Option(logPaths)
-          HoodieMergeOnReadFileSplit(partitionedFile, logPathsOptional, latestCommit, metaClient.getBasePath,
+          HoodieMergeOnReadFileSplit(partitionedFile, logPathsOptional, queryInstant, metaClient.getBasePath,
             maxCompactionMemoryInBytes, mergeType)
         }).toList
         fileSplits

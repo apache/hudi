@@ -19,12 +19,15 @@ package org.apache.spark.sql.hudi
 
 import scala.collection.JavaConverters._
 import java.net.URI
-import java.util.Locale
+import java.util.{Date, Locale}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.spark.SPARK_VERSION
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -35,9 +38,12 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 
+import java.text.SimpleDateFormat
 import scala.collection.immutable.Map
 
 object HoodieSqlUtils extends SparkAdapterSupport {
+  private val defaultDateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+  private val defaultDateFormat = new SimpleDateFormat("yyyy-MM-dd")
 
   def isHoodieTable(table: CatalogTable): Boolean = {
     table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
@@ -55,6 +61,23 @@ object HoodieSqlUtils extends SparkAdapterSupport {
         isHoodieTable(sparkAdapter.toTableIdentify(relation), spark)
       case _=> false
     }
+  }
+
+  def getTableIdentify(table: LogicalPlan): TableIdentifier = {
+    table match {
+      case SubqueryAlias(name, _) => sparkAdapter.toTableIdentify(name)
+      case _ => throw new IllegalArgumentException(s"Illegal table: $table")
+    }
+  }
+
+  def getTableSqlSchema(metaClient: HoodieTableMetaClient): Option[StructType] = {
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val avroSchema = try Some(schemaResolver.getTableAvroSchema(false))
+    catch {
+      case _: Throwable => None
+    }
+    avroSchema.map(SchemaConverters.toSqlType(_).dataType
+      .asInstanceOf[StructType])
   }
 
   private def tripAlias(plan: LogicalPlan): LogicalPlan = {
@@ -115,12 +138,12 @@ object HoodieSqlUtils extends SparkAdapterSupport {
    * @param spark
    * @return
    */
-  def getTableLocation(tableId: TableIdentifier, spark: SparkSession): Option[String] = {
+  def getTableLocation(tableId: TableIdentifier, spark: SparkSession): String = {
     val table = spark.sessionState.catalog.getTableMetadata(tableId)
     getTableLocation(table, spark)
   }
 
-  def getTableLocation(table: CatalogTable, sparkSession: SparkSession): Option[String] = {
+  def getTableLocation(table: CatalogTable, sparkSession: SparkSession): String = {
     val uri = if (table.tableType == CatalogTableType.MANAGED && isHoodieTable(table)) {
       Some(sparkSession.sessionState.catalog.defaultTablePath(table.identifier))
     } else {
@@ -129,6 +152,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     val conf = sparkSession.sessionState.newHadoopConf()
     uri.map(makePathQualified(_, conf))
       .map(removePlaceHolder)
+      .getOrElse(throw new IllegalArgumentException(s"Missing location for ${table.identifier}"))
   }
 
   private def removePlaceHolder(path: String): String = {
@@ -145,6 +169,16 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     val hadoopPath = new Path(path)
     val fs = hadoopPath.getFileSystem(hadoopConf)
     fs.makeQualified(hadoopPath).toUri.toString
+  }
+
+  /**
+   * Check if the hoodie.properties exists in the table path.
+   */
+  def tableExistsInPath(tablePath: String, conf: Configuration): Boolean = {
+    val basePath = new Path(tablePath)
+    val fs = basePath.getFileSystem(conf)
+    val metaPath = new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME)
+    fs.exists(metaPath)
   }
 
   def castIfNeeded(child: Expression, dataType: DataType, conf: SQLConf): Expression = {
@@ -184,7 +218,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
    * Append the spark config and table options to the baseConfig.
    */
   def withSparkConf(spark: SparkSession, options: Map[String, String])
-                   (baseConfig: Map[String, String]): Map[String, String] = {
+                   (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
     baseConfig ++ // Table options has the highest priority
       (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mappingSqlOptionToHoodieParam(options))
         .filterKeys(_.startsWith("hoodie."))
@@ -194,4 +228,26 @@ object HoodieSqlUtils extends SparkAdapterSupport {
 
   def isEnableHive(sparkSession: SparkSession): Boolean =
     "hive" == sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)
+
+  /**
+   * Convert different query instant time format to the commit time format.
+   * Currently we support three kinds of instant time format for time travel query:
+   * 1、yyyy-MM-dd HH:mm:ss
+   * 2、yyyy-MM-dd
+   *   This will convert to 'yyyyMMdd000000'.
+   * 3、yyyyMMddHHmmss
+   */
+  def formatQueryInstant(queryInstant: String): String = {
+    if (queryInstant.length == 19) { // for yyyy-MM-dd HH:mm:ss
+      HoodieActiveTimeline.COMMIT_FORMATTER.format(defaultDateTimeFormat.parse(queryInstant))
+    } else if (queryInstant.length == 14) { // for yyyyMMddHHmmss
+      HoodieActiveTimeline.COMMIT_FORMATTER.parse(queryInstant) // validate the format
+      queryInstant
+    } else if (queryInstant.length == 10) { // for yyyy-MM-dd
+      HoodieActiveTimeline.COMMIT_FORMATTER.format(defaultDateFormat.parse(queryInstant))
+    } else {
+      throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
+        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss' or 'yyyy-MM-dd' or 'yyyyMMddHHmmss'")
+    }
+  }
 }

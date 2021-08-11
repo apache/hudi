@@ -116,13 +116,19 @@ object DataSourceReadOptions {
     .defaultValue("")
     .withDocumentation("For the use-cases like users only want to incremental pull from certain partitions "
       + "instead of the full table. This option allows using glob pattern to directly filter on path.")
+
+  val TIME_TRAVEL_AS_OF_INSTANT: ConfigProperty[String] = ConfigProperty
+    .key("as.of.instant")
+    .noDefaultValue()
+    .withDocumentation("The query instant for time travel. Without specified this option," +
+      " we query the latest snapshot.")
+
 }
 
 /**
   * Options supported for writing hoodie tables.
   */
 object DataSourceWriteOptions {
-
   private val log = LogManager.getLogger(DataSourceWriteOptions.getClass)
 
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
@@ -250,6 +256,22 @@ object DataSourceWriteOptions {
     .withDocumentation("When set to true, will perform write operations directly using the spark native " +
       "`Row` representation, avoiding any additional conversion costs.")
 
+  /**
+   * Enable the bulk insert for sql insert statement.
+   */
+  val SQL_ENABLE_BULK_INSERT:ConfigProperty[String] = ConfigProperty
+    .key("hoodie.sql.bulk.insert.enable")
+    .defaultValue("false")
+    .withDocumentation("When set to true, the sql insert statement will use bulk insert.")
+
+  val SQL_INSERT_MODE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.sql.insert.mode")
+    .defaultValue("upsert")
+    .withDocumentation("Insert mode when insert data to pk-table. The optional modes are: upsert, strict and non-strict." +
+      "For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record." +
+      "For strict mode, insert statement will keep the primary key uniqueness constraint which do not allow duplicate record." +
+      "While for non-strict mode, hudi just do the insert operation for the pk-table.")
+
   val COMMIT_METADATA_KEYPREFIX: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.commitmeta.key.prefix")
     .defaultValue("_")
@@ -285,6 +307,13 @@ object DataSourceWriteOptions {
     .key("hoodie.meta.sync.client.tool.class")
     .defaultValue(classOf[HiveSyncTool].getName)
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
+
+  val RECONCILE_SCHEMA: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.write.reconcile.schema")
+    .defaultValue(false)
+    .withDocumentation("When a new batch of write has records with old schema, but latest table schema got "
+      + "evolved, this config will upgrade the records to leverage latest table schema(default values will be "
+      + "injected to missing fields). If not, the write batch would fail.")
 
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
@@ -349,9 +378,12 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .withDocumentation("")
 
+  // We should use HIVE_SYNC_MODE instead of this config from 0.9.0
+  @Deprecated
   val HIVE_USE_JDBC: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.use_jdbc")
     .defaultValue("true")
+    .deprecatedAfter("0.9.0")
     .withDocumentation("Use JDBC when hive synchronization is enabled")
 
   val HIVE_AUTO_CREATE_DATABASE: ConfigProperty[String] = ConfigProperty
@@ -400,6 +432,11 @@ object DataSourceWriteOptions {
     .key("hoodie.datasource.hive_sync.batch_num")
     .defaultValue(1000)
     .withDocumentation("The number of partitions one batch when synchronous partitions to hive.")
+
+  val HIVE_SYNC_MODE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.mode")
+    .noDefaultValue()
+    .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.")
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty
