@@ -35,10 +35,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -857,6 +859,62 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     validateMetadata(unsyncedClient);
   }
 
+  /**
+   * Test that failure to perform deltacommit on the metadata table does not lead to missed sync.
+   */
+  @Test
+  public void testMetdataTableCommitFailure() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+      // Write 1
+      String newCommitTime = "001";
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      client.startCommitWithTime(newCommitTime);
+      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+
+      // Write 2
+      newCommitTime = "002";
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateInserts(newCommitTime, 20);
+      writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+    }
+
+    // At this time both commits 001 and 002 must be synced to the metadata table
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieActiveTimeline timeline = metadataMetaClient.getActiveTimeline();
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "001")));
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002")));
+
+    // Delete the 002 deltacommit completed instant to make it inflight
+    FileCreateUtils.deleteDeltaCommit(metadataTableBasePath, "002");
+    timeline = metadataMetaClient.reloadActiveTimeline();
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "001")));
+    assertTrue(timeline.containsInstant(new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "002")));
+
+    // In this commit deltacommit "002" will be rolled back and attempted again.
+    String latestCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+      String newCommitTime = "003";
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      client.startCommitWithTime(newCommitTime);
+      client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+
+      records = dataGen.generateInserts(latestCommitTime, 20);
+      client.startCommitWithTime(latestCommitTime);
+      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), latestCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+    }
+
+    timeline = metadataMetaClient.reloadActiveTimeline();
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "001")));
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002")));
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, latestCommitTime)));
+    assertTrue(timeline.getRollbackTimeline().countInstants() == 1);
+  }
 
   /**
    * Validate the metadata tables contents to ensure it matches what is on the file system.

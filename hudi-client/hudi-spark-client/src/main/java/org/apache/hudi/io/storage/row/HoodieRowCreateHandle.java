@@ -31,7 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -187,8 +187,8 @@ public class HoodieRowCreateHandle implements Serializable {
    * @param partitionPath Partition path
    */
   private void createMarkerFile(String partitionPath, String dataFileName) {
-    MarkerFiles markerFiles = new MarkerFiles(table, instantTime);
-    markerFiles.create(partitionPath, dataFileName, IOType.CREATE);
+    WriteMarkersFactory.get(writeConfig.getMarkersType(), table, instantTime)
+        .create(partitionPath, dataFileName, IOType.CREATE);
   }
 
   private String getWriteToken() {
