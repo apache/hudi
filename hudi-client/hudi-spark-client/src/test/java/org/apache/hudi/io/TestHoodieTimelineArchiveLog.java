@@ -21,14 +21,12 @@ package org.apache.hudi.io;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -636,42 +634,6 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     List<HoodieInstant> notArchivedInstants = metaClient.getActiveTimeline().reload().getInstants().collect(Collectors.toList());
     assertEquals(3, notArchivedInstants.size(), "Not archived instants should be 3");
     assertEquals(notArchivedInstants, Arrays.asList(notArchivedInstant1, notArchivedInstant2, notArchivedInstant3), "");
-  }
-
-  private void createReplaceMetadataWithoutReplaceFileId(String instantTime) throws Exception {
-
-    // create replace instant without a previous replace commit
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-        .setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE.toString())
-        .setVersion(1)
-        .setExtraMetadata(Collections.emptyMap())
-        .build();
-    HoodieReplaceCommitMetadata completeReplaceMetadata = new HoodieReplaceCommitMetadata();
-    HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
-    completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
-    inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
-    HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.of(inflightReplaceMetadata), completeReplaceMetadata);
-  }
-
-  private void createReplaceMetadata(String instantTime) throws Exception {
-    String fileId1 = "file-" + instantTime + "-1";
-    String fileId2 = "file-" + instantTime + "-2";
-
-    // create replace instant to mark fileId1 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-        .setOperationType(WriteOperationType.INSERT_OVERWRITE.toString())
-        .setVersion(1)
-        .setExtraMetadata(Collections.emptyMap())
-        .build();
-    HoodieReplaceCommitMetadata completeReplaceMetadata = new HoodieReplaceCommitMetadata();
-    HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
-    completeReplaceMetadata.addReplaceFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1);
-    completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
-    inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
-    HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.of(inflightReplaceMetadata), completeReplaceMetadata)
-        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
   private HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly) throws IOException {
