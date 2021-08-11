@@ -20,7 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.cli.HoodieCLI;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -36,12 +36,15 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -56,9 +59,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test Cases for {@link TableCommand}.
  */
-public class TestTableCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestTableCommand extends CLIFunctionalTestHarness {
 
-  private final String tableName = "test_table";
+  private String tableName;
   private String tablePath;
   private String metaPath;
   private String archivePath;
@@ -68,17 +72,18 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
    */
   @BeforeEach
   public void init() {
-    HoodieCLI.conf = jsc.hadoopConfiguration();
-    tablePath = basePath + File.separator + tableName;
-    metaPath = tablePath + File.separator + METAFOLDER_NAME;
-    archivePath = metaPath + File.separator + HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue();
+    HoodieCLI.conf = hadoopConf();
+    tableName = tableName();
+    tablePath = tablePath(tableName);
+    metaPath = Paths.get(tablePath, METAFOLDER_NAME).toString();
+    archivePath = Paths.get(metaPath, HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue()).toString();
   }
 
   /**
    * Method to create a table for connect or desc.
    */
   private boolean prepareTable() {
-    CommandResult cr = getShell().executeCommand(
+    CommandResult cr = shell().executeCommand(
         "create --path " + tablePath + " --tableName " + tableName);
     return cr.isSuccess();
   }
@@ -92,7 +97,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     assertTrue(prepareTable());
 
     // Test connect with specified values
-    CommandResult cr = getShell().executeCommand(
+    CommandResult cr = shell().executeCommand(
         "connect --path " + tablePath + " --initialCheckIntervalMs 3000 "
             + "--maxWaitIntervalMs 40000 --maxCheckIntervalMs 8");
     assertTrue(cr.isSuccess());
@@ -131,7 +136,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
   @Test
   public void testCreateWithSpecifiedValues() {
     // Test create with specified values
-    CommandResult cr = getShell().executeCommand(
+    CommandResult cr = shell().executeCommand(
         "create --path " + tablePath + " --tableName " + tableName
             + " --tableType MERGE_ON_READ --archiveLogFolder archive");
     assertTrue(cr.isSuccess());
@@ -152,7 +157,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     assertTrue(prepareTable());
 
     // Test desc table
-    CommandResult cr = getShell().executeCommand("desc");
+    CommandResult cr = shell().executeCommand("desc");
     assertTrue(cr.isSuccess());
 
     // check table's basePath metaPath and type
@@ -168,14 +173,14 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
   public void testRefresh() throws IOException {
     List<String> refreshCommands = Arrays.asList("refresh", "metadata refresh",
         "commits refresh", "cleans refresh", "savepoints refresh");
-    for (String command: refreshCommands) {
+    for (String command : refreshCommands) {
       testRefreshCommand(command);
     }
   }
 
   private void testRefreshCommand(String command) throws IOException {
     // clean table matedata
-    FileSystem fs = FileSystem.get(jsc.hadoopConfiguration());
+    FileSystem fs = FileSystem.get(hadoopConf());
     fs.delete(new Path(tablePath + File.separator + HoodieTableMetaClient.METAFOLDER_NAME), true);
 
     // Create table
@@ -188,7 +193,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     // generate four savepoints
     for (int i = 100; i < 104; i++) {
       String instantTime = String.valueOf(i);
-      HoodieTestDataGenerator.createCommitFile(tablePath, instantTime, jsc.hadoopConfiguration());
+      HoodieTestDataGenerator.createCommitFile(tablePath, instantTime, hadoopConf());
     }
 
     // Before refresh, no instant
@@ -196,7 +201,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
         HoodieCLI.getTableMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
     assertEquals(0, timeline.countInstants(), "there should have no instant");
 
-    CommandResult cr = getShell().executeCommand(command);
+    CommandResult cr = shell().executeCommand(command);
     assertTrue(cr.isSuccess());
 
     timeline =
@@ -209,11 +214,10 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
   @Test
   public void testFetchTableSchema() throws Exception {
     // Create table and connect
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = hadoopConf();
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    metaClient = HoodieCLI.getTableMetaClient();
 
     String schemaStr = "{\n"
         + "         \"type\" : \"record\",\n"
@@ -230,7 +234,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
 
     generateData(schemaStr);
 
-    CommandResult cr = getShell().executeCommand("fetch table schema");
+    CommandResult cr = shell().executeCommand("fetch table schema");
     assertTrue(cr.isSuccess());
 
     String actualSchemaStr = cr.getResult().toString().substring(cr.getResult().toString().indexOf("{"));
@@ -241,7 +245,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     assertEquals(actualSchema, expectedSchema);
 
     File file = File.createTempFile("temp", null);
-    cr = getShell().executeCommand("fetch table schema --outputFilePath " + file.getAbsolutePath());
+    cr = shell().executeCommand("fetch table schema --outputFilePath " + file.getAbsolutePath());
     assertTrue(cr.isSuccess());
 
     actualSchemaStr = getFileContent(file.getAbsolutePath());
@@ -262,7 +266,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
           Option.of(value[0]), Option.of(value[1]), Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, schemaStr));
     }
 
-    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
         "There should have 3 commits");
     return data;
@@ -277,6 +281,6 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     byte[] data = new byte[(int) fileToRead.length()];
     fis.read(data);
     fis.close();
-    return new String(data, "UTF-8");
+    return new String(data, StandardCharsets.UTF_8);
   }
 }
