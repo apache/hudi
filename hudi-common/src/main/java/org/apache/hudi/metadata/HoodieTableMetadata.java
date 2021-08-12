@@ -111,13 +111,5 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   Option<String> getUpdateTime();
 
-  /**
-   * Get the instant time up to which the Metadata Table is returning data.
-   *
-   * This is different from the getUpdateTime() because the reader should consider all completed instants
-   * from the dataset timeline in order to always provide the most up to date view of the files within the dataset.
-   */
-  Option<String> getReaderTime();
-
   boolean isInSync();
 }

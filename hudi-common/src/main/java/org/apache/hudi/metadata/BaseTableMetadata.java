@@ -335,8 +335,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
   }
 
-  @Override
   public Option<String> getReaderTime() {
-    return Option.ofNullable(timelineMergedMetadata).map(TimelineMergedTableMetadata::getSyncedInstantTime());
+    if (timelineMergedMetadata == null) {
+      return Option.empty();
+    }
+    return timelineMergedMetadata.getSyncedInstantTime();
   }
 }

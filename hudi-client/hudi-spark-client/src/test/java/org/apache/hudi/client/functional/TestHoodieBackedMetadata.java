@@ -72,6 +72,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -801,7 +802,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       // Reader should sync to all the completed instants
       HoodieTableMetadata metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
           client.getConfig().getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
-      assertEquals(metadata.getReaderTime().get(), newCommitTime);
+      assertEquals(((HoodieBackedTableMetadata)metadata).getReaderTime().get(), newCommitTime);
 
       // Remove the inflight instance holding back table sync
       fs.delete(inflightCleanPath, false);
