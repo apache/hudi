@@ -78,7 +78,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     this.spillableMapDirectory = spillableMapDirectory;
     this.metadataConfig = metadataConfig;
 
-    this.enabled = metadataConfig.useFileListingMetadata();
+    this.enabled = metadataConfig.enabled();
     if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {

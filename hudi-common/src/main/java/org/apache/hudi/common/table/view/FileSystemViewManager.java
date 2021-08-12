@@ -160,7 +160,7 @@ public class FileSystemViewManager {
                                                                         HoodieTableMetaClient metaClient, SerializableSupplier<HoodieTableMetadata> metadataSupplier) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
-    if (metadataConfig.useFileListingMetadata()) {
+    if (metadataConfig.enabled()) {
       ValidationUtils.checkArgument(metadataSupplier != null, "Metadata supplier is null. Cannot instantiate metadata file system view");
       return new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
           metadataSupplier.get());
@@ -181,7 +181,7 @@ public class FileSystemViewManager {
                                                                                    HoodieMetadataConfig metadataConfig,
                                                                                    HoodieTimeline timeline) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
-    if (metadataConfig.useFileListingMetadata()) {
+    if (metadataConfig.enabled()) {
       return new HoodieMetadataFileSystemView(engineContext, metaClient, timeline, metadataConfig);
     }
     return new HoodieTableFileSystemView(metaClient, timeline);
