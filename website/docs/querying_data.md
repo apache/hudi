@@ -119,6 +119,11 @@ By default, Spark SQL will try to use its own parquet reader instead of Hive Ser
 both parquet and avro data, this default setting needs to be turned off using set `spark.sql.hive.convertMetastoreParquet=false`. 
 This will force Spark to fallback to using the Hive Serde to read the data (planning/executions is still Spark). 
 
+**NOTICE**
+
+Since 0.9.0 hudi will sync the table to hive as a spark datasource table. So we do not need the `spark.sql.hive.convertMetastoreParquet=false`
+config anymore for the table synced by 0.9.0+ version.
+
 ```java
 $ spark-shell --driver-class-path /etc/hive/conf  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3,org.apache.spark:spark-avro_2.11:2.4.4 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
 
@@ -141,14 +146,13 @@ and executors. Alternatively, hudi-spark-bundle can also fetched via the `--pack
 
 ### Snapshot query {#spark-snap-query}
 This method can be used to retrieve the data table at the present point in time.
-Note: The file path must be suffixed with a number of wildcard asterisk (`/*`) one greater than the number of partition levels. Eg: with table file path "tablePath" partitioned by columns "a", "b", and "c", the load path must be `tablePath + "/*/*/*/*"`
 
 ```scala
 val hudiIncQueryDF = spark
      .read()
-     .format("org.apache.hudi")
+     .format("hudi")
      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
-     .load(tablePath + "/*") //The number of wildcard asterisks here must be one greater than the number of partition
+     .load(tablePath) 
 ```
 
 ### Incremental query {#spark-incr-query}
