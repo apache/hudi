@@ -1216,8 +1216,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * File listing metadata configs.
    */
-  public boolean useFileListingMetadata() {
-    return metadataConfig.useFileListingMetadata();
+  public boolean isMetadataTableEnabled() {
+    return metadataConfig.enabled();
   }
 
   public boolean getFileListingMetadataVerify() {

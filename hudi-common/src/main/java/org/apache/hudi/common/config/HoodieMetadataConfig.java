@@ -144,12 +144,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.HOODIE_ASSUME_DATE_PARTITIONING_PROP);
   }
 
-  public boolean useFileListingMetadata() {
+  public boolean enabled() {
     return getBoolean(METADATA_ENABLE_PROP);
   }
 
   public boolean enableSync() {
-    return useFileListingMetadata() && getBoolean(HoodieMetadataConfig.METADATA_SYNC_ENABLE_PROP);
+    return enabled() && getBoolean(HoodieMetadataConfig.METADATA_SYNC_ENABLE_PROP);
   }
 
   public boolean validateFileListingMetadata() {

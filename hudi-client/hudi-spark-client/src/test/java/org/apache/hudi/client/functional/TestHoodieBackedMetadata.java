@@ -922,7 +922,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     HoodieTableMetadata tableMetadata = metadata(client);
     assertNotNull(tableMetadata, "MetadataReader should have been initialized");
-    if (!config.useFileListingMetadata()) {
+    if (!config.isMetadataTableEnabled()) {
       return;
     }
 
@@ -1023,7 +1023,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     // Validate write config for metadata table
     HoodieWriteConfig metadataWriteConfig = metadataWriter.getWriteConfig();
-    assertFalse(metadataWriteConfig.useFileListingMetadata(), "No metadata table for metadata table");
+    assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
     assertFalse(metadataWriteConfig.getFileListingMetadataVerify(), "No verify for metadata table");
 
     // Metadata table should be in sync with the dataset
