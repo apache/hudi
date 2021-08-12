@@ -403,7 +403,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         .isPresent()
         ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
-      syncTableMetadata();
+      if (writeOperationType != WriteOperationType.CLUSTER && writeOperationType != WriteOperationType.COMPACT) {
+        syncTableMetadata();
+      }
     } finally {
       this.txnManager.endTransaction();
     }
@@ -436,7 +438,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
       autoCleanOnCommit();
-      syncTableMetadata();
+      if (operationType != null && operationType != WriteOperationType.CLUSTER && operationType != WriteOperationType.COMPACT) {
+        syncTableMetadata();
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {
