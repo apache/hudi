@@ -146,6 +146,24 @@ can generate sample inserts and updates based on the the sample trip schema [her
 
 Hudi support create table using spark-sql.
 
+- COW & MOR table
+  
+  We can create a COW table or MOR table by specified the **type** option. **type = 'cow'** represents COW table, while **type = 'mor'** represents MOR table.
+
+
+- Partitioned & Non-Partitioned table
+
+ We can use the **partitioned by** statement to specified the partition columns to create a partitioned table.
+  
+- Managed & External table
+
+ If the table has not specified the **location** statement, it is a managed table. Or else it is an exteranl table.
+  
+- Table with primary key
+
+ If the table has specified the **primaryKey** column in options, it is a table with primary key.
+  
+
 **Create Non-Partitioned Table**
 
 Here is an example of creating a non-partitioned COW managed table with a primary key 'id'.
@@ -215,7 +233,7 @@ partitioned by (dt, hh)
 ```
 **Create Table On The Exists Table Path**
 
-We can create a table on an exists hudi table path. This is useful to read/write from a non-sql hudi table by spark-sql.
+We can create a table on an exists hudi table path. This is useful to read/write from a pre-exists hudi table by spark-sql.
 ```sql
  create table h_p1 using hudi 
  options (
@@ -253,6 +271,8 @@ select 1 as id, 'a1' as name, 10 as price
 | primaryKey | The primary key names of the table, multiple fields separated by commas. |
 | type       | The table type to create. type = 'cow' means a COPY-ON-WRITE table,while type = 'mor' means a MERGE-ON-READ table. Default value is 'cow' without specified this option.|
 | preCombineField | The Pre-Combine field of the table. |
+
+To set custom hudi config, see the  "Set hudi config section" would help.
 
 ## Insert data
 
