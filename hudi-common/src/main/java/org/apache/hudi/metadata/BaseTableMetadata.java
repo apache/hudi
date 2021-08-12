@@ -336,8 +336,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Option<String> getSyncedInstantTimeForReader() {
+  public Option<String> getReaderTime() {
     return Option.ofNullable(timelineMergedMetadata).map(TimelineMergedTableMetadata::getSyncedInstantTime());
   }
-
 }

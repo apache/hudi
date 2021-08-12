@@ -105,17 +105,19 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
 
   /**
-   * Get the instant time to which the metadata is synced w.r.t data timeline.
+   * Get the instant time at which Metadata Table was last updated.
+   *
+   * This is the timestamp of the Instant on the dataset which was last synced to the Metadata Table.
    */
-  Option<String> getSyncedInstantTime();
+  Option<String> getUpdateTime();
 
   /**
-   * Get the instant time to which the metadata is synced w.r.t data timeline on the reader side.
+   * Get the instant time up to which the Metadata Table is returning data.
    *
-   * This is different from the getSyncedInstantTime() because the reader should sync all completed instants
-   * from the data timeline in order to always provide the most up to date view of the files within the dataset.
+   * This is different from the getUpdateTime() because the reader should consider all completed instants
+   * from the dataset timeline in order to always provide the most up to date view of the files within the dataset.
    */
-  Option<String> getSyncedInstantTimeForReader();
+  Option<String> getReaderTime();
 
   boolean isInSync();
 }

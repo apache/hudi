@@ -420,7 +420,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         LOG.info("Syncing instant " + instant + " to metadata table");
 
         Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient,
-            metaClient.getActiveTimeline(), instant, metadata.getSyncedInstantTime());
+            metaClient.getActiveTimeline(), instant, metadata.getUpdateTime());
         if (records.isPresent()) {
           commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
         }
@@ -483,7 +483,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
     if (enabled) {
       List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metaClient.getActiveTimeline(),
-          restoreMetadata, instantTime, metadata.getSyncedInstantTime());
+          restoreMetadata, instantTime, metadata.getUpdateTime());
       commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
     }
   }
@@ -498,7 +498,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
     if (enabled) {
       List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metaClient.getActiveTimeline(),
-          rollbackMetadata, instantTime, metadata.getSyncedInstantTime());
+          rollbackMetadata, instantTime, metadata.getUpdateTime());
       commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
     }
   }

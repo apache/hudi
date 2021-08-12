@@ -205,7 +205,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     if (config.isMetadataTableEnabled()) {
       try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(),
           config.getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue())) {
-        Option<String> lastSyncedInstantTime = tableMetadata.getSyncedInstantTime();
+        Option<String> lastSyncedInstantTime = tableMetadata.getUpdateTime();
 
         if (lastSyncedInstantTime.isPresent()) {
           LOG.info("Limiting archiving of instants to last synced instant on metadata table at " + lastSyncedInstantTime.get());

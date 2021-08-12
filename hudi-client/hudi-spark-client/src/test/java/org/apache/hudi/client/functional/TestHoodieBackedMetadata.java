@@ -796,12 +796,12 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       // Table should sync only before the inflightActionTimestamp
       HoodieBackedTableMetadataWriter writer =
           (HoodieBackedTableMetadataWriter) SparkHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context);
-      assertEquals(writer.getLatestSyncedInstantTime().get(), beforeInflightActionTimestamp);
+      assertEquals(writer.getMetadataReader().getUpdateTime().get(), beforeInflightActionTimestamp);
 
       // Reader should sync to all the completed instants
       HoodieTableMetadata metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
           client.getConfig().getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
-      assertEquals(metadata.getSyncedInstantTimeForReader().get(), newCommitTime);
+      assertEquals(metadata.getReaderTime().get(), newCommitTime);
 
       // Remove the inflight instance holding back table sync
       fs.delete(inflightCleanPath, false);
@@ -809,12 +809,12 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
       writer =
           (HoodieBackedTableMetadataWriter)SparkHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context);
-      assertEquals(writer.getMetadataReader().getSyncedInstantTime().get(), newCommitTime);
+      assertEquals(writer.getMetadataReader().getUpdateTime().get(), newCommitTime);
 
       // Reader should sync to all the completed instants
       metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
           client.getConfig().getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
-      assertEquals(writer.getMetadataReader().getSyncedInstantTime().get(), newCommitTime);
+      assertEquals(writer.getMetadataReader().getUpdateTime().get(), newCommitTime);
     }
 
     // Enable metadata table and ensure it is synced

@@ -281,7 +281,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * Return the timestamp of the latest synced instant.
    */
   @Override
-  public Option<String> getSyncedInstantTime() {
+  public Option<String> getUpdateTime() {
     if (!enabled) {
       return Option.empty();
     }
