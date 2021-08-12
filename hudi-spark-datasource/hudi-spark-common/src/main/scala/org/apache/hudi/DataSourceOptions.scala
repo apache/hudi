@@ -462,10 +462,10 @@ object DataSourceWriteOptions {
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
 
-  val ENABLE_DROP_PARTITION_COLUMNS: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.write.drop.partition.columns.enable")
+  val DROP_PARTITION_COLUMNS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.drop.partition.columns")
     .defaultValue("false")
-    .withDocumentation("When set to true, will not write the  partition columns into parquet file. " +
+    .withDocumentation("When set to true, will not write the partition columns into hudi. " +
       "By default, false.")
 }
 
