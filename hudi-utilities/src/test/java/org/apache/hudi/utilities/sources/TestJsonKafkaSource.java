@@ -56,9 +56,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 /**
- * Tests against {@link AvroKafkaSource}.
+ * Tests against {@link JsonKafkaSource}.
  */
-public class TestKafkaSource extends UtilitiesTestBase {
+public class TestJsonKafkaSource extends UtilitiesTestBase {
 
   private static String TEST_TOPIC_NAME = "hoodie_test";
 
