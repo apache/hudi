@@ -1,0 +1,62 @@
+{
+  "version-0.5.1/docs": [
+    {
+      "type": "doc",
+      "id": "version-0.5.1/quick-start-guide"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.1/use_cases"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.1/writing_data"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.1/querying_data"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.1/configurations"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.1/performance"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.1/deployment"
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Storage Configurations",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.5.1/s3_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.1/gcs_hoodie"
+        }
+      ]
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Resources",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.5.1/docker_demo"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.1/privacy"
+        }
+      ]
+    }
+  ]
+}

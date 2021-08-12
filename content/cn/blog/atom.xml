@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://hudi.apache.org/cn/blog</id>
+    <title>Apache Hudi: User-Facing Analytics</title>
+    <updated>2021-07-21T00:00:00.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
+    <subtitle>Apache Hudi! Blog</subtitle>
+    <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi - The Data Lake Platform]]></title>
+        <id>Apache Hudi - The Data Lake Platform</id>
+        <link href="https://hudi.apache.org/cn/blog/2021/07/21/streaming-data-lake-platform"/>
+        <updated>2021-07-21T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[As early as 2016, we set out a bold, new vision reimagining batch data processing through a new “incremental” data processing stack - alongside the existing batch and streaming stacks.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Employing correct configurations for Hudi's cleaner table service]]></title>
+        <id>Employing correct configurations for Hudi's cleaner table service</id>
+        <link href="https://hudi.apache.org/cn/blog/2021/06/10/employing-right-configurations-for-hudi-cleaner"/>
+        <updated>2021-06-10T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Apache Hudi provides snapshot isolation between writers and readers. This is made possible by Hudi’s MVCC concurrency model. In this blog, we will explain how to employ the right configurations to manage multiple file versions. Furthermore, we will discuss mechanisms available to users on how to maintain just the required number of old file versions so that long running readers do not fail.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Streaming Responsibly - How Apache Hudi maintains optimum sized files]]></title>
+        <id>Streaming Responsibly - How Apache Hudi maintains optimum sized files</id>
+        <link href="https://hudi.apache.org/cn/blog/2021/03/01/hudi-file-sizing"/>
+        <updated>2021-03-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Apache Hudi is a data lake platform technology that provides several functionalities needed to build and manage data lakes.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi Key Generators]]></title>
+        <id>Apache Hudi Key Generators</id>
+        <link href="https://hudi.apache.org/cn/blog/2021/02/13/hudi-key-generators"/>
+        <updated>2021-02-13T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Optimize Data lake layout using Clustering in Apache Hudi]]></title>
+        <id>Optimize Data lake layout using Clustering in Apache Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2021/01/27/hudi-clustering-intro"/>
+        <updated>2021-01-27T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Apache Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing. In a data lake/warehouse, one of the key trade-offs is between ingestion speed and query performance. Data ingestion typically prefers small files to improve parallelism and make data available to queries as soon as possible. However, query performance degrades poorly with a lot of small files. Also, during ingestion, data is typically co-located based on arrival time. However, the query engines perform better when the data frequently queried is co-located together. In most architectures each of these systems tend to add optimizations independently to improve performance which hits limitations due to un-optimized data layouts. This blog introduces a new kind of table service called clustering [RFC-19] to reorganize data for improved query performance without compromising on ingestion speed.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go]]></title>
+        <id>Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/12/01/high-perf-data-lake-with-hudi-and-alluxio-t3go"/>
+        <updated>2020-12-01T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[T3Go  is China’s first platform for smart travel based on the Internet of Vehicles. In this article, Trevor Zhang and Vino Yang from T3Go describe the evolution of their data lake architecture, built on cloud-native or open-source technologies including Alibaba OSS, Apache Hudi, and Alluxio. Today, their data lake stores petabytes of data, supporting hundreds of pipelines and tens of thousands of tasks daily. It is essential for business units at T3Go including Data Warehouse, Internet of Vehicles, Order Dispatching, Machine Learning, and self-service query analysis.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Employing the right indexes for fast updates, deletes in Apache Hudi]]></title>
+        <id>Employing the right indexes for fast updates, deletes in Apache Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/11/11/hudi-indexing-mechanisms"/>
+        <updated>2020-11-11T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Apache Hudi employs an index to locate the file group, that an update/delete belongs to. For Copy-On-Write tables, this enables]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apply record level changes from relational databases to Amazon S3 data lake using Apache Hudi on Amazon EMR and AWS Database Migration Service]]></title>
+        <id>Apply record level changes from relational databases to Amazon S3 data lake using Apache Hudi on Amazon EMR and AWS Database Migration Service</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/10/19/hudi-meets-aws-emr-and-aws-dms"/>
+        <updated>2020-10-19T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[This blog published by AWS shows how to build a CDC pipeline that captures data from an Amazon Relational Database Service (Amazon RDS) for MySQL database using AWS Database Migration Service (AWS DMS) and applies those changes to a dataset in Amazon S3 using Apache Hudi on Amazon EMR.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi meets Apache Flink]]></title>
+        <id>Apache Hudi meets Apache Flink</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/10/15/apache-hudi-meets-apache-flink"/>
+        <updated>2020-10-15T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Apache Hudi (Hudi for short) is a data lake framework created at Uber. Hudi joined the Apache incubator for incubation in January 2019, and was promoted to the top Apache project in May 2020. It is one of the most popular data lake frameworks.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How nClouds Helps Accelerate Data Delivery with Apache Hudi on Amazon EMR]]></title>
+        <id>How nClouds Helps Accelerate Data Delivery with Apache Hudi on Amazon EMR</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/10/06/cdc-solution-using-hudi-by-nclouds"/>
+        <updated>2020-10-06T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[This blog published by nClouds in partnership with AWS shows how to build a CDC pipeline using Apache Hudi on Amazon EMR and other managed services like Amazon RDS and AWS DMS, including Amazon QuickSight for data visualization.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Ingest multiple tables using Hudi]]></title>
+        <id>Ingest multiple tables using Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/08/22/ingest-multiple-tables-using-hudi"/>
+        <updated>2020-08-22T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[When building a change data capture pipeline for already existing or newly created relational databases, one of the most common problems that one faces is simplifying the onboarding process for multiple tables. Ingesting multiple tables to Hudi dataset at a single go is now possible using HoodieMultiTableDeltaStreamer class which is a wrapper on top of the more popular HoodieDeltaStreamer class. Currently HoodieMultiTableDeltaStreamer supports COPY_ON_WRITE storage type only and the ingestion is done in a sequential way.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Async Compaction Deployment Models]]></title>
+        <id>Async Compaction Deployment Models</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/08/21/async-compaction-deployment-model"/>
+        <updated>2020-08-21T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[We will look at different deployment models for executing compactions asynchronously.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Efficient Migration of Large Parquet Tables to Apache Hudi]]></title>
+        <id>Efficient Migration of Large Parquet Tables to Apache Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/08/20/efficient-migration-of-large-parquet-tables"/>
+        <updated>2020-08-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[We will look at how to migrate a large parquet table to Hudi without having to rewrite the entire dataset.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Incremental Processing on the Data Lake]]></title>
+        <id>Incremental Processing on the Data Lake</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/08/18/hudi-incremental-processing-on-data-lakes"/>
+        <updated>2020-08-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[NOTE: This article is a translation of the infoq.cn article, found here, with minor edits]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Monitor Hudi metrics with Datadog]]></title>
+        <id>Monitor Hudi metrics with Datadog</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/05/28/monitoring-hudi-metrics-with-datadog"/>
+        <updated>2020-05-28T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Availability]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi Support on Apache Zeppelin]]></title>
+        <id>Apache Hudi Support on Apache Zeppelin</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/04/27/apache-hudi-apache-zepplin"/>
+        <updated>2020-04-27T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[1. Introduction]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Export Hudi datasets as a copy or as different formats]]></title>
+        <id>Export Hudi datasets as a copy or as different formats</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/03/22/exporting-hudi-datasets"/>
+        <updated>2020-03-22T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Copy to Hudi dataset]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Change Capture Using AWS Database Migration Service and Hudi]]></title>
+        <id>Change Capture Using AWS Database Migration Service and Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/01/20/change-capture-using-aws"/>
+        <updated>2020-01-20T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[One of the core use-cases for Apache Hudi is enabling seamless, efficient database ingestion to your data lake. Even though a lot has been talked about and even users already adopting this model, content on how to go about this is sparse.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Delete support in Hudi]]></title>
+        <id>Delete support in Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2020/01/15/delete-support-in-hudi"/>
+        <updated>2020-01-15T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Deletes are supported at a record level in Hudi with 0.5.1 release. This blog is a "how to" blog on how to delete records in hudi. Deletes can be done with 3 flavors: Hudi RDD APIs, with Spark data source and with DeltaStreamer.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Ingesting Database changes via Sqoop/Hudi]]></title>
+        <id>Ingesting Database changes via Sqoop/Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2019/09/09/ingesting-database-changes"/>
+        <updated>2019-09-09T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Very simple in just 2 steps.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Registering sample dataset to Hive via beeline]]></title>
+        <id>Registering sample dataset to Hive via beeline</id>
+        <link href="https://hudi.apache.org/cn/blog/2019/05/14/registering-dataset-to-hive"/>
+        <updated>2019-05-14T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Hudi hive sync tool typically handles registration of the dataset into Hive metastore. In case, there are issues with quickstart around this, following page shows commands that can be used to do this manually via beeline.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Big Batch vs Incremental Processing]]></title>
+        <id>Big Batch vs Incremental Processing</id>
+        <link href="https://hudi.apache.org/cn/blog/2019/03/07/batch-vs-incremental"/>
+        <updated>2019-03-07T00:00:00.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi entered Apache Incubator]]></title>
+        <id>Hudi entered Apache Incubator</id>
+        <link href="https://hudi.apache.org/cn/blog/2019/01/18/asf-incubation"/>
+        <updated>2019-01-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[In the coming weeks, we will be moving in our new home on the Apache Incubator.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Connect with us at Strata San Jose March 2017]]></title>
+        <id>Connect with us at Strata San Jose March 2017</id>
+        <link href="https://hudi.apache.org/cn/blog/2016/12/30/strata-talk-2017"/>
+        <updated>2016-12-30T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[We will be presenting Hudi & general concepts around how incremental processing works at Uber.]]></summary>
+    </entry>
+</feed>
