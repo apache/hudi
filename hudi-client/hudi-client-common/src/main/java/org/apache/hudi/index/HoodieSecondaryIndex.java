@@ -57,8 +57,8 @@ public abstract class HoodieSecondaryIndex<T extends HoodieRecordPayload, I, K, 
    * Update index to quickly identify records.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract void updateIndex(HoodieWriteMetadata<O> writeMetadata, String instantTime, HoodieEngineContext context,
-                                HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
+  public abstract void updateIndex(HoodieWriteMetadata<O> writeMetadata, String instantTime,
+                                   HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
 
   /**
    * Rollback the effects of the commit made at instantTime.

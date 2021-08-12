@@ -91,7 +91,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       }
 
       if (record.get().get("rangeIndexMetadata") != null) {
-        rangeIndexMetadata = (HoodieRangeIndexInfo) record.get().get("rangeIndexMetadata");
+        GenericRecord v = (GenericRecord) record.get().get("rangeIndexMetadata");
+        rangeIndexMetadata = new HoodieRangeIndexInfo(String.valueOf(v.get("columnName")), String.valueOf(v.get("filePath")),
+            String.valueOf(v.get("rangeLow")), String.valueOf(v.get("rangeHigh")), (Boolean) v.get("isDeleted"));
       }
     }
   }
@@ -258,11 +260,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static Stream<HoodieRecord<HoodieMetadataPayload>> createRangeRecords(String filePath, Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeInfo) {
     return columnRangeInfo.stream().map(columnRange -> {
-      HoodieKey key = new HoodieKey(filePath + columnRange.getColumnName(), MetadataPartitionType.RANGE_INDEX.partitionPath());
+      HoodieKey key = new HoodieKey(getRangeRecordKey(columnRange), MetadataPartitionType.RANGE_INDEX.partitionPath());
+      
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), RANGE_INDEX, Collections.emptyMap(),
           HoodieRangeIndexInfo.newBuilder()
-              .setRangeHigh(columnRange.getMaxValue().toString()) //TODO: we are storing everything as string. add support for other primitive types
-              .setRangeLow(columnRange.getMaxValue().toString())
+              //TODO: we are storing range for all columns as string. add support for other primitive types
+              // also if min/max is null, we store null for these columns. Should we consider storing String "null" instead?
+              .setRangeHigh(columnRange.getMinValue() == null ? null : columnRange.getMaxValue().toString()) 
+              .setRangeLow(columnRange.getMinValue() == null ? null : columnRange.getMaxValue().toString()) 
               .setColumnName(columnRange.getColumnName())
               .setFilePath(filePath)
               .setIsDeleted(false)
@@ -270,6 +275,20 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
       return new HoodieRecord<>(key, payload);
     });
+  }
+  
+  // get record key from range metadata
+  public static String getRangeRecordKey(HoodieColumnRangeMetadata<Comparable> columnRange) {
+    return "column||" + columnRange.getColumnName() + ";;path||" + columnRange.getFilePath();
+  }
+  
+  // parse attribute in record key. TODO: find better way to get this attribute instaed of parsing key
+  public static String getAttributeFromRecordKey(String recordKey, String attribute) {
+    String[] attributeNameValuePairs = recordKey.split(";;");
+    return Arrays.stream(attributeNameValuePairs)
+        .filter(nameValue -> nameValue.startsWith(attribute))
+        .findFirst()
+        .map(s -> s.split("\\|\\|")[1]).orElse(null);
   }
 
   @Override

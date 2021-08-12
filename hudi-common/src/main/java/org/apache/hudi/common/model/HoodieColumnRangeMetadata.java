@@ -26,14 +26,20 @@ import java.util.Objects;
  */
 public class HoodieColumnRangeMetadata<T> {
   
+  private final String filePath;
   private final String columnName;
   private final T minValue;
   private final T maxValue;
 
-  public HoodieColumnRangeMetadata(final String columnName, final T minValue, final T maxValue) {
+  public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue) {
+    this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
     this.maxValue = maxValue;
+  }
+
+  public String getFilePath() {
+    return this.filePath;
   }
 
   public String getColumnName() {
@@ -57,7 +63,8 @@ public class HoodieColumnRangeMetadata<T> {
       return false;
     }
     final HoodieColumnRangeMetadata<?> that = (HoodieColumnRangeMetadata<?>) o;
-    return Objects.equals(getColumnName(), that.getColumnName())
+    return Objects.equals(getFilePath(), that.getFilePath())
+        && Objects.equals(getColumnName(), that.getColumnName())
         && Objects.equals(getMinValue(), that.getMinValue()) 
         && Objects.equals(getMaxValue(), that.getMaxValue());
   }
@@ -70,6 +77,7 @@ public class HoodieColumnRangeMetadata<T> {
   @Override
   public String toString() {
     return "HoodieColumnRangeMetadata{"
+        + "filePath ='" + filePath + '\''
         + "columnName='" + columnName + '\''
         + ", minValue=" + minValue
         + ", maxValue=" + maxValue + '}';

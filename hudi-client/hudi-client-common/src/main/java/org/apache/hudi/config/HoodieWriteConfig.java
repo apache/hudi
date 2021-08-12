@@ -373,6 +373,11 @@ public class HoodieWriteConfig extends HoodieConfig {
        .withDocumentation("Whether to allow generation of empty commits, even if no data was written in the commit. "
           + "It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data");
 
+  public static final ConfigProperty<Boolean> TABLE_REQUIRES_SORTING = ConfigProperty
+      .key("hoodie.table.sort.key")
+      .defaultValue(false)
+      .withDocumentation("optional configuration to require sorting based on key");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -934,6 +939,13 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
+   * Secondary index config.
+   */
+  public Boolean getIsRangeIndexEnabled() {
+    return getBoolean(HoodieIndexConfig.RANGE_INDEX_ENABLED);
+  }
+
+  /**
    * storage properties.
    */
   public long getParquetMaxFileSize() {
@@ -1304,6 +1316,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public boolean allowEmptyCommit() {
     return getBooleanOrDefault(ALLOW_EMPTY_COMMIT);
   }
+  
+  public boolean requiresSorting() {
+    return getBooleanOrDefault(TABLE_REQUIRES_SORTING);
+  }
 
   public static class Builder {
 
@@ -1608,6 +1624,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       writeConfig.setValue(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      return this;
+    }
+
+    public Builder withRequiresSorting(boolean tableNeedsSorting) {
+      writeConfig.setValue(HoodieWriteConfig.TABLE_REQUIRES_SORTING, Boolean.toString(tableNeedsSorting));
       return this;
     }
 

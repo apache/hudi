@@ -61,22 +61,22 @@
                         {
                            "name": "columnName",
                            "type": "string",
-                           "doc": "Column name represented as dot string for nested columns"
-                        },
-                        {
-                           "name": "rangeLow",
-                           "type": "string",
-                           "doc": "Low end of the range. For now, this is a String, but we need to support other types"
-                        },
-                        {
-                           "name": "rangeHigh",
-                           "type": "string",
-                           "doc": "High end of the range. For now, this is a String, but we need to support other types"
+                           "doc": "Column name. Represented as dot string for nested columns"
                         },
                         {
                            "name": "filePath",
                            "type": "string",
                            "doc": "relative file path from basePath. Includes partition name and full fileName"
+                        },
+                        {
+                           "name": "rangeLow",
+                           "type": ["null","string"],
+                           "doc": "Low end of the range. For now, this is a String. Based on main data table schema, we can convert it to appropriate type"
+                        },
+                        {
+                           "name": "rangeHigh",
+                           "type": ["null","string"],
+                           "doc": "High end of the range. For now, this is a String. Based on main data table schema, we can convert it to appropriate type"
                         },
                         {
                            "name": "isDeleted",

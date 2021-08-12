@@ -22,17 +22,22 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.Path;
@@ -49,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
@@ -67,7 +73,7 @@ public class HoodieTableMetadataUtil {
    * @return a list of metadata table records
    * @throws IOException
    */
-  public static Option<List<HoodieRecord>> convertInstantToMetaRecords(HoodieTableMetaClient datasetMetaClient, HoodieInstant instant, Option<String> lastSyncTs) throws IOException {
+  public static Option<List<HoodieRecord>> convertInstantToFilesMetaRecords(HoodieTableMetaClient datasetMetaClient, HoodieInstant instant, Option<String> lastSyncTs) throws IOException {
     HoodieTimeline timeline = datasetMetaClient.getActiveTimeline();
     Option<List<HoodieRecord>> records = Option.empty();
     ValidationUtils.checkArgument(instant.isCompleted(), "Only completed instants can be synced.");
@@ -109,6 +115,50 @@ public class HoodieTableMetadataUtil {
 
     return records;
   }
+
+  /**
+   * Converts a timeline instant to metadata table records.
+   *
+   * @param datasetMetaClient The meta client associated with the timeline instant
+   * @param instant to fetch and convert to metadata table records
+   * @return a list of metadata table records
+   * @throws IOException
+   */
+  public static List<HoodieRecord> convertInstantToRangeMetaRecords(HoodieTableMetaClient datasetMetaClient, HoodieInstant instant, Option<String> lastSyncTs) throws IOException {
+    HoodieTimeline timeline = datasetMetaClient.getActiveTimeline();
+    List<HoodieRecord> records = Collections.emptyList();
+    ValidationUtils.checkArgument(instant.isCompleted(), "Only completed instants can be synced.");
+
+    switch (instant.getAction()) {
+      case HoodieTimeline.CLEAN_ACTION:
+        //TODO 
+        throw new HoodieException("clean not supported for range index yet");
+      case HoodieTimeline.DELTA_COMMIT_ACTION:
+      case HoodieTimeline.COMMIT_ACTION:
+      case HoodieTimeline.COMPACTION_ACTION:
+      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+            timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        Map<String, Collection<HoodieColumnRangeMetadata<Comparable>>> fileToColumnRangeInfo = 
+            createRangeIndexInfoFromWriteStats(datasetMetaClient, commitMetadata.getPartitionToWriteStats().values().stream().flatMap(e -> e.stream()));
+        records = convertMetadataToRecords(fileToColumnRangeInfo, instant.getTimestamp(), lastSyncTs);
+        break;
+      case HoodieTimeline.ROLLBACK_ACTION:
+        //TODO 
+        throw new HoodieException("rollback not supported for range index yet");
+      case HoodieTimeline.RESTORE_ACTION:
+        //TODO 
+        throw new HoodieException("restore not supported for range index yet");
+      case HoodieTimeline.SAVEPOINT_ACTION:
+        // Nothing to be done here
+        break;
+      default:
+        throw new HoodieException("Unknown type of action " + instant.getAction());
+    }
+
+    return records;
+  }
+
 
   /**
    * Finds all new files/partitions created as part of commit and creates metadata table records for them.
@@ -354,6 +404,40 @@ public class HoodieTableMetadataUtil {
     LOG.info("Creating " + rangeRecords.size() + " records for column ranges from " + fileToColumnRangeInfo.keySet().size()
         + " files created as part of instant " + instantTime + ". Last metadata sync: " + lastSyncTs);
     return rangeRecords;
+  }
+  
+  public static Map<String, Collection<HoodieColumnRangeMetadata<Comparable>>> createRangeIndexInfoFromWriteStats(HoodieEngineContext engineContext,
+                                                                                                             HoodieTableMetaClient datasetMetaClient,
+                                                                                                             List<HoodieWriteStat> allWriteStats) {
+    if (allWriteStats.isEmpty()) {
+      return Collections.emptyMap();
+    }
+    
+    return engineContext.mapToPair(allWriteStats, writeStat -> translateStatToRangeIndex(writeStat, datasetMetaClient), allWriteStats.size());
+  }
+
+  public static ImmutablePair<String, Collection<HoodieColumnRangeMetadata<Comparable>>> translateStatToRangeIndex(HoodieWriteStat writeStat,
+                                                                                                             HoodieTableMetaClient datasetMetaClient) {
+    Collection<HoodieColumnRangeMetadata<Comparable>> rangeMetadataCollection =
+        HoodieTableMetadataUtil.getRangeStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient);
+    return ImmutablePair.of(writeStat.getPath(), rangeMetadataCollection);
+  }
+
+  public static Map<String, Collection<HoodieColumnRangeMetadata<Comparable>>> createRangeIndexInfoFromWriteStats(
+      HoodieTableMetaClient datasetMetaClient, Stream<HoodieWriteStat> writeStats) {
+    
+    return writeStats.flatMap(writeStat -> getRangeStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient).stream())
+        .collect(Collectors.groupingBy(range -> range.getFilePath(),
+            Collectors.mapping(range -> range, Collectors.toCollection(ArrayList::new))));
+  }
+
+  public static Collection<HoodieColumnRangeMetadata<Comparable>> getRangeStats(final String partitionpath, final String path, HoodieTableMetaClient datasetMetaClient) {
+    if (path.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+      //TODO: we are capturing range for most columns in the schema. Should we have allowList/denyList to reduce storage size of index?
+      return new ParquetUtils().readRangeFromParquetMetadata(datasetMetaClient.getHadoopConf(), partitionpath, new Path(datasetMetaClient.getBasePath(), path));
+    } else {
+      throw new HoodieException("range index not supported for path " + path);
+    }
   }
 
 }

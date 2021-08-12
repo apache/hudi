@@ -43,6 +43,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
+import org.apache.hudi.index.HoodieSecondaryIndex;
+import org.apache.hudi.index.dfs.SparkFileToRangeIndex;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
@@ -237,6 +239,10 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     JavaRDD<WriteStatus> statuses = table.getIndex().updateLocation(writeStatusRDD, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
+    if (config.getIsRangeIndexEnabled()) {
+      HoodieSecondaryIndex secondaryIndex = new SparkFileToRangeIndex<>(config, context);
+      secondaryIndex.updateIndex(result, instantTime, table);
+    }
     return statuses;
   }
   

@@ -18,10 +18,12 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -40,8 +42,6 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -101,8 +101,20 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName);
+    JavaRDD<HoodieRecord> recordRDD = prepFileListingRecords(records);
+    commit(recordRDD, instantTime);
+  }
 
+  @Override
+  protected void commit(List<HoodieRecord> fileListRecords, List<HoodieRecord> rangeIndexRecords, String instantTime) {
+    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+    JavaRDD<HoodieRecord> fileRecordsRDD = prepFileListingRecords(fileListRecords);
+    JavaRDD<HoodieRecord> rangeRecordsRDD = prepRangeIndexRecords(rangeIndexRecords, instantTime, "column");
+
+    commit(jsc.union(fileRecordsRDD, rangeRecordsRDD), instantTime);
+  }
+  
+  private void commit(JavaRDD<HoodieRecord> recordRDD, String instantTime) {
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
       writeClient.startCommitWithTime(instantTime);
       List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
@@ -157,20 +169,18 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * Since we only read the latest base file in a partition, we tag the records with the instant time of the latest
    * base file.
    */
-  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName) {
+  private JavaRDD<HoodieRecord> prepFileListingRecords(List<HoodieRecord> records) {
     HoodieTable table = HoodieSparkTable.create(metadataWriteConfig, engineContext);
     TableFileSystemView.SliceView fsView = table.getSliceView();
-    List<HoodieBaseFile> baseFiles = fsView.getLatestFileSlices(partitionName)
+    List<HoodieBaseFile> baseFiles = fsView.getLatestFileSlices(MetadataPartitionType.FILES.partitionPath())
         .map(FileSlice::getBaseFile)
         .filter(Option::isPresent)
         .map(Option::get)
         .collect(Collectors.toList());
 
     // All the metadata fits within a single base file
-    if (partitionName.equals(MetadataPartitionType.FILES.partitionPath())) {
-      if (baseFiles.size() > 1) {
-        throw new HoodieMetadataException("Multiple base files found in metadata partition");
-      }
+    if (baseFiles.size() > 1) {
+      throw new HoodieMetadataException("Multiple base files found in metadata partition");
     }
 
     JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
@@ -196,5 +206,28 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
 
     return jsc.parallelize(records, 1).map(r -> r.setCurrentLocation(new HoodieRecordLocation(instantTime, fileId)));
+  }
+
+  /**
+   * Tag each record with the location.
+   * we try to keep all relevant records in a single file in metadata table. The 'relevance' can be defined by one of the columns in 'HoodieKey'.
+   * 
+   * This is basically poor man's version of 'bucketing'. After we have bucketing in hudi, we can use that feature and replace this with bucketing.
+   * 
+   * For example, lets say main table schema has 10 columns. We want to store all meatadata of column1 in same file  f1 on metadata table.
+   * Similarly, metadata for column2 across all partitions in main table in f2 on metadata table and so on.
+   * 
+   * In that scenario, we can use 'column' as keyAttribute.
+   * 
+   * If we know a query is interested only in column1, column2, then on metadata table, we only need to read files f1 and f2. 
+   */
+  private JavaRDD<HoodieRecord> prepRangeIndexRecords(List<HoodieRecord> records, String instantTime, String keyAttribute) {
+    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+    return jsc.parallelize(records).map(r -> {
+      // we want to create deterministic fileId for given key. So generate fileId based on key (key is typically either column_name or partitionPath of main dataset)
+      String fileIdPfx =  FSUtils.createFileIdPfxFromKey(HoodieMetadataPayload.getAttributeFromRecordKey(r.getRecordKey(), keyAttribute));
+      r.setCurrentLocation(new HoodieRecordLocation(instantTime, fileIdPfx + "-" + 0));
+      return r;
+    });
   }
 }

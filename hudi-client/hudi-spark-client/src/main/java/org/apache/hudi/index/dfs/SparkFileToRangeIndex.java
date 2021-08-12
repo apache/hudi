@@ -18,20 +18,17 @@
 
 package org.apache.hudi.index.dfs;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.ParquetUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieSecondaryIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -39,7 +36,6 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Hoodie Index implementation backed by HBase.
@@ -53,23 +49,12 @@ public class SparkFileToRangeIndex<T extends HoodieRecordPayload> extends Hoodie
   @Override
   public void updateIndex(final HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata,
                           final String instantTime,
-                          final HoodieEngineContext context,
                           final HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) throws HoodieIndexException {
-    
-    Map<String, Collection<HoodieColumnRangeMetadata<Comparable>>> fileToColumnRangeInfo = writeMetadata.getWriteStats().get().stream()
-        .map(stat -> stat.getPath())
-        .map(path -> Pair.of(path, getRangeStats(path, hoodieTable)))
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-
+    Map<String, Collection<HoodieColumnRangeMetadata<Comparable>>> fileToColumnRangeInfo = HoodieTableMetadataUtil.createRangeIndexInfoFromWriteStats(
+        engineContext,
+        hoodieTable.getMetaClient(), 
+        writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collect());
     SparkHoodieBackedTableMetadataWriter.create(hoodieTable.getHadoopConf(), getWriteConfig(), getEngineContext()).update(fileToColumnRangeInfo, instantTime);
-  }
-
-  private Collection<HoodieColumnRangeMetadata<Comparable>> getRangeStats(final String path, final HoodieTable table) {
-    if (path.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-      return new ParquetUtils().readRangeFromParquetMetadata(table.getHadoopConf(), new Path(table.getMetaClient().getBasePath(), path));
-    } else {
-      throw new HoodieException("range index not supported for path " + path);
-    }
   }
 
   @Override

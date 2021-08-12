@@ -73,7 +73,7 @@ public class TimelineMergedTableMetadata implements Serializable {
   private void scan() {
     for (HoodieInstant instant : instants) {
       try {
-        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(metaClient, instant, lastSyncTs);
+        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToFilesMetaRecords(metaClient, instant, lastSyncTs);
         if (records.isPresent()) {
           records.get().forEach(record -> processNextRecord(record));
         }

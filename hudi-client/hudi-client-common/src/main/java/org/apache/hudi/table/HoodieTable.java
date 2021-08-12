@@ -671,7 +671,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   public boolean requireSortedRecords() {
-    return getBaseFileFormat() == HoodieFileFormat.HFILE;
+    return getBaseFileFormat() == HoodieFileFormat.HFILE || config.requiresSorting();
   }
 
   public HoodieEngineContext getContext() {

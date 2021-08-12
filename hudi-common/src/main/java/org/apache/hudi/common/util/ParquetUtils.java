@@ -186,23 +186,23 @@ public class ParquetUtils extends BaseFileUtils {
   /**
    * Parse min/max statistics stored in parquet footers for all columns.
    */
-  public Collection<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(Configuration conf, Path parquetFilePath) {
+  public Collection<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(Configuration conf, String partitionPath, Path parquetFilePath) {
 
     ParquetMetadata metadata = readMetadata(conf, parquetFilePath);
     // collect stats from all parquet blocks 
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap = metadata.getBlocks().stream().flatMap(blockMetaData -> {
       return blockMetaData.getColumns().stream().map(columnChunkMetaData -> 
-          new HoodieColumnRangeMetadata<>(columnChunkMetaData.getPath().toDotString(), 
+          new HoodieColumnRangeMetadata<>(partitionPath + "/" + parquetFilePath.getName(), columnChunkMetaData.getPath().toDotString(), 
               columnChunkMetaData.getStatistics().genericGetMin(),
               columnChunkMetaData.getStatistics().genericGetMax())
       );
     }).collect(Collectors.groupingBy(e -> e.getColumnName()));
     
-    // we only intend to keep file level statistics (not per-block level statisitcs in index) (TBD: in future we can change to improve performance even more)
+    // we only intend to keep file level statistics (not per-block level statisitcs in index. In future, we can change to store row group level stats improve performance even more)
     // So reduce above map to Map<column_name, column_range>
-    return columnToStatsListMap.entrySet().stream().collect(
-        Collectors.toMap(Map.Entry::getKey, e -> getColumnRangeInFile(e.getValue()))).values();
-    
+    return new ArrayList<>(columnToStatsListMap.values().stream()
+        .map(blocks -> getColumnRangeInFile(blocks))
+        .collect(Collectors.toList()));
   }
 
   private HoodieColumnRangeMetadata<Comparable> getColumnRangeInFile(final List<HoodieColumnRangeMetadata<Comparable>> blockRanges) {
@@ -211,12 +211,31 @@ public class ParquetUtils extends BaseFileUtils {
       return blockRanges.get(0);
     } else {
       // there are multiple blocks. Compute min(block_mins) and max(block_maxs)
-      return blockRanges.stream().reduce((b1, b2) -> {
-        return new HoodieColumnRangeMetadata<>(b1.getColumnName(),
-            b1.getMinValue().compareTo(b2.getMinValue()) < 0 ? b1.getMinValue() : b2.getMinValue(),
-            b1.getMaxValue().compareTo(b2.getMaxValue()) < 0 ? b2.getMaxValue() : b1.getMaxValue());
-      }).get();
+      return blockRanges.stream().reduce((b1, b2) -> combineRanges(b1, b2)).get();
     }
+  }
+  
+  private HoodieColumnRangeMetadata<Comparable> combineRanges(HoodieColumnRangeMetadata<Comparable> range1, 
+                                                              HoodieColumnRangeMetadata<Comparable> range2) {
+    final Comparable minValue;
+    final Comparable maxValue;
+    if (range1.getMinValue() != null && range2.getMinValue() != null) {
+      minValue = range1.getMinValue().compareTo(range2.getMinValue()) < 0 ? range1.getMinValue() : range2.getMinValue();
+    } else if (range1.getMinValue() == null) {
+      minValue = range2.getMinValue();
+    } else  {
+      minValue = range1.getMinValue();
+    }
+
+    if (range1.getMaxValue() != null && range2.getMaxValue() != null) {
+      maxValue = range1.getMaxValue().compareTo(range2.getMaxValue()) < 0 ? range2.getMaxValue() : range1.getMaxValue();
+    } else if (range1.getMaxValue() == null) {
+      maxValue = range2.getMaxValue();
+    } else  {
+      maxValue = range1.getMaxValue();
+    }
+    
+    return new HoodieColumnRangeMetadata<>(range1.getFilePath(), range1.getColumnName(), minValue, maxValue);
   }
 
   /**

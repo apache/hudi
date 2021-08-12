@@ -193,6 +193,12 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.simple.index.update.partition.path")
       .defaultValue("false")
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH + ", but for simple index.");
+  
+  
+  public static final ConfigProperty<Boolean> RANGE_INDEX_ENABLED = ConfigProperty
+      .key("hoodie.range.index.enabled")
+      .defaultValue(false)
+      .withDocumentation("Enable storing range index");
 
   private EngineType engineType;
 
@@ -242,6 +248,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withHBaseIndexConfig(HoodieHBaseIndexConfig hBaseIndexConfig) {
       hoodieIndexConfig.getProps().putAll(hBaseIndexConfig.getProps());
+      return this;
+    }
+
+    public Builder withRangeIndexEnabled(boolean enableRangeIndex) {
+      hoodieIndexConfig.setValue(RANGE_INDEX_ENABLED, String.valueOf(enableRangeIndex));
       return this;
     }
 

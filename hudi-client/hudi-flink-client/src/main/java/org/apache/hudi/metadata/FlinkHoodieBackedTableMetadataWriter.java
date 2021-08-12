@@ -90,12 +90,17 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
     List<HoodieRecord> recordRDD = prepRecords(records, partitionName);
+    commit(recordRDD, Collections.emptyList(), instantTime);
+  }
 
+  @Override
+  protected void commit(List<HoodieRecord> recordRDD, List<HoodieRecord> rangeRecords, String instantTime) {
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig, true)) {
       writeClient.startCommitWithTime(instantTime);
       writeClient.transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
 
       List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime);
+      
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
