@@ -189,13 +189,13 @@ exit
 ```
 
 You can use HDFS web-browser to look at the tables
-`http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_cow`.
+`http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_cow`.
 
 You can explore the new partition folder created in the table along with a "commit" / "deltacommit"
 file under .hoodie which signals a successful commit.
 
 There will be a similar setup when you browse the MOR table
-`http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_mor`
+`http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_mor`
 
 
 ### Step 3: Sync with Hive
@@ -584,10 +584,10 @@ exit
 ```
 
 With Copy-On-Write table, the second ingestion by DeltaStreamer resulted in a new version of Parquet file getting created.
-See `http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_cow/2018/08/31`
+See `http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_cow/2018/08/31`
 
 With Merge-On-Read table, the second ingestion merely appended the batch to an unmerged delta (log) file.
-Take a look at the HDFS filesystem to get an idea: `http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_mor/2018/08/31`
+Take a look at the HDFS filesystem to get an idea: `http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_mor/2018/08/31`
 
 ### Step 6 (a): Run Hive Queries
 
