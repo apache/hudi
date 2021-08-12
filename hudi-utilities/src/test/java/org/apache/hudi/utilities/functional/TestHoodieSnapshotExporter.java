@@ -200,6 +200,8 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
     public void testExportDatasetWithNoPartition() throws IOException {
       // delete all source data
       dfs().delete(new Path(sourcePath + "/" + PARTITION_PATH), true);
+      // delete the metadata folder if present as metadata will be referring to deleted data
+      dfs().delete(new Path(sourcePath + "/.hoodie/metadata"), true);
 
       // export
       final Throwable thrown = assertThrows(HoodieSnapshotExporterException.class, () -> {
