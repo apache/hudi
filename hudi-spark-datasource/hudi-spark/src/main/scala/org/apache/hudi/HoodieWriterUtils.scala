@@ -76,7 +76,8 @@ object HoodieWriterUtils {
       INLINE_CLUSTERING_ENABLE.key -> INLINE_CLUSTERING_ENABLE.defaultValue,
       ASYNC_CLUSTERING_ENABLE.key -> ASYNC_CLUSTERING_ENABLE.defaultValue,
       ENABLE_ROW_WRITER.key -> ENABLE_ROW_WRITER.defaultValue,
-      RECONCILE_SCHEMA.key -> RECONCILE_SCHEMA.defaultValue.toString
+      RECONCILE_SCHEMA.key -> RECONCILE_SCHEMA.defaultValue.toString,
+      ENABLE_DROP_PARTITION_COLUMNS.key -> ENABLE_DROP_PARTITION_COLUMNS.defaultValue
     ) ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 

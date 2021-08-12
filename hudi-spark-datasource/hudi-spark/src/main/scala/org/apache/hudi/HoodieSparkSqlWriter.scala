@@ -63,6 +63,23 @@ object HoodieSparkSqlWriter {
   private var asyncCompactionTriggerFnDefined: Boolean = false
   private var asyncClusteringTriggerFnDefined: Boolean = false
 
+  def generateSchemaWithoutPartitionColumns(partitionParam: String, oldSchema: Schema): Schema = {
+    val fieldsToRemove =  new util.ArrayList[String]()
+    partitionParam.split(",").map(partitionField => partitionField.trim)
+      .filter(s => !s.isEmpty).map(field => fieldsToRemove.add(field))
+    HoodieAvroUtils.removeFields(oldSchema, fieldsToRemove)
+  }
+
+  def generateNewRecordForPartitionColumnsDrop(partitionParam: String, oldRecord: GenericRecord,
+                                               enableDropPartitionColumns: Boolean): GenericRecord = {
+    var record = oldRecord
+    if (enableDropPartitionColumns) {
+      val newSchema = generateSchemaWithoutPartitionColumns(partitionParam, oldRecord.getSchema)
+      record = HoodieAvroUtils.rewriteRecord(oldRecord, newSchema)
+    }
+    record
+  }
+
   def write(sqlContext: SQLContext,
             mode: SaveMode,
             parameters: Map[String, String],
@@ -223,21 +240,25 @@ object HoodieSparkSqlWriter {
               operation.equals(WriteOperationType.UPSERT) ||
               parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT_PROP.key(),
                 HoodieWriteConfig.COMBINE_BEFORE_INSERT_PROP.defaultValue()).toBoolean
+            val partitionKey = hoodieConfig.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD)
+            val enableDropPartitionColumns = hoodieConfig.getBoolean(DataSourceWriteOptions.ENABLE_DROP_PARTITION_COLUMNS)
             val hoodieAllIncomingRecords = genericRecords.map(gr => {
+              val newRecord = generateNewRecordForPartitionColumnsDrop(partitionKey, gr, enableDropPartitionColumns)
               val hoodieRecord = if (shouldCombine) {
                 val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD), false)
                   .asInstanceOf[Comparable[_]]
-                DataSourceUtils.createHoodieRecord(gr,
+                DataSourceUtils.createHoodieRecord(newRecord,
                   orderingVal, keyGenerator.getKey(gr),
                   hoodieConfig.getString(PAYLOAD_CLASS))
               } else {
-                DataSourceUtils.createHoodieRecord(gr, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS))
+                DataSourceUtils.createHoodieRecord(newRecord, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS))
               }
               hoodieRecord
             }).toJavaRDD()
 
+            val newSchema = if (enableDropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionKey, schema) else schema
             // Create a HoodieWriteClient & issue the write.
-            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, schema.toString, path.get,
+            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, newSchema.toString, path.get,
               tblName, mapAsJavaMap(parameters - HoodieWriteConfig.HOODIE_AUTO_COMMIT_PROP.key)
             )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
