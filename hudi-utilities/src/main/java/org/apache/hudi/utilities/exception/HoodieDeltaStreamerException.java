@@ -16,7 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.exception;
+package org.apache.hudi.utilities.exception;
+
+import org.apache.hudi.exception.HoodieException;
 
 public class HoodieDeltaStreamerException extends HoodieException {
 
