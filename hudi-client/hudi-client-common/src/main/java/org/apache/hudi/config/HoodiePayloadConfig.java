@@ -40,17 +40,21 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
         + "control merges based on specific business fields in the data.")
 public class HoodiePayloadConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> PAYLOAD_ORDERING_FIELD_PROP = ConfigProperty
+  public static final ConfigProperty<String> PAYLOAD_ORDERING_FIELD = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
       .defaultValue("ts")
       .withDocumentation("Table column/field name to order records that have the same key, before "
           + "merging and writing to storage.");
+  @Deprecated
+  public static final String PAYLOAD_ORDERING_FIELD_PROP = PAYLOAD_ORDERING_FIELD.key();
 
-  public static final ConfigProperty<String> PAYLOAD_EVENT_TIME_FIELD_PROP = ConfigProperty
+  public static final ConfigProperty<String> PAYLOAD_EVENT_TIME_FIELD = ConfigProperty
       .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
       .defaultValue("ts")
       .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
           + "be useful for e.g, determining the freshness of the table.");
+  @Deprecated
+  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = PAYLOAD_EVENT_TIME_FIELD.key();
 
   private HoodiePayloadConfig() {
     super();
@@ -77,12 +81,12 @@ public class HoodiePayloadConfig extends HoodieConfig {
     }
 
     public Builder withPayloadOrderingField(String payloadOrderingField) {
-      payloadConfig.setValue(PAYLOAD_ORDERING_FIELD_PROP, String.valueOf(payloadOrderingField));
+      payloadConfig.setValue(PAYLOAD_ORDERING_FIELD, String.valueOf(payloadOrderingField));
       return this;
     }
 
     public Builder withPayloadEventTimeField(String payloadEventTimeField) {
-      payloadConfig.setValue(PAYLOAD_EVENT_TIME_FIELD_PROP, String.valueOf(payloadEventTimeField));
+      payloadConfig.setValue(PAYLOAD_EVENT_TIME_FIELD, String.valueOf(payloadEventTimeField));
       return this;
     }
 

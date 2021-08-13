@@ -753,7 +753,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       // Use InMemoryIndex to generate log only mor table.
-      .option(HoodieIndexConfig.INDEX_TYPE_PROP.key, IndexType.INMEMORY.toString)
+      .option(HoodieIndexConfig.INDEX_TYPE.key, IndexType.INMEMORY.toString)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     // There should no base file in the file list.

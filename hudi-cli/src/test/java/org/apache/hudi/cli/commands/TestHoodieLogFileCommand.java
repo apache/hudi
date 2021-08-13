@@ -208,12 +208,12 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
             HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
         .withReadBlocksLazily(
             Boolean.parseBoolean(
-                HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue()))
+                HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED.defaultValue()))
         .withReverseReader(
             Boolean.parseBoolean(
-                HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP.defaultValue()))
-        .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue())
-        .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH_PROP.defaultValue())
+                HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED.defaultValue()))
+        .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
+        .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.defaultValue())
         .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
         .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
         .build();

@@ -270,7 +270,7 @@ object InsertIntoHoodieTableCommand extends Logging {
         PARTITIONPATH_FIELD.key -> partitionFields,
         PAYLOAD_CLASS.key -> payloadClassName,
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
-        HoodieWriteConfig.COMBINE_BEFORE_INSERT_PROP.key -> isPrimaryKeyTable.toString,
+        HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> isPrimaryKeyTable.toString,
         META_SYNC_ENABLED.key -> enableHive.toString,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",

@@ -214,9 +214,9 @@ class ExpressionPayload(record: GenericRecord,
    */
   private def initWriteSchemaIfNeed(properties: Properties): Unit = {
     if (writeSchema == null) {
-      ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA_PROP.key),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_PROP.key}")
-      writeSchema = new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA_PROP.key))
+      ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA.key),
+        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA.key}")
+      writeSchema = new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA.key))
     }
   }
 
