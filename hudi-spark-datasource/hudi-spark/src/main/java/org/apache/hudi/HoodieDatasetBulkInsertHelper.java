@@ -71,7 +71,7 @@ public class HoodieDatasetBulkInsertHelper {
   public static Dataset<Row> prepareHoodieDatasetForBulkInsert(SQLContext sqlContext,
       HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace,
                                                                BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows,
-                                                               boolean isGlobalIndex) {
+                                                               boolean isGlobalIndex, boolean dropPartitionColumns) {
     List<Column> originalFields =
         Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
 
@@ -103,9 +103,17 @@ public class HoodieDatasetBulkInsertHelper {
             .withColumn(HoodieRecord.FILENAME_METADATA_FIELD,
                 functions.lit("").cast(DataTypes.StringType));
 
-    Dataset<Row> dedupedDf = rowDatasetWithHoodieColumns;
+    Dataset<Row> processedDf = rowDatasetWithHoodieColumns;
+    if (dropPartitionColumns) {
+      String partitionColumns = String.join(",", keyGenerator.getPartitionPathFields());
+      for (String partitionField: keyGenerator.getPartitionPathFields()) {
+        originalFields.remove(new Column(partitionField));
+      }
+      processedDf = rowDatasetWithHoodieColumns.drop(partitionColumns);
+    }
+    Dataset<Row> dedupedDf = processedDf;
     if (config.shouldCombineBeforeInsert()) {
-      dedupedDf = SparkRowWriteHelper.newInstance().deduplicateRows(rowDatasetWithHoodieColumns, config.getPreCombineField(), isGlobalIndex);
+      dedupedDf = SparkRowWriteHelper.newInstance().deduplicateRows(processedDf, config.getPreCombineField(), isGlobalIndex);
     }
 
     List<Column> orderedFields = Stream.concat(HoodieRecord.HOODIE_META_COLUMNS.stream().map(Column::new),

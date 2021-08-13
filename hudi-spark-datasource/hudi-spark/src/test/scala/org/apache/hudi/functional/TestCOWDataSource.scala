@@ -775,4 +775,26 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val resultSchema = new StructType(recordsReadDF.schema.filter(p=> !p.name.startsWith("_hoodie")).toArray)
     assertEquals(resultSchema, schema1)
   }
+
+  @ParameterizedTest @ValueSource(booleans = Array(true, false))
+  def testCopyOnWriteWithDropPartitionColumns(enableDropPartitionColumns: Boolean) {
+    val resultContainPartitionColumn = copyOnWriteTableSelect(enableDropPartitionColumns)
+    assertEquals(enableDropPartitionColumns, !resultContainPartitionColumn)
+  }
+
+  def copyOnWriteTableSelect(enableDropPartitionColumns: Boolean): Boolean = {
+    val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 3)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key, enableDropPartitionColumns)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/*")
+    snapshotDF1.registerTempTable("tmptable")
+    val result = spark.sql("select * from tmptable limit 1").collect()(0)
+    result.schema.contains(new StructField("partition", StringType, true))
+  }
 }
