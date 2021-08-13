@@ -107,7 +107,7 @@ public class HoodieWriteClientExample {
       List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
       List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
       JavaRDD<HoodieRecord<HoodieAvroPayload>> writeRecords = jsc.parallelize(records, 1);
-      client.upsert(writeRecords, newCommitTime);
+      client.insert(writeRecords, newCommitTime);
 
       // updates
       newCommitTime = client.startCommit();
