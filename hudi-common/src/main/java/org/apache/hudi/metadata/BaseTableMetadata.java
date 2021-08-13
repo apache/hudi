@@ -299,7 +299,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     if (timelineMergedMetadata == null) {
       List<HoodieInstant> unSyncedInstants = findInstantsToSyncForReader();
       timelineMergedMetadata =
-          new TimelineMergedTableMetadata(datasetMetaClient, metadataTableTimeline, unSyncedInstants, getSyncedInstantTime(), null);
+          new TimelineMergedTableMetadata(datasetMetaClient, metadataTableTimeline, unSyncedInstants, getUpdateTime(), null);
     }
   }
 
