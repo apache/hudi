@@ -23,7 +23,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -44,6 +46,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.MarkerUtils.MARKER_TYPE_FILENAME;
 
 /**
  * Marker operations of directly accessing the file system to create and delete
@@ -158,7 +162,10 @@ public class DirectWriteMarkers extends WriteMarkers {
     Set<String> markerFiles = new HashSet<>();
     if (doesMarkerDirExist()) {
       FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
-        markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
+        String filePathStr = fileStatus.getPath().toString();
+        if (!filePathStr.contains(MARKER_TYPE_FILENAME)) {
+          markerFiles.add(stripMarkerFolderPrefix(filePathStr));
+        }
         return true;
       }, false);
     }
@@ -173,6 +180,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     try {
       if (!fs.exists(dirPath)) {
         fs.mkdirs(dirPath); // create a new partition as needed.
+        MarkerUtils.writeMarkerTypeToFile(MarkerType.DIRECT, fs, markerDirPath.toString());
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + dirPath, e);

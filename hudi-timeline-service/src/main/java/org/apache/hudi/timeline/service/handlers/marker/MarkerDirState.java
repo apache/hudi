@@ -21,7 +21,9 @@ package org.apache.hudi.timeline.service.handlers.marker;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieException;
@@ -52,10 +54,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
+import static org.apache.hudi.common.util.MarkerUtils.MARKER_TYPE_FILENAME;
 import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
 /**
@@ -270,9 +274,11 @@ public class MarkerDirState implements Serializable {
     try {
       if (fileSystem.exists(dirPath)) {
         FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
+        Predicate<String> prefixFilter = pathStr -> pathStr.contains(MARKERS_FILENAME_PREFIX);
+        Predicate<String> filenameFilter = pathStr -> !pathStr.contains(MARKER_TYPE_FILENAME);
         List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
             .map(fileStatus -> fileStatus.getPath().toString())
-            .filter(pathStr -> pathStr.contains(MARKERS_FILENAME_PREFIX))
+            .filter(prefixFilter.and(filenameFilter))
             .collect(Collectors.toList());
 
         if (markerDirSubPaths.size() > 0) {
@@ -313,6 +319,10 @@ public class MarkerDirState implements Serializable {
             }
           }
         }
+      } else {
+        // There is no existing marker directory, create a new directory and write marker type
+        fileSystem.mkdirs(dirPath);
+        MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, fileSystem, markerDirPath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
