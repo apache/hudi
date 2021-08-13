@@ -69,24 +69,20 @@ public class MarkerUtils {
   public static Option<MarkerType> readMarkerType(FileSystem fileSystem, String markerDir) {
     Path markerTypeFilePath = new Path(markerDir, MARKER_TYPE_FILENAME);
     FSDataInputStream fsDataInputStream = null;
-    String content = null;
+    Option<MarkerType> content = Option.empty();
     try {
       if (!fileSystem.exists(markerTypeFilePath)) {
         return Option.empty();
       }
       fsDataInputStream = fileSystem.open(markerTypeFilePath);
-      content = FileIOUtils.readAsUTFString(fsDataInputStream);
+      content = Option.of(MarkerType.valueOf(FileIOUtils.readAsUTFString(fsDataInputStream)));
     } catch (IOException e) {
       throw new HoodieIOException("Cannot read marker type file " + markerTypeFilePath.toString()
           + "; " + e.getMessage(), e);
     } finally {
       closeQuietly(fsDataInputStream);
     }
-
-    if (content != null) {
-      return Option.of(MarkerType.valueOf(content));
-    }
-    return Option.empty();
+    return content;
   }
 
   /**
@@ -145,10 +141,10 @@ public class MarkerUtils {
       if (fileSystem.exists(dirPath)) {
         FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
         Predicate<String> prefixFilter = pathStr -> pathStr.contains(MARKERS_FILENAME_PREFIX);
-        Predicate<String> filenameFilter = pathStr -> !pathStr.equals(MARKER_TYPE_FILENAME);
+        Predicate<String> markerTypeFilter = pathStr -> !pathStr.equals(MARKER_TYPE_FILENAME);
         List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
             .map(fileStatus -> fileStatus.getPath().toString())
-            .filter(prefixFilter.and(filenameFilter))
+            .filter(prefixFilter.and(markerTypeFilter))
             .collect(Collectors.toList());
 
         if (markerDirSubPaths.size() > 0) {

@@ -47,6 +47,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,7 +65,7 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     try {
-      List<String> markerFilePaths = getAllMarkerFilePaths(instantToRollback.getTimestamp(), config.getRollbackParallelism());
+      List<String> markerFilePaths = getAllMarkerPaths(instantToRollback.getTimestamp(), config.getRollbackParallelism());
       int parallelism = Math.max(Math.min(markerFilePaths.size(), config.getRollbackParallelism()), 1);
       jsc.setJobGroup(this.getClass().getSimpleName(), "Rolling back using marker files");
       return jsc.parallelize(markerFilePaths, parallelism)
@@ -98,35 +99,32 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
   }
 
   /**
-   * Gets all marker file paths
+   * Gets all marker paths.
    *
-   * @param instant
-   * @param parallelism
-   * @return
+   * @param instant     instant of interest to rollback
+   * @param parallelism parallelism to use
+   * @return a list of all markers
    * @throws IOException
    */
-  private List<String> getAllMarkerFilePaths(String instant, int parallelism) throws IOException {
+  private List<String> getAllMarkerPaths(String instant, int parallelism) throws IOException {
     String markerDir = table.getMetaClient().getMarkerFolderPath(instant);
     FileSystem fileSystem = FSUtils.getFs(markerDir, context.getHadoopConf().newCopy());
     Option<MarkerType> markerTypeOption = MarkerUtils.readMarkerType(fileSystem, markerDir);
 
+    // If there is no marker type file "MARKERS.type", we assume "DIRECT" markers are used
     if (!markerTypeOption.isPresent()) {
       WriteMarkers writeMarkers = WriteMarkersFactory.get(MarkerType.DIRECT, table, instant);
       return new ArrayList<>(writeMarkers.allMarkerFilePaths());
     }
 
     switch (markerTypeOption.get()) {
-      case DIRECT:
-        WriteMarkers writeMarkers = WriteMarkersFactory.get(MarkerType.DIRECT, table, instant);
-        return new ArrayList<>(writeMarkers.allMarkerFilePaths());
       case TIMELINE_SERVER_BASED:
         // Reads all markers written by the timeline server
         Map<String, Set<String>> markersMap =
             MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
                 markerDir, fileSystem, context, parallelism);
-        List<String> markers = new ArrayList<>();
-        markersMap.forEach((key, value) -> markers.addAll(value));
-        return markers;
+        return markersMap.values().stream().flatMap(Collection::stream)
+            .collect(Collectors.toCollection(ArrayList::new));
       default:
         throw new HoodieException(
             "The marker type \"" + markerTypeOption.get().name() + "\" is not supported.");

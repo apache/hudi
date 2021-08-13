@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -100,8 +101,10 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     createSomeMarkers();
     // add invalid file
     createInvalidFile("2020/06/01", "invalid_file3");
-    int fileSize = FileSystemTestUtils.listRecursive(fs, markerFolderPath).size();
-    assertEquals(fileSize,4);
+    long fileSize = FileSystemTestUtils.listRecursive(fs, markerFolderPath).stream()
+        .filter(fileStatus -> !fileStatus.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME))
+        .count();
+    assertEquals(fileSize, 4);
 
     // then
     assertIterableEquals(CollectionUtils.createImmutableList(
@@ -118,7 +121,9 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
     // then
     assertIterableEquals(CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",
         "2020/06/02/file2.marker.APPEND", "2020/06/03/file3.marker.CREATE"),
-        writeMarkers.allMarkerFilePaths().stream().sorted().collect(Collectors.toList())
+        writeMarkers.allMarkerFilePaths().stream()
+            .filter(path -> !path.contains(MarkerUtils.MARKER_TYPE_FILENAME))
+            .sorted().collect(Collectors.toList())
     );
   }
 
@@ -130,5 +135,9 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
 
     // when-then
     assertEquals(pathPrefix, WriteMarkers.stripMarkerSuffix(markerFilePath));
+  }
+
+  private void verifyNumMarkers(int expected) {
+
   }
 }
