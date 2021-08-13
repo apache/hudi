@@ -403,7 +403,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         .isPresent()
         ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
-      syncTableMetadata();
+      if (writeOperationType != WriteOperationType.CLUSTER && writeOperationType != WriteOperationType.COMPACT) {
+        syncTableMetadata();
+      }
     } finally {
       this.txnManager.endTransaction();
     }
@@ -436,7 +438,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
       autoCleanOnCommit();
-      syncTableMetadata();
+      if (operationType != null && operationType != WriteOperationType.CLUSTER && operationType != WriteOperationType.COMPACT) {
+        syncTableMetadata();
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {
@@ -449,19 +453,19 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       // Do an inline compaction if enabled
       if (config.inlineCompactionEnabled()) {
         runAnyPendingCompactions(table);
-        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP.key(), "true");
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
         inlineCompact(extraMetadata);
       } else {
-        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP.key(), "false");
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
       }
 
       // Do an inline clustering if enabled
       if (config.inlineClusteringEnabled()) {
         runAnyPendingClustering(table);
-        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP.key(), "true");
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
         inlineCluster(extraMetadata);
       } else {
-        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP.key(), "false");
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
       }
     }
   }

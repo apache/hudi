@@ -470,9 +470,9 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   public void testHbaseTagLocationForArchivedCommits() throws Exception {
     // Load to memory
     Map<String, String> params = new HashMap<String, String>();
-    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP.key(), "1");
-    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP.key(), "3");
-    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP.key(), "2");
+    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), "1");
+    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP.key(), "3");
+    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), "2");
     HoodieWriteConfig config = getConfigBuilder(100, false, false).withProps(params).build();
 
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);

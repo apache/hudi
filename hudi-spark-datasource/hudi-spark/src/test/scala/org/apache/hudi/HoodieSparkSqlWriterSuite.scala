@@ -428,7 +428,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
             .save(srcPath.toAbsolutePath.toString)
 
           val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-            HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key -> srcPath.toAbsolutePath.toString,
+            HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH.key -> srcPath.toAbsolutePath.toString,
             HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
             DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
             HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM.key -> "4",
@@ -652,7 +652,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         df.write.mode(SaveMode.Overwrite).save(baseBootStrapPath)
         spark.emptyDataFrame.write.format("hudi")
           .options(options)
-          .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key, baseBootStrapPath)
+          .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH.key, baseBootStrapPath)
           .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
           .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
           .option(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM.key, "4")

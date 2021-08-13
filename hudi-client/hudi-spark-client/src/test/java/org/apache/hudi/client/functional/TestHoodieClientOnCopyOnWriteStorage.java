@@ -833,7 +833,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       .setTimelineLayoutVersion(VERSION_0)
       .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
     // Set rollback to LAZY so no inflights are deleted
-    hoodieWriteConfig.getProps().put(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY_PROP.key(),
+    hoodieWriteConfig.getProps().put(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY.key(),
         HoodieFailedWritesCleaningPolicy.LAZY.name());
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 

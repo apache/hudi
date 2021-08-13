@@ -70,7 +70,7 @@ public class TestCreateAvroKeyGeneratorByTypeWithFactory {
   @ParameterizedTest
   @MethodSource("configParams")
   public void testKeyGeneratorTypes(String keyGenType) throws IOException {
-    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), keyGenType);
+    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), keyGenType);
     KeyGeneratorType keyType = KeyGeneratorType.valueOf(keyGenType);
 
     KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);

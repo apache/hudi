@@ -230,7 +230,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     // insert actions.
     var writeParams = parameters +
       (OPERATION.key -> UPSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA_PROP.key -> getTableSchema.toString) +
+      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
     // Map of Condition -> Assignments
@@ -277,7 +277,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
 
     var writeParams = parameters +
       (OPERATION.key -> INSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA_PROP.key -> getTableSchema.toString)
+      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString)
 
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))

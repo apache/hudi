@@ -182,7 +182,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key(), "1")
+        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
         .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).mode(SaveMode.Append);
@@ -210,7 +210,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key(), "1")
+        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
         .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).mode(SaveMode.Append);

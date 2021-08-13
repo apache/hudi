@@ -44,11 +44,13 @@ import java.util.Properties;
         + " writers and new hudi writers in parallel, to validate the migration.")
 public class HoodieBootstrapConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> BOOTSTRAP_BASE_PATH_PROP = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_BASE_PATH = ConfigProperty
       .key("hoodie.bootstrap.base.path")
       .noDefaultValue()
       .sinceVersion("0.6.0")
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
+  @Deprecated
+  public static final String BOOTSTRAP_BASE_PATH_PROP = BOOTSTRAP_BASE_PATH.key();
 
   public static final ConfigProperty<String> BOOTSTRAP_MODE_SELECTOR = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
@@ -100,11 +102,13 @@ public class HoodieBootstrapConfig extends HoodieConfig {
           + "METADATA_ONLY will generate just skeleton base files with keys/footers, avoiding full cost of rewriting the dataset. "
           + "FULL_RECORD will perform a full copy/rewrite of the data as a Hudi table.");
 
-  public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_PROP = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS = ConfigProperty
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
       .sinceVersion("0.6.0")
       .withDocumentation("Implementation to use, for mapping a skeleton base file to a boostrap base file.");
+  @Deprecated
+  public static final String BOOTSTRAP_INDEX_CLASS_PROP = BOOTSTRAP_INDEX_CLASS.key();
 
   private HoodieBootstrapConfig() {
     super();
@@ -126,7 +130,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
     }
 
     public Builder withBootstrapBasePath(String basePath) {
-      bootstrapConfig.setValue(BOOTSTRAP_BASE_PATH_PROP, basePath);
+      bootstrapConfig.setValue(BOOTSTRAP_BASE_PATH, basePath);
       return this;
     }
 
@@ -178,7 +182,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public HoodieBootstrapConfig build() {
       // TODO: use infer function instead
-      bootstrapConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_PROP, HoodieTableConfig.getDefaultBootstrapIndexClass(
+      bootstrapConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS, HoodieTableConfig.getDefaultBootstrapIndexClass(
           bootstrapConfig.getProps()));
       bootstrapConfig.setDefaults(HoodieBootstrapConfig.class.getName());
       return bootstrapConfig;

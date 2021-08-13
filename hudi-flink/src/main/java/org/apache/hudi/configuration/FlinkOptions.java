@@ -309,13 +309,13 @@ public class FlinkOptions extends HoodieConfig {
           + "By default false (the names of partition folders are only partition values)");
 
   public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key())
+      .key(HoodieWriteConfig.KEYGENERATOR_CLASS.key())
       .stringType()
       .defaultValue("")
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
 
   public static final ConfigOption<String> KEYGEN_TYPE = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key())
+      .key(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
