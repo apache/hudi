@@ -41,8 +41,11 @@ public class HoodieMetadataMetrics implements Serializable {
   // Metric names
   public static final String LOOKUP_PARTITIONS_STR = "lookup_partitions";
   public static final String LOOKUP_FILES_STR = "lookup_files";
+  public static final String LOOKUP_RECORDINDEX_STR = "lookup_record_index";
+  public static final String LOOKUP_RECORDKEYS_COUNT_STR = "lookup_recordkeys_count";
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
+  public static final String LOGFILE_READ_STR = "logfile_read";
   public static final String INITIALIZE_FILE_LISTING_STR = "initialize_files";
   public static final String INITIALIZE_RECORD_INDEX_STR = "initialize_record_index";
   public static final String REBOOTSTRAP_STR = "rebootstrap";
@@ -51,6 +54,8 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String READ_FILES_BOOTSTRAP_STR = "read_filelisting_bootstrap";
   public static final String RECORDINDEX_SHARD_COUNT_STR = "record_index_shard_count";
   public static final String RECORDINDEX_BOOTSTRAP_COUNT_STR = "record_index_bootstrap_count";
+  public static final String RECORDINDEX_HITS_STR = "record_index_hits";
+  public static final String RECORDINDEX_MISS_STR = "record_index_misses";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";

@@ -19,6 +19,9 @@
 package org.apache.hudi.common.config;
 
 import javax.annotation.concurrent.Immutable;
+
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -126,8 +129,33 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Number of shards to use for Record Level Index");
 
+  public static final ConfigProperty<String> SPILLABLE_MAP_DIR_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".spillable.dir")
+      .defaultValue(FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue())
+      .sinceVersion("0.10.0")
+      .withDocumentation("Directory where the spillable maps are saved");
+
+  public static final ConfigProperty<Long> MAX_CACHE_MEMORY_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.cache.memory")
+      .defaultValue(256 * 1024 * 1024L)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Max memory to use to cache records read from metadata");
+
+  public static final ConfigProperty<Long> MAX_READER_MEMORY_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.reader.memory")
+      .defaultValue(1024 * 1024 * 1024L)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Max memory to use for the reader to read from metadata");
+
+  public static final ConfigProperty<Integer> MAX_READER_BUFFER_SIZE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".max.reader.buffer.size")
+      .defaultValue(10 * 1024 * 1024)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Max memory to use for the reader buffer while merging log blocks");
+
   private HoodieMetadataConfig() {
     super();
+
   }
 
   public static HoodieMetadataConfig.Builder newBuilder() {
@@ -160,6 +188,22 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getRecordLevelIndexShardCount() {
     return getInt(RECORD_LEVEL_INDEX_SHARD_COUNT_PROP);
+  }
+
+  public String getSplliableMapDir() {
+    return getString(SPILLABLE_MAP_DIR_PROP);
+  }
+
+  public long getMaxRecordCacheMemory() {
+    return getLong(MAX_CACHE_MEMORY_PROP);
+  }
+
+  public long getMaxReaderMemory() {
+    return getLong(MAX_READER_MEMORY_PROP);
+  }
+
+  public int getMaxReaderBufferSize() {
+    return getInt(MAX_READER_BUFFER_SIZE_PROP);
   }
 
   public static class Builder {
@@ -231,6 +275,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withRecordLevelIndexEnabled(boolean enabled) {
       metadataConfig.setValue(RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withSpillableMapDir(String dir) {
+      metadataConfig.setValue(SPILLABLE_MAP_DIR_PROP, dir);
+      return this;
+    }
+
+    public Builder withMaxRecordCacheMemory(long mem) {
+      metadataConfig.setValue(MAX_CACHE_MEMORY_PROP, String.valueOf(mem));
+      return this;
+    }
+
+    public Builder withMaxReaderMemory(long mem) {
+      metadataConfig.setValue(MAX_READER_MEMORY_PROP, String.valueOf(mem));
+      return this;
+    }
+
+    public Builder withMaxReaderBufferSize(long mem) {
+      metadataConfig.setValue(MAX_READER_BUFFER_SIZE_PROP, String.valueOf(mem));
       return this;
     }
 

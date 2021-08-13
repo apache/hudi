@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -37,6 +38,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
@@ -138,5 +140,10 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   @Override
   public void close() throws Exception {
     // no-op
+  }
+
+  @Override
+  public Map<String, HoodieRecordLocation> readRecordLevelIndex(Set<String> recordKeys) {
+    throw new UnsupportedOperationException();
   }
 }

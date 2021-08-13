@@ -26,10 +26,12 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -42,13 +44,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(BaseTableMetadata.class);
-
-  static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
-  static final int BUFFER_SIZE = 10 * 1024 * 1024;
 
   protected final transient HoodieEngineContext engineContext;
   protected final SerializableConfiguration hadoopConf;
@@ -56,8 +56,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final HoodieTableMetaClient datasetMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
   protected final HoodieMetadataConfig metadataConfig;
-  // Directory used for Spillable Map when merging records
-  protected final String spillableMapDirectory;
 
   protected boolean enabled;
 
@@ -67,7 +65,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     this.hadoopConf = new SerializableConfiguration(engineContext.getHadoopConf());
     this.datasetBasePath = datasetBasePath;
     this.datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(datasetBasePath).build();
-    this.spillableMapDirectory = spillableMapDirectory;
     this.metadataConfig = metadataConfig;
 
     this.enabled = metadataConfig.useFileListingMetadata();
@@ -200,7 +197,71 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     return statuses;
   }
 
+  /**
+   * Reads record keys from record-level index.
+   *
+   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
+   *
+   * @param recordKeys The list of record keys to read
+   */
+  @Override
+  public Map<String, HoodieRecordLocation> readRecordLevelIndex(Set<String> recordKeys) {
+    ValidationUtils.checkState(enabled, "Cannot access record-level index as Metadata Table is disabled");
+    ValidationUtils.checkState(metadataConfig.isRecordLevelIndexEnabled(),
+        "Cannot access record-level index as it is disabled in the config");
+
+    HoodieTimer timer = new HoodieTimer().startTimer();
+
+    // Pre loading the keys helps in reducing the overhead of individual key lookup and merge
+    loadAndCacheKeys(recordKeys, MetadataPartitionType.RECORD_LEVEL_INDEX.partitionPath());
+
+    Map<String, HoodieRecordLocation> recordKeyToLocation = new HashMap<>(recordKeys.size());
+    recordKeys.stream().sorted().forEach(recordKey -> {
+      Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKeyFromCache(recordKey);
+      if (hoodieRecord.isPresent()) {
+        recordKeyToLocation.put(recordKey, hoodieRecord.get().getData().getRecordLocation());
+      }
+    });
+
+    clearKeyCache();
+
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORDINDEX_STR, timer.endTimer()));
+    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.LOOKUP_RECORDKEYS_COUNT_STR, recordKeys.size()));
+    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.RECORDINDEX_HITS_STR, recordKeyToLocation.size()));
+    metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.RECORDINDEX_MISS_STR, recordKeys.size() - recordKeyToLocation.size()));
+
+    return recordKeyToLocation;
+  }
+
+  /**
+   * Load the records for the given keys into a cache.
+   *
+   * @param recordKeys The keys of the record which are to be loaded.
+   * @param partitionPath The metadata partition.
+   */
+  protected abstract void loadAndCacheKeys(Set<String> recordKeys, String partitionPath);
+
+  /**
+   * Clear the cache of records.
+   */
+  protected abstract void clearKeyCache();
+
+  /**
+   * Reads and returns a record from metadata.
+   *
+   * @param key Key of the record to read.
+   * @param partitionName The metadata partition.
+   * @return
+   */
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key, String partitionName);
+
+  /**
+   * Reads and returns a record from cache.
+   *
+   * @param key Key of the record to read.
+   * @return
+   */
+  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromCache(String key);
 
   protected HoodieEngineContext getEngineContext() {
     return engineContext != null ? engineContext : new HoodieLocalEngineContext(hadoopConf.get());

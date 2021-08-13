@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hadoop.fs.FileStatus;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -96,12 +98,21 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   List<String> getAllPartitionPaths() throws IOException;
 
   /**
+<<<<<<< HEAD
    * Fetch all files for given partition paths.
    */
   Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.
+=======
+   * Returns the location of recordKeys which are found in the record level index.
+   */
+  public Map<String, HoodieRecordLocation> readRecordLevelIndex(Set<String> recordKeys);
+
+  /**
+   * Returns the timestamp of the latest synced instant.
+>>>>>>> 47573155c (API to read from record level index.)
    */
   Option<String> getSyncedInstantTime();
 
