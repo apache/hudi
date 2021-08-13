@@ -81,7 +81,7 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
 
   public static final ConfigProperty<HoodieTableVersion> HOODIE_TABLE_VERSION_PROP = ConfigProperty
       .key("hoodie.table.version")
-      .defaultValue(HoodieTableVersion.ONE)
+      .defaultValue(HoodieTableVersion.ZERO)
       .withDocumentation("Version of table, used for running upgrade/downgrade steps between releases with potentially "
           + "breaking/backwards compatible changes.");
 
