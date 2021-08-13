@@ -18,18 +18,13 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-/**
- * Downgrade handle to assist in downgrading hoodie table from version 1 to 0.
- */
-public class OneToZeroDowngradeHandler extends BaseOneToZeroDowngradeHandler {
+public class OneToTwoUpgradeHandler extends BaseOneToTwoUpgradeHandler {
 
   @Override
-  HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return HoodieSparkTable.create(config, context);
+  String getPartitionColumns(HoodieWriteConfig config) {
+    return config.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD.key());
   }
 }

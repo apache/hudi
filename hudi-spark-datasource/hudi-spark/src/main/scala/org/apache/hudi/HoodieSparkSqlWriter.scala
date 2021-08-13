@@ -18,6 +18,9 @@
 package org.apache.hudi
 
 
+import java.util
+import java.util.Properties
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -29,9 +32,8 @@ import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH, BOOTSTRAP_INDEX_CLASS}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
@@ -51,8 +53,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 
-import java.util
-import java.util.Properties
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
 
@@ -118,7 +118,7 @@ object HoodieSparkSqlWriter {
     } else {
       // Handle various save modes
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
-      val partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator)
+      val partitionColumns = HoodieSparkWriterUtils.getPartitionColumnsFromKeyGenerator(keyGenerator, toProperties(parameters))
       // Create the table if not present
       if (!tableExists) {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP)

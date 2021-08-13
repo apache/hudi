@@ -166,10 +166,23 @@ public class DirectWriteMarkers extends WriteMarkers {
     return markerFiles;
   }
 
+  /**
+   * Creates a marker file based on the full marker name excluding the base path and instant.
+   *
+   * @param markerName the full marker name, e.g., "2021/08/13/file1.marker.CREATE"
+   * @return path of the marker file
+   */
+  public Option<Path> create(String markerName) {
+    return create(new Path(markerDirPath, markerName), false);
+  }
+
   @Override
   protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+    return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
+  }
+
+  private Option<Path> create(Path markerPath, boolean checkIfExists) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
     Path dirPath = markerPath.getParent();
     try {
       if (!fs.exists(dirPath)) {

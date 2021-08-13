@@ -17,13 +17,13 @@
 
 package org.apache.hudi
 
+import java.util.Properties
+
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.{METADATA_ENABLE_PROP, METADATA_VALIDATE_PROP}
 import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 
-import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.{mapAsScalaMapConverter, _}
 
@@ -96,23 +96,7 @@ object HoodieWriterUtils {
     val props = new TypedProperties()
     props.putAll(parameters.asJava)
     val keyGen = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
-    getPartitionColumns(keyGen)
-  }
-
-  def getPartitionColumns(keyGen: KeyGenerator): String = {
-    keyGen match {
-      // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
-      // is: "field_name: field_type", we extract the field_name from the partition path field.
-      case c: BaseKeyGenerator
-        if c.isInstanceOf[CustomKeyGenerator] || c.isInstanceOf[CustomAvroKeyGenerator] =>
-          c.getPartitionPathFields.asScala.map(pathField =>
-            pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
-                .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
-            .mkString(",")
-
-      case b: BaseKeyGenerator => b.getPartitionPathFields.asScala.mkString(",")
-      case _=> null
-    }
+    HoodieSparkWriterUtils.getPartitionColumnsFromKeyGenerator(keyGen, props)
   }
 
   def convertMapToHoodieConfig(parameters: Map[String, String]): HoodieConfig = {
