@@ -539,6 +539,12 @@ object DataSourceWriteOptions {
     .defaultValue("io.confluent.kafka.serializers.KafkaAvroDeserializer")
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
+
+  val DROP_PARTITION_COLUMNS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.drop.partition.columns")
+    .defaultValue("false")
+    .withDocumentation("When set to true, will not write the partition columns into hudi. " +
+      "By default, false.")
 }
 
 object DataSourceOptionsHelper {
