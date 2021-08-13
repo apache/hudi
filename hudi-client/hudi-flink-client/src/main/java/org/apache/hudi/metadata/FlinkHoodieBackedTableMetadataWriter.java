@@ -18,8 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -32,10 +30,10 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -45,7 +43,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -82,41 +79,6 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
       enabled = false;
     }
-  }
-
-  @Override
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
-    ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    List<HoodieRecord> recordRDD = prepRecords(records, partitionName);
-
-    try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig, true)) {
-      writeClient.startCommitWithTime(instantTime);
-      writeClient.transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
-
-      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime);
-      statuses.forEach(writeStatus -> {
-        if (writeStatus.hasErrors()) {
-          throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
-        }
-      });
-      writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
-      // trigger cleaning, compaction, with suffixes based on the same instant time. This ensures that any future
-      // delta commits synced over will not have an instant time lesser than the last completed instant on the
-      // metadata table.
-      if (writeClient.scheduleCompactionAtInstant(instantTime + "001", Option.empty())) {
-        writeClient.compact(instantTime + "001");
-      }
-      writeClient.clean(instantTime + "002");
-    }
-
-    // Update total size of the metadata and count of base/log files
-    metrics.ifPresent(m -> {
-      try {
-        m.updateSizeMetrics(metaClient, metadata);
-      } catch (HoodieIOException e) {
-        LOG.error("Could not publish metadata size metrics", e);
-      }
-    });
   }
 
   /**
@@ -181,5 +143,67 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
 
     return records.stream().map(r -> r.setCurrentLocation(new HoodieRecordLocation(instantTime, fileId))).collect(Collectors.toList());
+  }
+
+  @Override
+  protected BaseFileOnlyView getTableFileSystemView() {
+    // TODO
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  protected void queueForUpdate(Object records, MetadataPartitionType partitionType, String instantTime) {
+    // TODO
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  protected void queueForUpdate(List records, MetadataPartitionType partitionType, String instantTime) {
+    // TODO
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  protected Pair readRecordKeysFromBaseFiles(HoodieEngineContext engineContext, List partitionBaseFilePairs) {
+    // TODO
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  protected void commit(String instantTime, boolean isInsert) {
+    // TODO
+    /*
+    ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
+    List<HoodieRecord> recordRDD = prepRecords(records, partitionName);
+
+    try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig, true)) {
+      writeClient.startCommitWithTime(instantTime);
+      writeClient.transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+
+      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime);
+      statuses.forEach(writeStatus -> {
+        if (writeStatus.hasErrors()) {
+          throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
+        }
+      });
+      writeClient.commit(instantTime, statuses, Option.empty(), HoodieActiveTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap());
+      // trigger cleaning, compaction, with suffixes based on the same instant time. This ensures that any future
+      // delta commits synced over will not have an instant time lesser than the last completed instant on the
+      // metadata table.
+      if (writeClient.scheduleCompactionAtInstant(instantTime + "001", Option.empty())) {
+        writeClient.compact(instantTime + "001");
+      }
+      writeClient.clean(instantTime + "002");
+    }
+
+    // Update total size of the metadata and count of base/log files
+    metrics.ifPresent(m -> {
+      try {
+        m.updateSizeMetrics(metaClient, metadata);
+      } catch (HoodieIOException e) {
+        LOG.error("Could not publish metadata size metrics", e);
+      }
+    });
+    */
   }
 }

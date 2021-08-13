@@ -94,6 +94,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         recordIndexInfo = new HoodieRecordIndexInfo(recordLevelIndexMetadata.get("partition").toString(),
             Long.parseLong(recordLevelIndexMetadata.get("fileIdHighBits").toString()),
             Long.parseLong(recordLevelIndexMetadata.get("fileIdLowBits").toString()),
+            Integer.parseInt(recordLevelIndexMetadata.get("fileIndex").toString()),
             Integer.parseInt(recordLevelIndexMetadata.get("instantTime").toString()));
       }
     }
@@ -160,16 +161,27 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static HoodieRecord<HoodieMetadataPayload> createRecordLevelIndexRecord(String recordKey, String partition,
       String fileId, String instantTime) {
     HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_LEVEL_INDEX.partitionPath());
-    final UUID uuid = UUID.fromString(fileId);
+    // Data file names have a -D suffix to denote the index (D = integer) of the file written
+    final int index = fileId.lastIndexOf("-");
+    // TODO: Some UUIDs are invalid
+    UUID uuid;
+    int fileIndex = 0;
+    try {
+      uuid = UUID.fromString(fileId.substring(0, index));
+      fileIndex = Integer.parseInt(fileId.substring(index + 1));
+    } catch (Exception e) {
+      // TODO: only for testing.
+      uuid = UUID.randomUUID();
+    }
     Date instantDate;
     try {
-      instantDate = HoodieActiveTimeline.getCommitFormatter().parse(instantTime);
+      instantDate = HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime);
     } catch (Exception e) {
       throw new HoodieMetadataException("Invalid instantTime format: " + instantTime, e);
     }
 
     HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey, new HoodieRecordIndexInfo(partition,
-        uuid.getMostSignificantBits(), uuid.getLeastSignificantBits(), (int)(instantDate.getTime() / 1000)));
+        uuid.getMostSignificantBits(), uuid.getLeastSignificantBits(), fileIndex, (int)(instantDate.getTime() / 1000)));
     return new HoodieRecord<>(key, payload);
   }
 
@@ -250,9 +262,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * If this is a record-level index entry, returns the file to which this is mapped.
    */
   public HoodieRecordLocation getRecordLocation() {
-    final String fileId = new UUID(recordIndexInfo.getFileIdHighBits(), recordIndexInfo.getFileIdLowBits()).toString();
+    final UUID uuid = new UUID(recordIndexInfo.getFileIdHighBits(), recordIndexInfo.getFileIdLowBits());
+    final String fileId = String.format("%s-%d", uuid.toString(), recordIndexInfo.getFileIndex());
     final Date instantDate = new Date(recordIndexInfo.getInstantTime() * 1000);
-    return new HoodieRecordLocation(HoodieActiveTimeline.getCommitFormatter().format(instantDate), fileId);
+    return new HoodieRecordLocation(HoodieActiveTimeline.COMMIT_FORMATTER.format(instantDate), fileId);
   }
 
   private Stream<Map.Entry<String, HoodieMetadataFileInfo>> filterFileInfoEntries(boolean isDeleted) {

@@ -88,4 +88,9 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
   public long getTotalRecords() {
     return orcUtils.getRowCount(conf, path);
   }
+
+  @Override
+  public Iterator<String> getRecordKeyIterator() throws IOException {
+    return orcUtils.readRowKeys(conf, path).iterator();
+  }
 }

@@ -1301,6 +1301,17 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(ALLOW_EMPTY_COMMIT);
   }
 
+  /**
+   * Record level index configs.
+   */
+  public boolean isRecordLevelIndexEnabled() {
+    return metadataConfig.isRecordLevelIndexEnabled();
+  }
+
+  public int getRecordLevelIndexShardCount() {
+    return metadataConfig.getRecordLevelIndexShardCount();
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();

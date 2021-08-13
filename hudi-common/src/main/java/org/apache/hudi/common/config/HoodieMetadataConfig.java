@@ -114,6 +114,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
 
+  public static final ConfigProperty<Boolean> RECORD_LEVEL_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.enabled")
+      .defaultValue(false)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable Record Level Index");
+
+  public static final ConfigProperty<Integer> RECORD_LEVEL_INDEX_SHARD_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.enabled")
+      .defaultValue(10)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Number of shards to use for Record Level Index");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -140,6 +152,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getDirectoryFilterRegex() {
     return getString(DIRECTORY_FILTER_REGEX);
+  }
+
+  public boolean isRecordLevelIndexEnabled() {
+    return useFileListingMetadata() && getBoolean(RECORD_LEVEL_INDEX_ENABLE_PROP);
+  }
+
+  public int getRecordLevelIndexShardCount() {
+    return getInt(RECORD_LEVEL_INDEX_SHARD_COUNT_PROP);
   }
 
   public static class Builder {
@@ -206,6 +226,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withDirectoryFilterRegex(String regex) {
       metadataConfig.setValue(DIRECTORY_FILTER_REGEX, regex);
+      return this;
+    }
+
+    public Builder withRecordLevelIndexEnabled(boolean enabled) {
+      metadataConfig.setValue(RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withRecordLevelIndexShardCount(int count) {
+      metadataConfig.setValue(RECORD_LEVEL_INDEX_SHARD_COUNT_PROP, String.valueOf(count));
       return this;
     }
 

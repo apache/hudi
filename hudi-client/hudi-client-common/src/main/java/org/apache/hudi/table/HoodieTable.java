@@ -100,7 +100,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   protected final HoodieIndex<T, I, K, O> index;
   private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
-  private final HoodieTableMetadata metadata;
+  private final HoodieTableMetadata metadataReader;
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
@@ -112,10 +112,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
+    this.metadataReader = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
         FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadataReader);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.taskContextSupplier = context.getTaskContextSupplier();
@@ -125,7 +125,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadataReader);
     }
     return viewManager;
   }
@@ -680,6 +680,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // This is to handle scenarios where this is called at the executor tasks which do not have access
     // to engine context, and it ends up being null (as its not serializable and marked transient here).
     return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
+  }
+
+  public HoodieTableMetadata getMetadataReader() {
+    return metadataReader;
   }
 
   public Option<HoodieTableMetadataWriter> getMetadataWriter() {

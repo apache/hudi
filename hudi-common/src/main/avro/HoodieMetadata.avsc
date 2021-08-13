@@ -80,6 +80,11 @@
                         "avro.java.string": "String"
                     },
                     {
+                        "name": "fileIndex",
+                        "type": "int",
+                        "doc": "index of the file"
+                    },
+                    {
                         "name": "instantTime",
                         "type": "int",
                         "doc": "Timestamp at which record was added"

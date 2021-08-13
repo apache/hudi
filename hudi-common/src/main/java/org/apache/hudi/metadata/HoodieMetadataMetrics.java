@@ -43,9 +43,14 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String LOOKUP_FILES_STR = "lookup_files";
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
-  public static final String INITIALIZE_STR = "initialize";
+  public static final String INITIALIZE_FILE_LISTING_STR = "initialize_files";
+  public static final String INITIALIZE_RECORD_INDEX_STR = "initialize_record_index";
   public static final String REBOOTSTRAP_STR = "rebootstrap";
   public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
+  public static final String READ_RECORDKEYS_BOOTSTRAP_STR = "read_recordkeys_bootstrap";
+  public static final String READ_FILES_BOOTSTRAP_STR = "read_filelisting_bootstrap";
+  public static final String RECORDINDEX_SHARD_COUNT_STR = "record_index_shard_count";
+  public static final String RECORDINDEX_BOOTSTRAP_COUNT_STR = "record_index_bootstrap_count";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";

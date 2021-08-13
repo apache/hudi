@@ -22,32 +22,44 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.metrics.DistributedRegistry;
-
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
+public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
 
   private static final Logger LOG = LogManager.getLogger(SparkHoodieBackedTableMetadataWriter.class);
+  private List<JavaRDD<HoodieRecord>> recordsQueuedForCommit;
 
   public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig, HoodieEngineContext context) {
     return new SparkHoodieBackedTableMetadataWriter(conf, writeConfig, context);
@@ -92,13 +104,31 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
+  protected void commit(String instantTime, boolean isInsert) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
+
+    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+    JavaRDD<HoodieRecord> recordRDD = recordsQueuedForCommit.isEmpty() ? jsc.emptyRDD() : recordsQueuedForCommit.get(0);
+    for (int index = 1; index < recordsQueuedForCommit.size(); ++index) {
+      recordRDD = recordRDD.union(recordsQueuedForCommit.get(index));
+    }
+
+    // Ensure each record is tagged
+    recordRDD.foreach(r -> {
+      if (r.getCurrentLocation() == null) {
+        throw new HoodieMetadataException("Record is not tagged with a location");
+      }
+    });
+    recordsQueuedForCommit.clear();
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
       writeClient.startCommitWithTime(instantTime);
-      List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
+      List<WriteStatus> statuses;
+      if (isInsert) {
+        statuses = writeClient.insertPreppedRecords(recordRDD, instantTime).collect();
+      } else {
+        statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
+      }
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
@@ -171,20 +201,71 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     writeClient.clean(instantTime + "002");
   }
 
-  /**
-   * Tag each record with the location in the given partition.
-   *
-   * The record is sharded to a file based on its record key.
-   */
-  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int shardCount) {
-    List<FileSlice> shards = HoodieTableMetadataUtil.loadPartitionShards(metaClient, partitionName);
-    ValidationUtils.checkArgument(shards.size() == shardCount, String.format("Invalid number of shards: found=%d, required=%d", shards.size(), shardCount));
+  @Override
+  protected TableFileSystemView.BaseFileOnlyView getTableFileSystemView() {
+    HoodieTable table = HoodieSparkTable.create(datasetWriteConfig, engineContext);
+    return (TableFileSystemView.BaseFileOnlyView)table.getFileSystemView();
+  }
 
+  @Override
+  protected Pair<JavaRDD<HoodieRecord>, Long> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
+      List<Pair<String, String>> partitionBaseFilePairs) {
     JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
-    return jsc.parallelize(records, 1).map(r -> {
-      FileSlice slice = shards.get(HoodieTableMetadataUtil.keyToShard(r.getRecordKey(), shardCount));
-      r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-      return r;
+    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(partitionBaseFilePairs, partitionBaseFilePairs.size()).flatMap(p -> {
+      final String partition = p.getKey();
+      final String filename = p.getValue();
+      Path dataFilePath = new Path(datasetWriteConfig.getBasePath(), partition + Path.SEPARATOR + filename);
+
+      final String fileId = FSUtils.getFileId(filename);
+      final String instantTime = FSUtils.getCommitTime(filename);
+      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), dataFilePath);
+      Iterator<String> recordKeyIterator = reader.getRecordKeyIterator();
+
+      return new Iterator<HoodieRecord>() {
+        @Override
+        public boolean hasNext() {
+          return recordKeyIterator.hasNext();
+        }
+
+        @Override
+        public HoodieRecord next() {
+          return HoodieMetadataPayload.createRecordLevelIndexRecord(recordKeyIterator.next(), partition, fileId, instantTime);
+        }
+      };
     });
+
+    if (recordRDD.getStorageLevel() == StorageLevel.NONE()) {
+      recordRDD.persist(StorageLevel.MEMORY_AND_DISK());
+    }
+
+    return Pair.of(recordRDD, recordRDD.count());
+  }
+
+  @Override
+  protected void queueForUpdate(JavaRDD<HoodieRecord> records, MetadataPartitionType partitionType, String instantTime) {
+    List<FileSlice> shards = HoodieTableMetadataUtil.loadPartitionShards(metaClient, partitionType.partitionPath());
+
+    JavaRDD<HoodieRecord> taggedRecordRDD = records.map(r -> {
+      int shardIndex = Math.abs(HoodieTableMetadataUtil.keyToShard(r.getRecordKey(), shards.size()));
+      HoodieRecordLocation loc = new HoodieRecordLocation(shards.get(shardIndex).getBaseInstantTime(), shards.get(shardIndex).getFileId());
+      HoodieRecord taggedRecord = HoodieIndexUtils.getTaggedRecord(r, Option.of(loc));
+      if (taggedRecord.getCurrentLocation() == null) {
+        throw new HoodieMetadataException("Tagged record does not have a location set");
+      }
+
+      return taggedRecord;
+    });
+
+    if (recordsQueuedForCommit == null) {
+      recordsQueuedForCommit = new ArrayList<>();
+    }
+
+    recordsQueuedForCommit.add(taggedRecordRDD);
+  }
+
+  @Override
+  protected void queueForUpdate(List<HoodieRecord> records, MetadataPartitionType partitionType, String instantTime) {
+    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+    queueForUpdate(jsc.parallelize(records, 1), partitionType, instantTime);
   }
 }
