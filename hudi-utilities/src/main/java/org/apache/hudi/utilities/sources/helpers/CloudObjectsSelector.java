@@ -55,12 +55,15 @@ import java.util.stream.Collectors;
 public class CloudObjectsSelector {
   public static final List<String> ALLOWED_S3_EVENT_PREFIX =
       Collections.singletonList("ObjectCreated");
+  public static final String S3_PREFIX = "s3://";
   public static volatile Logger log = LogManager.getLogger(CloudObjectsSelector.class);
   public static final String SQS_ATTR_APPROX_MESSAGES = "ApproximateNumberOfMessages";
   static final String SQS_MODEL_MESSAGE = "Message";
   static final String SQS_MODEL_EVENT_RECORDS = "Records";
   static final String SQS_MODEL_EVENT_NAME = "eventName";
   static final String S3_MODEL_EVENT_TIME = "eventTime";
+  static final String S3_FILE_SIZE = "fileSize";
+  static final String S3_FILE_PATH = "filePath";
   public final String queueUrl;
   public final int longPollWait;
   public final int maxMessagesPerRequest;
@@ -119,8 +122,8 @@ public class CloudObjectsSelector {
     String key = URLDecoder.decode(s3Object.getString("key"), "UTF-8");
     String filePath = this.fsName + "://" + bucket + "/" + key;
     fileRecord.put(S3_MODEL_EVENT_TIME, eventTime);
-    fileRecord.put("fileSize", s3Object.getLong("size"));
-    fileRecord.put("filePath", filePath);
+    fileRecord.put(S3_FILE_SIZE, s3Object.getLong("size"));
+    fileRecord.put(S3_FILE_PATH, filePath);
     return fileRecord;
   }
 
@@ -235,34 +238,35 @@ public class CloudObjectsSelector {
    * Configs supported.
    */
   public static class Config {
+    private static final String HOODIE_DELTASTREAMER_S3_SOURCE = "hoodie.deltastreamer.s3.source";
     /**
      * {@value #S3_SOURCE_QUEUE_URL} is the queue url for cloud object events.
      */
-    public static final String S3_SOURCE_QUEUE_URL = "hoodie.deltastreamer.s3.source.queue.url";
+    public static final String S3_SOURCE_QUEUE_URL = HOODIE_DELTASTREAMER_S3_SOURCE + ".queue.url";
 
     /**
      * {@value #S3_SOURCE_QUEUE_REGION} is the case-sensitive region name of the cloud provider for the queue. For example, "us-east-1".
      */
-    public static final String S3_SOURCE_QUEUE_REGION = "hoodie.deltastreamer.s3.source.queue.region";
+    public static final String S3_SOURCE_QUEUE_REGION = HOODIE_DELTASTREAMER_S3_SOURCE + ".queue.region";
 
     /**
      * {@value #S3_SOURCE_QUEUE_FS} is file system corresponding to queue. For example, for AWS SQS it is s3/s3a.
      */
-    public static final String S3_SOURCE_QUEUE_FS = "hoodie.deltastreamer.s3.source.queue.fs";
+    public static final String S3_SOURCE_QUEUE_FS = HOODIE_DELTASTREAMER_S3_SOURCE + ".queue.fs";
 
     /**
      * {@value #S3_QUEUE_LONG_POLL_WAIT} is the long poll wait time in seconds If set as 0 then
      * client will fetch on short poll basis.
      */
     public static final String S3_QUEUE_LONG_POLL_WAIT =
-        "hoodie.deltastreamer.s3.source.queue.long.poll.wait";
+        HOODIE_DELTASTREAMER_S3_SOURCE + ".queue.long.poll.wait";
 
     /**
      * {@value #S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH} is max messages for each batch of delta streamer
      * run. Source will process these maximum number of message at a time.
      */
     public static final String S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH =
-        "hoodie.deltastreamer.s3.source.queue.max.messages.per.batch";
+        HOODIE_DELTASTREAMER_S3_SOURCE + ".queue.max.messages.per.batch";
 
     /**
      * {@value #S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT} is visibility timeout for messages in queue. After we
@@ -270,7 +274,7 @@ public class CloudObjectsSelector {
      * can't be consumed again by source for this timeout period.
      */
     public static final String S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT =
-        "hoodie.deltastreamer.s3.source.queue.visibility.timeout";
+        HOODIE_DELTASTREAMER_S3_SOURCE + ".queue.visibility.timeout";
 
     /**
      * {@value #SOURCE_INPUT_SELECTOR} source input selector.

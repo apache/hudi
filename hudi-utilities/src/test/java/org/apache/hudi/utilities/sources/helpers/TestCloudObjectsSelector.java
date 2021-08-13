@@ -44,6 +44,10 @@ import java.util.Map;
 
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.S3_FILE_PATH;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.S3_FILE_SIZE;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.S3_MODEL_EVENT_TIME;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.S3_PREFIX;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_ATTR_APPROX_MESSAGES;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_MODEL_EVENT_RECORDS;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_MODEL_MESSAGE;
@@ -126,7 +130,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
             + "\\\",\\\"size\\\":123,\\\"eTag\\\":\\\"test\\\",\\\"sequencer\\\":\\\"1\\\"}}}]}\"}";
     JSONObject messageBody = new JSONObject(s3Records);
     Map<String, Object> messageMap = new HashMap<>();
-    if (messageBody.has("Message")) {
+    if (messageBody.has(SQS_MODEL_MESSAGE)) {
       ObjectMapper mapper = new ObjectMapper();
       messageMap =
           (Map<String, Object>) mapper.readValue(messageBody.getString(SQS_MODEL_MESSAGE), Map.class);
@@ -138,9 +142,9 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
         selector.getFileAttributesFromRecord(new JSONObject(records.get(0)));
 
     assertEquals(3, fileAttributes.size());
-    assertEquals(123L, (long) fileAttributes.get("fileSize"));
-    assertEquals("s3://" + bucket + "/" + key, fileAttributes.get("filePath"));
-    assertEquals(1627376736755L, (long) fileAttributes.get("eventTime"));
+    assertEquals(123L, (long) fileAttributes.get(S3_FILE_SIZE));
+    assertEquals(S3_PREFIX + bucket + "/" + key, fileAttributes.get(S3_FILE_PATH));
+    assertEquals(1627376736755L, (long) fileAttributes.get(S3_MODEL_EVENT_TIME));
   }
 
   @ParameterizedTest

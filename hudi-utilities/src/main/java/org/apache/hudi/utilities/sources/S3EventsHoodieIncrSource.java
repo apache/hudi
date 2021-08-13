@@ -49,6 +49,7 @@ import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.HOODIE_S
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.READ_LATEST_INSTANT_ON_MISSING_CKPT;
 import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.SOURCE_FILE_FORMAT;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.S3_PREFIX;
 
 /**
  * This source will use the S3 events meta information from hoodie table generate by {@link S3EventsSource}.
@@ -56,7 +57,6 @@ import static org.apache.hudi.utilities.sources.HoodieIncrSource.Config.SOURCE_F
 public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   private static final Logger LOG = LogManager.getLogger(S3EventsHoodieIncrSource.class);
-  public static final String S3_PREFIX = "s3://";
 
   public S3EventsHoodieIncrSource(
       TypedProperties props,
