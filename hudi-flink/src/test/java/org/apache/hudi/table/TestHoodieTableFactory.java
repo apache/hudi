@@ -200,6 +200,31 @@ public class TestHoodieTableFactory {
   }
 
   @Test
+  void testSetupDropDuplicateOptions() {
+    // definition with simple primary key and partition path
+    TableSchema schema1 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    final Configuration conf1 = tableSource1.getConf();
+    assertThat(conf1.getBoolean(FlinkOptions.INSERT_DROP_DUPS), is(true));
+
+    // set up table type to MOR
+    this.conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
+    final Configuration conf2 = tableSource2.getConf();
+    assertThat(conf2.getBoolean(FlinkOptions.INSERT_DROP_DUPS), is(false));
+  }
+
+  @Test
   void testSetupCleaningOptionsForSource() {
     // definition with simple primary key and partition path
     TableSchema schema1 = TableSchema.builder()

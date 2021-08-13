@@ -115,8 +115,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Double> INDEX_STATE_TTL = ConfigOptions
       .key("index.state.ttl")
       .doubleType()
-      .defaultValue(1.5D)
-      .withDescription("Index state ttl in days, default 1.5 day");
+      .defaultValue(0D)
+      .withDescription("Default store the index forever");
 
   public static final ConfigOption<Boolean> INDEX_GLOBAL_ENABLED = ConfigOptions
       .key("index.global.enabled")
