@@ -25,10 +25,14 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.io.Serializable;
+
 /**
  * Utilities to project the row data with given positions.
  */
-public class RowDataProjection {
+public class RowDataProjection implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   private final RowData.FieldGetter[] fieldGetters;
 
   private RowDataProjection(LogicalType[] types, int[] positions) {
