@@ -48,7 +48,7 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
       val keyGenProps = new TypedProperties()
       keyGenProps.putAll(props)
       keyGenProps.remove(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS)
-      keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key, beforeKeyGenClassName)
+      keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS.key, beforeKeyGenClassName)
       Some(KeyGenUtils.createKeyGeneratorByClassName(keyGenProps))
     } else {
       None

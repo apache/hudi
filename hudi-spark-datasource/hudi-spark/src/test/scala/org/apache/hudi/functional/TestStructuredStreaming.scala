@@ -193,8 +193,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
 
   def getClusteringOpts(isInlineClustering: String, isAsyncClustering: String, isAsyncCompaction: String,
                         clusteringNumCommit: String, fileMaxRecordNum: Int):Map[String, String] = {
-    commonOpts + (HoodieClusteringConfig.INLINE_CLUSTERING_PROP.key -> isInlineClustering,
-      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP.key -> clusteringNumCommit,
+    commonOpts + (HoodieClusteringConfig.INLINE_CLUSTERING.key -> isInlineClustering,
+      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT.key -> clusteringNumCommit,
       DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
       DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> isAsyncCompaction,
       HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMIT_PROP.key -> clusteringNumCommit,

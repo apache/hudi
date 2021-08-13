@@ -53,9 +53,9 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
       properties.put(KeyGeneratorOptions.RECORDKEY_FIELD.key(), "_row_key");
     }
     if (useKeyGeneratorClassName) {
-      properties.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), CustomKeyGenerator.class.getName());
+      properties.put(HoodieWriteConfig.KEYGENERATOR_CLASS.key(), CustomKeyGenerator.class.getName());
     } else {
-      properties.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), KeyGeneratorType.CUSTOM.name());
+      properties.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
     }
     properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key(), "true");
     return properties;
@@ -96,9 +96,9 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     TypedProperties properties = new TypedProperties();
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD.key(), "timestamp:simple");
     if (useKeyGeneratorClassName) {
-      properties.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), CustomKeyGenerator.class.getName());
+      properties.put(HoodieWriteConfig.KEYGENERATOR_CLASS.key(), CustomKeyGenerator.class.getName());
     } else {
-      properties.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), KeyGeneratorType.CUSTOM.name());
+      properties.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.CUSTOM.name());
     }
     return properties;
   }

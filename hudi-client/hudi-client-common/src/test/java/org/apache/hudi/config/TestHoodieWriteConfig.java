@@ -44,9 +44,9 @@ public class TestHoodieWriteConfig {
   public void testPropertyLoading(boolean withAlternative) throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
     Map<String, String> params = new HashMap<>(3);
-    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP.key(), "1");
-    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP.key(), "5");
-    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP.key(), "2");
+    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), "1");
+    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP.key(), "5");
+    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), "2");
     if (withAlternative) {
       params.put("hoodie.avro.schema.externalTransformation", "true");
     } else {

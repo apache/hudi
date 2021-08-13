@@ -83,7 +83,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   }
 
   private String getUrl() {
-    return writeConfig.getString(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_URL_PROP);
+    return writeConfig.getString(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_URL);
   }
 
   private CloseableHttpClient getClient() {

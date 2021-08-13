@@ -510,7 +510,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(HoodieWriteConfig.HOODIE_AUTO_COMMIT_PROP.key, "true")
+      .option(HoodieWriteConfig.HOODIE_AUTO_COMMIT.key, "true")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 

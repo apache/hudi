@@ -105,7 +105,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
 
   /**
    * multiPutBatchSize will be computed and re-set in updateLocation if
-   * {@link HoodieHBaseIndexConfig#HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP} is set to true.
+   * {@link HoodieHBaseIndexConfig#HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE} is set to true.
    */
   private Integer multiPutBatchSize;
   private Integer numRegionServersForTable;

@@ -361,7 +361,7 @@ public class SparkMain {
     TypedProperties properties = propsFilePath == null ? UtilHelpers.buildProperties(configs)
         : UtilHelpers.readConfig(FSUtils.getFs(propsFilePath, jsc.hadoopConfiguration()), new Path(propsFilePath), configs).getConfig();
 
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key(), sourcePath);
+    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH.key(), sourcePath);
 
     if (!StringUtils.isNullOrEmpty(keyGenerator) &&  KeyGeneratorType.getNames().contains(keyGenerator.toUpperCase(Locale.ROOT))) {
       properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_TYPE.key(), keyGenerator.toUpperCase(Locale.ROOT));
