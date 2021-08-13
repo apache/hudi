@@ -42,8 +42,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.QUEUE_REGION;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.QUEUE_URL_PROP;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_ATTR_APPROX_MESSAGES;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_MODEL_EVENT_RECORDS;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_MODEL_MESSAGE;
 import static org.apache.hudi.utilities.testutils.CloudObjectTestUtils.deleteMessagesInQueue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -69,8 +72,8 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
 
     props = new TypedProperties();
     sqsUrl = "test-queue";
-    props.setProperty(QUEUE_URL_PROP, sqsUrl);
-    props.setProperty(QUEUE_REGION, REGION_NAME);
+    props.setProperty(S3_SOURCE_QUEUE_URL, sqsUrl);
+    props.setProperty(S3_SOURCE_QUEUE_REGION, REGION_NAME);
   }
 
   @AfterEach
@@ -92,7 +95,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
     Map<String, String> queueAttributes = selector.getSqsQueueAttributes(sqs, sqsUrl);
     assertEquals(1, queueAttributes.size());
     // ApproximateNumberOfMessages is a required queue attribute for Cloud object selector
-    assertEquals("0", queueAttributes.get("ApproximateNumberOfMessages"));
+    assertEquals("0", queueAttributes.get(SQS_ATTR_APPROX_MESSAGES));
   }
 
   @ParameterizedTest
@@ -126,9 +129,9 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
     if (messageBody.has("Message")) {
       ObjectMapper mapper = new ObjectMapper();
       messageMap =
-          (Map<String, Object>) mapper.readValue(messageBody.getString("Message"), Map.class);
+          (Map<String, Object>) mapper.readValue(messageBody.getString(SQS_MODEL_MESSAGE), Map.class);
     }
-    List<Map<String, Object>> records = (List<Map<String, Object>>) messageMap.get("Records");
+    List<Map<String, Object>> records = (List<Map<String, Object>>) messageMap.get(SQS_MODEL_EVENT_RECORDS);
 
     // test the return values
     Map<String, Object> fileAttributes =
@@ -214,6 +217,6 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
     deleteMessagesInQueue(sqs);
 
     //  test the return values
-    selector.onCommitDeleteProcessedMessages(sqs, sqsUrl, testSingleList);
+    selector.deleteProcessedMessages(sqs, sqsUrl, testSingleList);
   }
 }

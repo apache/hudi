@@ -407,7 +407,7 @@
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-sqs</artifactId>
-      <version>1.12.22</version>
+      <version>${aws.sdk.version}</version>
     </dependency>
     
     <!-- Hive - Test -->

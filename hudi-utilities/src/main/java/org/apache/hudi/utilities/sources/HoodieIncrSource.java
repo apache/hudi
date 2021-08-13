@@ -77,6 +77,12 @@ public class HoodieIncrSource extends RowSource {
     static final String READ_LATEST_INSTANT_ON_MISSING_CKPT =
         "hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt";
     static final Boolean DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT = false;
+
+    /**
+     * {@value #SOURCE_FILE_FORMAT} is passed to the reader while loading dataset. Default value is parquet.
+     */
+    static final String SOURCE_FILE_FORMAT = "hoodie.deltastreamer.source.hoodieincr.file.format";
+    static final String DEFAULT_SOURCE_FILE_FORMAT = "parquet";
   }
 
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,

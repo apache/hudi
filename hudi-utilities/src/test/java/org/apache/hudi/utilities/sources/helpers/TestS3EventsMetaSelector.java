@@ -29,6 +29,7 @@ import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.Message;
 import org.apache.hadoop.fs.Path;
+import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,12 +41,12 @@ import org.mockito.MockitoAnnotations;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.QUEUE_REGION;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.QUEUE_URL_PROP;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
 import static org.apache.hudi.utilities.sources.helpers.TestCloudObjectsSelector.REGION_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestCloudObjectsDfsSelector extends HoodieClientTestHarness {
+public class TestS3EventsMetaSelector extends HoodieClientTestHarness {
 
   TypedProperties props;
   String sqsUrl;
@@ -54,7 +55,7 @@ public class TestCloudObjectsDfsSelector extends HoodieClientTestHarness {
   AmazonSQS sqs;
 
   @Mock
-  private CloudObjectsDfsSelector cloudObjectsDfsSelector;
+  private S3EventsMetaSelector s3EventsMetaSelector;
 
   @BeforeEach
   void setUp() {
@@ -65,22 +66,20 @@ public class TestCloudObjectsDfsSelector extends HoodieClientTestHarness {
 
     props = new TypedProperties();
     sqsUrl = "test-queue";
-    props.setProperty(QUEUE_URL_PROP, sqsUrl);
-    props.setProperty(QUEUE_REGION, REGION_NAME);
+    props.setProperty(S3_SOURCE_QUEUE_URL, sqsUrl);
+    props.setProperty(S3_SOURCE_QUEUE_REGION, REGION_NAME);
   }
 
   @AfterEach
   public void teardown() throws Exception {
-    Mockito.reset(cloudObjectsDfsSelector);
+    Mockito.reset(s3EventsMetaSelector);
     cleanupResources();
   }
 
   @ParameterizedTest
-  @ValueSource(classes = {CloudObjectsDfsSelector.class})
-  public void testNextFilePathsFromQueueShouldReturnsEventsFromQueue(Class<?> clazz) {
-    CloudObjectsDfsSelector selector =
-        (CloudObjectsDfsSelector) ReflectionUtils.loadClass(clazz.getName(), props);
-
+  @ValueSource(classes = {S3EventsMetaSelector.class})
+  public void testNextEventsFromQueueShouldReturnsEventsFromQueue(Class<?> clazz) {
+    S3EventsMetaSelector selector = (S3EventsMetaSelector) ReflectionUtils.loadClass(clazz.getName(), props);
     // setup s3 record
     String bucket = "test-bucket";
     String key = "part-foo-bar.snappy.parquet";
@@ -90,11 +89,17 @@ public class TestCloudObjectsDfsSelector extends HoodieClientTestHarness {
     List<Message> processed = new ArrayList<>();
 
     // test the return values
-    Pair<Option<String>, String> eventFromQueue =
-        selector.getNextFilePathsFromQueue(sqs, Option.empty(), processed);
+    Pair<List<String>, String> eventFromQueue =
+        selector.getNextEventsFromQueue(sqs, Option.empty(), processed);
 
+    assertEquals(1, eventFromQueue.getLeft().size());
     assertEquals(1, processed.size());
-    assertEquals("s3://" + bucket + "/" + key, eventFromQueue.getLeft().get());
+    assertEquals(
+        key,
+        new JSONObject(eventFromQueue.getLeft().get(0))
+            .getJSONObject("s3")
+            .getJSONObject("object")
+            .getString("key"));
     assertEquals("1627376736755", eventFromQueue.getRight());
   }
 }

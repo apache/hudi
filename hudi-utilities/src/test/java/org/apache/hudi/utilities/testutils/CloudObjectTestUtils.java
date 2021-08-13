@@ -27,21 +27,25 @@ import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.hadoop.fs.Path;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_ATTR_APPROX_MESSAGES;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-/** Utils Class for unit testing on CloudObject related sources. */
+/**
+ * Utils Class for unit testing on CloudObject related sources.
+ */
 public class CloudObjectTestUtils {
 
   /**
    * Set a return value for mocked sqs instance. It will add a new messages (s3 Event) and set
    * ApproximateNumberOfMessages attribute of the queue.
    *
-   * @param sqs Mocked instance of AmazonSQS
+   * @param sqs  Mocked instance of AmazonSQS
    * @param path Absolute Path of file in FileSystem
    */
   public static void setMessagesInQueue(AmazonSQS sqs, Path path) {
@@ -79,7 +83,7 @@ public class CloudObjectTestUtils {
     when(sqs.getQueueAttributes(any(GetQueueAttributesRequest.class)))
         .thenReturn(
             new GetQueueAttributesResult()
-                .addAttributesEntry("ApproximateNumberOfMessages", approximateNumberOfMessages));
+                .addAttributesEntry(SQS_ATTR_APPROX_MESSAGES, approximateNumberOfMessages));
   }
 
   /**

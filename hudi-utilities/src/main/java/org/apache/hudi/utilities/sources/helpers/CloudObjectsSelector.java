@@ -49,17 +49,22 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Cloud Objects Selector Class. This class has methods for processing cloud objects. It currently
- * supports only AWS S3 objects and AWS SQS queue.
+ * This class has methods for processing cloud objects.
+ * It currently supports only AWS S3 objects and AWS SQS queue.
  */
 public class CloudObjectsSelector {
   public static final List<String> ALLOWED_S3_EVENT_PREFIX =
       Collections.singletonList("ObjectCreated");
   public static volatile Logger log = LogManager.getLogger(CloudObjectsSelector.class);
+  public static final String SQS_ATTR_APPROX_MESSAGES = "ApproximateNumberOfMessages";
+  static final String SQS_MODEL_MESSAGE = "Message";
+  static final String SQS_MODEL_EVENT_RECORDS = "Records";
+  static final String SQS_MODEL_EVENT_NAME = "eventName";
+  static final String S3_MODEL_EVENT_TIME = "eventTime";
   public final String queueUrl;
   public final int longPollWait;
-  public final int maxMessagesEachRequest;
-  public final int maxMessageEachBatch;
+  public final int maxMessagesPerRequest;
+  public final int maxMessagePerBatch;
   public final int visibilityTimeout;
   public final TypedProperties props;
   public final String fsName;
@@ -69,15 +74,15 @@ public class CloudObjectsSelector {
    * Cloud Objects Selector Class. {@link CloudObjectsSelector}
    */
   public CloudObjectsSelector(TypedProperties props) {
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.QUEUE_URL_PROP, Config.QUEUE_REGION));
+    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.S3_SOURCE_QUEUE_URL, Config.S3_SOURCE_QUEUE_REGION));
     this.props = props;
-    this.queueUrl = props.getString(Config.QUEUE_URL_PROP);
-    this.regionName = props.getString(Config.QUEUE_REGION);
-    this.fsName = props.getString(Config.SOURCE_QUEUE_FS_PROP, "s3").toLowerCase();
-    this.longPollWait = props.getInteger(Config.QUEUE_LONGPOLLWAIT_PROP, 20);
-    this.maxMessageEachBatch = props.getInteger(Config.QUEUE_MAXMESSAGESEACHBATCH_PROP, 5);
-    this.visibilityTimeout = props.getInteger(Config.QUEUE_VISIBILITYTIMEOUT_PROP, 30);
-    this.maxMessagesEachRequest = 10;
+    this.queueUrl = props.getString(Config.S3_SOURCE_QUEUE_URL);
+    this.regionName = props.getString(Config.S3_SOURCE_QUEUE_REGION);
+    this.fsName = props.getString(Config.S3_SOURCE_QUEUE_FS, "s3").toLowerCase();
+    this.longPollWait = props.getInteger(Config.S3_QUEUE_LONG_POLL_WAIT, 20);
+    this.maxMessagePerBatch = props.getInteger(Config.S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH, 5);
+    this.visibilityTimeout = props.getInteger(Config.S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT, 30);
+    this.maxMessagesPerRequest = 10;
   }
 
   /**
@@ -91,7 +96,7 @@ public class CloudObjectsSelector {
     GetQueueAttributesResult queueAttributesResult =
         sqsClient.getQueueAttributes(
             new GetQueueAttributesRequest(queueUrl)
-                .withAttributeNames("ApproximateNumberOfMessages"));
+                .withAttributeNames(SQS_ATTR_APPROX_MESSAGES));
     return queueAttributesResult.getAttributes();
   }
 
@@ -103,20 +108,17 @@ public class CloudObjectsSelector {
    */
   protected Map<String, Object> getFileAttributesFromRecord(JSONObject record)
       throws UnsupportedEncodingException {
-
     Map<String, Object> fileRecord = new HashMap<>();
-    String eventTimeStr = record.getString("eventTime");
+    String eventTimeStr = record.getString(S3_MODEL_EVENT_TIME);
     long eventTime =
         Date.from(Instant.from(DateTimeFormatter.ISO_INSTANT.parse(eventTimeStr))).getTime();
-
     JSONObject s3Object = record.getJSONObject("s3").getJSONObject("object");
     String bucket =
         URLDecoder.decode(
             record.getJSONObject("s3").getJSONObject("bucket").getString("name"), "UTF-8");
     String key = URLDecoder.decode(s3Object.getString("key"), "UTF-8");
     String filePath = this.fsName + "://" + bucket + "/" + key;
-
-    fileRecord.put("eventTime", eventTime);
+    fileRecord.put(S3_MODEL_EVENT_TIME, eventTime);
     fileRecord.put("fileSize", s3Object.getLong("size"));
     fileRecord.put("filePath", filePath);
     return fileRecord;
@@ -135,29 +137,31 @@ public class CloudObjectsSelector {
   protected List<Message> getMessagesToProcess(
       AmazonSQS sqsClient,
       String queueUrl,
-      ReceiveMessageRequest receiveMessageRequest,
-      int maxMessageEachBatch,
-      int maxMessagesEachRequest) {
+      int longPollWait,
+      int visibilityTimeout,
+      int maxMessagePerBatch,
+      int maxMessagesPerRequest) {
     List<Message> messagesToProcess = new ArrayList<>();
-
+    ReceiveMessageRequest receiveMessageRequest =
+        new ReceiveMessageRequest()
+            .withQueueUrl(queueUrl)
+            .withWaitTimeSeconds(longPollWait)
+            .withVisibilityTimeout(visibilityTimeout);
+    receiveMessageRequest.setMaxNumberOfMessages(maxMessagesPerRequest);
     // Get count for available messages
     Map<String, String> queueAttributesResult = getSqsQueueAttributes(sqsClient, queueUrl);
-    long approxMessagesAvailable =
-        Long.parseLong(queueAttributesResult.get("ApproximateNumberOfMessages"));
-    log.info("Approx. " + approxMessagesAvailable + " messages available in queue.");
-
+    long approxMessagesAvailable = Long.parseLong(queueAttributesResult.get(SQS_ATTR_APPROX_MESSAGES));
+    log.info("Approximately " + approxMessagesAvailable + " messages available in queue.");
+    long numMessagesToProcess = Math.min(approxMessagesAvailable, maxMessagePerBatch);
     for (int i = 0;
-         i < (int) Math.ceil((double) approxMessagesAvailable / maxMessagesEachRequest);
+         i < (int) Math.ceil((double) numMessagesToProcess / maxMessagesPerRequest);
          ++i) {
       List<Message> messages = sqsClient.receiveMessage(receiveMessageRequest).getMessages();
-      log.debug("Messages size: " + messages.size());
-
-      for (Message message : messages) {
-        log.debug("message id: " + message.getMessageId());
-        messagesToProcess.add(message);
-      }
-      log.debug("total fetched messages size: " + messagesToProcess.size());
-      if (messages.isEmpty() || (messagesToProcess.size() >= maxMessageEachBatch)) {
+      log.debug("Number of messages: " + messages.size());
+      messagesToProcess.addAll(messages);
+      if (messages.isEmpty()) {
+        // ApproximateNumberOfMessages value is eventually consistent.
+        // So, we still need to check and break if there are no messages.
         break;
       }
     }
@@ -165,19 +169,16 @@ public class CloudObjectsSelector {
   }
 
   /**
-   * create partitions of list using specific batch size. we can't use third party API for this
+   * Create partitions of list using specific batch size. we can't use third party API for this
    * functionality, due to https://github.com/apache/hudi/blob/master/style/checkstyle.xml#L270
    */
   protected List<List<Message>> createListPartitions(List<Message> singleList, int eachBatchSize) {
     List<List<Message>> listPartitions = new ArrayList<>();
-
     if (singleList.size() == 0 || eachBatchSize < 1) {
       return listPartitions;
     }
-
     for (int start = 0; start < singleList.size(); start += eachBatchSize) {
       int end = Math.min(start + eachBatchSize, singleList.size());
-
       if (start > end) {
         throw new IndexOutOfBoundsException(
             "Index " + start + " is out of the list range <0," + (singleList.size() - 1) + ">");
@@ -188,14 +189,12 @@ public class CloudObjectsSelector {
   }
 
   /**
-   * delete batch of messages from queue.
+   * Delete batch of messages from queue.
    */
-  protected void deleteBatchOfMessages(
-      AmazonSQS sqs, String queueUrl, List<Message> messagesToBeDeleted) {
+  protected void deleteBatchOfMessages(AmazonSQS sqs, String queueUrl, List<Message> messagesToBeDeleted) {
     DeleteMessageBatchRequest deleteBatchReq =
         new DeleteMessageBatchRequest().withQueueUrl(queueUrl);
     List<DeleteMessageBatchRequestEntry> deleteEntries = deleteBatchReq.getEntries();
-
     for (Message message : messagesToBeDeleted) {
       deleteEntries.add(
           new DeleteMessageBatchRequestEntry()
@@ -207,7 +206,6 @@ public class CloudObjectsSelector {
         deleteResult.getFailed().stream()
             .map(BatchResultErrorEntry::getId)
             .collect(Collectors.toList());
-    System.out.println("Delete is" + deleteFailures.isEmpty() + "or ignoring it.");
     if (!deleteFailures.isEmpty()) {
       log.warn(
           "Failed to delete "
@@ -223,11 +221,8 @@ public class CloudObjectsSelector {
   /**
    * Delete Queue Messages after hudi commit. This method will be invoked by source.onCommit.
    */
-  public void onCommitDeleteProcessedMessages(
-      AmazonSQS sqs, String queueUrl, List<Message> processedMessages) {
-
+  public void deleteProcessedMessages(AmazonSQS sqs, String queueUrl, List<Message> processedMessages) {
     if (!processedMessages.isEmpty()) {
-
       // create batch for deletion, SES DeleteMessageBatchRequest only accept max 10 entries
       List<List<Message>> deleteBatches = createListPartitions(processedMessages, 10);
       for (List<Message> deleteBatch : deleteBatches) {
@@ -241,41 +236,41 @@ public class CloudObjectsSelector {
    */
   public static class Config {
     /**
-     * {@value #QUEUE_URL_PROP} is the queue url for cloud object events.
+     * {@value #S3_SOURCE_QUEUE_URL} is the queue url for cloud object events.
      */
-    public static final String QUEUE_URL_PROP = "hoodie.deltastreamer.source.queue.url";
+    public static final String S3_SOURCE_QUEUE_URL = "hoodie.deltastreamer.s3.source.queue.url";
 
     /**
-     * {@value #QUEUE_REGION} is the case-sensitive region name of the cloud provider for the queue. For example, "us-east-1".
+     * {@value #S3_SOURCE_QUEUE_REGION} is the case-sensitive region name of the cloud provider for the queue. For example, "us-east-1".
      */
-    public static final String QUEUE_REGION = "hoodie.deltastreamer.source.queue.region";
+    public static final String S3_SOURCE_QUEUE_REGION = "hoodie.deltastreamer.s3.source.queue.region";
 
     /**
-     * {@value #SOURCE_QUEUE_FS_PROP} is file system corresponding to queue. For example, for AWS SQS it is s3/s3a.
+     * {@value #S3_SOURCE_QUEUE_FS} is file system corresponding to queue. For example, for AWS SQS it is s3/s3a.
      */
-    public static final String SOURCE_QUEUE_FS_PROP = "hoodie.deltastreamer.source.queue.fs";
+    public static final String S3_SOURCE_QUEUE_FS = "hoodie.deltastreamer.s3.source.queue.fs";
 
     /**
-     * {@value #QUEUE_LONGPOLLWAIT_PROP} is the long poll wait time in seconds If set as 0 then
+     * {@value #S3_QUEUE_LONG_POLL_WAIT} is the long poll wait time in seconds If set as 0 then
      * client will fetch on short poll basis.
      */
-    public static final String QUEUE_LONGPOLLWAIT_PROP =
-        "hoodie.deltastreamer.source.queue.longpoll.wait";
+    public static final String S3_QUEUE_LONG_POLL_WAIT =
+        "hoodie.deltastreamer.s3.source.queue.long.poll.wait";
 
     /**
-     * {@value #QUEUE_MAXMESSAGESEACHBATCH_PROP} is max messages for each batch of delta streamer
+     * {@value #S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH} is max messages for each batch of delta streamer
      * run. Source will process these maximum number of message at a time.
      */
-    public static final String QUEUE_MAXMESSAGESEACHBATCH_PROP =
-        "hoodie.deltastreamer.source.queue.max.messages.eachbatch";
+    public static final String S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH =
+        "hoodie.deltastreamer.s3.source.queue.max.messages.per.batch";
 
     /**
-     * {@value #QUEUE_VISIBILITYTIMEOUT_PROP} is visibility timeout for messages in queue. After we
+     * {@value #S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT} is visibility timeout for messages in queue. After we
      * consume the message, queue will move the consumed messages to in-flight state, these messages
      * can't be consumed again by source for this timeout period.
      */
-    public static final String QUEUE_VISIBILITYTIMEOUT_PROP =
-        "hoodie.deltastreamer.source.queue.visibility.timeout";
+    public static final String S3_SOURCE_QUEUE_VISIBILITY_TIMEOUT =
+        "hoodie.deltastreamer.s3.source.queue.visibility.timeout";
 
     /**
      * {@value #SOURCE_INPUT_SELECTOR} source input selector.

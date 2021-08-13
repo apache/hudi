@@ -34,15 +34,15 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.List;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.QUEUE_REGION;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.QUEUE_URL_PROP;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.SOURCE_QUEUE_FS_PROP;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
+import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_FS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Basic tests for {@link CloudObjectsMetaSource}.
+ * Basic tests for {@link S3EventsSource}.
  */
-public class TestCloudObjectsMetaSource extends AbstractCloudObjectsSourceTestBase {
+public class TestS3EventsSource extends AbstractCloudObjectsSourceTestBase {
 
   @BeforeEach
   public void setup() throws Exception {
@@ -97,10 +97,10 @@ public class TestCloudObjectsMetaSource extends AbstractCloudObjectsSourceTestBa
   @Override
   public Source prepareCloudObjectSource() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(QUEUE_URL_PROP, sqsUrl);
-    props.setProperty(QUEUE_REGION, regionName);
-    props.setProperty(SOURCE_QUEUE_FS_PROP, "hdfs");
-    CloudObjectsMetaSource dfsSource = new CloudObjectsMetaSource(props, jsc, sparkSession, null);
+    props.setProperty(S3_SOURCE_QUEUE_URL, sqsUrl);
+    props.setProperty(S3_SOURCE_QUEUE_REGION, regionName);
+    props.setProperty(S3_SOURCE_QUEUE_FS, "hdfs");
+    S3EventsSource dfsSource = new S3EventsSource(props, jsc, sparkSession, null);
     dfsSource.sqs = this.sqs;
     return dfsSource;
   }

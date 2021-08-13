@@ -18,16 +18,15 @@
 
 package org.apache.hudi.utilities.testutils.sources;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import java.io.IOException;
-import java.util.List;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import com.amazonaws.services.sqs.AmazonSQS;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,7 +34,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-/** An abstract test base for {@link Source} using CloudObjects as the file system. */
+import java.io.IOException;
+import java.util.List;
+
+/**
+ * An abstract test base for {@link Source} using CloudObjects as the file system.
+ */
 public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBase {
 
   protected FilebasedSchemaProvider schemaProvider;
@@ -45,7 +49,8 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
   protected boolean useFlattenedSchema = false;
   protected String sqsUrl = "test-queue";
   protected String regionName = "us-east-1";
-  @Mock protected AmazonSQS sqs;
+  @Mock
+  protected AmazonSQS sqs;
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -80,7 +85,7 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
    * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.
    *
    * @param records Test data.
-   * @param path The path in {@link Path} of the file to write.
+   * @param path    The path in {@link Path} of the file to write.
    */
   protected abstract void writeNewDataToFile(List<HoodieRecord> records, Path path)
       throws IOException;
@@ -88,9 +93,9 @@ public abstract class AbstractCloudObjectsSourceTestBase extends UtilitiesTestBa
   /**
    * Generates a batch of test data and writes the data to a file.
    *
-   * @param filename The name of the file.
+   * @param filename    The name of the file.
    * @param instantTime The commit time.
-   * @param n The number of records to generate.
+   * @param n           The number of records to generate.
    * @return The file path.
    */
   protected Path generateOneFile(String filename, String instantTime, int n) throws IOException {
