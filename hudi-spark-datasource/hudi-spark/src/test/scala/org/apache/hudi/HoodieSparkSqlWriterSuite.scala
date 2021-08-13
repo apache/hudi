@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.HoodieConfig
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -715,19 +715,34 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       // ensure 2nd batch of updates matches.
       assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
 
-      // delete partitions
-      val recordsToDelete = df1.filter(entry => {
+      // delete partitions contains the primary key
+      val recordsToDelete1 = df1.filter(entry => {
         val partitionPath : String = entry.getString(1)
-        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) || partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
       })
       val updatedParams = fooTableParams.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete)
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete1)
 
       val snapshotDF3 = spark.read.format("org.apache.hudi")
         .load(path.toAbsolutePath.toString + "/*/*/*/*")
       assertEquals(0, snapshotDF3.filter(entry => {
         val partitionPath = entry.getString(3)
-        !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+      }).count())
+
+      // delete partitions do not contains the primary key
+      val recordsToDelete2 = df1.filter(entry => {
+        val partitionPath : String = entry.getString(1)
+        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+      }).select("partition")
+
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete2)
+
+      val snapshotDF4 = spark.read.format("org.apache.hudi")
+        .load(path.toAbsolutePath.toString + "/*/*/*/*")
+      assertEquals(0, snapshotDF4.filter(entry => {
+        val partitionPath = entry.getString(3)
+        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
       }).count())
     } finally {
       spark.stop()
