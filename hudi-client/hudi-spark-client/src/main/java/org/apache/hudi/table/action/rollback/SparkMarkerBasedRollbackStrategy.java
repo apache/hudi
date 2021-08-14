@@ -57,11 +57,11 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     try {
-      List<String> markerFilePaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
+      List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
           table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
-      int parallelism = Math.max(Math.min(markerFilePaths.size(), config.getRollbackParallelism()), 1);
+      int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
       jsc.setJobGroup(this.getClass().getSimpleName(), "Rolling back using marker files");
-      return jsc.parallelize(markerFilePaths, parallelism)
+      return jsc.parallelize(markerPaths, parallelism)
           .map(markerFilePath -> {
             String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
             IOType type = IOType.valueOf(typeStr);

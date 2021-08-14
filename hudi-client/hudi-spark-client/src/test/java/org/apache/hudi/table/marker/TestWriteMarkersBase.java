@@ -91,6 +91,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   public void testDeletionWhenMarkerDirNotExists() throws IOException {
     // then
     assertFalse(writeMarkers.doesMarkerDirExist());
+    assertTrue(writeMarkers.allMarkerFilePaths().isEmpty());
     assertFalse(writeMarkers.deleteMarkerDir(context, 2));
   }
 

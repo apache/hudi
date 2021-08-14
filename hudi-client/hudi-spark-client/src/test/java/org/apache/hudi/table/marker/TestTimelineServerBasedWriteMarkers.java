@@ -23,15 +23,18 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -44,6 +47,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
@@ -89,7 +93,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
   }
 
   @Override
-  void verifyMarkersInFileSystem() {
+  void verifyMarkersInFileSystem() throws IOException {
     List<String> allMarkers = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
         markerFolderPath.toString(), fs, context, 1)
         .values().stream().flatMap(Collection::stream).sorted()
@@ -100,6 +104,12 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
         "2020/06/02/file2.marker.APPEND",
         "2020/06/03/file3.marker.CREATE"),
         allMarkers);
+    Path markerTypeFilePath = new Path(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
+    assertTrue(fs.exists(markerTypeFilePath));
+    FSDataInputStream fsDataInputStream = fs.open(markerTypeFilePath);
+    assertEquals(MarkerType.TIMELINE_SERVER_BASED.toString(),
+        FileIOUtils.readAsUTFString(fsDataInputStream));
+    closeQuietly(fsDataInputStream);
   }
 
   /**
