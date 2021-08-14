@@ -153,6 +153,7 @@
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
     <antlr.version>4.7</antlr.version>
+    <aws.sdk.version>1.12.22</aws.sdk.version>
   </properties>
 
   <scm>
