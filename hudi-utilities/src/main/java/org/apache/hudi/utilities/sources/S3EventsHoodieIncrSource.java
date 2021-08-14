@@ -58,6 +58,12 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
   private static final Logger LOG = LogManager.getLogger(S3EventsHoodieIncrSource.class);
 
+  static class Config {
+    // control whether we do existence check for files before consuming them
+    static final String ENABLE_EXISTS_CHECK = "hoodie.deltastreamer.source.s3incr.check.file.exists";
+    static final Boolean DEFAULT_ENABLE_EXISTS_CHECK = false;
+  }
+
   public S3EventsHoodieIncrSource(
       TypedProperties props,
       JavaSparkContext sparkContext,
@@ -90,13 +96,10 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     }
 
     // Do incremental pull. Set end instant if available.
-    DataFrameReader metaReader =
-        sparkSession
-            .read()
-            .format("org.apache.hudi")
-            .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
-            .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
-            .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight());
+    DataFrameReader metaReader = sparkSession.read().format("org.apache.hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), instantEndpts.getLeft())
+        .option(DataSourceReadOptions.END_INSTANTTIME().key(), instantEndpts.getRight());
     Dataset<Row> source = metaReader.load(srcPath);
     // Extract distinct file keys from s3 meta hoodie table
     final List<Row> cloudMetaDf = source
@@ -105,18 +108,23 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         .distinct()
         .collectAsList();
     // Create S3 paths
+    final boolean checkExists = props.getBoolean(Config.ENABLE_EXISTS_CHECK, Config.DEFAULT_ENABLE_EXISTS_CHECK);
     List<String> cloudFiles = new ArrayList<>();
     for (Row row : cloudMetaDf) {
       // construct file path, row index 0 refers to bucket and 1 refers to key
       String bucket = row.getString(0);
       String filePath = S3_PREFIX + bucket + "/" + row.getString(1);
-      FileSystem fs = FSUtils.getFs(S3_PREFIX + bucket, sparkSession.sparkContext().hadoopConfiguration());
-      try {
-        if (fs.exists(new Path(filePath))) {
-          cloudFiles.add(filePath);
+      if (checkExists) {
+        FileSystem fs = FSUtils.getFs(S3_PREFIX + bucket, sparkSession.sparkContext().hadoopConfiguration());
+        try {
+          if (fs.exists(new Path(filePath))) {
+            cloudFiles.add(filePath);
+          }
+        } catch (IOException e) {
+          LOG.error(String.format("Error while checking path exists for %s ", filePath), e);
         }
-      } catch (IOException e) {
-        LOG.error(String.format("Error while checking path exists for %s ", filePath), e);
+      } else {
+        cloudFiles.add(filePath);
       }
     }
     String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);

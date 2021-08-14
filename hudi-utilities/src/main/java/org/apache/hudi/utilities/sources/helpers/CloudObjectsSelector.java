@@ -96,10 +96,9 @@ public class CloudObjectsSelector {
    * @return map of attributes needed
    */
   protected Map<String, String> getSqsQueueAttributes(AmazonSQS sqsClient, String queueUrl) {
-    GetQueueAttributesResult queueAttributesResult =
-        sqsClient.getQueueAttributes(
-            new GetQueueAttributesRequest(queueUrl)
-                .withAttributeNames(SQS_ATTR_APPROX_MESSAGES));
+    GetQueueAttributesResult queueAttributesResult = sqsClient.getQueueAttributes(
+        new GetQueueAttributesRequest(queueUrl).withAttributeNames(SQS_ATTR_APPROX_MESSAGES)
+    );
     return queueAttributesResult.getAttributes();
   }
 
@@ -109,16 +108,13 @@ public class CloudObjectsSelector {
    * @param record of object event
    * @return map of file attribute
    */
-  protected Map<String, Object> getFileAttributesFromRecord(JSONObject record)
-      throws UnsupportedEncodingException {
+  protected Map<String, Object> getFileAttributesFromRecord(JSONObject record) throws UnsupportedEncodingException {
     Map<String, Object> fileRecord = new HashMap<>();
     String eventTimeStr = record.getString(S3_MODEL_EVENT_TIME);
     long eventTime =
         Date.from(Instant.from(DateTimeFormatter.ISO_INSTANT.parse(eventTimeStr))).getTime();
     JSONObject s3Object = record.getJSONObject("s3").getJSONObject("object");
-    String bucket =
-        URLDecoder.decode(
-            record.getJSONObject("s3").getJSONObject("bucket").getString("name"), "UTF-8");
+    String bucket = URLDecoder.decode(record.getJSONObject("s3").getJSONObject("bucket").getString("name"), "UTF-8");
     String key = URLDecoder.decode(s3Object.getString("key"), "UTF-8");
     String filePath = this.fsName + "://" + bucket + "/" + key;
     fileRecord.put(S3_MODEL_EVENT_TIME, eventTime);
