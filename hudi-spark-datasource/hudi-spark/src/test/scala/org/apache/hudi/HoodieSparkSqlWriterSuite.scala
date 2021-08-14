@@ -679,76 +679,68 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     }
   }
 
-  test("test delete partitions") {
-    initSparkContext("test_delete_partitions")
-    val path = java.nio.file.Files.createTempDirectory("hoodie_test_path_delete_partitions")
-    try {
-      val hoodieFooTableName = "hoodie_foo_tbl_delete_partitions"
-      val fooTableModifier = getCommonParams(path, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
-      val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
-      val schema = DataSourceTestUtils.getStructTypeExampleSchema
-      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
-      val records = DataSourceTestUtils.generateRandomRows(10)
-      val recordsSeq = convertRowListToSeq(records)
-      val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-      // write to Hudi
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
+  List(true, false)
+    .foreach(usePartitionsToDeleteConfig => {
+      test("test delete partitions for " + usePartitionsToDeleteConfig) {
+        initSparkContext("test_delete_partitions_" + usePartitionsToDeleteConfig)
+        val path = java.nio.file.Files.createTempDirectory("hoodie_test_path_delete_partitions")
+        try {
+          val hoodieFooTableName = "hoodie_foo_tbl_delete_partitions"
+          val fooTableModifier = getCommonParams(path, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+          var fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+          val schema = DataSourceTestUtils.getStructTypeExampleSchema
+          val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+          val records = DataSourceTestUtils.generateRandomRows(10)
+          val recordsSeq = convertRowListToSeq(records)
+          val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+          // write to Hudi
+          HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
 
-      val snapshotDF1 = spark.read.format("org.apache.hudi")
-        .load(path.toAbsolutePath.toString + "/*/*/*/*")
-      assertEquals(10, snapshotDF1.count())
-      // remove metadata columns so that expected and actual DFs can be compared as is
-      val trimmedDf1 = dropMetaFields(snapshotDF1)
-      assert(df1.except(trimmedDf1).count() == 0)
+          val snapshotDF1 = spark.read.format("org.apache.hudi")
+            .load(path.toAbsolutePath.toString + "/*/*/*/*")
+          assertEquals(10, snapshotDF1.count())
+          // remove metadata columns so that expected and actual DFs can be compared as is
+          val trimmedDf1 = dropMetaFields(snapshotDF1)
+          assert(df1.except(trimmedDf1).count() == 0)
 
-      // issue updates so that log files are created for MOR table
-      var updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
-      var updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
-      // write updates to Hudi
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
-      val snapshotDF2 = spark.read.format("org.apache.hudi")
-        .load(path.toAbsolutePath.toString + "/*/*/*/*")
-      assertEquals(10, snapshotDF2.count())
+          // issue updates so that log files are created for MOR table
+          var updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
+          var updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
+          // write updates to Hudi
+          HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
+          val snapshotDF2 = spark.read.format("org.apache.hudi")
+            .load(path.toAbsolutePath.toString + "/*/*/*/*")
+          assertEquals(10, snapshotDF2.count())
 
-      // remove metadata columns so that expected and actual DFs can be compared as is
-      val trimmedDf2 = dropMetaFields(snapshotDF2)
-      // ensure 2nd batch of updates matches.
-      assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
+          // remove metadata columns so that expected and actual DFs can be compared as is
+          val trimmedDf2 = dropMetaFields(snapshotDF2)
+          // ensure 2nd batch of updates matches.
+          assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
 
-      // delete partitions contains the primary key
-      val recordsToDelete1 = df1.filter(entry => {
-        val partitionPath : String = entry.getString(1)
-        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
-      })
-      val updatedParams = fooTableParams.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete1)
+          if ( usePartitionsToDeleteConfig) {
+            fooTableParams.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+          }
+          // delete partitions contains the primary key
+          val recordsToDelete = df1.filter(entry => {
+            val partitionPath : String = entry.getString(1)
+            partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) ||
+              partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+          })
+          val updatedParams = fooTableParams.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
+          HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete)
 
-      val snapshotDF3 = spark.read.format("org.apache.hudi")
-        .load(path.toAbsolutePath.toString + "/*/*/*/*")
-      assertEquals(0, snapshotDF3.filter(entry => {
-        val partitionPath = entry.getString(3)
-        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
-      }).count())
-
-      // delete partitions do not contains the primary key
-      val recordsToDelete2 = df1.filter(entry => {
-        val partitionPath : String = entry.getString(1)
-        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
-      }).select("partition")
-
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete2)
-
-      val snapshotDF4 = spark.read.format("org.apache.hudi")
-        .load(path.toAbsolutePath.toString + "/*/*/*/*")
-      assertEquals(0, snapshotDF4.filter(entry => {
-        val partitionPath = entry.getString(3)
-        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
-      }).count())
-    } finally {
-      spark.stop()
-      FileUtils.deleteDirectory(path.toFile)
-    }
-  }
+          val snapshotDF3 = spark.read.format("org.apache.hudi")
+            .load(path.toAbsolutePath.toString + "/*/*/*/*")
+          assertEquals(0, snapshotDF3.filter(entry => {
+            val partitionPath = entry.getString(3)
+            !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+          }).count())
+        } finally {
+          spark.stop()
+          FileUtils.deleteDirectory(path.toFile)
+        }
+      }
+    })
 
   def dropMetaFields(df: Dataset[Row]) : Dataset[Row] = {
     df.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))

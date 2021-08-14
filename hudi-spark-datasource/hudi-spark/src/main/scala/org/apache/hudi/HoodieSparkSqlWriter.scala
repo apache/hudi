@@ -192,7 +192,12 @@ object HoodieSparkSqlWriter {
             }
 
             // Get list of partitions to delete
-            val partitionsToDelete = genericRecords.map(gr => gr.get(partitionColumns).toString).toJavaRDD().distinct().collect()
+            val partitionsToDelete = if (parameters.containsKey(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
+              val partitionColsToDelete = parameters.get(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).get.split(",")
+              java.util.Arrays.asList(partitionColsToDelete:_*)
+            } else {
+              genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
+            }
             // Create a HoodieWriteClient & issue the delete.
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               null, path.get, tblName,
