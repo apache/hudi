@@ -325,6 +325,11 @@ object DataSourceWriteOptions {
   @Deprecated
   val INSERT_DROP_DUPS_OPT_KEY = INSERT_DROP_DUPS.key()
 
+  val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.partitions.to.delete")
+    .noDefaultValue()
+    .withDocumentation("Comma separated list of partitions to delete")
+
   val STREAMING_RETRY_CNT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.retry.count")
     .defaultValue("3")
