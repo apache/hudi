@@ -28,15 +28,17 @@ import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
+import org.springframework.stereotype.Component;
 
 /**
- * CLI command to assist in upgrading/downgrading Hoodie dataset to a different version.
+ * CLI command to assist in upgrading/downgrading Hoodie table to a different version.
  */
+@Component
 public class UpgradeOrDowngradeCommand implements CommandMarker {
 
-  @CliCommand(value = "upgrade hoodie dataset ", help = "Upgrades hoodie dataset")
-  public String upgradeHoodieDataset(
-      @CliOption(key = {"toVersion"}, help = "To version of Hoodie dataset to be upgraded/downgraded to", unspecifiedDefaultValue = "") final String toVersion,
+  @CliCommand(value = "upgrade table", help = "Upgrades a table")
+  public String upgradeHoodieTable(
+      @CliOption(key = {"toVersion"}, help = "To version of Hoodie table to be upgraded/downgraded to", unspecifiedDefaultValue = "") final String toVersion,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
@@ -52,14 +54,14 @@ public class UpgradeOrDowngradeCommand implements CommandMarker {
     int exitCode = process.waitFor();
     HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
-      return String.format("Failed: Could not Upgrade/Downgrade Hoodie dataset to \"%s\".", toVersion);
+      return String.format("Failed: Could not Upgrade/Downgrade Hoodie table to \"%s\".", toVersion);
     }
-    return String.format("Hoodie dataset upgraded/downgraded to ", toVersion);
+    return String.format("Hoodie table upgraded/downgraded to ", toVersion);
   }
 
-  @CliCommand(value = "downgrade hoodie dataset ", help = "Upgrades hoodie dataset")
-  public String downgradeHoodieDataset(
-      @CliOption(key = {"toVersion"}, help = "To version of Hoodie dataset to be upgraded/downgraded to", unspecifiedDefaultValue = "") final String toVersion,
+  @CliCommand(value = "downgrade table", help = "Downgrades a table")
+  public String downgradeHoodieTable(
+      @CliOption(key = {"toVersion"}, help = "To version of Hoodie table to be upgraded/downgraded to", unspecifiedDefaultValue = "") final String toVersion,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
       @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
@@ -74,8 +76,8 @@ public class UpgradeOrDowngradeCommand implements CommandMarker {
     int exitCode = process.waitFor();
     HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
-      return String.format("Failed: Could not Upgrade/Downgrade Hoodie dataset to \"%s\".", toVersion);
+      return String.format("Failed: Could not Upgrade/Downgrade Hoodie table to \"%s\".", toVersion);
     }
-    return String.format("Hoodie dataset upgraded/downgraded to ", toVersion);
+    return String.format("Hoodie table upgraded/downgraded to ", toVersion);
   }
 }
