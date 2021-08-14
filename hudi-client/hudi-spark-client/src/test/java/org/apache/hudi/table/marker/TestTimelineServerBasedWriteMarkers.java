@@ -94,6 +94,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
 
   @Override
   void verifyMarkersInFileSystem() throws IOException {
+    // Verifies the markers
     List<String> allMarkers = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
         markerFolderPath.toString(), fs, context, 1)
         .values().stream().flatMap(Collection::stream).sorted()
@@ -104,8 +105,9 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
         "2020/06/02/file2.marker.APPEND",
         "2020/06/03/file3.marker.CREATE"),
         allMarkers);
+    // Verifies the marker type file
     Path markerTypeFilePath = new Path(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
-    assertTrue(fs.exists(markerTypeFilePath));
+    assertTrue(MarkerUtils.doesMarkerTypeFileExist(fs, markerFolderPath.toString()));
     FSDataInputStream fsDataInputStream = fs.open(markerTypeFilePath);
     assertEquals(MarkerType.TIMELINE_SERVER_BASED.toString(),
         FileIOUtils.readAsUTFString(fsDataInputStream));
