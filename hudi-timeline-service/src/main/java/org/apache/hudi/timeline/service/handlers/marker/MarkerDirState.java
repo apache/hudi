@@ -87,6 +87,7 @@ public class MarkerDirState implements Serializable {
   // Last underlying file index used, for finding the next file index
   // in a round-robin fashion
   private int lastFileIndexUsed = -1;
+  private boolean isMarkerTypeWritten = false;
 
   public MarkerDirState(String markerDirPath, int markerBatchNumThreads, FileSystem fileSystem,
                         Registry metricsRegistry, HoodieEngineContext hoodieEngineContext, int parallelism) {
@@ -99,7 +100,17 @@ public class MarkerDirState implements Serializable {
         Stream.generate(() -> false).limit(markerBatchNumThreads).collect(Collectors.toList());
     // Lazy initialization of markers by reading MARKERS* files on the file system
     syncMarkersFromFileSystem();
-    writeMarkerTypeToFile();
+  }
+
+  /**
+   * @return {@code true} if the marker directory exists in the system.
+   */
+  public boolean exists() {
+    try {
+      return fileSystem.exists(new Path(markerDirPath));
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
   }
 
   /**
@@ -200,6 +211,12 @@ public class MarkerDirState implements Serializable {
         }
         future.setResult(!exists);
       }
+
+      if (!isMarkerTypeWritten) {
+        // Create marker directory and write marker type to MARKERS.type
+        writeMarkerTypeToFile();
+        isMarkerTypeWritten = true;
+      }
     }
     flushMarkersToFile(fileIndex);
     markFileAsAvailable(fileIndex);
@@ -223,23 +240,25 @@ public class MarkerDirState implements Serializable {
     Path dirPath = new Path(markerDirPath);
     boolean result = false;
     try {
-      FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-      List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
-          .map(fileStatus -> fileStatus.getPath().toString())
-          .collect(Collectors.toList());
+      if (fileSystem.exists(dirPath)) {
+        FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
+        List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
+            .map(fileStatus -> fileStatus.getPath().toString())
+            .collect(Collectors.toList());
 
-      if (markerDirSubPaths.size() > 0) {
-        SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
-        int actualParallelism = Math.min(markerDirSubPaths.size(), parallelism);
-        hoodieEngineContext.foreach(markerDirSubPaths, subPathStr -> {
-          Path subPath = new Path(subPathStr);
-          FileSystem fileSystem = subPath.getFileSystem(conf.get());
-          fileSystem.delete(subPath, true);
-        }, actualParallelism);
+        if (markerDirSubPaths.size() > 0) {
+          SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
+          int actualParallelism = Math.min(markerDirSubPaths.size(), parallelism);
+          hoodieEngineContext.foreach(markerDirSubPaths, subPathStr -> {
+            Path subPath = new Path(subPathStr);
+            FileSystem fileSystem = subPath.getFileSystem(conf.get());
+            fileSystem.delete(subPath, true);
+          }, actualParallelism);
+        }
+
+        result = fileSystem.delete(dirPath, false);
+        LOG.info("Removing marker directory at " + dirPath);
       }
-
-      result = fileSystem.delete(dirPath, false);
-      LOG.info("Removing marker directory at " + dirPath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -259,12 +278,19 @@ public class MarkerDirState implements Serializable {
       Set<String> fileMarkers = fileMarkersSetMap.get(markersFilePathStr);
       if (!fileMarkers.isEmpty()) {
         int index = parseMarkerFileIndex(markersFilePathStr);
-
         if (index >= 0) {
           fileMarkersMap.put(index, new StringBuilder(StringUtils.join(",", fileMarkers)));
           allMarkers.addAll(fileMarkers);
         }
       }
+    }
+
+    try {
+      if (MarkerUtils.doesMarkerTypeFileExist(fileSystem, markerDirPath)) {
+        isMarkerTypeWritten = true;
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
     }
   }
 
@@ -316,14 +342,6 @@ public class MarkerDirState implements Serializable {
     LOG.debug("Write to " + markerDirPath + "/" + MARKERS_FILENAME_PREFIX + markerFileIndex);
     HoodieTimer timer = new HoodieTimer().startTimer();
     Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME_PREFIX + markerFileIndex);
-    Path dirPath = markersFilePath.getParent();
-    try {
-      if (!fileSystem.exists(dirPath)) {
-        fileSystem.mkdirs(dirPath);
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to make dir " + dirPath, e);
-    }
     FSDataOutputStream fsDataOutputStream = null;
     BufferedWriter bufferedWriter = null;
     try {

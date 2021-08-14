@@ -90,6 +90,15 @@ public class MarkerUtils {
   }
 
   /**
+   * @param fileSystem file system to use.
+   * @param markerDir  marker directory.
+   * @return {@code true} if the MARKERS.type file exists; {@code false} otherwise.
+   */
+  public static boolean doesMarkerTypeFileExist(FileSystem fileSystem, String markerDir) throws IOException {
+    return fileSystem.exists(new Path(markerDir, MARKER_TYPE_FILENAME));
+  }
+
+  /**
    * Reads the marker type from `MARKERS.type` file.
    *
    * @param fileSystem file system to use.
@@ -101,7 +110,7 @@ public class MarkerUtils {
     FSDataInputStream fsDataInputStream = null;
     Option<MarkerType> content = Option.empty();
     try {
-      if (!fileSystem.exists(markerTypeFilePath)) {
+      if (!doesMarkerTypeFileExist(fileSystem, markerDir)) {
         return Option.empty();
       }
       fsDataInputStream = fileSystem.open(markerTypeFilePath);
