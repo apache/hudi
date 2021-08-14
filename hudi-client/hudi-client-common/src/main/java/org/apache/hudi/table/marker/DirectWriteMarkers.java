@@ -173,7 +173,7 @@ public class DirectWriteMarkers extends WriteMarkers {
    * @return path of the marker file
    */
   public Option<Path> create(String markerName) {
-    return create(new Path(markerDirPath, markerName), false);
+    return create(new Path(markerDirPath, markerName), true);
   }
 
   @Override
