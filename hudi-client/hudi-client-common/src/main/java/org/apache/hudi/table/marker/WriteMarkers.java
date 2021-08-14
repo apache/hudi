@@ -23,7 +23,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.Path;
@@ -125,23 +124,6 @@ public abstract class WriteMarkers implements Serializable {
     Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
     String markerFileName = getMarkerFileName(dataFileName, type);
     return new Path(path, markerFileName);
-  }
-
-  /**
-   * Strips the folder prefix of the marker file path.
-   *
-   * @param fullMarkerPath the full path of the marker file
-   * @return marker file name
-   */
-  protected String stripMarkerFolderPrefix(String fullMarkerPath) {
-    ValidationUtils.checkArgument(fullMarkerPath.contains(HoodieTableMetaClient.MARKER_EXTN));
-    String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
-        new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime))).toString();
-    int begin =
-        fullMarkerPath.indexOf(markerRootPath);
-    ValidationUtils.checkArgument(begin >= 0,
-        "Not in marker dir. Marker Path=" + fullMarkerPath + ", Expected Marker Root=" + markerRootPath);
-    return fullMarkerPath.substring(begin + markerRootPath.length() + 1);
   }
 
   /**

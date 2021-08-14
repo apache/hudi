@@ -18,15 +18,15 @@
 
 package org.apache.hudi.client.embedded;
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.marker.MarkerType;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.log4j.LogManager;
