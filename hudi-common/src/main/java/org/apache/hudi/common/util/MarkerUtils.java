@@ -179,7 +179,8 @@ public class MarkerUtils {
     try {
       if (fileSystem.exists(dirPath)) {
         FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-        Predicate<String> prefixFilter = pathStr -> pathStr.contains(MARKERS_FILENAME_PREFIX);
+        Predicate<String> prefixFilter = pathStr ->
+            stripMarkerFolderPrefix(pathStr, markerDir).startsWith(MARKERS_FILENAME_PREFIX);
         Predicate<String> markerTypeFilter =
             pathStr -> !stripMarkerFolderPrefix(pathStr, markerDir).equals(MARKER_TYPE_FILENAME);
         List<String> markerDirSubPaths = Arrays.stream(fileStatuses)

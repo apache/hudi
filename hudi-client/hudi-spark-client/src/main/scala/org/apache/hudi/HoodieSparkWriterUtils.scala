@@ -20,11 +20,11 @@
 package org.apache.hudi
 
 import java.util.Properties
+
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
-import org.apache.spark.sql.sources.v2.DataSourceOptions
 
 import scala.collection.JavaConverters._
 

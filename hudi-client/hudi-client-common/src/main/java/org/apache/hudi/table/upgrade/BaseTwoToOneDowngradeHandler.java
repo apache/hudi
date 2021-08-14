@@ -124,7 +124,9 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
     // Delete timeline based marker files if any.
     Path dirPath = new Path(markerDir);
     FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-    Predicate<FileStatus> prefixFilter = pathStr -> pathStr.getPath().getName().contains(MARKERS_FILENAME_PREFIX);
+    Predicate<FileStatus> prefixFilter = pathStr ->
+        MarkerUtils.stripMarkerFolderPrefix(pathStr.getPath().toString(), markerDir)
+            .startsWith(MARKERS_FILENAME_PREFIX);
     List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
         .filter(prefixFilter)
         .map(fileStatus -> fileStatus.getPath().toString())
