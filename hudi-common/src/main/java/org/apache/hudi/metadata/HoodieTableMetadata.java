@@ -68,6 +68,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @param basePath The base path to check
    */
   static boolean isMetadataTable(String basePath) {
+    if (basePath.endsWith(Path.SEPARATOR)) {
+      basePath = basePath.substring(0, basePath.length() - 1);
+    }
     return basePath.endsWith(METADATA_TABLE_REL_PATH);
   }
 
@@ -102,9 +105,11 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
 
   /**
-   * Get the instant time to which the metadata is synced w.r.t data timeline.
+   * Get the instant time at which Metadata Table was last updated.
+   *
+   * This is the timestamp of the Instant on the dataset which was last synced to the Metadata Table.
    */
-  Option<String> getSyncedInstantTime();
+  Option<String> getUpdateTime();
 
   boolean isInSync();
 }

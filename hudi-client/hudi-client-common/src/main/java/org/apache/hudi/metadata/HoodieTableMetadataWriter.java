@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
 
@@ -41,9 +40,4 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
   void update(HoodieRestoreMetadata restoreMetadata, String instantTime);
 
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
-
-  /**
-   * Return the timestamp of the latest instant synced to the metadata table.
-   */
-  Option<String> getLatestSyncedInstantTime();
 }
