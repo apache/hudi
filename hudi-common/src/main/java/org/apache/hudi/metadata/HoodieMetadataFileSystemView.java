@@ -18,11 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import java.io.IOException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,12 +26,17 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+
+import java.io.IOException;
+
 /**
  * {@code HoodieTableFileSystemView} implementation that retrieved partition listings from the Metadata Table.
  */
 public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
 
-  private HoodieTableMetadata tableMetadata;
+  private final HoodieTableMetadata tableMetadata;
 
   public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
@@ -72,17 +72,5 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
     } catch (Exception e) {
       throw new HoodieException("Error closing metadata file system view.", e);
     }
-  }
-
-  @Override
-  public void sync() {
-    // Sync the tableMetadata first as super.sync() may call listPartition
-    if (tableMetadata != null) {
-      BaseTableMetadata baseMetadata = (BaseTableMetadata) tableMetadata;
-      tableMetadata = HoodieTableMetadata.create(baseMetadata.getEngineContext(), baseMetadata.getMetadataConfig(),
-          metaClient.getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
-    }
-
-    super.sync();
   }
 }
