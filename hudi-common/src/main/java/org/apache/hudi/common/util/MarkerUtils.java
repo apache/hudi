@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieException;
@@ -58,6 +59,35 @@ public class MarkerUtils {
   public static final String MARKERS_FILENAME_PREFIX = "MARKERS";
   public static final String MARKER_TYPE_FILENAME = MARKERS_FILENAME_PREFIX + ".type";
   private static final Logger LOG = LogManager.getLogger(MarkerUtils.class);
+
+  /**
+   * Strips the folder prefix of the marker file path corresponding to a data file.
+   *
+   * @param fullMarkerPath the full path of the marker file
+   * @param basePath       the base path
+   * @param instantTime    instant of interest
+   * @return marker file name
+   */
+  public static String stripMarkerFolderPrefix(String fullMarkerPath, String basePath, String instantTime) {
+    ValidationUtils.checkArgument(fullMarkerPath.contains(HoodieTableMetaClient.MARKER_EXTN));
+    String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
+        new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime))).toString();
+    return stripMarkerFolderPrefix(fullMarkerPath, markerRootPath);
+  }
+
+  /**
+   * Strips the marker folder prefix of any file path under the marker directory.
+   *
+   * @param fullMarkerPath the full path of the file
+   * @param markerDir      marker directory
+   * @return file name
+   */
+  public static String stripMarkerFolderPrefix(String fullMarkerPath, String markerDir) {
+    int begin = fullMarkerPath.indexOf(markerDir);
+    ValidationUtils.checkArgument(begin >= 0,
+        "Not in marker dir. Marker Path=" + fullMarkerPath + ", Expected Marker Root=" + markerDir);
+    return fullMarkerPath.substring(begin + markerDir.length() + 1);
+  }
 
   /**
    * Reads the marker type from `MARKERS.type` file.
@@ -141,7 +171,8 @@ public class MarkerUtils {
       if (fileSystem.exists(dirPath)) {
         FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
         Predicate<String> prefixFilter = pathStr -> pathStr.contains(MARKERS_FILENAME_PREFIX);
-        Predicate<String> markerTypeFilter = pathStr -> !pathStr.equals(MARKER_TYPE_FILENAME);
+        Predicate<String> markerTypeFilter =
+            pathStr -> !stripMarkerFolderPrefix(pathStr, markerDir).equals(MARKER_TYPE_FILENAME);
         List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
             .map(fileStatus -> fileStatus.getPath().toString())
             .filter(prefixFilter.and(markerTypeFilter))

@@ -29,28 +29,20 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.MarkerUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
-import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -65,7 +57,8 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     try {
-      List<String> markerFilePaths = getAllMarkerPaths(instantToRollback.getTimestamp(), config.getRollbackParallelism());
+      List<String> markerFilePaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
+          table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
       int parallelism = Math.max(Math.min(markerFilePaths.size(), config.getRollbackParallelism()), 1);
       jsc.setJobGroup(this.getClass().getSimpleName(), "Rolling back using marker files");
       return jsc.parallelize(markerFilePaths, parallelism)
@@ -96,38 +89,5 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
     return FSUtils.getAllLogFiles(table.getMetaClient().getFs(),
         FSUtils.getPartitionPath(config.getBasePath(), partitionPathStr), fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime)
         .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen()));
-  }
-
-  /**
-   * Gets all marker paths.
-   *
-   * @param instant     instant of interest to rollback
-   * @param parallelism parallelism to use
-   * @return a list of all markers
-   * @throws IOException
-   */
-  private List<String> getAllMarkerPaths(String instant, int parallelism) throws IOException {
-    String markerDir = table.getMetaClient().getMarkerFolderPath(instant);
-    FileSystem fileSystem = FSUtils.getFs(markerDir, context.getHadoopConf().newCopy());
-    Option<MarkerType> markerTypeOption = MarkerUtils.readMarkerType(fileSystem, markerDir);
-
-    // If there is no marker type file "MARKERS.type", we assume "DIRECT" markers are used
-    if (!markerTypeOption.isPresent()) {
-      WriteMarkers writeMarkers = WriteMarkersFactory.get(MarkerType.DIRECT, table, instant);
-      return new ArrayList<>(writeMarkers.allMarkerFilePaths());
-    }
-
-    switch (markerTypeOption.get()) {
-      case TIMELINE_SERVER_BASED:
-        // Reads all markers written by the timeline server
-        Map<String, Set<String>> markersMap =
-            MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
-                markerDir, fileSystem, context, parallelism);
-        return markersMap.values().stream().flatMap(Collection::stream)
-            .collect(Collectors.toCollection(ArrayList::new));
-      default:
-        throw new HoodieException(
-            "The marker type \"" + markerTypeOption.get().name() + "\" is not supported.");
-    }
   }
 }

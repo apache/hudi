@@ -26,31 +26,24 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import java.io.BufferedReader;
 import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.List;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
@@ -96,31 +89,10 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
   }
 
   @Override
-  void verifyMarkersInFileSystem() throws IOException {
-    Predicate<FileStatus> prefixFilter =
-        status -> status.getPath().getName().contains(MARKERS_FILENAME_PREFIX);
-    Predicate<FileStatus> markerTypeFilter =
-        status -> !status.getPath().getName().contains(MarkerUtils.MARKER_TYPE_FILENAME);
-    List<String> allMarkers = FileSystemTestUtils.listRecursive(fs, markerFolderPath)
-        .stream().filter(prefixFilter.and(markerTypeFilter))
-        .flatMap(status -> {
-          // Read all markers stored in each marker file maintained by the timeline service
-          FSDataInputStream fsDataInputStream = null;
-          BufferedReader bufferedReader = null;
-          List<String> markers = null;
-          try {
-            fsDataInputStream = fs.open(status.getPath());
-            bufferedReader = new BufferedReader(new InputStreamReader(fsDataInputStream, StandardCharsets.UTF_8));
-            markers = bufferedReader.lines().collect(Collectors.toList());
-          } catch (IOException e) {
-            e.printStackTrace();
-          } finally {
-            closeQuietly(bufferedReader);
-            closeQuietly(fsDataInputStream);
-          }
-          return markers.stream();
-        })
-        .sorted()
+  void verifyMarkersInFileSystem() {
+    List<String> allMarkers = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
+        markerFolderPath.toString(), fs, context, 1)
+        .values().stream().flatMap(Collection::stream).sorted()
         .collect(Collectors.toList());
     assertEquals(3, allMarkers.size());
     assertIterableEquals(CollectionUtils.createImmutableList(

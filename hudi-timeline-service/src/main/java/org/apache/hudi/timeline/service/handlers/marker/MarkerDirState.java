@@ -103,17 +103,6 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * @return  {@code true} if the marker directory exists in the system.
-   */
-  public boolean exists() {
-    try {
-      return fileSystem.exists(new Path(markerDirPath));
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
-    }
-  }
-
-  /**
    * @return all markers in the marker directory.
    */
   public Set<String> getAllMarkers() {
@@ -234,25 +223,23 @@ public class MarkerDirState implements Serializable {
     Path dirPath = new Path(markerDirPath);
     boolean result = false;
     try {
-      if (fileSystem.exists(dirPath)) {
-        FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-        List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
-            .map(fileStatus -> fileStatus.getPath().toString())
-            .collect(Collectors.toList());
+      FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
+      List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
+          .map(fileStatus -> fileStatus.getPath().toString())
+          .collect(Collectors.toList());
 
-        if (markerDirSubPaths.size() > 0) {
-          SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
-          int actualParallelism = Math.min(markerDirSubPaths.size(), parallelism);
-          hoodieEngineContext.foreach(markerDirSubPaths, subPathStr -> {
-            Path subPath = new Path(subPathStr);
-            FileSystem fileSystem = subPath.getFileSystem(conf.get());
-            fileSystem.delete(subPath, true);
-          }, actualParallelism);
-        }
-
-        result = fileSystem.delete(dirPath, false);
-        LOG.info("Removing marker directory at " + dirPath);
+      if (markerDirSubPaths.size() > 0) {
+        SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
+        int actualParallelism = Math.min(markerDirSubPaths.size(), parallelism);
+        hoodieEngineContext.foreach(markerDirSubPaths, subPathStr -> {
+          Path subPath = new Path(subPathStr);
+          FileSystem fileSystem = subPath.getFileSystem(conf.get());
+          fileSystem.delete(subPath, true);
+        }, actualParallelism);
       }
+
+      result = fileSystem.delete(dirPath, false);
+      LOG.info("Removing marker directory at " + dirPath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }

@@ -22,19 +22,23 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.timeline.service.TimelineService;
-import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationDispatchingRunnable;
+import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
 import io.javalin.Context;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -115,8 +119,11 @@ public class MarkerHandler extends Handler {
    * @return all marker paths in the marker directory
    */
   public Set<String> getAllMarkers(String markerDir) {
-    MarkerDirState markerDirState = getMarkerDirState(markerDir);
-    return markerDirState.getAllMarkers();
+    Option<MarkerDirState> markerDirState = getOrInstantiateMarkerDirStateIfDirExists(markerDir);
+    if (!markerDirState.isPresent()) {
+      return new HashSet<>();
+    }
+    return markerDirState.get().getAllMarkers();
   }
 
   /**
@@ -134,8 +141,11 @@ public class MarkerHandler extends Handler {
    * @return {@code true} if the marker directory exists; {@code false} otherwise.
    */
   public boolean doesMarkerDirExist(String markerDir) {
-    MarkerDirState markerDirState = getMarkerDirState(markerDir);
-    return markerDirState.exists();
+    try {
+      return fileSystem.exists(new Path(markerDir));
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
   }
 
   /**
@@ -153,7 +163,7 @@ public class MarkerHandler extends Handler {
     LOG.info("Request: create marker " + markerDir + " " + markerName);
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     // Add the future to the list
-    MarkerDirState markerDirState = getMarkerDirState(markerDir);
+    MarkerDirState markerDirState = getOrInstantiateMarkerDirState(markerDir);
     markerDirState.addMarkerCreationFuture(future);
     if (!firstCreationRequestSeen) {
       synchronized (firstCreationRequestSeenLock) {
@@ -172,15 +182,31 @@ public class MarkerHandler extends Handler {
    * Deletes markers in the directory.
    *
    * @param markerDir marker directory path
-   * @return {@code true} if successful; {@code false} otherwise.
+   * @return {@code true} if successful; {@code false} if the directory does not exist or deletion fails.
    */
   public Boolean deleteMarkers(String markerDir) {
-    boolean result = getMarkerDirState(markerDir).deleteAllMarkers();
+    boolean result = false;
+    Option<MarkerDirState> markerDirState = getOrInstantiateMarkerDirStateIfDirExists(markerDir);
+    if (markerDirState.isPresent()) {
+      result = markerDirState.get().deleteAllMarkers();
+    }
     markerDirStateMap.remove(markerDir);
     return result;
   }
 
-  private MarkerDirState getMarkerDirState(String markerDir) {
+  private Option<MarkerDirState> getOrInstantiateMarkerDirStateIfDirExists(String markerDir) {
+    Option<MarkerDirState> markerDirState = Option.empty();
+    try {
+      if (fileSystem.exists(new Path(markerDir))) {
+        markerDirState = Option.of(getOrInstantiateMarkerDirState(markerDir));
+      }
+      return markerDirState;
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
+  }
+
+  private MarkerDirState getOrInstantiateMarkerDirState(String markerDir) {
     MarkerDirState markerDirState = markerDirStateMap.get(markerDir);
     if (markerDirState == null) {
       synchronized (markerDirStateMap) {
