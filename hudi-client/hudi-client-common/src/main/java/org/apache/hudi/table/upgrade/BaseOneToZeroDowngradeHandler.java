@@ -40,9 +40,9 @@ public abstract class BaseOneToZeroDowngradeHandler implements DowngradeHandler 
     HoodieTable table = getTable(config, context);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
-    for (HoodieInstant commitInstant : commits) {
+    for (HoodieInstant inflightInstant : commits) {
       // delete existing markers
-      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, commitInstant.getTimestamp());
+      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, inflightInstant.getTimestamp());
       writeMarkers.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     }
     return Collections.EMPTY_MAP;

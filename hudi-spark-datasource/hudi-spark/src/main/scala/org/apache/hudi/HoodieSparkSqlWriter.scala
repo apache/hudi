@@ -118,7 +118,7 @@ object HoodieSparkSqlWriter {
     } else {
       // Handle various save modes
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
-      val partitionColumns = HoodieSparkWriterUtils.getPartitionColumnsFromKeyGenerator(keyGenerator, toProperties(parameters))
+      val partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, toProperties(parameters))
       // Create the table if not present
       if (!tableExists) {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP)

@@ -32,7 +32,6 @@ public abstract class BaseOneToTwoUpgradeHandler implements UpgradeHandler {
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
-    tablePropsToAdd.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP, config.getTableName());
     tablePropsToAdd.put(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP, getPartitionColumns(config));
     tablePropsToAdd.put(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD.key()));
     tablePropsToAdd.put(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP, config.getString(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP));

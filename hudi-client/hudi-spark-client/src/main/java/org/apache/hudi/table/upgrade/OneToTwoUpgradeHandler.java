@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.HoodieSparkWriterUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
@@ -28,6 +28,6 @@ public class OneToTwoUpgradeHandler extends BaseOneToTwoUpgradeHandler {
 
   @Override
   String getPartitionColumns(HoodieWriteConfig config) {
-    return HoodieSparkWriterUtils.getPartitionColumns(config.getProps());
+    return HoodieSparkUtils.getPartitionColumns(config.getProps());
   }
 }

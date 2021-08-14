@@ -39,6 +39,7 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -58,11 +59,11 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
     // re-create marker files if any partial timeline server based markers are found
     HoodieTimeline inflightTimeline = metaClient.getCommitsTimeline().filterPendingExcludingCompaction();
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
-    for (HoodieInstant commitInstant : commits) {
+    for (HoodieInstant inflightInstant : commits) {
       // Converts the markers in new format to old format of direct markers
       try {
         convertToDirectMarkers(
-            commitInstant.getTimestamp(), table, context, config.getMarkersDeleteParallelism());
+            inflightInstant.getTimestamp(), table, context, config.getMarkersDeleteParallelism());
       } catch (IOException e) {
         throw new HoodieException("Converting marker files to DIRECT style failed during downgrade", e);
       }
@@ -102,31 +103,30 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
                   markerDir, fileSystem, context, parallelism);
           DirectWriteMarkers directWriteMarkers = new DirectWriteMarkers(table, commitInstantTime);
           // Recreates the markers in the direct format
-          for (Set<String> markers : markersMap.values()) {
-            markers.forEach(directWriteMarkers::create);
-          }
-          // Delete marker type file
+          markersMap.values().stream().flatMap(Collection::stream)
+              .forEach(directWriteMarkers::create);
+          // Deletes marker type file
           MarkerUtils.deleteMarkerTypeFile(fileSystem, markerDir);
-          // delete timeline server based markers
+          // Deletes timeline server based markers
           deleteTimelineBasedMarkerFiles(markerDir, fileSystem);
           break;
         default:
-          throw new HoodieException("The marker type \"" + markerTypeOption.get().name() + "\" is not supported.");
+          throw new HoodieException("The marker type \"" + markerTypeOption.get().name()
+              + "\" is not supported for rollback.");
       }
     } else {
-      // incase of partial failures during downgrade, there is a chance that marker type file was deleted, but timeline server based marker files are left.
-      // so delete them if any
+      // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
+      // but timeline server based marker files are left.  So deletes them if any
       deleteTimelineBasedMarkerFiles(markerDir, fileSystem);
     }
   }
 
   private void deleteTimelineBasedMarkerFiles(String markerDir, FileSystem fileSystem) throws IOException {
-    // Delete timeline based marker files if any.
+    // Deletes timeline based marker files if any.
     Path dirPath = new Path(markerDir);
     FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-    Predicate<FileStatus> prefixFilter = pathStr ->
-        MarkerUtils.stripMarkerFolderPrefix(pathStr.getPath().toString(), markerDir)
-            .startsWith(MARKERS_FILENAME_PREFIX);
+    Predicate<FileStatus> prefixFilter = fileStatus ->
+        fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
     List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
         .filter(prefixFilter)
         .map(fileStatus -> fileStatus.getPath().toString())

@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.HoodieSparkWriterUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -249,7 +248,7 @@ public class DeltaSync implements Serializable {
       }
     } else {
       this.commitTimelineOpt = Option.empty();
-      String partitionColumns = HoodieSparkWriterUtils.getPartitionColumnsFromKeyGenerator(keyGenerator, props);
+      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
@@ -353,7 +352,7 @@ public class DeltaSync implements Serializable {
         }
       }
     } else {
-      String partitionColumns = HoodieSparkWriterUtils.getPartitionColumnsFromKeyGenerator(keyGenerator, props);
+      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)

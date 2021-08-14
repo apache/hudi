@@ -179,13 +179,13 @@ public class MarkerUtils {
     try {
       if (fileSystem.exists(dirPath)) {
         FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
-        Predicate<String> prefixFilter = pathStr ->
-            stripMarkerFolderPrefix(pathStr, markerDir).startsWith(MARKERS_FILENAME_PREFIX);
-        Predicate<String> markerTypeFilter =
-            pathStr -> !stripMarkerFolderPrefix(pathStr, markerDir).equals(MARKER_TYPE_FILENAME);
+        Predicate<FileStatus> prefixFilter = fileStatus ->
+            fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
+        Predicate<FileStatus> markerTypeFilter = fileStatus ->
+            !fileStatus.getPath().getName().equals(MARKER_TYPE_FILENAME);
         List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
-            .map(fileStatus -> fileStatus.getPath().toString())
             .filter(prefixFilter.and(markerTypeFilter))
+            .map(fileStatus -> fileStatus.getPath().toString())
             .collect(Collectors.toList());
 
         if (markerDirSubPaths.size() > 0) {

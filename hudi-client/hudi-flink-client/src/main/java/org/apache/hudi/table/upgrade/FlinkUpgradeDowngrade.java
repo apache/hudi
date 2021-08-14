@@ -26,7 +26,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Map;
 
 public class FlinkUpgradeDowngrade extends AbstractUpgradeDowngrade {
