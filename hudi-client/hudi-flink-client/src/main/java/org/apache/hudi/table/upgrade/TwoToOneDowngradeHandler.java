@@ -18,18 +18,15 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 
-/**
- * Downgrade handle to assist in downgrading hoodie table from version 1 to 0.
- */
-public class OneToZeroDowngradeHandler extends BaseOneToZeroDowngradeHandler {
-
+public class TwoToOneDowngradeHandler extends BaseTwoToOneDowngradeHandler {
   @Override
   HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return HoodieSparkTable.create(config, context);
+    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
   }
 }

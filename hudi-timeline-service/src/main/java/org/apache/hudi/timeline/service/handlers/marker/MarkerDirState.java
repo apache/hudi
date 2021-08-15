@@ -273,7 +273,6 @@ public class MarkerDirState implements Serializable {
   private void syncMarkersFromFileSystem() {
     Map<String, Set<String>> fileMarkersSetMap = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
         markerDirPath, fileSystem, hoodieEngineContext, parallelism);
-
     for (String markersFilePathStr : fileMarkersSetMap.keySet()) {
       Set<String> fileMarkers = fileMarkersSetMap.get(markersFilePathStr);
       if (!fileMarkers.isEmpty()) {

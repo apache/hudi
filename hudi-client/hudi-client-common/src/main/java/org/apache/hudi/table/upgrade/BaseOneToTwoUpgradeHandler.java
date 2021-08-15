@@ -18,18 +18,25 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-/**
- * Downgrade handle to assist in downgrading hoodie table from version 1 to 0.
- */
-public class OneToZeroDowngradeHandler extends BaseOneToZeroDowngradeHandler {
+import java.util.HashMap;
+import java.util.Map;
+
+public abstract class BaseOneToTwoUpgradeHandler implements UpgradeHandler {
 
   @Override
-  HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return HoodieSparkTable.create(config, context);
+  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    tablePropsToAdd.put(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP, getPartitionColumns(config));
+    tablePropsToAdd.put(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD.key()));
+    tablePropsToAdd.put(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP, config.getString(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP));
+    return tablePropsToAdd;
   }
+
+  abstract String getPartitionColumns(HoodieWriteConfig config);
 }

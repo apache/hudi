@@ -24,9 +24,9 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
 /**
- * Downgrade handle to assist in downgrading hoodie table from version 1 to 0.
+ * Downgrade handle to assist in downgrading hoodie table from version 2 to 1.
  */
-public class OneToZeroDowngradeHandler extends BaseOneToZeroDowngradeHandler {
+public class TwoToOneDowngradeHandler extends BaseTwoToOneDowngradeHandler {
 
   @Override
   HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
