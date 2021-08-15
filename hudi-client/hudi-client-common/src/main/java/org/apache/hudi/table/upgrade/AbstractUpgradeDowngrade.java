@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -33,6 +34,8 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -112,15 +115,27 @@ public abstract class AbstractUpgradeDowngrade {
 
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
+    Map<ConfigProperty, String> tableProps = new HashMap<>();
     if (fromVersion.versionCode() < toVersion.versionCode()) {
       // upgrade
-      upgrade(fromVersion, toVersion, instantTime);
+      while (fromVersion.versionCode() < toVersion.versionCode()) {
+        HoodieTableVersion nextVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() + 1);
+        tableProps.putAll(upgrade(fromVersion, nextVersion, instantTime));
+        fromVersion = nextVersion;
+      }
     } else {
       // downgrade
-      downgrade(fromVersion, toVersion, instantTime);
+      while (fromVersion.versionCode() > toVersion.versionCode()) {
+        HoodieTableVersion prevVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() - 1);
+        tableProps.putAll(downgrade(fromVersion, prevVersion, instantTime));
+        fromVersion = prevVersion;
+      }
     }
 
     // Write out the current version in hoodie.properties.updated file
+    for (Map.Entry<ConfigProperty, String> entry: tableProps.entrySet()) {
+      metaClient.getTableConfig().setValue(entry.getKey(), entry.getValue());
+    }
     metaClient.getTableConfig().setTableVersion(toVersion);
     createUpdatedFile(metaClient.getTableConfig().getProps());
 
@@ -143,7 +158,7 @@ public abstract class AbstractUpgradeDowngrade {
     }
   }
 
-  protected abstract void upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime);
+  protected abstract Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime);
 
-  protected abstract void downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime);
+  protected abstract Map<ConfigProperty, String> downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime);
 }

@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.HoodieWriterUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -50,7 +49,6 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -62,6 +60,7 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
@@ -249,7 +248,7 @@ public class DeltaSync implements Serializable {
       }
     } else {
       this.commitTimelineOpt = Option.empty();
-      String partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator);
+      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
@@ -353,7 +352,7 @@ public class DeltaSync implements Serializable {
         }
       }
     } else {
-      String partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator);
+      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
