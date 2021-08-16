@@ -7,7 +7,7 @@ last_modified_at: 2020-08-12T15:19:57+08:00
 This guide provides a document at Hudi's capabilities using Flink SQL. We can feel the unique charm of Flink stream computing engine on Hudi.
 Reading this guide, you can quickly start using Flink to write to(read from) Hudi, have a deeper understanding of configuration and optimization:
 
-- **Quick Start** : Read [Quick Start](#quick-start) to get started quickly flink sql client to write to(read from) Hudi.
+- **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
 - **Configuration** : For [Flink Configuration](#flink-configuration), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](#table-option).
 - **Writing Data** : Flink supports different writing data use cases, such as [Bulk Insert](#bulk-insert), [Index Bootstrap](#index-bootstrap), [Changelog Mode](#changelog-mode), [Insert Mode](#insert-mode)  and [Offline Compaction](#offline-compaction).
 - **Querying Data** : Flink supports different querying data use cases, such as [Hive Query](#hive-query), [Presto Query](#presto-query).
@@ -339,7 +339,7 @@ All changelog records can be consumed with Flink streaming reader.
 
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
-| `changelog.enabled` | `false` | `false` | It is turned off by default, to have the `upsert` semantics, only the merged messages are ensured to be kept, intermediate changes may be merged. Setting to true to support consumption of all changes. |
+| `changelog.enabled` | `false` | `false` | It is turned off by default, to have the `upsert` semantics, only the merged messages are ensured to be kept, intermediate changes may be merged. Setting to true to support consumption of all changes |
 
 :::note
 Batch (Snapshot) read still merge all the intermediate changes, regardless of whether the format has stored the intermediate changelog messages.
@@ -425,8 +425,8 @@ WITH (
   'connector' = 'hudi',
   'path' = 'oss://vvr-daily/hudi/t1',
   'table.type' = 'COPY_ON_WRITE',  --If MERGE_ON_READ, hive query will not have output until the parquet file is generated
-  'hive_sync.enable' = 'true',  -- Required. To enable hive synchronization
-  'hive_sync.mode' = 'hms' -- Required. Setting hive sync mode to hms, default jdbc
+  'hive_sync.enable' = 'true',     -- Required. To enable hive synchronization
+  'hive_sync.mode' = 'hms'         -- Required. Setting hive sync mode to hms, default jdbc
   'hive_sync.metastore.uris' = 'thrift://ip:9083' -- Required. The port need set on hive-site.xml
 );
 
@@ -444,9 +444,9 @@ WITH (
   'connector' = 'hudi',
   'path' = 'oss://vvr-daily/hudi/t1',
   'table.type' = 'COPY_ON_WRITE',  --If MERGE_ON_READ, hive query will not have output until the parquet file is generated
-  'hive_sync.enable' = 'true',  -- Required. To enable hive synchronization
-  'hive_sync.mode' = 'hms' -- Required. Setting hive sync mode to hms, default jdbc
-  'hive_sync.metastore.uris' = 'thrift://ip:9083' -- Required. The port need set on hive-site.xml
+  'hive_sync.enable' = 'true',     -- Required. To enable hive synchronization
+  'hive_sync.mode' = 'hms'         -- Required. Setting hive sync mode to hms, default jdbc
+  'hive_sync.metastore.uris' = 'thrift://ip:9083'  -- Required. The port need set on hive-site.xml
   'hive_sync.jdbc_url'='jdbc:hive2://ip:10000',    -- required, hiveServer port
   'hive_sync.table'='t1',                          -- required, hive table name
   'hive_sync.db'='testDB',                         -- required, hive database name
@@ -521,7 +521,7 @@ Offline compaction needs to submit the Flink task on the command line. The progr
 
 ```bash
 # Command line
-x./bin/flink run -c org.apache.hudi.sink.compact.HoodieFlinkCompactor lib/hudi-flink-bundle_2.11-0.9.0.jar --path hdfs://xxx:9000/table
+./bin/flink run -c org.apache.hudi.sink.compact.HoodieFlinkCompactor lib/hudi-flink-bundle_2.11-0.9.0.jar --path hdfs://xxx:9000/table
 ```
 
 ### Options
