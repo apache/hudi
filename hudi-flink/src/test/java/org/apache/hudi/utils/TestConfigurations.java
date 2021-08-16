@@ -26,6 +26,7 @@ import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
@@ -50,10 +51,8 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE = (RowType) ROW_DATA_TYPE.getLogicalType();
 
-  public static final TableSchema TABLE_SCHEMA = TableSchema.builder()
-      .fields(
-          ROW_TYPE.getFieldNames().toArray(new String[0]),
-          ROW_DATA_TYPE.getChildren().toArray(new DataType[0]))
+  public static final ResolvedSchema TABLE_SCHEMA = SchemaBuilder.instance()
+      .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())
       .build();
 
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {

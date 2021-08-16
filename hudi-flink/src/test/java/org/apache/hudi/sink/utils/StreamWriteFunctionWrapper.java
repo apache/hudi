@@ -110,7 +110,7 @@ public class StreamWriteFunctionWrapper<I> {
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
     // one function
-    this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1, false);
+    this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
     this.bucketAssignOperatorContext = new MockBucketAssignOperatorContext();
