@@ -355,7 +355,7 @@ For ssh tunnel on emr, refer - https://docs.aws.amazon.com/emr/latest/Management
 
 Run this command on your local machine to access graphite UI.
 ```
-ssh -i ~/mykeypair.pem -N -L 8157:ec2-###-##-##-###.compute-1.amazonaws.com:80 hadoop@ec2-###-##-##-###.compute-1.amazonaws.com
+ssh -i ~/mykeypair.pem -N -L 80:ec2-###-##-##-###.compute-1.amazonaws.com:80 hadoop@ec2-###-##-##-###.compute-1.amazonaws.com
 ```
 Open browser and access metrics at
 ```
