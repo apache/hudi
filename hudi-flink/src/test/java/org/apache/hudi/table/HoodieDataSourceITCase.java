@@ -68,8 +68,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * IT cases for Hoodie table source and sink.
- * <p>
- * Note: should add more SQL cases when batch write is supported.
  */
 public class HoodieDataSourceITCase extends AbstractTestBase {
   private TableEnvironment streamTableEnv;
@@ -289,7 +287,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + ")";
     List<Row> result = execSelectSql(streamTableEnv,
         "select name, sum(age) from t1 group by name", sinkDDL, 10);
-    final String expected = "[+I(Danny,24), +I(Stephen,34)]";
+    final String expected = "[+I(+I[Danny, 24]), +I(+I[Stephen, 34])]";
     assertRowsEquals(result, expected, true);
   }
 
@@ -314,9 +312,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> result2 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1 where uuid > 'id5'").execute().collect());
     assertRowsEquals(result2, "["
-        + "id6,Emma,20,1970-01-01T00:00:06,par3, "
-        + "id7,Bob,44,1970-01-01T00:00:07,par4, "
-        + "id8,Han,56,1970-01-01T00:00:08,par4]");
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
   @ParameterizedTest
@@ -350,14 +348,14 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     execInsertSql(streamTableEnv, insertInto);
 
     final String expected = "["
-        + "id1,Danny,23,par1,1970-01-01T00:00:01, "
-        + "id2,Stephen,33,par1,1970-01-01T00:00:02, "
-        + "id3,Julian,53,par2,1970-01-01T00:00:03, "
-        + "id4,Fabian,31,par2,1970-01-01T00:00:04, "
-        + "id5,Sophia,18,par3,1970-01-01T00:00:05, "
-        + "id6,Emma,20,par3,1970-01-01T00:00:06, "
-        + "id7,Bob,44,par4,1970-01-01T00:00:07, "
-        + "id8,Han,56,par4,1970-01-01T00:00:08]";
+        + "+I[id1, Danny, 23, par1, 1970-01-01T00:00:01], "
+        + "+I[id2, Stephen, 33, par1, 1970-01-01T00:00:02], "
+        + "+I[id3, Julian, 53, par2, 1970-01-01T00:00:03], "
+        + "+I[id4, Fabian, 31, par2, 1970-01-01T00:00:04], "
+        + "+I[id5, Sophia, 18, par3, 1970-01-01T00:00:05], "
+        + "+I[id6, Emma, 20, par3, 1970-01-01T00:00:06], "
+        + "+I[id7, Bob, 44, par4, 1970-01-01T00:00:07], "
+        + "+I[id8, Han, 56, par4, 1970-01-01T00:00:08]]";
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
 
@@ -401,8 +399,8 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> result2 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
-        + "id1,Danny,24,1970-01-01T00:00:01,par1, "
-        + "id2,Stephen,34,1970-01-01T00:00:02,par2]";
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:01, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:02, par2]]";
     assertRowsEquals(result2, expected);
   }
 
@@ -431,7 +429,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par1]");
+    assertRowsEquals(result, "[+I[id1, Sophia, 18, 1970-01-01T00:00:05, par1]]");
   }
 
   @ParameterizedTest
@@ -467,7 +465,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par5]");
+    assertRowsEquals(result, "[+I[id1, Sophia, 18, 1970-01-01T00:00:05, par5]]");
   }
 
   @Test
@@ -490,7 +488,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     List<Row> result = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(result, "[id1,Phoebe,52,1970-01-01T00:00:08,par4]");
+    assertRowsEquals(result, "[+I[id1, Phoebe, 52, 1970-01-01T00:00:08, par4]]");
   }
 
   @Test
@@ -514,10 +512,10 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> result = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
-        + "id1,Stephen,34,1970-01-01T00:00:02,par1, "
-        + "id1,Fabian,32,1970-01-01T00:00:04,par2, "
-        + "id1,Jane,19,1970-01-01T00:00:06,par3, "
-        + "id1,Phoebe,52,1970-01-01T00:00:08,par4]";
+        + "+I[id1, Stephen, 34, 1970-01-01T00:00:02, par1], "
+        + "+I[id1, Fabian, 32, 1970-01-01T00:00:04, par2], "
+        + "+I[id1, Jane, 19, 1970-01-01T00:00:06, par3], "
+        + "+I[id1, Phoebe, 52, 1970-01-01T00:00:08, par4]]";
     assertRowsEquals(result, expected, 3);
   }
 
@@ -577,16 +575,16 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     execInsertSql(streamTableEnv, insertInto);
 
     final String expected = "["
-        + "101,1000,scooter,3.140000104904175, "
-        + "102,2000,car battery,8.100000381469727, "
-        + "103,3000,12-pack drill bits,0.800000011920929, "
-        + "104,4000,hammer,0.75, "
-        + "105,5000,hammer,0.875, "
-        + "106,10000,hammer,1.0, "
-        + "107,11000,rocks,5.099999904632568, "
-        + "108,8000,jacket,0.10000000149011612, "
-        + "109,9000,spare tire,22.200000762939453, "
-        + "110,14000,jacket,0.5]";
+        + "+I[101, 1000, scooter, 3.140000104904175], "
+        + "+I[102, 2000, car battery, 8.100000381469727], "
+        + "+I[103, 3000, 12-pack drill bits, 0.800000011920929], "
+        + "+I[104, 4000, hammer, 0.75], "
+        + "+I[105, 5000, hammer, 0.875], "
+        + "+I[106, 10000, hammer, 1.0], "
+        + "+I[107, 11000, rocks, 5.099999904632568], "
+        + "+I[108, 8000, jacket, 0.10000000149011612], "
+        + "+I[109, 9000, spare tire, 22.200000762939453], "
+        + "+I[110, 14000, jacket, 0.5]]";
 
     List<Row> result = execSelectSql(streamTableEnv, "select * from hoodie_sink", execMode);
 
@@ -621,9 +619,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> result2 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from hoodie_sink where uuid > 'id5'").execute().collect());
     assertRowsEquals(result2, "["
-        + "id6,Emma,20,1970-01-01T00:00:06,par3, "
-        + "id7,Bob,44,1970-01-01T00:00:07,par4, "
-        + "id8,Han,56,1970-01-01T00:00:08,par4]");
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
   @Test
@@ -660,11 +658,11 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result, "["
-        + "id1,Danny,23,1970-01-01T00:00:01,par1, "
-        + "id1,Stephen,33,1970-01-01T00:00:02,par2, "
-        + "id1,Julian,53,1970-01-01T00:00:03,par3, "
-        + "id1,Fabian,31,1970-01-01T00:00:04,par4, "
-        + "id1,Sophia,18,1970-01-01T00:00:05,par5]", 3);
+        + "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
+        + "+I[id1, Stephen, 33, 1970-01-01T00:00:02, par2], "
+        + "+I[id1, Julian, 53, 1970-01-01T00:00:03, par3], "
+        + "+I[id1, Fabian, 31, 1970-01-01T00:00:04, par4], "
+        + "+I[id1, Sophia, 18, 1970-01-01T00:00:05, par5]]", 3);
   }
 
   // -------------------------------------------------------------------------
