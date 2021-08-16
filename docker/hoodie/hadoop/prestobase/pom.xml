@@ -55,9 +55,9 @@
           <execution>
             <phase>package</phase>
             <configuration>
-              <tasks>
+              <target>
                 <copy file="${project.basedir}/../../../../packaging/hudi-presto-bundle/target/hudi-presto-bundle-${project.version}.jar" tofile="target/hudi-presto-bundle.jar" />
-              </tasks>
+              </target>
             </configuration>
             <goals>
               <goal>run</goal>
