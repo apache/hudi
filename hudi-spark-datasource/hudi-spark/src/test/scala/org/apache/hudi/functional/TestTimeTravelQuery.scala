@@ -42,7 +42,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME_CFG.key -> "hoodie_test"
+    HoodieWriteConfig.TABLE_NAME_VALUE.key -> "hoodie_test"
   )
 
   @BeforeEach override def setUp() {

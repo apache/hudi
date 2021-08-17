@@ -22,9 +22,8 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.HoodieConfig
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -73,7 +72,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val session = SparkSession.builder().appName("hoodie_test").master("local").getOrCreate()
     try {
       val sqlContext = session.sqlContext
-      val options = Map("path" -> "hoodie/test/path", HoodieWriteConfig.TABLE_NAME_CFG.key -> "hoodie_test_tbl")
+      val options = Map("path" -> "hoodie/test/path", HoodieWriteConfig.TABLE_NAME_VALUE.key -> "hoodie_test_tbl")
       val e = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.ErrorIfExists, options,
         session.emptyDataFrame))
       assert(e.getMessage.contains("spark.serializer"))
@@ -89,7 +88,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       val hoodieFooTableName = "hoodie_foo_tbl"
       //create a new table
       val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-        HoodieWriteConfig.TABLE_NAME_CFG.key -> hoodieFooTableName,
+        HoodieWriteConfig.TABLE_NAME_VALUE.key -> hoodieFooTableName,
         "hoodie.insert.shuffle.parallelism" -> "4",
         "hoodie.upsert.shuffle.parallelism" -> "4")
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
@@ -98,7 +97,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
       //on same path try append with different("hoodie_bar_tbl") table name which should throw an exception
       val barTableModifier = Map("path" -> path.toAbsolutePath.toString,
-        HoodieWriteConfig.TABLE_NAME_CFG.key -> "hoodie_bar_tbl",
+        HoodieWriteConfig.TABLE_NAME_VALUE.key -> "hoodie_bar_tbl",
         "hoodie.insert.shuffle.parallelism" -> "4",
         "hoodie.upsert.shuffle.parallelism" -> "4")
       val barTableParams = HoodieWriterUtils.parametersWithWriteDefaults(barTableModifier)
@@ -152,7 +151,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
       .updated(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), String.valueOf(populateMetaFields))
-      .updated(HoodieWriteConfig.BULKINSERT_SORT_MODE_CFG.key(), sortMode.name())
+      .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), sortMode.name())
     val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
     // generate the inserts
@@ -200,7 +199,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         .updated("hoodie.bulkinsert.shuffle.parallelism", "4")
         .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
         .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
-        .updated(HoodieWriteConfig.BULKINSERT_SORT_MODE_CFG.key(), BulkInsertSortMode.NONE.name())
+        .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), BulkInsertSortMode.NONE.name())
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
       // generate the inserts
@@ -352,10 +351,10 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         try {
           val hoodieFooTableName = "hoodie_foo_tbl"
           val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
-            HoodieWriteConfig.TABLE_NAME_CFG.key -> hoodieFooTableName,
+            HoodieWriteConfig.TABLE_NAME_VALUE.key -> hoodieFooTableName,
             HoodieWriteConfig.BASE_FILE_FORMAT.key -> baseFileFormat,
             DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-            HoodieWriteConfig.INSERT_PARALLELISM_CFG.key -> "4",
+            HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "4",
             DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
             DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
             DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
@@ -429,13 +428,13 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
           val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
             HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH.key -> srcPath.toAbsolutePath.toString,
-            HoodieWriteConfig.TABLE_NAME_CFG.key -> hoodieFooTableName,
+            HoodieWriteConfig.TABLE_NAME_VALUE.key -> hoodieFooTableName,
             DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-            HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM_CFG.key -> "4",
+            HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM_VALUE.key -> "4",
             DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL,
             DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
             DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-            HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS_CFG.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
+            HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
           val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
           val client = spy(DataSourceUtils.createHoodieClient(
@@ -622,7 +621,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
         DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
-        HoodieWriteConfig.TABLE_NAME_CFG.key -> "hoodie_test")
+        HoodieWriteConfig.TABLE_NAME_VALUE.key -> "hoodie_test")
       try {
         val df = spark.range(0, 1000).toDF("keyid")
           .withColumn("col3", expr("keyid"))
@@ -653,9 +652,9 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         spark.emptyDataFrame.write.format("hudi")
           .options(options)
           .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH.key, baseBootStrapPath)
-          .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS_CFG.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
+          .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
           .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
-          .option(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM_CFG.key, "4")
+          .option(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM_VALUE.key, "4")
           .mode(SaveMode.Overwrite).save(basePath)
 
         df.write.format("hudi")
@@ -750,7 +749,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
   def getCommonParams(path: java.nio.file.Path, hoodieFooTableName: String, tableType: String) : Map[String, String] = {
     Map("path" -> path.toAbsolutePath.toString,
-      HoodieWriteConfig.TABLE_NAME_CFG.key -> hoodieFooTableName,
+      HoodieWriteConfig.TABLE_NAME_VALUE.key -> hoodieFooTableName,
       "hoodie.insert.shuffle.parallelism" -> "1",
       "hoodie.upsert.shuffle.parallelism" -> "1",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
@@ -779,7 +778,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           .option(DataSourceWriteOptions.OPERATION.key, "insert")
           .option("hoodie.insert.shuffle.parallelism", "1")
           .option("hoodie.metadata.enable", "true")
-          .option(HoodieWriteConfig.TABLE_NAME_CFG.key, "hoodie_test")
+          .option(HoodieWriteConfig.TABLE_NAME_VALUE.key, "hoodie_test")
           .mode(SaveMode.Overwrite).save(basePath)
         // upsert same record again
         val df_update = spark.range(0, 10).toDF("keyid")
@@ -794,7 +793,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           .option(DataSourceWriteOptions.OPERATION.key, "upsert")
           .option("hoodie.upsert.shuffle.parallelism", "1")
           .option("hoodie.metadata.enable", "true")
-          .option(HoodieWriteConfig.TABLE_NAME_CFG.key, "hoodie_test")
+          .option(HoodieWriteConfig.TABLE_NAME_VALUE.key, "hoodie_test")
           .mode(SaveMode.Append).save(basePath)
         assert(spark.read.format("hudi").load(basePath).count() == 10)
         assert(spark.read.format("hudi").load(basePath).where("age >= 2000").count() == 10)

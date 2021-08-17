@@ -17,14 +17,13 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.DataSourceWriteOptions.OPERATION
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{OPERATION, _}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_CFG
+import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_VALUE
 import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, SubqueryAlias}
+import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
@@ -68,13 +67,13 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
       Map(
         "path" -> path,
         KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        TABLE_NAME_CFG.key -> tableId.table,
+        TABLE_NAME_VALUE.key -> tableId.table,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_SUPPORT_TIMESTAMP.key -> "true",
         HIVE_STYLE_PARTITIONING.key -> "true",
-        HoodieWriteConfig.DELETE_PARALLELISM_CFG.key -> "200",
+        HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
       )
     }

@@ -58,7 +58,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .withDocumentation("Controls the batch size for performing gets against HBase. "
           + "Batching improves throughput, by saving round trips.");
 
-  public static final ConfigProperty<String> HBASE_ZK_ZNODEPARENT_CFG = ConfigProperty
+  public static final ConfigProperty<String> HBASE_ZK_NODE_PATH = ConfigProperty
       .key("hoodie.index.hbase.zknode.path")
       .noDefaultValue()
       .withDocumentation("Only applies if index type is HBASE. This is the root znode that will contain "
@@ -70,7 +70,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .withDocumentation("Controls the batch size for performing puts against HBase. "
           + "Batching improves throughput, by saving round trips.");
 
-  public static final ConfigProperty<String> HBASE_INDEX_QPS_ALLOCATOR_CLASS_CFG = ConfigProperty
+  public static final ConfigProperty<String> HBASE_INDEX_QPS_ALLOCATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.index.hbase.qps.allocator.class")
       .defaultValue(DefaultHBaseQPSResourceAllocator.class.getName())
       .withDocumentation("Property to set which implementation of HBase QPS resource allocator to be used, which"
@@ -97,7 +97,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
           + " value based on global indexing throughput needs and most importantly, how much the HBase installation in use is\n"
           + " able to tolerate without Region Servers going down.");
 
-  public static final ConfigProperty<Boolean> HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY_CFG = ConfigProperty
+  public static final ConfigProperty<Boolean> HBASE_INDEX_COMPUTE_QPS_DYNAMICALLY = ConfigProperty
       .key("hoodie.index.hbase.dynamic_qps")
       .defaultValue(false)
       .withDocumentation("Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.");
@@ -127,23 +127,23 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("");
 
-  public static final ConfigProperty<Integer> HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS_CFG = ConfigProperty
+  public static final ConfigProperty<Integer> HBASE_INDEX_ZK_SESSION_TIMEOUT_MS = ConfigProperty
       .key("hoodie.index.hbase.zk.session_timeout_ms")
       .defaultValue(60 * 1000)
       .withDocumentation("Session timeout value to use for Zookeeper failure detection, for the HBase client."
           + "Lower this value, if you want to fail faster.");
 
-  public static final ConfigProperty<Integer> HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS_CFG = ConfigProperty
+  public static final ConfigProperty<Integer> HBASE_INDEX_ZK_CONNECTION_TIMEOUT_MS = ConfigProperty
       .key("hoodie.index.hbase.zk.connection_timeout_ms")
       .defaultValue(15 * 1000)
       .withDocumentation("Timeout to use for establishing connection with zookeeper, from HBase client.");
 
-  public static final ConfigProperty<String> HBASE_ZK_PATH_QPS_ROOT_CFG = ConfigProperty
+  public static final ConfigProperty<String> HBASE_ZKPATH_QPS_ROOT = ConfigProperty
       .key("hoodie.index.hbase.zkpath.qps_root")
       .defaultValue("/QPS_ROOT")
       .withDocumentation("chroot in zookeeper, to use for all qps allocation co-ordination.");
 
-  public static final ConfigProperty<Boolean> HBASE_INDEX_UPDATE_PARTITION_PATH_CFG = ConfigProperty
+  public static final ConfigProperty<Boolean> HBASE_INDEX_UPDATE_PARTITION_PATH_ENABLE = ConfigProperty
       .key("hoodie.hbase.index.update.partition.path")
       .defaultValue(false)
       .withDocumentation("Only applies if index type is HBASE. "
@@ -151,7 +151,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
           + "this config when set, will delete old record in old paritition "
           + "and will insert it as new record in new partition.");
 
-  public static final ConfigProperty<Boolean> HBASE_INDEX_ROLLBACK_SYNC_CFG = ConfigProperty
+  public static final ConfigProperty<Boolean> HBASE_INDEX_ROLLBACK_SYNC_ENABLE = ConfigProperty
       .key("hoodie.index.hbase.rollback.sync")
       .defaultValue(false)
       .withDocumentation("When set to true, the rollback method will delete the last failed task index. "
@@ -166,28 +166,44 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   /** @deprecated Use {@link #HBASE_TABLENAME} and its methods instead */
   @Deprecated
   public static final String HBASE_TABLENAME_PROP = HBASE_TABLENAME.key();
-  /** @deprecated Use {@link #HBASE_GET_BATCH_SIZE} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_GET_BATCH_SIZE} and its methods instead
+   */
   @Deprecated
   public static final String HBASE_GET_BATCH_SIZE_PROP = HBASE_GET_BATCH_SIZE.key();
-  /** @deprecated Use {@link #HBASE_ZK_ZNODEPARENT_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_ZK_NODE_PATH} and its methods instead
+   */
   @Deprecated
-  public static final String HBASE_ZK_ZNODEPARENT = HBASE_ZK_ZNODEPARENT_CFG.key();
-  /** @deprecated Use {@link #HBASE_PUT_BATCH_SIZE} and its methods instead */
+  public static final String HBASE_ZK_ZNODEPARENT = HBASE_ZK_NODE_PATH.key();
+  /**
+   * @deprecated Use {@link #HBASE_PUT_BATCH_SIZE} and its methods instead
+   */
   @Deprecated
   public static final String HBASE_PUT_BATCH_SIZE_PROP = HBASE_PUT_BATCH_SIZE.key();
-  /** @deprecated Use {@link #HBASE_INDEX_QPS_ALLOCATOR_CLASS_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_QPS_ALLOCATOR_CLASS_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String HBASE_INDEX_QPS_ALLOCATOR_CLASS = HBASE_INDEX_QPS_ALLOCATOR_CLASS_CFG.key();
-  /** @deprecated Use {@link #HBASE_INDEX_QPS_ALLOCATOR_CLASS_CFG} and its methods instead */
+  public static final String HBASE_INDEX_QPS_ALLOCATOR_CLASS = HBASE_INDEX_QPS_ALLOCATOR_CLASS_NAME.key();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_QPS_ALLOCATOR_CLASS_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS = HBASE_INDEX_QPS_ALLOCATOR_CLASS_CFG.defaultValue();
-  /** @deprecated Use {@link #HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE} and its methods instead */
+  public static final String DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS = HBASE_INDEX_QPS_ALLOCATOR_CLASS_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE} and its methods instead
+   */
   @Deprecated
   public static final String HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP = HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE.key();
-  /** @deprecated Use {@link #HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE = HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE.defaultValue();
-  /** @deprecated Use {@link #HBASE_MAX_QPS_FRACTION} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_MAX_QPS_FRACTION} and its methods instead
+   */
   @Deprecated
   public static final String HBASE_QPS_FRACTION_PROP = HBASE_QPS_FRACTION.key();
   /** @deprecated Use {@link #HBASE_MAX_QPS_PER_REGION_SERVER} and its methods instead */
@@ -195,66 +211,104 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
   public static final String HBASE_MAX_QPS_PER_REGION_SERVER_PROP = HBASE_MAX_QPS_PER_REGION_SERVER.key();
   @Deprecated
   public static final int DEFAULT_HBASE_BATCH_SIZE = 100;
-  /** @deprecated Use {@link #HBASE_MAX_QPS_PER_REGION_SERVER} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_MAX_QPS_PER_REGION_SERVER} and its methods instead
+   */
   @Deprecated
   public static final int DEFAULT_HBASE_MAX_QPS_PER_REGION_SERVER = HBASE_MAX_QPS_PER_REGION_SERVER.defaultValue();
-  /** @deprecated Use {@link #HBASE_QPS_FRACTION} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_QPS_FRACTION} and its methods instead
+   */
   @Deprecated
   public static final float DEFAULT_HBASE_QPS_FRACTION = HBASE_QPS_FRACTION.defaultValue();
-  /** @deprecated Use {@link #HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_COMPUTE_QPS_DYNAMICALLY} and its methods instead
+   */
   @Deprecated
-  public static final String HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY_CFG.key();
-  /** @deprecated Use {@link #HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY_CFG} and its methods instead */
+  public static final String HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = HBASE_INDEX_COMPUTE_QPS_DYNAMICALLY.key();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_COMPUTE_QPS_DYNAMICALLY} and its methods instead
+   */
   @Deprecated
-  public static final boolean DEFAULT_HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY_CFG.defaultValue();
-  /** @deprecated Use {@link #HBASE_MIN_QPS_FRACTION} and its methods instead */
+  public static final boolean DEFAULT_HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = HBASE_INDEX_COMPUTE_QPS_DYNAMICALLY.defaultValue();
+  /**
+   * @deprecated Use {@link #HBASE_MIN_QPS_FRACTION} and its methods instead
+   */
   @Deprecated
   public static final String HBASE_MIN_QPS_FRACTION_PROP = HBASE_MIN_QPS_FRACTION.key();
-  /** @deprecated Use {@link #HBASE_MAX_QPS_FRACTION} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_MAX_QPS_FRACTION} and its methods instead
+   */
   @Deprecated
   public static final String HBASE_MAX_QPS_FRACTION_PROP = HBASE_MAX_QPS_FRACTION.key();
   /** @deprecated Use {@link #HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECONDS} and its methods instead */
   @Deprecated
   public static final String HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS = HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECONDS.key();
-  /** @deprecated Use {@link #HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECONDS} and its methods instead */
+  /**
+   * @deprecated Use {@link #HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECONDS} and its methods instead
+   */
   @Deprecated
   public static final int DEFAULT_HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS = HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECONDS.defaultValue();
-  /** @deprecated Use {@link #HBASE_SLEEP_MS_PUT_BATCH} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_SLEEP_MS_PUT_BATCH} and its methods instead
+   */
   @Deprecated
   public static final String HBASE_SLEEP_MS_PUT_BATCH_PROP = HBASE_SLEEP_MS_PUT_BATCH.key();
-  /** @deprecated Use {@link #HBASE_SLEEP_MS_GET_BATCH} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_SLEEP_MS_GET_BATCH} and its methods instead
+   */
   @Deprecated
   public static final String HBASE_SLEEP_MS_GET_BATCH_PROP = HBASE_SLEEP_MS_GET_BATCH.key();
-  /** @deprecated Use {@link #HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_ZK_SESSION_TIMEOUT_MS} and its methods instead
+   */
   @Deprecated
-  public static final String HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS = HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS_CFG.key();
-  /** @deprecated Use {@link #HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS_CFG} and its methods instead */
+  public static final String HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS = HBASE_INDEX_ZK_SESSION_TIMEOUT_MS.key();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_ZK_SESSION_TIMEOUT_MS} and its methods instead
+   */
   @Deprecated
-  public static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS_CFG.defaultValue();
-  /** @deprecated Use {@link #HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS_CFG} and its methods instead */
+  public static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = HBASE_INDEX_ZK_SESSION_TIMEOUT_MS.defaultValue();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_ZK_CONNECTION_TIMEOUT_MS} and its methods instead
+   */
   @Deprecated
-  public static final String HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS = HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS_CFG.key();
-  /** @deprecated Use {@link #HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS_CFG} and its methods instead */
+  public static final String HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS = HBASE_INDEX_ZK_CONNECTION_TIMEOUT_MS.key();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_ZK_CONNECTION_TIMEOUT_MS} and its methods instead
+   */
   @Deprecated
-  public static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS_CFG.defaultValue();
-  /** @deprecated Use {@link #HBASE_ZK_PATH_QPS_ROOT_CFG} and its methods instead */
+  public static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = HBASE_INDEX_ZK_CONNECTION_TIMEOUT_MS.defaultValue();
+  /**
+   * @deprecated Use {@link #HBASE_ZKPATH_QPS_ROOT} and its methods instead
+   */
   @Deprecated
-  public static final String HBASE_ZK_PATH_QPS_ROOT = HBASE_ZK_PATH_QPS_ROOT_CFG.key();
-  /** @deprecated Use {@link #HBASE_ZK_PATH_QPS_ROOT_CFG} and its methods instead */
+  public static final String HBASE_ZK_PATH_QPS_ROOT = HBASE_ZKPATH_QPS_ROOT.key();
+  /**
+   * @deprecated Use {@link #HBASE_ZKPATH_QPS_ROOT} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_HBASE_ZK_PATH_QPS_ROOT = HBASE_ZK_PATH_QPS_ROOT_CFG.defaultValue();
-  /** @deprecated Use {@link #HBASE_INDEX_UPDATE_PARTITION_PATH_CFG} and its methods instead */
+  public static final String DEFAULT_HBASE_ZK_PATH_QPS_ROOT = HBASE_ZKPATH_QPS_ROOT.defaultValue();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_UPDATE_PARTITION_PATH_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String HBASE_INDEX_UPDATE_PARTITION_PATH = HBASE_INDEX_UPDATE_PARTITION_PATH_CFG.key();
-  /** @deprecated Use {@link #HBASE_INDEX_UPDATE_PARTITION_PATH_CFG} and its methods instead */
+  public static final String HBASE_INDEX_UPDATE_PARTITION_PATH = HBASE_INDEX_UPDATE_PARTITION_PATH_ENABLE.key();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_UPDATE_PARTITION_PATH_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final Boolean DEFAULT_HBASE_INDEX_UPDATE_PARTITION_PATH = HBASE_INDEX_UPDATE_PARTITION_PATH_CFG.defaultValue();
-  /** @deprecated Use {@link #HBASE_INDEX_ROLLBACK_SYNC_CFG} and its methods instead */
+  public static final Boolean DEFAULT_HBASE_INDEX_UPDATE_PARTITION_PATH = HBASE_INDEX_UPDATE_PARTITION_PATH_ENABLE.defaultValue();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_ROLLBACK_SYNC_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String HBASE_INDEX_ROLLBACK_SYNC = HBASE_INDEX_ROLLBACK_SYNC_CFG.key();
-  /** @deprecated Use {@link #HBASE_INDEX_ROLLBACK_SYNC_CFG} and its methods instead */
+  public static final String HBASE_INDEX_ROLLBACK_SYNC = HBASE_INDEX_ROLLBACK_SYNC_ENABLE.key();
+  /**
+   * @deprecated Use {@link #HBASE_INDEX_ROLLBACK_SYNC_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final Boolean DEFAULT_HBASE_INDEX_ROLLBACK_SYNC = HBASE_INDEX_ROLLBACK_SYNC_CFG.defaultValue();
+  public static final Boolean DEFAULT_HBASE_INDEX_ROLLBACK_SYNC = HBASE_INDEX_ROLLBACK_SYNC_ENABLE.defaultValue();
 
   private HoodieHBaseIndexConfig() {
     super();
@@ -296,7 +350,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
     }
 
     public Builder hbaseZkZnodeQPSPath(String zkZnodeQPSPath) {
-      hBaseIndexConfig.setValue(HBASE_ZK_PATH_QPS_ROOT_CFG, zkZnodeQPSPath);
+      hBaseIndexConfig.setValue(HBASE_ZKPATH_QPS_ROOT, zkZnodeQPSPath);
       return this;
     }
 
@@ -321,7 +375,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
     }
 
     public Builder hbaseIndexShouldComputeQPSDynamically(boolean shouldComputeQPsDynamically) {
-      hBaseIndexConfig.setValue(HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY_CFG, String.valueOf(shouldComputeQPsDynamically));
+      hBaseIndexConfig.setValue(HBASE_INDEX_COMPUTE_QPS_DYNAMICALLY, String.valueOf(shouldComputeQPsDynamically));
       return this;
     }
 
@@ -351,32 +405,32 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
     }
 
     public Builder hbaseIndexUpdatePartitionPath(boolean updatePartitionPath) {
-      hBaseIndexConfig.setValue(HBASE_INDEX_UPDATE_PARTITION_PATH_CFG, String.valueOf(updatePartitionPath));
+      hBaseIndexConfig.setValue(HBASE_INDEX_UPDATE_PARTITION_PATH_ENABLE, String.valueOf(updatePartitionPath));
       return this;
     }
 
     public Builder hbaseIndexRollbackSync(boolean rollbackSync) {
-      hBaseIndexConfig.setValue(HBASE_INDEX_ROLLBACK_SYNC_CFG, String.valueOf(rollbackSync));
+      hBaseIndexConfig.setValue(HBASE_INDEX_ROLLBACK_SYNC_ENABLE, String.valueOf(rollbackSync));
       return this;
     }
 
     public Builder withQPSResourceAllocatorType(String qpsResourceAllocatorClass) {
-      hBaseIndexConfig.setValue(HBASE_INDEX_QPS_ALLOCATOR_CLASS_CFG, qpsResourceAllocatorClass);
+      hBaseIndexConfig.setValue(HBASE_INDEX_QPS_ALLOCATOR_CLASS_NAME, qpsResourceAllocatorClass);
       return this;
     }
 
     public Builder hbaseIndexZkSessionTimeout(int zkSessionTimeout) {
-      hBaseIndexConfig.setValue(HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS_CFG, String.valueOf(zkSessionTimeout));
+      hBaseIndexConfig.setValue(HBASE_INDEX_ZK_SESSION_TIMEOUT_MS, String.valueOf(zkSessionTimeout));
       return this;
     }
 
     public Builder hbaseIndexZkConnectionTimeout(int zkConnectionTimeout) {
-      hBaseIndexConfig.setValue(HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS_CFG, String.valueOf(zkConnectionTimeout));
+      hBaseIndexConfig.setValue(HBASE_INDEX_ZK_CONNECTION_TIMEOUT_MS, String.valueOf(zkConnectionTimeout));
       return this;
     }
 
     public Builder hbaseZkZnodeParent(String zkZnodeParent) {
-      hBaseIndexConfig.setValue(HBASE_ZK_ZNODEPARENT_CFG, zkZnodeParent);
+      hBaseIndexConfig.setValue(HBASE_ZK_NODE_PATH, zkZnodeParent);
       return this;
     }
 

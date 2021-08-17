@@ -103,9 +103,9 @@ import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_F
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
+import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
-import static org.apache.hudi.config.HoodieWriteConfig.HOODIE_AUTO_COMMIT;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -711,7 +711,7 @@ public class DeltaSync implements Serializable {
     ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == cfg.isAsyncClusteringEnabled(),
         String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), cfg.isAsyncClusteringEnabled()));
     ValidationUtils.checkArgument(!config.shouldAutoCommit(),
-        String.format("%s should be set to %s", HOODIE_AUTO_COMMIT.key(), autoCommit));
+        String.format("%s should be set to %s", AUTO_COMMIT_ENABLE.key(), autoCommit));
     ValidationUtils.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes,
         String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
     ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),

@@ -48,13 +48,13 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
   public Table getTable(StructType schema, Transform[] partitioning, Map<String, String> properties) {
     String instantTime = properties.get(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY);
     String path = properties.get("path");
-    String tblName = properties.get(HoodieWriteConfig.TABLE_NAME_CFG.key());
+    String tblName = properties.get(HoodieWriteConfig.TABLE_NAME_VALUE.key());
     boolean populateMetaFields = Boolean.parseBoolean(properties.getOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(),
         HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()));
     boolean arePartitionRecordsSorted = Boolean.parseBoolean(properties.getOrDefault(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED,
         Boolean.toString(HoodieInternalConfig.DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED)));
     // 1st arg to createHooodieConfig is not really reuqired to be set. but passing it anyways.
-    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(properties.get(HoodieWriteConfig.AVRO_SCHEMA_CFG.key()), path, tblName, properties);
+    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(properties.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()), path, tblName, properties);
     return new HoodieDataSourceInternalTable(instantTime, config, schema, getSparkSession(),
         getConfiguration(), properties, populateMetaFields, arePartitionRecordsSorted);
   }

@@ -97,7 +97,7 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
           new AvroSchemaConverter().convert(schema), schema, Option.of(filter));
       HoodieAvroParquetConfig config = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
-          new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_CFG.defaultValue()));
+          new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()));
       try (HoodieParquetWriter writer = new HoodieParquetWriter(
           currentInstantTime,
           new Path(Paths.get(basePath, partition, fileName).toString()),

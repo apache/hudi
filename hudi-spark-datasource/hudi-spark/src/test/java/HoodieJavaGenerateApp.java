@@ -175,7 +175,7 @@ public class HoodieJavaGenerateApp {
         // use to combine duplicate records in input/with disk val
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         // Used by hive sync and queries
-        .option(HoodieWriteConfig.TABLE_NAME_CFG.key(), tableName)
+        .option(HoodieWriteConfig.TABLE_NAME_VALUE.key(), tableName)
         // Add Key Extractor
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()

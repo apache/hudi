@@ -18,10 +18,10 @@
 
 package org.apache.hudi.dla;
 
-import com.beust.jcommander.Parameter;
-
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+
+import com.beust.jcommander.Parameter;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -74,7 +74,7 @@ public class DLASyncConfig implements Serializable {
   public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 
   @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-  public Boolean verifyMetadataFileListing = HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue();
+  public Boolean verifyMetadataFileListing = HoodieMetadataConfig.METADATA_VALIDATE_ENABLE.defaultValue();
 
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;

@@ -40,21 +40,21 @@ public class HoodieClusteringConfig extends HoodieConfig {
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
 
-  public static final ConfigProperty<String> CLUSTERING_TARGET_PARTITIONS_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLUSTERING_DAYBASED_LOOKBACK_PARTITIONS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
       .defaultValue("2")
       .sinceVersion("0.7.0")
       .withDocumentation("Number of partitions to list to create ClusteringPlan");
 
-  public static final ConfigProperty<String> CLUSTERING_PLAN_STRATEGY_CLASS_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLUSTERING_PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
       .defaultValue("org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy")
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
           + "i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by "
-          + CLUSTERING_TARGET_PARTITIONS_CFG.key() + ") day based partitions picks the small file slices within those partitions.");
+          + CLUSTERING_DAYBASED_LOOKBACK_PARTITIONS.key() + ") day based partitions picks the small file slices within those partitions.");
 
-  public static final ConfigProperty<String> CLUSTERING_EXECUTION_STRATEGY_CLASS_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLUSTERING_EXECUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.execution.strategy.class")
       .defaultValue("org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
       .sinceVersion("0.7.0")
@@ -68,13 +68,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Turn on inline clustering - clustering will be run after each write operation is complete");
 
-  public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMIT = ConfigProperty
+  public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMITS = ConfigProperty
       .key("hoodie.clustering.inline.max.commits")
       .defaultValue("4")
       .sinceVersion("0.7.0")
       .withDocumentation("Config to control frequency of clustering planning");
 
-  public static final ConfigProperty<String> ASYNC_CLUSTERING_MAX_COMMIT_PROP = ConfigProperty
+  public static final ConfigProperty<String> ASYNC_CLUSTERING_MAX_COMMITS = ConfigProperty
       .key("hoodie.clustering.async.max.commits")
       .defaultValue("4")
       .sinceVersion("0.9.0")
@@ -86,13 +86,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
           .sinceVersion("0.9.0")
           .withDocumentation("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
 
-  public static final ConfigProperty<String> CLUSTERING_PLAN_SMALL_FILE_LIMIT_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLUSTERING_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
       .defaultValue(String.valueOf(600 * 1024 * 1024L))
       .sinceVersion("0.7.0")
       .withDocumentation("Files smaller than the size specified here are candidates for clustering");
 
-  public static final ConfigProperty<String> CLUSTERING_MAX_BYTES_PER_GROUP_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLUSTERING_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
       .defaultValue(String.valueOf(2 * 1024 * 1024 * 1024L))
       .sinceVersion("0.7.0")
@@ -100,13 +100,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + " is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS)."
           + " Max amount of data to be included in one group");
 
-  public static final ConfigProperty<String> CLUSTERING_MAX_NUM_GROUPS_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLUSTERING_STRATEGY_MAX_GROUPS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.num.groups")
       .defaultValue("30")
       .sinceVersion("0.7.0")
       .withDocumentation("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism");
 
-  public static final ConfigProperty<String> CLUSTERING_TARGET_FILE_MAX_BYTES_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLUSTERING_STRATEGY_TARGET_FILE_MAX_BYTES = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "target.file.max.bytes")
       .defaultValue(String.valueOf(1024 * 1024 * 1024L))
       .sinceVersion("0.7.0")
@@ -137,67 +137,109 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
-  /** @deprecated Use {@link #CLUSTERING_PLAN_STRATEGY_CLASS_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #CLUSTERING_PLAN_STRATEGY_CLASS_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String CLUSTERING_PLAN_STRATEGY_CLASS = CLUSTERING_PLAN_STRATEGY_CLASS_CFG.key();
-  /** @deprecated Use {@link #CLUSTERING_PLAN_STRATEGY_CLASS_CFG} and its methods instead */
+  public static final String CLUSTERING_PLAN_STRATEGY_CLASS = CLUSTERING_PLAN_STRATEGY_CLASS_NAME.key();
+  /**
+   * @deprecated Use {@link #CLUSTERING_PLAN_STRATEGY_CLASS_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_PLAN_STRATEGY_CLASS = CLUSTERING_PLAN_STRATEGY_CLASS_CFG.defaultValue();
-  /** @deprecated Use {@link #CLUSTERING_EXECUTION_STRATEGY_CLASS_CFG} and its methods instead */
+  public static final String DEFAULT_CLUSTERING_PLAN_STRATEGY_CLASS = CLUSTERING_PLAN_STRATEGY_CLASS_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #CLUSTERING_EXECUTION_STRATEGY_CLASS_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String CLUSTERING_EXECUTION_STRATEGY_CLASS = CLUSTERING_EXECUTION_STRATEGY_CLASS_CFG.key();
-  /** @deprecated Use {@link #CLUSTERING_EXECUTION_STRATEGY_CLASS_CFG} and its methods instead */
+  public static final String CLUSTERING_EXECUTION_STRATEGY_CLASS = CLUSTERING_EXECUTION_STRATEGY_CLASS_NAME.key();
+  /**
+   * @deprecated Use {@link #CLUSTERING_EXECUTION_STRATEGY_CLASS_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_EXECUTION_STRATEGY_CLASS = CLUSTERING_EXECUTION_STRATEGY_CLASS_CFG.defaultValue();
-  /** @deprecated Use {@link #INLINE_CLUSTERING} and its methods instead */
+  public static final String DEFAULT_CLUSTERING_EXECUTION_STRATEGY_CLASS = CLUSTERING_EXECUTION_STRATEGY_CLASS_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #INLINE_CLUSTERING} and its methods instead
+   */
   @Deprecated
   public static final String INLINE_CLUSTERING_PROP = INLINE_CLUSTERING.key();
-  /** @deprecated Use {@link #INLINE_CLUSTERING} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_CLUSTERING} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_INLINE_CLUSTERING = INLINE_CLUSTERING.defaultValue();
-  /** @deprecated Use {@link #INLINE_CLUSTERING_MAX_COMMIT} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_CLUSTERING_MAX_COMMITS} and its methods instead
+   */
   @Deprecated
-  public static final String INLINE_CLUSTERING_MAX_COMMIT_PROP = INLINE_CLUSTERING_MAX_COMMIT.key();
-  /** @deprecated Use {@link #INLINE_CLUSTERING_MAX_COMMIT} and its methods instead */
+  public static final String INLINE_CLUSTERING_MAX_COMMIT_PROP = INLINE_CLUSTERING_MAX_COMMITS.key();
+  /**
+   * @deprecated Use {@link #INLINE_CLUSTERING_MAX_COMMITS} and its methods instead
+   */
   @Deprecated
-  private static final String DEFAULT_INLINE_CLUSTERING_NUM_COMMITS = INLINE_CLUSTERING_MAX_COMMIT.defaultValue();
-  /** @deprecated Use {@link #CLUSTERING_TARGET_PARTITIONS_CFG} and its methods instead */
+  private static final String DEFAULT_INLINE_CLUSTERING_NUM_COMMITS = INLINE_CLUSTERING_MAX_COMMITS.defaultValue();
+  /**
+   * @deprecated Use {@link #CLUSTERING_DAYBASED_LOOKBACK_PARTITIONS} and its methods instead
+   */
   @Deprecated
-  public static final String CLUSTERING_TARGET_PARTITIONS = CLUSTERING_TARGET_PARTITIONS_CFG.key();
-  /** @deprecated Use {@link #CLUSTERING_TARGET_PARTITIONS_CFG} and its methods instead */
+  public static final String CLUSTERING_TARGET_PARTITIONS = CLUSTERING_DAYBASED_LOOKBACK_PARTITIONS.key();
+  /**
+   * @deprecated Use {@link #CLUSTERING_DAYBASED_LOOKBACK_PARTITIONS} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_TARGET_PARTITIONS = CLUSTERING_TARGET_PARTITIONS_CFG.defaultValue();
-  /** @deprecated Use {@link #CLUSTERING_PLAN_SMALL_FILE_LIMIT_CFG} and its methods instead */
+  public static final String DEFAULT_CLUSTERING_TARGET_PARTITIONS = CLUSTERING_DAYBASED_LOOKBACK_PARTITIONS.defaultValue();
+  /**
+   * @deprecated Use {@link #CLUSTERING_STRATEGY_SMALL_FILE_LIMIT} and its methods instead
+   */
   @Deprecated
-  public static final String CLUSTERING_PLAN_SMALL_FILE_LIMIT = CLUSTERING_PLAN_SMALL_FILE_LIMIT_CFG.key();
-  /** @deprecated Use {@link #CLUSTERING_PLAN_SMALL_FILE_LIMIT_CFG} and its methods instead */
+  public static final String CLUSTERING_PLAN_SMALL_FILE_LIMIT = CLUSTERING_STRATEGY_SMALL_FILE_LIMIT.key();
+  /**
+   * @deprecated Use {@link #CLUSTERING_STRATEGY_SMALL_FILE_LIMIT} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_PLAN_SMALL_FILE_LIMIT = CLUSTERING_PLAN_SMALL_FILE_LIMIT_CFG.defaultValue();
-  /** @deprecated Use {@link #CLUSTERING_MAX_BYTES_PER_GROUP_CFG} and its methods instead */
+  public static final String DEFAULT_CLUSTERING_PLAN_SMALL_FILE_LIMIT = CLUSTERING_STRATEGY_SMALL_FILE_LIMIT.defaultValue();
+  /**
+   * @deprecated Use {@link #CLUSTERING_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP} and its methods instead
+   */
   @Deprecated
-  public static final String CLUSTERING_MAX_BYTES_PER_GROUP = CLUSTERING_MAX_BYTES_PER_GROUP_CFG.key();
-  /** @deprecated Use {@link #CLUSTERING_MAX_BYTES_PER_GROUP_CFG} and its methods instead */
+  public static final String CLUSTERING_MAX_BYTES_PER_GROUP = CLUSTERING_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP.key();
+  /**
+   * @deprecated Use {@link #CLUSTERING_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_MAX_GROUP_SIZE = CLUSTERING_MAX_BYTES_PER_GROUP_CFG.defaultValue();
-  /** @deprecated Use {@link #CLUSTERING_MAX_NUM_GROUPS_CFG} and its methods instead */
+  public static final String DEFAULT_CLUSTERING_MAX_GROUP_SIZE = CLUSTERING_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP.defaultValue();
+  /**
+   * @deprecated Use {@link #CLUSTERING_STRATEGY_MAX_GROUPS} and its methods instead
+   */
   @Deprecated
-  public static final String CLUSTERING_MAX_NUM_GROUPS = CLUSTERING_MAX_NUM_GROUPS_CFG.key();
-  /** @deprecated Use {@link #CLUSTERING_MAX_NUM_GROUPS_CFG} and its methods instead */
+  public static final String CLUSTERING_MAX_NUM_GROUPS = CLUSTERING_STRATEGY_MAX_GROUPS.key();
+  /**
+   * @deprecated Use {@link #CLUSTERING_STRATEGY_MAX_GROUPS} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_MAX_NUM_GROUPS = CLUSTERING_MAX_NUM_GROUPS_CFG.defaultValue();
-  /** @deprecated Use {@link #CLUSTERING_TARGET_FILE_MAX_BYTES_CFG} and its methods instead */
+  public static final String DEFAULT_CLUSTERING_MAX_NUM_GROUPS = CLUSTERING_STRATEGY_MAX_GROUPS.defaultValue();
+  /**
+   * @deprecated Use {@link #CLUSTERING_STRATEGY_TARGET_FILE_MAX_BYTES} and its methods instead
+   */
   @Deprecated
-  public static final String CLUSTERING_TARGET_FILE_MAX_BYTES = CLUSTERING_TARGET_FILE_MAX_BYTES_CFG.key();
-  /** @deprecated Use {@link #CLUSTERING_TARGET_FILE_MAX_BYTES_CFG} and its methods instead */
+  public static final String CLUSTERING_TARGET_FILE_MAX_BYTES = CLUSTERING_STRATEGY_TARGET_FILE_MAX_BYTES.key();
+  /**
+   * @deprecated Use {@link #CLUSTERING_STRATEGY_TARGET_FILE_MAX_BYTES} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_TARGET_FILE_MAX_BYTES = CLUSTERING_TARGET_FILE_MAX_BYTES_CFG.defaultValue();
-  /** @deprecated Use {@link #CLUSTERING_SORT_COLUMNS} and its methods instead */
+  public static final String DEFAULT_CLUSTERING_TARGET_FILE_MAX_BYTES = CLUSTERING_STRATEGY_TARGET_FILE_MAX_BYTES.defaultValue();
+  /**
+   * @deprecated Use {@link #CLUSTERING_SORT_COLUMNS} and its methods instead
+   */
   @Deprecated
   public static final String CLUSTERING_SORT_COLUMNS_PROPERTY = CLUSTERING_SORT_COLUMNS.key();
-  /** @deprecated Use {@link #CLUSTERING_UPDATES_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #CLUSTERING_UPDATES_STRATEGY} and its methods instead
+   */
   @Deprecated
   public static final String CLUSTERING_UPDATES_STRATEGY_PROP = CLUSTERING_UPDATES_STRATEGY.key();
-  /** @deprecated Use {@link #CLUSTERING_UPDATES_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #CLUSTERING_UPDATES_STRATEGY} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_CLUSTERING_UPDATES_STRATEGY = CLUSTERING_UPDATES_STRATEGY.defaultValue();
   /** @deprecated Use {@link #ASYNC_CLUSTERING_ENABLE} and its methods instead */
@@ -227,17 +269,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withClusteringPlanStrategyClass(String clusteringStrategyClass) {
-      clusteringConfig.setValue(CLUSTERING_PLAN_STRATEGY_CLASS_CFG, clusteringStrategyClass);
+      clusteringConfig.setValue(CLUSTERING_PLAN_STRATEGY_CLASS_NAME, clusteringStrategyClass);
       return this;
     }
 
     public Builder withClusteringExecutionStrategyClass(String runClusteringStrategyClass) {
-      clusteringConfig.setValue(CLUSTERING_EXECUTION_STRATEGY_CLASS_CFG, runClusteringStrategyClass);
+      clusteringConfig.setValue(CLUSTERING_EXECUTION_STRATEGY_CLASS_NAME, runClusteringStrategyClass);
       return this;
     }
 
     public Builder withClusteringTargetPartitions(int clusteringTargetPartitions) {
-      clusteringConfig.setValue(CLUSTERING_TARGET_PARTITIONS_CFG, String.valueOf(clusteringTargetPartitions));
+      clusteringConfig.setValue(CLUSTERING_DAYBASED_LOOKBACK_PARTITIONS, String.valueOf(clusteringTargetPartitions));
       return this;
     }
 
@@ -247,7 +289,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withClusteringPlanSmallFileLimit(long clusteringSmallFileLimit) {
-      clusteringConfig.setValue(CLUSTERING_PLAN_SMALL_FILE_LIMIT_CFG, String.valueOf(clusteringSmallFileLimit));
+      clusteringConfig.setValue(CLUSTERING_STRATEGY_SMALL_FILE_LIMIT, String.valueOf(clusteringSmallFileLimit));
       return this;
     }
     
@@ -257,17 +299,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withClusteringMaxBytesInGroup(long clusteringMaxGroupSize) {
-      clusteringConfig.setValue(CLUSTERING_MAX_BYTES_PER_GROUP_CFG, String.valueOf(clusteringMaxGroupSize));
+      clusteringConfig.setValue(CLUSTERING_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP, String.valueOf(clusteringMaxGroupSize));
       return this;
     }
 
     public Builder withClusteringMaxNumGroups(int maxNumGroups) {
-      clusteringConfig.setValue(CLUSTERING_MAX_NUM_GROUPS_CFG, String.valueOf(maxNumGroups));
+      clusteringConfig.setValue(CLUSTERING_STRATEGY_MAX_GROUPS, String.valueOf(maxNumGroups));
       return this;
     }
 
     public Builder withClusteringTargetFileMaxBytes(long targetFileSize) {
-      clusteringConfig.setValue(CLUSTERING_TARGET_FILE_MAX_BYTES_CFG, String.valueOf(targetFileSize));
+      clusteringConfig.setValue(CLUSTERING_STRATEGY_TARGET_FILE_MAX_BYTES, String.valueOf(targetFileSize));
       return this;
     }
 
@@ -277,12 +319,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withInlineClusteringNumCommits(int numCommits) {
-      clusteringConfig.setValue(INLINE_CLUSTERING_MAX_COMMIT, String.valueOf(numCommits));
+      clusteringConfig.setValue(INLINE_CLUSTERING_MAX_COMMITS, String.valueOf(numCommits));
       return this;
     }
 
     public Builder withAsyncClusteringMaxCommits(int numCommits) {
-      clusteringConfig.setValue(ASYNC_CLUSTERING_MAX_COMMIT_PROP, String.valueOf(numCommits));
+      clusteringConfig.setValue(ASYNC_CLUSTERING_MAX_COMMITS, String.valueOf(numCommits));
       return this;
     }
 

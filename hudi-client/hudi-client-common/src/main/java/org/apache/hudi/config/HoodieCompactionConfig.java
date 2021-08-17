@@ -105,7 +105,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("When " + HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
           + " the minimum number of file slices to retain in each file group, during cleaning.");
 
-  public static final ConfigProperty<String> CLEANER_INCREMENTAL_MODE_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLEANER_INCREMENTAL_MODE_ENABLE = ConfigProperty
       .key("hoodie.cleaner.incremental.mode")
       .defaultValue("true")
       .withDocumentation("When enabled, the plans for each cleaner service run is computed incrementally off the events "
@@ -131,7 +131,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Archiving of instants is batched in best-effort manner, to pack more instants into a single"
           + " archive log. This config controls such archival batch size.");
 
-  public static final ConfigProperty<String> CLEANER_BOOTSTRAP_BASE_FILE_ENABLED_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLEANER_BOOTSTRAP_BASE_FILE_ENABLE = ConfigProperty
       .key("hoodie.cleaner.delete.bootstrap.base.file")
       .defaultValue("false")
       .withDocumentation("When set to true, cleaner also deletes the bootstrap base file when it's skeleton base file is "
@@ -139,7 +139,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + " base files are also physically deleted, to comply with data privacy enforcement processes.");
 
-  public static final ConfigProperty<String> PARQUET_SMALL_FILE_LIMIT_BYTES_CFG = ConfigProperty
+  public static final ConfigProperty<String> PARQUET_SMALL_FILE_LIMIT = ConfigProperty
       .key("hoodie.parquet.small.file.limit")
       .defaultValue(String.valueOf(104857600))
       .withDocumentation("During upsert operation, we opportunistically expand existing small files on storage, instead of writing"
@@ -154,7 +154,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " Hudi will search commits in the reverse order, until we find a commit that has totalBytesWritten "
           + " larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * this_threshold)");
 
-  public static final ConfigProperty<String> CLEANER_PARALLELISM_CFG = ConfigProperty
+  public static final ConfigProperty<String> CLEANER_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.cleaner.parallelism")
       .defaultValue("200")
       .withDocumentation("Parallelism for the cleaning operation. Increase this if cleaning becomes slow.");
@@ -209,7 +209,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
   /**
    * Configs related to specific table types.
    */
-  public static final ConfigProperty<String> COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE_CFG = ConfigProperty
+  public static final ConfigProperty<String> COPY_ON_WRITE_INSERT_SPLIT_SIZE = ConfigProperty
       .key("hoodie.copyonwrite.insert.split.size")
       .defaultValue(String.valueOf(500000))
       .withDocumentation("Number of inserts assigned for each partition/bucket for writing. "
@@ -217,14 +217,14 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "  over provision to 500K. As long as auto-tuning of splits is turned on, this only affects the first "
           + "  write, where there is no history to learn record sizes from.");
 
-  public static final ConfigProperty<String> COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS_CFG = ConfigProperty
+  public static final ConfigProperty<String> COPY_ON_WRITE_AUTO_SPLIT_INSERTS = ConfigProperty
       .key("hoodie.copyonwrite.insert.auto.split")
       .defaultValue("true")
       .withDocumentation("Config to control whether we control insert split sizes automatically based on average"
           + " record sizes. It's recommended to keep this turned on, since hand tuning is otherwise extremely"
           + " cumbersome.");
 
-  public static final ConfigProperty<String> COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE_CFG = ConfigProperty
+  public static final ConfigProperty<String> COPY_ON_WRITE_RECORD_SIZE_ESTIMATE = ConfigProperty
       .key("hoodie.copyonwrite.record.size.estimate")
       .defaultValue(String.valueOf(1024))
       .withDocumentation("The average record size. If not explicitly specified, hudi will compute the "
@@ -255,67 +255,109 @@ public class HoodieCompactionConfig extends HoodieConfig {
   /** @deprecated Use {@link #CLEANER_FILE_VERSIONS_RETAINED} and its methods instead */
   @Deprecated
   public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = CLEANER_FILE_VERSIONS_RETAINED.key();
-  /** @deprecated Use {@link #CLEANER_COMMITS_RETAINED} and its methods instead */
+  /**
+   * @deprecated Use {@link #CLEANER_COMMITS_RETAINED} and its methods instead
+   */
   @Deprecated
   public static final String CLEANER_COMMITS_RETAINED_PROP = CLEANER_COMMITS_RETAINED.key();
-  /** @deprecated Use {@link #CLEANER_INCREMENTAL_MODE_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #CLEANER_INCREMENTAL_MODE_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String CLEANER_INCREMENTAL_MODE = CLEANER_INCREMENTAL_MODE_CFG.key();
-  /** @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead */
+  public static final String CLEANER_INCREMENTAL_MODE = CLEANER_INCREMENTAL_MODE_ENABLE.key();
+  /**
+   * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
+   */
   @Deprecated
   public static final String MAX_COMMITS_TO_KEEP_PROP = MAX_COMMITS_TO_KEEP.key();
-  /** @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods instead */
+  /**
+   * @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods instead
+   */
   @Deprecated
   public static final String MIN_COMMITS_TO_KEEP_PROP = MIN_COMMITS_TO_KEEP.key();
-  /** @deprecated Use {@link #COMMITS_ARCHIVAL_BATCH_SIZE} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMMITS_ARCHIVAL_BATCH_SIZE} and its methods instead
+   */
   @Deprecated
   public static final String COMMITS_ARCHIVAL_BATCH_SIZE_PROP = COMMITS_ARCHIVAL_BATCH_SIZE.key();
-  /** @deprecated Use {@link #CLEANER_BOOTSTRAP_BASE_FILE_ENABLED_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #CLEANER_BOOTSTRAP_BASE_FILE_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = CLEANER_BOOTSTRAP_BASE_FILE_ENABLED_CFG.key();
-  /** @deprecated Use {@link #PARQUET_SMALL_FILE_LIMIT_BYTES_CFG} and its methods instead */
+  public static final String CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = CLEANER_BOOTSTRAP_BASE_FILE_ENABLE.key();
+  /**
+   * @deprecated Use {@link #PARQUET_SMALL_FILE_LIMIT} and its methods instead
+   */
   @Deprecated
-  public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = PARQUET_SMALL_FILE_LIMIT_BYTES_CFG.key();
-  /** @deprecated Use {@link #PARQUET_SMALL_FILE_LIMIT_BYTES_CFG} and its methods instead */
+  public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = PARQUET_SMALL_FILE_LIMIT.key();
+  /**
+   * @deprecated Use {@link #PARQUET_SMALL_FILE_LIMIT} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = PARQUET_SMALL_FILE_LIMIT_BYTES_CFG.defaultValue();
-  /** @deprecated Use {@link #RECORD_SIZE_ESTIMATION_THRESHOLD} and its methods instead */
+  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = PARQUET_SMALL_FILE_LIMIT.defaultValue();
+  /**
+   * @deprecated Use {@link #RECORD_SIZE_ESTIMATION_THRESHOLD} and its methods instead
+   */
   @Deprecated
   public static final String RECORD_SIZE_ESTIMATION_THRESHOLD_PROP = RECORD_SIZE_ESTIMATION_THRESHOLD.key();
-  /** @deprecated Use {@link #RECORD_SIZE_ESTIMATION_THRESHOLD} and its methods instead */
+  /**
+   * @deprecated Use {@link #RECORD_SIZE_ESTIMATION_THRESHOLD} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_RECORD_SIZE_ESTIMATION_THRESHOLD = RECORD_SIZE_ESTIMATION_THRESHOLD.defaultValue();
-  /** @deprecated Use {@link #COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_INSERT_SPLIT_SIZE} and its methods instead
+   */
   @Deprecated
-  public static final String COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE_CFG.key();
-  /** @deprecated Use {@link #COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE_CFG} and its methods instead */
+  public static final String COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = COPY_ON_WRITE_INSERT_SPLIT_SIZE.key();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_INSERT_SPLIT_SIZE} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE_CFG.defaultValue();
-  /** @deprecated Use {@link #COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS_CFG} and its methods instead */
+  public static final String DEFAULT_COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = COPY_ON_WRITE_INSERT_SPLIT_SIZE.defaultValue();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_AUTO_SPLIT_INSERTS} and its methods instead
+   */
   @Deprecated
-  public static final String COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS_CFG.key();
-  /** @deprecated Use {@link #COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS_CFG} and its methods instead */
+  public static final String COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = COPY_ON_WRITE_AUTO_SPLIT_INSERTS.key();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_AUTO_SPLIT_INSERTS} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS_CFG.defaultValue();
-  /** @deprecated Use {@link #COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE_CFG} and its methods instead */
+  public static final String DEFAULT_COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = COPY_ON_WRITE_AUTO_SPLIT_INSERTS.defaultValue();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_RECORD_SIZE_ESTIMATE} and its methods instead
+   */
   @Deprecated
-  public static final String COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE_CFG.key();
-  /** @deprecated Use {@link #COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE_CFG} and its methods instead */
+  public static final String COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key();
+  /**
+   * @deprecated Use {@link #COPY_ON_WRITE_RECORD_SIZE_ESTIMATE} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE_CFG.defaultValue();
-  /** @deprecated Use {@link #CLEANER_PARALLELISM_CFG} and its methods instead */
+  public static final String DEFAULT_COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE = COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.defaultValue();
+  /**
+   * @deprecated Use {@link #CLEANER_PARALLELISM_VALUE} and its methods instead
+   */
   @Deprecated
-  public static final String CLEANER_PARALLELISM = CLEANER_PARALLELISM_CFG.key();
-  /** @deprecated Use {@link #CLEANER_PARALLELISM_CFG} and its methods instead */
+  public static final String CLEANER_PARALLELISM = CLEANER_PARALLELISM_VALUE.key();
+  /**
+   * @deprecated Use {@link #CLEANER_PARALLELISM_VALUE} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_CLEANER_PARALLELISM = CLEANER_PARALLELISM_CFG.defaultValue();
-  /** @deprecated Use {@link #TARGET_IO_PER_COMPACTION_IN_MB} and its methods instead */
+  public static final String DEFAULT_CLEANER_PARALLELISM = CLEANER_PARALLELISM_VALUE.defaultValue();
+  /**
+   * @deprecated Use {@link #TARGET_IO_PER_COMPACTION_IN_MB} and its methods instead
+   */
   @Deprecated
   public static final String TARGET_IO_PER_COMPACTION_IN_MB_PROP = TARGET_IO_PER_COMPACTION_IN_MB.key();
-  /** @deprecated Use {@link #TARGET_IO_PER_COMPACTION_IN_MB} and its methods instead */
+  /**
+   * @deprecated Use {@link #TARGET_IO_PER_COMPACTION_IN_MB} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB = TARGET_IO_PER_COMPACTION_IN_MB.defaultValue();
-  /** @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead
+   */
   @Deprecated
   public static final String COMPACTION_STRATEGY_PROP = COMPACTION_STRATEGY.key();
   /** @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead */
@@ -351,15 +393,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
   /** @deprecated Use {@link #AUTO_CLEAN} and its methods instead */
   @Deprecated
   private static final String DEFAULT_AUTO_CLEAN = AUTO_CLEAN.defaultValue();
-  /** @deprecated Use {@link #ASYNC_CLEAN} and its methods instead */
+  /**
+   * @deprecated Use {@link #ASYNC_CLEAN} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_ASYNC_CLEAN = ASYNC_CLEAN.defaultValue();
-  /** @deprecated Use {@link #INLINE_COMPACT} and its methods instead */
+  /**
+   * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT = INLINE_COMPACT.defaultValue();
-  /** @deprecated Use {@link #CLEANER_INCREMENTAL_MODE_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #CLEANER_INCREMENTAL_MODE_ENABLE} and its methods instead
+   */
   @Deprecated
-  private static final String DEFAULT_INCREMENTAL_CLEANER = CLEANER_INCREMENTAL_MODE_CFG.defaultValue();
+  private static final String DEFAULT_INCREMENTAL_CLEANER = CLEANER_INCREMENTAL_MODE_ENABLE.defaultValue();
   /** @deprecated Use {@link #INLINE_COMPACT_NUM_DELTA_COMMITS} and its methods instead */
   @Deprecated
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = INLINE_COMPACT_NUM_DELTA_COMMITS.defaultValue();
@@ -378,15 +426,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
   /** @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead */
   @Deprecated
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = MAX_COMMITS_TO_KEEP.defaultValue();
-  /** @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods instead */
+  /**
+   * @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_MIN_COMMITS_TO_KEEP = MIN_COMMITS_TO_KEEP.defaultValue();
-  /** @deprecated Use {@link #COMMITS_ARCHIVAL_BATCH_SIZE} and its methods instead */
+  /**
+   * @deprecated Use {@link #COMMITS_ARCHIVAL_BATCH_SIZE} and its methods instead
+   */
   @Deprecated
   private static final String DEFAULT_COMMITS_ARCHIVAL_BATCH_SIZE = COMMITS_ARCHIVAL_BATCH_SIZE.defaultValue();
-  /** @deprecated Use {@link #CLEANER_BOOTSTRAP_BASE_FILE_ENABLED_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #CLEANER_BOOTSTRAP_BASE_FILE_ENABLE} and its methods instead
+   */
   @Deprecated
-  private static final String DEFAULT_CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = CLEANER_BOOTSTRAP_BASE_FILE_ENABLED_CFG.defaultValue();
+  private static final String DEFAULT_CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = CLEANER_BOOTSTRAP_BASE_FILE_ENABLE.defaultValue();
   /** @deprecated Use {@link #TARGET_PARTITIONS_PER_DAYBASED_COMPACTION} and its methods instead */
   @Deprecated
   public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP = TARGET_PARTITIONS_PER_DAYBASED_COMPACTION.key();
@@ -429,7 +483,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder withIncrementalCleaningMode(Boolean incrementalCleaningMode) {
-      compactionConfig.setValue(CLEANER_INCREMENTAL_MODE_CFG, String.valueOf(incrementalCleaningMode));
+      compactionConfig.setValue(CLEANER_INCREMENTAL_MODE_ENABLE, String.valueOf(incrementalCleaningMode));
       return this;
     }
 
@@ -465,7 +519,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder compactionSmallFileSize(long smallFileLimitBytes) {
-      compactionConfig.setValue(PARQUET_SMALL_FILE_LIMIT_BYTES_CFG, String.valueOf(smallFileLimitBytes));
+      compactionConfig.setValue(PARQUET_SMALL_FILE_LIMIT, String.valueOf(smallFileLimitBytes));
       return this;
     }
 
@@ -475,22 +529,22 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder insertSplitSize(int insertSplitSize) {
-      compactionConfig.setValue(COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE_CFG, String.valueOf(insertSplitSize));
+      compactionConfig.setValue(COPY_ON_WRITE_INSERT_SPLIT_SIZE, String.valueOf(insertSplitSize));
       return this;
     }
 
     public Builder autoTuneInsertSplits(boolean autoTuneInsertSplits) {
-      compactionConfig.setValue(COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS_CFG, String.valueOf(autoTuneInsertSplits));
+      compactionConfig.setValue(COPY_ON_WRITE_AUTO_SPLIT_INSERTS, String.valueOf(autoTuneInsertSplits));
       return this;
     }
 
     public Builder approxRecordSize(int recordSizeEstimate) {
-      compactionConfig.setValue(COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE_CFG, String.valueOf(recordSizeEstimate));
+      compactionConfig.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(recordSizeEstimate));
       return this;
     }
 
     public Builder withCleanerParallelism(int cleanerParallelism) {
-      compactionConfig.setValue(CLEANER_PARALLELISM_CFG, String.valueOf(cleanerParallelism));
+      compactionConfig.setValue(CLEANER_PARALLELISM_VALUE, String.valueOf(cleanerParallelism));
       return this;
     }
 
@@ -540,7 +594,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder withCleanBootstrapBaseFileEnabled(Boolean cleanBootstrapSourceFileEnabled) {
-      compactionConfig.setValue(CLEANER_BOOTSTRAP_BASE_FILE_ENABLED_CFG, String.valueOf(cleanBootstrapSourceFileEnabled));
+      compactionConfig.setValue(CLEANER_BOOTSTRAP_BASE_FILE_ENABLE, String.valueOf(cleanBootstrapSourceFileEnabled));
       return this;
     }
 

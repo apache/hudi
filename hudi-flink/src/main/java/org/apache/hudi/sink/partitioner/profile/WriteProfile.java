@@ -81,7 +81,7 @@ public class WriteProfile {
 
   /**
    * Total records to write for each bucket based on
-   * the config option {@link org.apache.hudi.config.HoodieStorageConfig#PARQUET_FILE_MAX_BYTES_CFG}.
+   * the config option {@link org.apache.hudi.config.HoodieStorageConfig#PARQUET_MAX_FILE_SIZE}.
    */
   private long recordsPerBucket;
 

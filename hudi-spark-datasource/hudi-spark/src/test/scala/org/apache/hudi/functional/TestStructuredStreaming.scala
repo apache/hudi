@@ -50,7 +50,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME_CFG.key -> "hoodie_test"
+    HoodieWriteConfig.TABLE_NAME_VALUE.key -> "hoodie_test"
   )
 
   @BeforeEach override def setUp() {
@@ -194,11 +194,11 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   def getClusteringOpts(isInlineClustering: String, isAsyncClustering: String, isAsyncCompaction: String,
                         clusteringNumCommit: String, fileMaxRecordNum: Int):Map[String, String] = {
     commonOpts + (HoodieClusteringConfig.INLINE_CLUSTERING.key -> isInlineClustering,
-      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT.key -> clusteringNumCommit,
+      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
       DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
       DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> isAsyncCompaction,
-      HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMIT_PROP.key -> clusteringNumCommit,
-      HoodieStorageConfig.PARQUET_FILE_MAX_BYTES_CFG.key -> dataGen.getEstimatedFileSizeInBytes(fileMaxRecordNum).toString
+      HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
+      HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key -> dataGen.getEstimatedFileSizeInBytes(fileMaxRecordNum).toString
     )
   }
 

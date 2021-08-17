@@ -56,7 +56,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME_CFG.key -> "hoodie_test"
+    HoodieWriteConfig.TABLE_NAME_VALUE.key -> "hoodie_test"
   )
 
   val verificationCol: String = "driver"
@@ -117,7 +117,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     val tableMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).build()
     val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
-    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(commonOpts(HoodieWriteConfig.TABLE_NAME_CFG.key))
+    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(commonOpts(HoodieWriteConfig.TABLE_NAME_VALUE.key))
     spark.sparkContext.getConf.registerKryoClasses(
       Array(classOf[org.apache.avro.generic.GenericData],
         classOf[org.apache.avro.Schema]))
@@ -166,7 +166,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -175,7 +175,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // Snapshot query
     val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF1.count())
 
@@ -185,13 +185,13 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     updateDf.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
     val snapshotDF2 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF2.count())
     assertEquals(updatedVerificationVal, snapshotDF2.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
@@ -203,7 +203,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -212,7 +212,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // Snapshot Query
     val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF3.count()) // still 100, since we only updated
 
@@ -242,7 +242,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val emptyDF = spark.read.json(spark.sparkContext.parallelize(emptyRecords, 1))
     emptyDF.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -510,7 +510,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(HoodieWriteConfig.HOODIE_AUTO_COMMIT.key, "true")
+      .option(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key, "true")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -660,7 +660,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, partitionEncode)
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
@@ -668,7 +668,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
     // query the partition by filter
     val count1 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .load(basePath)
       .filter("partition = '2016/03/15'")
       .count()
@@ -677,7 +677,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // query the partition by path
     val partitionPath = if (partitionEncode) "2016%2F03%2F15" else "2016/03/15"
     val count2 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .load(basePath + s"/$partitionPath")
       .count()
     assertEquals(countIn20160315, count2)
@@ -689,7 +689,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, partitionEncode)
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
     // Incremental query without "*" in path

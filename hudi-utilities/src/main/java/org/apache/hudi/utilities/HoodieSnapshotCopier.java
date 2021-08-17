@@ -74,7 +74,7 @@ public class HoodieSnapshotCopier implements Serializable {
     public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 
     @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue();
+    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.METADATA_VALIDATE_ENABLE.defaultValue();
   }
 
   public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,

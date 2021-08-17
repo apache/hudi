@@ -43,13 +43,13 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
   public static final String METRIC_PREFIX = "hoodie.metrics";
 
-  public static final ConfigProperty<Boolean> METRICS_ON_CFG = ConfigProperty
+  public static final ConfigProperty<Boolean> TURN_METRICS_ON = ConfigProperty
       .key(METRIC_PREFIX + ".on")
       .defaultValue(false)
       .sinceVersion("0.5.0")
       .withDocumentation("Turn on/off metrics reporting. off by default.");
 
-  public static final ConfigProperty<MetricsReporterType> METRICS_REPORTER_TYPE_CFG = ConfigProperty
+  public static final ConfigProperty<MetricsReporterType> METRICS_REPORTER_TYPE_VALUE = ConfigProperty
       .key(METRIC_PREFIX + ".reporter.type")
       .defaultValue(MetricsReporterType.GRAPHITE)
       .sinceVersion("0.5.0")
@@ -58,13 +58,13 @@ public class HoodieMetricsConfig extends HoodieConfig {
   // Graphite
   public static final String GRAPHITE_PREFIX = METRIC_PREFIX + ".graphite";
 
-  public static final ConfigProperty<String> GRAPHITE_SERVER_HOST_CFG = ConfigProperty
+  public static final ConfigProperty<String> GRAPHITE_SERVER_HOST_NAME = ConfigProperty
       .key(GRAPHITE_PREFIX + ".host")
       .defaultValue("localhost")
       .sinceVersion("0.5.0")
       .withDocumentation("Graphite host to connect to");
 
-  public static final ConfigProperty<Integer> GRAPHITE_SERVER_PORT_CFG = ConfigProperty
+  public static final ConfigProperty<Integer> GRAPHITE_SERVER_PORT_NUM = ConfigProperty
       .key(GRAPHITE_PREFIX + ".port")
       .defaultValue(4756)
       .sinceVersion("0.5.0")
@@ -73,86 +73,118 @@ public class HoodieMetricsConfig extends HoodieConfig {
   // Jmx
   public static final String JMX_PREFIX = METRIC_PREFIX + ".jmx";
 
-  public static final ConfigProperty<String> JMX_HOST_CFG = ConfigProperty
+  public static final ConfigProperty<String> JMX_HOST_NAME = ConfigProperty
       .key(JMX_PREFIX + ".host")
       .defaultValue("localhost")
       .sinceVersion("0.5.1")
       .withDocumentation("Jmx host to connect to");
 
-  public static final ConfigProperty<Integer> JMX_PORT_CFG = ConfigProperty
+  public static final ConfigProperty<Integer> JMX_PORT_NUM = ConfigProperty
       .key(JMX_PREFIX + ".port")
       .defaultValue(9889)
       .sinceVersion("0.5.1")
       .withDocumentation("Jmx port to connect to");
 
-  public static final ConfigProperty<String> GRAPHITE_METRIC_PREFIX_CFG = ConfigProperty
+  public static final ConfigProperty<String> GRAPHITE_METRIC_PREFIX_VALUE = ConfigProperty
       .key(GRAPHITE_PREFIX + ".metric.prefix")
       .noDefaultValue()
       .sinceVersion("0.5.1")
       .withDocumentation("Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g");
 
   // User defined
-  public static final ConfigProperty<String> METRICS_REPORTER_CLASS_CFG = ConfigProperty
+  public static final ConfigProperty<String> METRICS_REPORTER_CLASS_NAME = ConfigProperty
       .key(METRIC_PREFIX + ".reporter.class")
       .defaultValue("")
       .sinceVersion("0.6.0")
       .withDocumentation("");
 
   // Enable metrics collection from executors
-  public static final ConfigProperty<String> ENABLE_EXECUTOR_METRICS_CFG = ConfigProperty
+  public static final ConfigProperty<String> EXECUTOR_METRICS_ENABLE = ConfigProperty
       .key(METRIC_PREFIX + ".executor.enable")
       .noDefaultValue()
       .sinceVersion("0.7.0")
       .withDocumentation("");
 
-  /** @deprecated Use {@link #METRICS_ON_CFG} and its methods instead */
+  /**
+   * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
+   */
   @Deprecated
-  public static final String METRICS_ON = METRICS_ON_CFG.key();
-  /** @deprecated Use {@link #METRICS_ON_CFG} and its methods instead */
+  public static final String METRICS_ON = TURN_METRICS_ON.key();
+  /**
+   * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
+   */
   @Deprecated
-  public static final boolean DEFAULT_METRICS_ON = METRICS_ON_CFG.defaultValue();
-  /** @deprecated Use {@link #METRICS_REPORTER_TYPE_CFG} and its methods instead */
+  public static final boolean DEFAULT_METRICS_ON = TURN_METRICS_ON.defaultValue();
+  /**
+   * @deprecated Use {@link #METRICS_REPORTER_TYPE_VALUE} and its methods instead
+   */
   @Deprecated
-  public static final String METRICS_REPORTER_TYPE = METRICS_REPORTER_TYPE_CFG.key();
-  /** @deprecated Use {@link #METRICS_REPORTER_TYPE_CFG} and its methods instead */
+  public static final String METRICS_REPORTER_TYPE = METRICS_REPORTER_TYPE_VALUE.key();
+  /**
+   * @deprecated Use {@link #METRICS_REPORTER_TYPE_VALUE} and its methods instead
+   */
   @Deprecated
-  public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = METRICS_REPORTER_TYPE_CFG.defaultValue();
-  /** @deprecated Use {@link #GRAPHITE_SERVER_HOST_CFG} and its methods instead */
+  public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = METRICS_REPORTER_TYPE_VALUE.defaultValue();
+  /**
+   * @deprecated Use {@link #GRAPHITE_SERVER_HOST_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String GRAPHITE_SERVER_HOST = GRAPHITE_SERVER_HOST_CFG.key();
-  /** @deprecated Use {@link #GRAPHITE_SERVER_HOST_CFG} and its methods instead */
+  public static final String GRAPHITE_SERVER_HOST = GRAPHITE_SERVER_HOST_NAME.key();
+  /**
+   * @deprecated Use {@link #GRAPHITE_SERVER_HOST_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_GRAPHITE_SERVER_HOST = GRAPHITE_SERVER_HOST_CFG.defaultValue();
-  /** @deprecated Use {@link #GRAPHITE_SERVER_PORT_CFG} and its methods instead */
+  public static final String DEFAULT_GRAPHITE_SERVER_HOST = GRAPHITE_SERVER_HOST_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #GRAPHITE_SERVER_PORT_NUM} and its methods instead
+   */
   @Deprecated
-  public static final String GRAPHITE_SERVER_PORT = GRAPHITE_SERVER_PORT_CFG.key();
-  /** @deprecated Use {@link #GRAPHITE_SERVER_PORT_CFG} and its methods instead */
+  public static final String GRAPHITE_SERVER_PORT = GRAPHITE_SERVER_PORT_NUM.key();
+  /**
+   * @deprecated Use {@link #GRAPHITE_SERVER_PORT_NUM} and its methods instead
+   */
   @Deprecated
-  public static final int DEFAULT_GRAPHITE_SERVER_PORT = GRAPHITE_SERVER_PORT_CFG.defaultValue();
-  /** @deprecated Use {@link #JMX_HOST_CFG} and its methods instead */
+  public static final int DEFAULT_GRAPHITE_SERVER_PORT = GRAPHITE_SERVER_PORT_NUM.defaultValue();
+  /**
+   * @deprecated Use {@link #JMX_HOST_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String JMX_HOST = JMX_HOST_CFG.key();
-  /** @deprecated Use {@link #JMX_HOST_CFG} and its methods instead */
+  public static final String JMX_HOST = JMX_HOST_NAME.key();
+  /**
+   * @deprecated Use {@link #JMX_HOST_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_JMX_HOST = JMX_HOST_CFG.defaultValue();
-  /** @deprecated Use {@link #JMX_PORT_CFG} and its methods instead */
+  public static final String DEFAULT_JMX_HOST = JMX_HOST_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #JMX_PORT_NUM} and its methods instead
+   */
   @Deprecated
-  public static final String JMX_PORT = JMX_PORT_CFG.key();
-  /** @deprecated Use {@link #JMX_PORT_CFG} and its methods instead */
+  public static final String JMX_PORT = JMX_PORT_NUM.key();
+  /**
+   * @deprecated Use {@link #JMX_PORT_NUM} and its methods instead
+   */
   @Deprecated
-  public static final int DEFAULT_JMX_PORT = JMX_PORT_CFG.defaultValue();
-  /** @deprecated Use {@link #GRAPHITE_METRIC_PREFIX_CFG} and its methods instead */
+  public static final int DEFAULT_JMX_PORT = JMX_PORT_NUM.defaultValue();
+  /**
+   * @deprecated Use {@link #GRAPHITE_METRIC_PREFIX_VALUE} and its methods instead
+   */
   @Deprecated
-  public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_METRIC_PREFIX_CFG.key();
-  /** @deprecated Use {@link #METRICS_REPORTER_CLASS_CFG} and its methods instead */
+  public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_METRIC_PREFIX_VALUE.key();
+  /**
+   * @deprecated Use {@link #METRICS_REPORTER_CLASS_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String METRICS_REPORTER_CLASS = METRICS_REPORTER_CLASS_CFG.key();
-  /** @deprecated Use {@link #METRICS_REPORTER_CLASS_CFG} and its methods instead */
+  public static final String METRICS_REPORTER_CLASS = METRICS_REPORTER_CLASS_NAME.key();
+  /**
+   * @deprecated Use {@link #METRICS_REPORTER_CLASS_NAME} and its methods instead
+   */
   @Deprecated
-  public static final String DEFAULT_METRICS_REPORTER_CLASS = METRICS_REPORTER_CLASS_CFG.defaultValue();
-  /** @deprecated Use {@link #ENABLE_EXECUTOR_METRICS_CFG} and its methods instead */
+  public static final String DEFAULT_METRICS_REPORTER_CLASS = METRICS_REPORTER_CLASS_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #EXECUTOR_METRICS_ENABLE} and its methods instead
+   */
   @Deprecated
-  public static final String ENABLE_EXECUTOR_METRICS = ENABLE_EXECUTOR_METRICS_CFG.key();
+  public static final String ENABLE_EXECUTOR_METRICS = EXECUTOR_METRICS_ENABLE.key();
 
   private HoodieMetricsConfig() {
     super();
@@ -179,47 +211,47 @@ public class HoodieMetricsConfig extends HoodieConfig {
     }
 
     public Builder on(boolean metricsOn) {
-      hoodieMetricsConfig.setValue(METRICS_ON_CFG, String.valueOf(metricsOn));
+      hoodieMetricsConfig.setValue(TURN_METRICS_ON, String.valueOf(metricsOn));
       return this;
     }
 
     public Builder withReporterType(String reporterType) {
-      hoodieMetricsConfig.setValue(METRICS_REPORTER_TYPE_CFG, reporterType);
+      hoodieMetricsConfig.setValue(METRICS_REPORTER_TYPE_VALUE, reporterType);
       return this;
     }
 
     public Builder toGraphiteHost(String host) {
-      hoodieMetricsConfig.setValue(GRAPHITE_SERVER_HOST_CFG, host);
+      hoodieMetricsConfig.setValue(GRAPHITE_SERVER_HOST_NAME, host);
       return this;
     }
 
     public Builder onGraphitePort(int port) {
-      hoodieMetricsConfig.setValue(GRAPHITE_SERVER_PORT_CFG, String.valueOf(port));
+      hoodieMetricsConfig.setValue(GRAPHITE_SERVER_PORT_NUM, String.valueOf(port));
       return this;
     }
 
     public Builder toJmxHost(String host) {
-      hoodieMetricsConfig.setValue(JMX_HOST_CFG, host);
+      hoodieMetricsConfig.setValue(JMX_HOST_NAME, host);
       return this;
     }
 
     public Builder onJmxPort(String port) {
-      hoodieMetricsConfig.setValue(JMX_PORT_CFG, port);
+      hoodieMetricsConfig.setValue(JMX_PORT_NUM, port);
       return this;
     }
 
     public Builder usePrefix(String prefix) {
-      hoodieMetricsConfig.setValue(GRAPHITE_METRIC_PREFIX_CFG, prefix);
+      hoodieMetricsConfig.setValue(GRAPHITE_METRIC_PREFIX_VALUE, prefix);
       return this;
     }
 
     public Builder withReporterClass(String className) {
-      hoodieMetricsConfig.setValue(METRICS_REPORTER_CLASS_CFG, className);
+      hoodieMetricsConfig.setValue(METRICS_REPORTER_CLASS_NAME, className);
       return this;
     }
 
     public Builder withExecutorMetrics(boolean enable) {
-      hoodieMetricsConfig.setValue(ENABLE_EXECUTOR_METRICS_CFG, String.valueOf(enable));
+      hoodieMetricsConfig.setValue(EXECUTOR_METRICS_ENABLE, String.valueOf(enable));
       return this;
     }
 
@@ -227,7 +259,7 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
       hoodieMetricsConfig.setDefaults(HoodieMetricsConfig.class.getName());
 
-      MetricsReporterType reporterType = MetricsReporterType.valueOf(hoodieMetricsConfig.getString(METRICS_REPORTER_TYPE_CFG));
+      MetricsReporterType reporterType = MetricsReporterType.valueOf(hoodieMetricsConfig.getString(METRICS_REPORTER_TYPE_VALUE));
 
       hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.DATADOG,
           HoodieMetricsDatadogConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());

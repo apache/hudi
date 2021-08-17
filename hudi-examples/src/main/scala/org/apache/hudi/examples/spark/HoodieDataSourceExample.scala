@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceReadOptions.{BEGIN_INSTANTTIME, END_INSTANTTIME
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.model.HoodieAvroPayload
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_CFG
+import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_VALUE
 import org.apache.hudi.examples.common.{HoodieExampleDataGenerator, HoodieExampleSparkUtils}
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
 import org.apache.spark.sql.SparkSession
@@ -79,7 +79,7 @@ object HoodieDataSourceExample {
         option(PRECOMBINE_FIELD.key, "ts").
         option(RECORDKEY_FIELD.key, "uuid").
         option(PARTITIONPATH_FIELD.key, "partitionpath").
-        option(TABLE_NAME_CFG.key, tableName).
+        option(TABLE_NAME_VALUE.key, tableName).
         mode(Overwrite).
         save(tablePath)
   }
@@ -124,7 +124,7 @@ object HoodieDataSourceExample {
         option(PRECOMBINE_FIELD.key, "ts").
         option(RECORDKEY_FIELD.key, "uuid").
         option(PARTITIONPATH_FIELD.key, "partitionpath").
-        option(TABLE_NAME_CFG.key, tableName).
+        option(TABLE_NAME_VALUE.key, tableName).
         mode(Append).
         save(tablePath)
   }

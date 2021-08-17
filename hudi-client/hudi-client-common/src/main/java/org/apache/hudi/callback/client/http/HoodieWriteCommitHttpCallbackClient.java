@@ -79,7 +79,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   }
 
   private String getApiKey() {
-    return writeConfig.getString(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_API_KEY_CFG);
+    return writeConfig.getString(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_API_KEY_VALUE);
   }
 
   private String getUrl() {
@@ -97,7 +97,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   }
 
   private Integer getHttpTimeoutSeconds() {
-    return writeConfig.getInt(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_TIMEOUT_SECONDS_CFG);
+    return writeConfig.getInt(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_TIMEOUT_IN_SECONDS);
   }
 
   @Override

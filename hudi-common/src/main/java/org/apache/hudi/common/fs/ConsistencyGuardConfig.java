@@ -37,7 +37,7 @@ import java.util.Properties;
         + "(Tip: S3 is NOT eventually consistent anymore!)")
 public class ConsistencyGuardConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> CONSISTENCY_CHECK_ENABLED_PROP = ConfigProperty
+  public static final ConfigProperty<String> CONSISTENCY_CHECK_ENABLE = ConfigProperty
       .key("hoodie.consistency.check.enabled")
       .defaultValue("false")
       .sinceVersion("0.5.0")
@@ -45,14 +45,14 @@ public class ConsistencyGuardConfig extends HoodieConfig {
       .withDocumentation("Enabled to handle S3 eventual consistency issue. This property is no longer required "
           + "since S3 is now strongly consistent. Will be removed in the future releases.");
 
-  public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP = ConfigProperty
+  public static final ConfigProperty<Long> INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.initial_interval_ms")
       .defaultValue(400L)
       .sinceVersion("0.5.0")
       .deprecatedAfter("0.7.0")
       .withDocumentation("Amount of time (in ms) to wait, before checking for consistency after an operation on storage.");
 
-  public static final ConfigProperty<Long> MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP = ConfigProperty
+  public static final ConfigProperty<Long> MAX_CONSISTENCY_CHECK_INTERVAL_MS = ConfigProperty
       .key("hoodie.consistency.check.max_interval_ms")
       .defaultValue(20000L)
       .sinceVersion("0.5.0")
@@ -60,7 +60,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
       .withDocumentation("Maximum amount of time (in ms), to wait for consistency checking.");
 
   // maximum number of checks, for consistency of written data. Will wait upto 140 Secs
-  public static final ConfigProperty<Integer> MAX_CONSISTENCY_CHECKS_PROP = ConfigProperty
+  public static final ConfigProperty<Integer> MAX_CONSISTENCY_CHECKS = ConfigProperty
       .key("hoodie.consistency.check.max_checks")
       .defaultValue(6)
       .sinceVersion("0.5.0")
@@ -68,14 +68,14 @@ public class ConsistencyGuardConfig extends HoodieConfig {
       .withDocumentation("Maximum number of consistency checks to perform, with exponential backoff.");
 
   // sleep time for OptimisticConsistencyGuard
-  public static final ConfigProperty<Long> OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP = ConfigProperty
+  public static final ConfigProperty<Long> OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS = ConfigProperty
       .key("hoodie.optimistic.consistency.guard.sleep_time_ms")
       .defaultValue(500L)
       .sinceVersion("0.6.0")
       .withDocumentation("Amount of time (in ms), to wait after which we assume storage is consistent.");
 
   // config to enable OptimisticConsistencyGuard in finalizeWrite instead of FailSafeConsistencyGuard
-  public static final ConfigProperty<Boolean> ENABLE_OPTIMISTIC_CONSISTENCY_GUARD_PROP = ConfigProperty
+  public static final ConfigProperty<Boolean> OPTIMISTIC_CONSISTENCY_GUARD_ENABLE = ConfigProperty
       .key("_hoodie.optimistic.consistency.guard.enable")
       .defaultValue(false)
       .sinceVersion("0.6.0")
@@ -90,27 +90,27 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   }
 
   public boolean isConsistencyCheckEnabled() {
-    return getBoolean(CONSISTENCY_CHECK_ENABLED_PROP);
+    return getBoolean(CONSISTENCY_CHECK_ENABLE);
   }
 
   public int getMaxConsistencyChecks() {
-    return getInt(MAX_CONSISTENCY_CHECKS_PROP);
+    return getInt(MAX_CONSISTENCY_CHECKS);
   }
 
   public int getInitialConsistencyCheckIntervalMs() {
-    return getInt(INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP);
+    return getInt(INITIAL_CONSISTENCY_CHECK_INTERVAL_MS);
   }
 
   public int getMaxConsistencyCheckIntervalMs() {
-    return getInt(MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP);
+    return getInt(MAX_CONSISTENCY_CHECK_INTERVAL_MS);
   }
 
   public long getOptimisticConsistencyGuardSleepTimeMs() {
-    return getLong(OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP);
+    return getLong(OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS);
   }
 
   public boolean shouldEnableOptimisticConsistencyGuard() {
-    return getBoolean(ENABLE_OPTIMISTIC_CONSISTENCY_GUARD_PROP);
+    return getBoolean(OPTIMISTIC_CONSISTENCY_GUARD_ENABLE);
   }
 
   /**
@@ -133,32 +133,32 @@ public class ConsistencyGuardConfig extends HoodieConfig {
     }
 
     public Builder withConsistencyCheckEnabled(boolean enabled) {
-      consistencyGuardConfig.setValue(CONSISTENCY_CHECK_ENABLED_PROP, String.valueOf(enabled));
+      consistencyGuardConfig.setValue(CONSISTENCY_CHECK_ENABLE, String.valueOf(enabled));
       return this;
     }
 
     public Builder withInitialConsistencyCheckIntervalMs(int initialIntevalMs) {
-      consistencyGuardConfig.setValue(INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP, String.valueOf(initialIntevalMs));
+      consistencyGuardConfig.setValue(INITIAL_CONSISTENCY_CHECK_INTERVAL_MS, String.valueOf(initialIntevalMs));
       return this;
     }
 
     public Builder withMaxConsistencyCheckIntervalMs(int maxIntervalMs) {
-      consistencyGuardConfig.setValue(MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP, String.valueOf(maxIntervalMs));
+      consistencyGuardConfig.setValue(MAX_CONSISTENCY_CHECK_INTERVAL_MS, String.valueOf(maxIntervalMs));
       return this;
     }
 
     public Builder withMaxConsistencyChecks(int maxConsistencyChecks) {
-      consistencyGuardConfig.setValue(MAX_CONSISTENCY_CHECKS_PROP, String.valueOf(maxConsistencyChecks));
+      consistencyGuardConfig.setValue(MAX_CONSISTENCY_CHECKS, String.valueOf(maxConsistencyChecks));
       return this;
     }
 
     public Builder withOptimisticConsistencyGuardSleepTimeMs(long sleepTimeMs) {
-      consistencyGuardConfig.setValue(OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP, String.valueOf(sleepTimeMs));
+      consistencyGuardConfig.setValue(OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS, String.valueOf(sleepTimeMs));
       return this;
     }
 
     public Builder withEnableOptimisticConsistencyGuard(boolean enableOptimisticConsistencyGuard) {
-      consistencyGuardConfig.setValue(ENABLE_OPTIMISTIC_CONSISTENCY_GUARD_PROP, String.valueOf(enableOptimisticConsistencyGuard));
+      consistencyGuardConfig.setValue(OPTIMISTIC_CONSISTENCY_GUARD_ENABLE, String.valueOf(enableOptimisticConsistencyGuard));
       return this;
     }
 
@@ -167,4 +167,65 @@ public class ConsistencyGuardConfig extends HoodieConfig {
       return consistencyGuardConfig;
     }
   }
+
+  /**
+   * @deprecated use {@link #CONSISTENCY_CHECK_ENABLE} and its methods.
+   */
+  @Deprecated
+  private static final String CONSISTENCY_CHECK_ENABLED_PROP = CONSISTENCY_CHECK_ENABLE.key();
+  /**
+   * @deprecated use {@link #CONSISTENCY_CHECK_ENABLE} and its methods.
+   */
+  @Deprecated
+  private static final String DEFAULT_CONSISTENCY_CHECK_ENABLED = CONSISTENCY_CHECK_ENABLE.defaultValue();
+  /**
+   * @deprecated use {@link #INITIAL_CONSISTENCY_CHECK_INTERVAL_MS} and its methods.
+   */
+  @Deprecated
+  private static final String INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP = INITIAL_CONSISTENCY_CHECK_INTERVAL_MS.key();
+  /**
+   * @deprecated use {@link #INITIAL_CONSISTENCY_CHECK_INTERVAL_MS} and its methods.
+   */
+  @Deprecated
+  private static long DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = INITIAL_CONSISTENCY_CHECK_INTERVAL_MS.defaultValue();
+  /**
+   * @deprecated use {@link #MAX_CONSISTENCY_CHECK_INTERVAL_MS} and its methods.
+   */
+  @Deprecated
+  private static final String MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP = MAX_CONSISTENCY_CHECK_INTERVAL_MS.key();
+  /**
+   * @deprecated use {@link #MAX_CONSISTENCY_CHECK_INTERVAL_MS} and its methods.
+   */
+  @Deprecated
+  private static long DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS = MAX_CONSISTENCY_CHECK_INTERVAL_MS.defaultValue();
+  /**
+   * @deprecated use {@link #MAX_CONSISTENCY_CHECKS} and its methods.
+   */
+  @Deprecated
+  private static final String MAX_CONSISTENCY_CHECKS_PROP = MAX_CONSISTENCY_CHECKS.key();
+  /**
+   * @deprecated use {@link #MAX_CONSISTENCY_CHECKS} and its methods.
+   */
+  @Deprecated
+  private static int DEFAULT_MAX_CONSISTENCY_CHECKS = MAX_CONSISTENCY_CHECKS.defaultValue();
+  /**
+   * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS} and its methods.
+   */
+  @Deprecated
+  private static final String OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP = OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS.key();
+  /**
+   * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS} and its methods.
+   */
+  @Deprecated
+  private static long DEFAULT_OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP = OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS.defaultValue();
+  /**
+   * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_ENABLE} and its methods.
+   */
+  @Deprecated
+  private static final String ENABLE_OPTIMISTIC_CONSISTENCY_GUARD = OPTIMISTIC_CONSISTENCY_GUARD_ENABLE.key();
+  /**
+   * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_ENABLE} and its methods.
+   */
+  @Deprecated
+  private static boolean DEFAULT_ENABLE_OPTIMISTIC_CONSISTENCY_GUARD = OPTIMISTIC_CONSISTENCY_GUARD_ENABLE.defaultValue();
 }

@@ -17,8 +17,6 @@
 
 package org.apache.hudi
 
-import java.util.Properties
-import scala.collection.JavaConverters._
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -26,21 +24,23 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.util.Properties
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
@@ -122,12 +122,12 @@ case class HoodieFileIndex(
 
     // To support metadata listing via Spark SQL we allow users to pass the config via SQL Conf in spark session. Users
     // would be able to run SET hoodie.metadata.enable=true in the spark sql session to enable metadata listing.
-    properties.put(HoodieMetadataConfig.METADATA_ENABLE_PROP,
-      sqlConf.getConfString(HoodieMetadataConfig.METADATA_ENABLE_PROP.key(),
+    properties.put(HoodieMetadataConfig.METADATA_ENABLE,
+      sqlConf.getConfString(HoodieMetadataConfig.METADATA_ENABLE.key(),
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
-    properties.put(HoodieMetadataConfig.METADATA_VALIDATE_PROP,
-      sqlConf.getConfString(HoodieMetadataConfig.METADATA_VALIDATE_PROP.key(),
-        HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue().toString))
+    properties.put(HoodieMetadataConfig.METADATA_VALIDATE_ENABLE,
+      sqlConf.getConfString(HoodieMetadataConfig.METADATA_VALIDATE_ENABLE.key(),
+        HoodieMetadataConfig.METADATA_VALIDATE_ENABLE.defaultValue().toString))
     properties.putAll(options.asJava)
     properties
   }
