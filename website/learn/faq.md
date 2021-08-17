@@ -53,7 +53,7 @@ Immaterial of what you choose, Hudi provides
  - Incremental pulls
  - Ability to de-duplicate data
 
-Find more [here]().
+Find more here.
 
 6. Is Hudi an analytical database?
 
