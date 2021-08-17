@@ -49,22 +49,20 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("0.6.0")
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
-  @Deprecated
-  public static final String BOOTSTRAP_BASE_PATH_PROP = BOOTSTRAP_BASE_PATH.key();
 
-  public static final ConfigProperty<String> BOOTSTRAP_MODE_SELECTOR = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_MODE_SELECTOR_CFG = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
       .defaultValue(MetadataOnlyBootstrapModeSelector.class.getCanonicalName())
       .sinceVersion("0.6.0")
       .withDocumentation("Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped");
 
-  public static final ConfigProperty<String> FULL_BOOTSTRAP_INPUT_PROVIDER = ConfigProperty
+  public static final ConfigProperty<String> FULL_BOOTSTRAP_INPUT_PROVIDER_CFG = ConfigProperty
       .key("hoodie.bootstrap.full.input.provider")
       .defaultValue("org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider")
       .sinceVersion("0.6.0")
       .withDocumentation("Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode FULL_RECORD");
 
-  public static final ConfigProperty<String> BOOTSTRAP_KEYGEN_CLASS = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_KEYGEN_CLASS_CFG = ConfigProperty
       .key("hoodie.bootstrap.keygen.class")
       .noDefaultValue()
       .sinceVersion("0.6.0")
@@ -76,25 +74,25 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Type of build-in key generator, currently support SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE");
 
-  public static final ConfigProperty<String> BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS_CFG = ConfigProperty
       .key("hoodie.bootstrap.partitionpath.translator.class")
       .defaultValue(IdentityBootstrapPartitionPathTranslator.class.getName())
       .sinceVersion("0.6.0")
       .withDocumentation("Translates the partition paths from the bootstrapped data into how is laid out as a Hudi table.");
 
-  public static final ConfigProperty<String> BOOTSTRAP_PARALLELISM = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_PARALLELISM_CFG = ConfigProperty
       .key("hoodie.bootstrap.parallelism")
       .defaultValue("1500")
       .sinceVersion("0.6.0")
       .withDocumentation("Parallelism value to be used to bootstrap data into hudi");
 
-  public static final ConfigProperty<String> BOOTSTRAP_MODE_SELECTOR_REGEX = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_MODE_SELECTOR_REGEX_CFG = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex")
       .defaultValue(".*")
       .sinceVersion("0.6.0")
       .withDocumentation("Matches each bootstrap dataset partition against this regex and applies the mode below to it.");
 
-  public static final ConfigProperty<String> BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_MODE_SELECTOR_REGEX_MODE_CFG = ConfigProperty
       .key("hoodie.bootstrap.mode.selector.regex.mode")
       .defaultValue(BootstrapMode.METADATA_ONLY.name())
       .sinceVersion("0.6.0")
@@ -107,8 +105,52 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .defaultValue(HFileBootstrapIndex.class.getName())
       .sinceVersion("0.6.0")
       .withDocumentation("Implementation to use, for mapping a skeleton base file to a boostrap base file.");
+
+  /** @deprecated Use {@link #BOOTSTRAP_BASE_PATH} and its methods instead */
+  @Deprecated
+  public static final String BOOTSTRAP_BASE_PATH_PROP = BOOTSTRAP_BASE_PATH.key();
+  /** @deprecated Use {@link #BOOTSTRAP_INDEX_CLASS} and its methods instead */
   @Deprecated
   public static final String BOOTSTRAP_INDEX_CLASS_PROP = BOOTSTRAP_INDEX_CLASS.key();
+  /** @deprecated Use {@link #BOOTSTRAP_INDEX_CLASS} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = BOOTSTRAP_INDEX_CLASS.defaultValue();
+  /** @deprecated Use {@link #BOOTSTRAP_MODE_SELECTOR_CFG} and its methods instead */
+  @Deprecated
+  public static final String BOOTSTRAP_MODE_SELECTOR = BOOTSTRAP_MODE_SELECTOR_CFG.key();
+  /** @deprecated Use {@link #FULL_BOOTSTRAP_INPUT_PROVIDER_CFG} and its methods instead */
+  @Deprecated
+  public static final String FULL_BOOTSTRAP_INPUT_PROVIDER = FULL_BOOTSTRAP_INPUT_PROVIDER_CFG.key();
+  /** @deprecated Use {@link #FULL_BOOTSTRAP_INPUT_PROVIDER_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_FULL_BOOTSTRAP_INPUT_PROVIDER = FULL_BOOTSTRAP_INPUT_PROVIDER_CFG.defaultValue();
+  /** @deprecated Use {@link #BOOTSTRAP_KEYGEN_CLASS_CFG} and its methods instead */
+  @Deprecated
+  public static final String BOOTSTRAP_KEYGEN_CLASS = BOOTSTRAP_KEYGEN_CLASS_CFG.key();
+  /** @deprecated Use {@link #BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS_CFG} and its methods instead */
+  @Deprecated
+  public static final String BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS = BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS_CFG.key();
+  /** @deprecated Use {@link #BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS = BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS_CFG.defaultValue();
+  /** @deprecated Use {@link #BOOTSTRAP_PARALLELISM_CFG} and its methods instead */
+  @Deprecated
+  public static final String BOOTSTRAP_PARALLELISM = BOOTSTRAP_PARALLELISM_CFG.key();
+  /** @deprecated Use {@link #BOOTSTRAP_PARALLELISM_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BOOTSTRAP_PARALLELISM = BOOTSTRAP_PARALLELISM_CFG.defaultValue();
+  /** @deprecated Use {@link #BOOTSTRAP_MODE_SELECTOR_REGEX_CFG} and its methods instead */
+  @Deprecated
+  public static final String BOOTSTRAP_MODE_SELECTOR_REGEX = BOOTSTRAP_MODE_SELECTOR_REGEX_CFG.key();
+  /** @deprecated Use {@link #BOOTSTRAP_MODE_SELECTOR_REGEX_MODE_CFG} and its methods instead */
+  @Deprecated
+  public static final String BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = BOOTSTRAP_MODE_SELECTOR_REGEX_MODE_CFG.key();
+  /** @deprecated Use {@link #BOOTSTRAP_MODE_SELECTOR_REGEX_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX = BOOTSTRAP_MODE_SELECTOR_REGEX_CFG.defaultValue();
+  /** @deprecated Use {@link #BOOTSTRAP_MODE_SELECTOR_REGEX_MODE_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX_MODE = BOOTSTRAP_MODE_SELECTOR_REGEX_MODE_CFG.defaultValue();
 
   private HoodieBootstrapConfig() {
     super();
@@ -135,17 +177,17 @@ public class HoodieBootstrapConfig extends HoodieConfig {
     }
 
     public Builder withBootstrapModeSelector(String partitionSelectorClass) {
-      bootstrapConfig.setValue(BOOTSTRAP_MODE_SELECTOR, partitionSelectorClass);
+      bootstrapConfig.setValue(BOOTSTRAP_MODE_SELECTOR_CFG, partitionSelectorClass);
       return this;
     }
 
     public Builder withFullBootstrapInputProvider(String partitionSelectorClass) {
-      bootstrapConfig.setValue(FULL_BOOTSTRAP_INPUT_PROVIDER, partitionSelectorClass);
+      bootstrapConfig.setValue(FULL_BOOTSTRAP_INPUT_PROVIDER_CFG, partitionSelectorClass);
       return this;
     }
 
     public Builder withBootstrapKeyGenClass(String keyGenClass) {
-      bootstrapConfig.setValue(BOOTSTRAP_KEYGEN_CLASS, keyGenClass);
+      bootstrapConfig.setValue(BOOTSTRAP_KEYGEN_CLASS_CFG, keyGenClass);
       return this;
     }
 
@@ -156,22 +198,22 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public Builder withBootstrapPartitionPathTranslatorClass(String partitionPathTranslatorClass) {
       bootstrapConfig
-          .setValue(BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS, partitionPathTranslatorClass);
+          .setValue(BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS_CFG, partitionPathTranslatorClass);
       return this;
     }
 
     public Builder withBootstrapParallelism(int parallelism) {
-      bootstrapConfig.setValue(BOOTSTRAP_PARALLELISM, String.valueOf(parallelism));
+      bootstrapConfig.setValue(BOOTSTRAP_PARALLELISM_CFG, String.valueOf(parallelism));
       return this;
     }
 
     public Builder withBootstrapModeSelectorRegex(String regex) {
-      bootstrapConfig.setValue(BOOTSTRAP_MODE_SELECTOR_REGEX, regex);
+      bootstrapConfig.setValue(BOOTSTRAP_MODE_SELECTOR_REGEX_CFG, regex);
       return this;
     }
 
     public Builder withBootstrapModeForRegexMatch(BootstrapMode modeForRegexMatch) {
-      bootstrapConfig.setValue(BOOTSTRAP_MODE_SELECTOR_REGEX_MODE, modeForRegexMatch.name());
+      bootstrapConfig.setValue(BOOTSTRAP_MODE_SELECTOR_REGEX_MODE_CFG, modeForRegexMatch.name());
       return this;
     }
 

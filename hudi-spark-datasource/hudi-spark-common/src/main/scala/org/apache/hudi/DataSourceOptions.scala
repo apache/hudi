@@ -243,7 +243,7 @@ object DataSourceWriteOptions {
    * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
    * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
    */
-  val PAYLOAD_CLASS = HoodieWriteConfig.WRITE_PAYLOAD_CLASS
+  val PAYLOAD_CLASS = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_CFG
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
@@ -621,10 +621,10 @@ object DataSourceWriteOptions {
   @Deprecated
   val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = PRECOMBINE_FIELD.defaultValue()
 
-  /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS} and its methods instead */
+  /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS_CFG} and its methods instead */
   @Deprecated
-  val PAYLOAD_CLASS_OPT_KEY = HoodieWriteConfig.WRITE_PAYLOAD_CLASS.key()
-  /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS} and its methods instead */
+  val PAYLOAD_CLASS_OPT_KEY = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_CFG.key()
+  /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS_CFG} and its methods instead */
   @Deprecated
   val DEFAULT_PAYLOAD_OPT_VAL = PAYLOAD_CLASS.defaultValue()
 

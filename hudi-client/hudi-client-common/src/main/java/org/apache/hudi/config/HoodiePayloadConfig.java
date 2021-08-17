@@ -45,16 +45,12 @@ public class HoodiePayloadConfig extends HoodieConfig {
       .defaultValue("ts")
       .withDocumentation("Table column/field name to order records that have the same key, before "
           + "merging and writing to storage.");
-  @Deprecated
-  public static final String PAYLOAD_ORDERING_FIELD_PROP = PAYLOAD_ORDERING_FIELD.key();
 
   public static final ConfigProperty<String> PAYLOAD_EVENT_TIME_FIELD = ConfigProperty
       .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
       .defaultValue("ts")
       .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
           + "be useful for e.g, determining the freshness of the table.");
-  @Deprecated
-  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = PAYLOAD_EVENT_TIME_FIELD.key();
 
   private HoodiePayloadConfig() {
     super();

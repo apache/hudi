@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
+import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_CFG
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.sql.InsertMode
@@ -262,7 +262,7 @@ object InsertIntoHoodieTableCommand extends Logging {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
-        TABLE_NAME.key -> table.identifier.table,
+        TABLE_NAME_CFG.key -> table.identifier.table,
         PRECOMBINE_FIELD.key -> tableSchema.fields.last.name,
         OPERATION.key -> operation,
         KEYGENERATOR_CLASS.key -> keyGenClass,
@@ -281,8 +281,8 @@ object InsertIntoHoodieTableCommand extends Logging {
         HIVE_PARTITION_FIELDS.key -> partitionFields,
         HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
         URL_ENCODE_PARTITIONING.key -> "true",
-        HoodieWriteConfig.INSERT_PARALLELISM.key -> "200",
-        HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
+        HoodieWriteConfig.INSERT_PARALLELISM_CFG.key -> "200",
+        HoodieWriteConfig.UPSERT_PARALLELISM_CFG.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> table.partitionSchema.toDDL
       )
     }

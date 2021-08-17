@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.config.HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY;
+import static org.apache.hudi.config.HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS;
 
 /**
  * Clustering Strategy based on following.
@@ -63,10 +63,10 @@ public class SparkSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
                                                 final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata) {
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
     Properties props = getWriteConfig().getProps();
-    props.put(HoodieWriteConfig.BULKINSERT_PARALLELISM.key(), String.valueOf(numOutputGroups));
+    props.put(HoodieWriteConfig.BULKINSERT_PARALLELISM_CFG.key(), String.valueOf(numOutputGroups));
     // We are calling another action executor - disable auto commit. Strategy is only expected to write data in new files.
     props.put(HoodieWriteConfig.HOODIE_AUTO_COMMIT.key(), Boolean.FALSE.toString());
-    props.put(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES.key(), String.valueOf(getWriteConfig().getClusteringTargetFileMaxBytes()));
+    props.put(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES_CFG.key(), String.valueOf(getWriteConfig().getClusteringTargetFileMaxBytes()));
     HoodieWriteConfig newConfig =  HoodieWriteConfig.newBuilder().withProps(props).build();
     return (JavaRDD<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
         false, getPartitioner(strategyParams, schema), true, numOutputGroups, preserveHoodieMetadata);
@@ -76,8 +76,8 @@ public class SparkSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
    * Create BulkInsertPartitioner based on strategy params.
    */
   protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
-    if (strategyParams.containsKey(CLUSTERING_SORT_COLUMNS_PROPERTY.key())) {
-      return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(CLUSTERING_SORT_COLUMNS_PROPERTY.key()).split(","),
+    if (strategyParams.containsKey(CLUSTERING_SORT_COLUMNS.key())) {
+      return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(CLUSTERING_SORT_COLUMNS.key()).split(","),
           HoodieAvroUtils.addMetadataFields(schema)));
     } else {
       return Option.empty();

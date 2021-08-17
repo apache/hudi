@@ -78,7 +78,7 @@ object HoodieSparkSqlWriter {
     val sparkContext = sqlContext.sparkContext
     val path = parameters.get("path")
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-    val tblNameOp = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TABLE_NAME, s"'${HoodieWriteConfig.TABLE_NAME.key}' must be set.")
+    val tblNameOp = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TABLE_NAME_CFG, s"'${HoodieWriteConfig.TABLE_NAME_CFG.key}' must be set.")
     asyncCompactionTriggerFnDefined = asyncCompactionTriggerFn.isDefined
     asyncClusteringTriggerFnDefined = asyncClusteringTriggerFn.isDefined
     if (path.isEmpty) {
@@ -334,7 +334,7 @@ object HoodieSparkSqlWriter {
     val sparkContext = sqlContext.sparkContext
     val path = parameters.getOrElse("path", throw new HoodieException("'path' must be set."))
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
-    val tableName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TABLE_NAME, s"'${HoodieWriteConfig.TABLE_NAME.key}' must be set.")
+    val tableName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TABLE_NAME_CFG, s"'${HoodieWriteConfig.TABLE_NAME_CFG.key}' must be set.")
     val tableType = hoodieConfig.getStringOrDefault(TABLE_TYPE)
     val bootstrapBasePath = hoodieConfig.getStringOrThrow(BOOTSTRAP_BASE_PATH,
       s"'${BOOTSTRAP_BASE_PATH.key}' is required for '${BOOTSTRAP_OPERATION_OPT_VAL}'" +
@@ -423,7 +423,7 @@ object HoodieSparkSqlWriter {
     if (parameters(INSERT_DROP_DUPS.key).toBoolean) {
       throw new HoodieException("Dropping duplicates with bulk_insert in row writer path is not supported yet")
     }
-    val params = parameters.updated(HoodieWriteConfig.AVRO_SCHEMA.key, schema.toString)
+    val params = parameters.updated(HoodieWriteConfig.AVRO_SCHEMA_CFG.key, schema.toString)
     val writeConfig = DataSourceUtils.createHoodieConfig(schema.toString, path.get, tblName, mapAsJavaMap(params))
     val bulkInsertPartitionerRows : BulkInsertPartitioner[Dataset[Row]] = if (populateMetaFields) {
       val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)

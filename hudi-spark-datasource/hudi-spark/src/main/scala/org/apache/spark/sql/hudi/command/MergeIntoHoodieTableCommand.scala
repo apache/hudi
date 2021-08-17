@@ -21,7 +21,7 @@ import java.util.Base64
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
+import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_CFG
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils, SparkAdapterSupport}
@@ -433,7 +433,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
           RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
           KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
           PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
-          TABLE_NAME.key -> targetTableName,
+          TABLE_NAME_CFG.key -> targetTableName,
           PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
           PAYLOAD_CLASS.key -> classOf[ExpressionPayload].getCanonicalName,
           META_SYNC_ENABLED.key -> enableHive.toString,
@@ -446,9 +446,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
           HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
           HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
           URL_ENCODE_PARTITIONING.key -> "true", // enable the url decode for sql.
-          HoodieWriteConfig.INSERT_PARALLELISM.key -> "200", // set the default parallelism to 200 for sql
-          HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
-          HoodieWriteConfig.DELETE_PARALLELISM.key -> "200",
+          HoodieWriteConfig.INSERT_PARALLELISM_CFG.key -> "200", // set the default parallelism to 200 for sql
+          HoodieWriteConfig.UPSERT_PARALLELISM_CFG.key -> "200",
+          HoodieWriteConfig.DELETE_PARALLELISM_CFG.key -> "200",
           SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
         )
       })

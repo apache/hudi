@@ -35,7 +35,7 @@ import org.apache.log4j.Logger;
 
 import java.util.Properties;
 
-import static org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_CFG;
 import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.CALLBACK_KAFKA_ACKS;
 import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.CALLBACK_KAFKA_BOOTSTRAP_SERVERS;
 import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.CALLBACK_KAFKA_PARTITION;
@@ -112,10 +112,10 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     String partition = hoodieConfig.getString(CALLBACK_KAFKA_PARTITION);
     if (null != partition) {
       return new ProducerRecord<String, String>(topic, Integer.valueOf(partition), hoodieConfig
-          .getString(TABLE_NAME),
+          .getString(TABLE_NAME_CFG),
           callbackMsg);
     } else {
-      return new ProducerRecord<String, String>(topic, hoodieConfig.getString(TABLE_NAME), callbackMsg);
+      return new ProducerRecord<String, String>(topic, hoodieConfig.getString(TABLE_NAME_CFG), callbackMsg);
     }
   }
 

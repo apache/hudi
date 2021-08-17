@@ -39,19 +39,19 @@ import java.util.Properties;
     description = "Configurations that control aspects around writing, sizing, reading base and log files.")
 public class HoodieStorageConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> PARQUET_FILE_MAX_BYTES = ConfigProperty
+  public static final ConfigProperty<String> PARQUET_FILE_MAX_BYTES_CFG = ConfigProperty
       .key("hoodie.parquet.max.file.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
       .withDocumentation("Target size for parquet files produced by Hudi write phases. "
           + "For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.");
 
-  public static final ConfigProperty<String> PARQUET_BLOCK_SIZE_BYTES = ConfigProperty
+  public static final ConfigProperty<String> PARQUET_BLOCK_SIZE_BYTES_CFG = ConfigProperty
       .key("hoodie.parquet.block.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
       .withDocumentation("Parquet RowGroup size. It's recommended to make this large enough that scan costs can be"
           + " amortized by packing enough column values into a single row group.");
 
-  public static final ConfigProperty<String> PARQUET_PAGE_SIZE_BYTES = ConfigProperty
+  public static final ConfigProperty<String> PARQUET_PAGE_SIZE_BYTES_CFG = ConfigProperty
       .key("hoodie.parquet.page.size")
       .defaultValue(String.valueOf(1 * 1024 * 1024))
       .withDocumentation("Parquet page size. Page is the unit of read within a parquet file. "
@@ -72,45 +72,45 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue(ORC_FILE_MAX_BYTES.defaultValue())
       .withDocumentation("ORC block size, recommended to be aligned with the target file size.");
 
-  public static final ConfigProperty<String> HFILE_FILE_MAX_BYTES = ConfigProperty
+  public static final ConfigProperty<String> HFILE_FILE_MAX_BYTES_CFG = ConfigProperty
       .key("hoodie.hfile.max.file.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
       .withDocumentation("Target file size for HFile base files.");
 
-  public static final ConfigProperty<String> HFILE_BLOCK_SIZE_BYTES = ConfigProperty
+  public static final ConfigProperty<String> HFILE_BLOCK_SIZE_BYTES_CFG = ConfigProperty
       .key("hoodie.hfile.block.size")
       .defaultValue(String.valueOf(1024 * 1024))
       .withDocumentation("Lower values increase the size of metadata tracked within HFile, but can offer potentially "
           + "faster lookup times.");
 
   // used to size log files
-  public static final ConfigProperty<String> LOGFILE_SIZE_MAX_BYTES = ConfigProperty
+  public static final ConfigProperty<String> LOGFILE_SIZE_MAX_BYTES_CFG = ConfigProperty
       .key("hoodie.logfile.max.size")
       .defaultValue(String.valueOf(1024 * 1024 * 1024)) // 1 GB
       .withDocumentation("LogFile max size. This is the maximum size allowed for a log file "
           + "before it is rolled over to the next version.");
 
   // used to size data blocks in log file
-  public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = ConfigProperty
+  public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES_CFG = ConfigProperty
       .key("hoodie.logfile.data.block.max.size")
       .defaultValue(String.valueOf(256 * 1024 * 1024))
       .withDocumentation("LogFile Data block max size. This is the maximum size allowed for a single data block "
           + "to be appended to a log file. This helps to make sure the data appended to the log file is broken up "
           + "into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory.");
 
-  public static final ConfigProperty<String> PARQUET_COMPRESSION_RATIO = ConfigProperty
+  public static final ConfigProperty<String> PARQUET_COMPRESSION_RATIO_CFG = ConfigProperty
       .key("hoodie.parquet.compression.ratio")
       .defaultValue(String.valueOf(0.1))
       .withDocumentation("Expected compression of parquet data used by Hudi, when it tries to size new parquet files. "
           + "Increase this value, if bulk_insert is producing smaller than expected sized files");
 
   // Default compression codec for parquet
-  public static final ConfigProperty<String> PARQUET_COMPRESSION_CODEC = ConfigProperty
+  public static final ConfigProperty<String> PARQUET_COMPRESSION_CODEC_CFG = ConfigProperty
       .key("hoodie.parquet.compression.codec")
       .defaultValue("gzip")
       .withDocumentation("Compression Codec for parquet files");
 
-  public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM = ConfigProperty
+  public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_CFG = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
       .withDocumentation("Compression codec to use for hfile base files.");
@@ -121,11 +121,78 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Compression codec to use for ORC base files.");
 
   // Default compression ratio for log file to parquet, general 3x
-  public static final ConfigProperty<String> LOGFILE_TO_PARQUET_COMPRESSION_RATIO = ConfigProperty
+  public static final ConfigProperty<String> LOGFILE_TO_PARQUET_COMPRESSION_RATIO_CFG = ConfigProperty
       .key("hoodie.logfile.to.parquet.compression.ratio")
       .defaultValue(String.valueOf(0.35))
       .withDocumentation("Expected additional compression as records move from log files to parquet. Used for merge_on_read "
           + "table to send inserts into log files & control the size of compacted parquet file.");
+
+  /** @deprecated Use {@link #PARQUET_FILE_MAX_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String PARQUET_FILE_MAX_BYTES = PARQUET_FILE_MAX_BYTES_CFG.key();
+  /** @deprecated Use {@link #PARQUET_FILE_MAX_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_PARQUET_FILE_MAX_BYTES = PARQUET_FILE_MAX_BYTES_CFG.defaultValue();
+  /** @deprecated Use {@link #PARQUET_BLOCK_SIZE_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String PARQUET_BLOCK_SIZE_BYTES = PARQUET_BLOCK_SIZE_BYTES_CFG.key();
+  /** @deprecated Use {@link #PARQUET_BLOCK_SIZE_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_PARQUET_BLOCK_SIZE_BYTES = PARQUET_BLOCK_SIZE_BYTES_CFG.defaultValue();
+  /** @deprecated Use {@link #PARQUET_PAGE_SIZE_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String PARQUET_PAGE_SIZE_BYTES = PARQUET_PAGE_SIZE_BYTES_CFG.key();
+  /** @deprecated Use {@link #PARQUET_PAGE_SIZE_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_PARQUET_PAGE_SIZE_BYTES = PARQUET_PAGE_SIZE_BYTES_CFG.defaultValue();
+  /** @deprecated Use {@link #HFILE_FILE_MAX_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String HFILE_FILE_MAX_BYTES = HFILE_FILE_MAX_BYTES_CFG.key();
+  /** @deprecated Use {@link #HFILE_FILE_MAX_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_HFILE_FILE_MAX_BYTES = HFILE_FILE_MAX_BYTES_CFG.defaultValue();
+  /** @deprecated Use {@link #HFILE_BLOCK_SIZE_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String HFILE_BLOCK_SIZE_BYTES = HFILE_BLOCK_SIZE_BYTES_CFG.defaultValue();
+  /** @deprecated Use {@link #HFILE_BLOCK_SIZE_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_HFILE_BLOCK_SIZE_BYTES = HFILE_BLOCK_SIZE_BYTES_CFG.defaultValue();
+  /** @deprecated Use {@link #LOGFILE_SIZE_MAX_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String LOGFILE_SIZE_MAX_BYTES = LOGFILE_SIZE_MAX_BYTES_CFG.key();
+  /** @deprecated Use {@link #LOGFILE_SIZE_MAX_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_LOGFILE_SIZE_MAX_BYTES = LOGFILE_SIZE_MAX_BYTES_CFG.defaultValue();
+  /** @deprecated Use {@link #LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES_CFG.key();
+  /** @deprecated Use {@link #LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES_CFG.defaultValue();
+  /** @deprecated Use {@link #PARQUET_COMPRESSION_RATIO_CFG} and its methods instead */
+  @Deprecated
+  public static final String PARQUET_COMPRESSION_RATIO = PARQUET_COMPRESSION_RATIO_CFG.key();
+  /** @deprecated Use {@link #PARQUET_COMPRESSION_RATIO_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_STREAM_COMPRESSION_RATIO = PARQUET_COMPRESSION_RATIO_CFG.defaultValue();
+  /** @deprecated Use {@link #PARQUET_COMPRESSION_CODEC_CFG} and its methods instead */
+  @Deprecated
+  public static final String PARQUET_COMPRESSION_CODEC = PARQUET_COMPRESSION_CODEC_CFG.key();
+  /** @deprecated Use {@link #HFILE_COMPRESSION_ALGORITHM_CFG} and its methods instead */
+  @Deprecated
+  public static final String HFILE_COMPRESSION_ALGORITHM = HFILE_COMPRESSION_ALGORITHM_CFG.key();
+  /** @deprecated Use {@link #PARQUET_COMPRESSION_CODEC_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_PARQUET_COMPRESSION_CODEC = PARQUET_COMPRESSION_CODEC_CFG.defaultValue();
+  /** @deprecated Use {@link #HFILE_COMPRESSION_ALGORITHM_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_HFILE_COMPRESSION_ALGORITHM = HFILE_COMPRESSION_ALGORITHM_CFG.defaultValue();
+  /** @deprecated Use {@link #LOGFILE_TO_PARQUET_COMPRESSION_RATIO_CFG} and its methods instead */
+  @Deprecated
+  public static final String LOGFILE_TO_PARQUET_COMPRESSION_RATIO = LOGFILE_TO_PARQUET_COMPRESSION_RATIO_CFG.key();
+  /** @deprecated Use {@link #LOGFILE_TO_PARQUET_COMPRESSION_RATIO_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_LOGFILE_TO_PARQUET_COMPRESSION_RATIO = LOGFILE_TO_PARQUET_COMPRESSION_RATIO_CFG.defaultValue();
 
   private HoodieStorageConfig() {
     super();
@@ -152,57 +219,57 @@ public class HoodieStorageConfig extends HoodieConfig {
     }
 
     public Builder parquetMaxFileSize(long maxFileSize) {
-      storageConfig.setValue(PARQUET_FILE_MAX_BYTES, String.valueOf(maxFileSize));
+      storageConfig.setValue(PARQUET_FILE_MAX_BYTES_CFG, String.valueOf(maxFileSize));
       return this;
     }
 
     public Builder parquetBlockSize(int blockSize) {
-      storageConfig.setValue(PARQUET_BLOCK_SIZE_BYTES, String.valueOf(blockSize));
+      storageConfig.setValue(PARQUET_BLOCK_SIZE_BYTES_CFG, String.valueOf(blockSize));
       return this;
     }
 
     public Builder parquetPageSize(int pageSize) {
-      storageConfig.setValue(PARQUET_PAGE_SIZE_BYTES, String.valueOf(pageSize));
+      storageConfig.setValue(PARQUET_PAGE_SIZE_BYTES_CFG, String.valueOf(pageSize));
       return this;
     }
 
     public Builder hfileMaxFileSize(long maxFileSize) {
-      storageConfig.setValue(HFILE_FILE_MAX_BYTES, String.valueOf(maxFileSize));
+      storageConfig.setValue(HFILE_FILE_MAX_BYTES_CFG, String.valueOf(maxFileSize));
       return this;
     }
 
     public Builder hfileBlockSize(int blockSize) {
-      storageConfig.setValue(HFILE_BLOCK_SIZE_BYTES, String.valueOf(blockSize));
+      storageConfig.setValue(HFILE_BLOCK_SIZE_BYTES_CFG, String.valueOf(blockSize));
       return this;
     }
 
     public Builder logFileDataBlockMaxSize(int dataBlockSize) {
-      storageConfig.setValue(LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES, String.valueOf(dataBlockSize));
+      storageConfig.setValue(LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES_CFG, String.valueOf(dataBlockSize));
       return this;
     }
 
     public Builder logFileMaxSize(int logFileSize) {
-      storageConfig.setValue(LOGFILE_SIZE_MAX_BYTES, String.valueOf(logFileSize));
+      storageConfig.setValue(LOGFILE_SIZE_MAX_BYTES_CFG, String.valueOf(logFileSize));
       return this;
     }
 
     public Builder parquetCompressionRatio(double parquetCompressionRatio) {
-      storageConfig.setValue(PARQUET_COMPRESSION_RATIO, String.valueOf(parquetCompressionRatio));
+      storageConfig.setValue(PARQUET_COMPRESSION_RATIO_CFG, String.valueOf(parquetCompressionRatio));
       return this;
     }
 
     public Builder parquetCompressionCodec(String parquetCompressionCodec) {
-      storageConfig.setValue(PARQUET_COMPRESSION_CODEC, parquetCompressionCodec);
+      storageConfig.setValue(PARQUET_COMPRESSION_CODEC_CFG, parquetCompressionCodec);
       return this;
     }
 
     public Builder hfileCompressionAlgorithm(String hfileCompressionAlgorithm) {
-      storageConfig.setValue(HFILE_COMPRESSION_ALGORITHM, hfileCompressionAlgorithm);
+      storageConfig.setValue(HFILE_COMPRESSION_ALGORITHM_CFG, hfileCompressionAlgorithm);
       return this;
     }
 
     public Builder logFileToParquetCompressionRatio(double logFileToParquetCompressionRatio) {
-      storageConfig.setValue(LOGFILE_TO_PARQUET_COMPRESSION_RATIO, String.valueOf(logFileToParquetCompressionRatio));
+      storageConfig.setValue(LOGFILE_TO_PARQUET_COMPRESSION_RATIO_CFG, String.valueOf(logFileToParquetCompressionRatio));
       return this;
     }
 

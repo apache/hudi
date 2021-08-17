@@ -57,19 +57,15 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE]. "
           + "Bloom filters removes the dependency on a external system "
           + "and is stored in the footer of the Parquet Data Files");
-  @Deprecated
-  public static final String INDEX_TYPE_PROP = INDEX_TYPE.key();
 
   public static final ConfigProperty<String> INDEX_CLASS = ConfigProperty
       .key("hoodie.index.class")
       .defaultValue("")
       .withDocumentation("Full path of user-defined index class and must be a subclass of HoodieIndex class. "
           + "It will take precedence over the hoodie.index.type configuration if specified");
-  @Deprecated
-  public static final String INDEX_CLASS_PROP = INDEX_CLASS.key();
 
   // ***** Bloom Index configs *****
-  public static final ConfigProperty<String> BLOOM_FILTER_NUM_ENTRIES = ConfigProperty
+  public static final ConfigProperty<String> BLOOM_FILTER_NUM_ENTRIES_CFG = ConfigProperty
       .key("hoodie.index.bloom.num_entries")
       .defaultValue("60000")
       .withDocumentation("Only applies if index type is BLOOM. "
@@ -81,7 +77,7 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "increase the size every base file linearly (roughly 4KB for every 50000 entries). "
           + "This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.");
 
-  public static final ConfigProperty<String> BLOOM_FILTER_FPP = ConfigProperty
+  public static final ConfigProperty<String> BLOOM_FILTER_FPP_CFG = ConfigProperty
       .key("hoodie.index.bloom.fpp")
       .defaultValue("0.000000001")
       .withDocumentation("Only applies if index type is BLOOM. "
@@ -97,8 +93,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BLOOM. "
           + "This is the amount of parallelism for index lookup, which involves a shuffle. "
           + "By default, this is auto computed based on input workload characteristics.");
-  @Deprecated
-  public static final String BLOOM_INDEX_PARALLELISM_PROP = BLOOM_INDEX_PARALLELISM.key();
 
   public static final ConfigProperty<String> BLOOM_INDEX_PRUNE_BY_RANGES = ConfigProperty
       .key("hoodie.bloom.index.prune.by.ranges")
@@ -108,8 +102,6 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "if the key has a monotonously increasing prefix, such as timestamp. "
           + "If the record key is completely random, it is better to turn this off, since range pruning will only "
           + " add extra overhead to the index lookup.");
-  @Deprecated
-  public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP = BLOOM_INDEX_PRUNE_BY_RANGES.key();
 
   public static final ConfigProperty<String> BLOOM_INDEX_USE_CACHING = ConfigProperty
       .key("hoodie.bloom.index.use.caching")
@@ -117,8 +109,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BLOOM."
           + "When true, the input RDD will cached to speed up index lookup by reducing IO "
           + "for computing parallelism or affected partitions");
-  @Deprecated
-  public static final String BLOOM_INDEX_USE_CACHING_PROP = BLOOM_INDEX_USE_CACHING.key();
 
   public static final ConfigProperty<String> BLOOM_INDEX_TREE_BASED_FILTER = ConfigProperty
       .key("hoodie.bloom.index.use.treebased.filter")
@@ -126,8 +116,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BLOOM. "
           + "When true, interval tree based file pruning optimization is enabled. "
           + "This mode speeds-up file-pruning based on key ranges when compared with the brute-force mode");
-  @Deprecated
-  public static final String BLOOM_INDEX_TREE_BASED_FILTER_PROP = BLOOM_INDEX_TREE_BASED_FILTER.key();
 
   // TODO: On by default. Once stable, we will remove the other mode.
   public static final ConfigProperty<String> BLOOM_INDEX_BUCKETIZED_CHECKING = ConfigProperty
@@ -136,17 +124,15 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BLOOM. "
           + "When true, bucketized bloom filtering is enabled. "
           + "This reduces skew seen in sort based bloom index lookup");
-  @Deprecated
-  public static final String BLOOM_INDEX_BUCKETIZED_CHECKING_PROP = BLOOM_INDEX_BUCKETIZED_CHECKING.key();
 
-  public static final ConfigProperty<String> BLOOM_INDEX_FILTER_TYPE = ConfigProperty
+  public static final ConfigProperty<String> BLOOM_INDEX_FILTER_TYPE_CFG = ConfigProperty
       .key("hoodie.bloom.index.filter.type")
       .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
       .withDocumentation("Filter type used. Default is BloomFilterTypeCode.DYNAMIC_V0. "
           + "Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. "
           + "Dynamic bloom filters auto size themselves based on number of keys.");
 
-  public static final ConfigProperty<String> HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
+  public static final ConfigProperty<String> HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES_CFG = ConfigProperty
       .key("hoodie.bloom.index.filter.dynamic.max.entries")
       .defaultValue("100000")
       .withDocumentation("The threshold for the maximum number of keys to record in a dynamic Bloom filter row. "
@@ -158,24 +144,18 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is SIMPLE. "
           + "When true, the incoming writes will cached to speed up index lookup by reducing IO "
           + "for computing parallelism or affected partitions");
-  @Deprecated
-  public static final String SIMPLE_INDEX_USE_CACHING_PROP = SIMPLE_INDEX_USE_CACHING.key();
 
   public static final ConfigProperty<String> SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.simple.index.parallelism")
       .defaultValue("50")
       .withDocumentation("Only applies if index type is SIMPLE. "
           + "This is the amount of parallelism for index lookup, which involves a Spark Shuffle");
-  @Deprecated
-  public static final String SIMPLE_INDEX_PARALLELISM_PROP = SIMPLE_INDEX_PARALLELISM.key();
 
   public static final ConfigProperty<String> GLOBAL_SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.global.simple.index.parallelism")
       .defaultValue("100")
       .withDocumentation("Only applies if index type is GLOBAL_SIMPLE. "
           + "This is the amount of parallelism for index lookup, which involves a Spark Shuffle");
-  @Deprecated
-  public static final String GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP = GLOBAL_SIMPLE_INDEX_PARALLELISM.key();
 
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
@@ -186,16 +166,14 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "This configuration controls the “bucket” size which tracks the number of record-key checks made against "
           + "a single file and is the unit of work allocated to each partition performing bloom filter lookup. "
           + "A higher value would amortize the fixed cost of reading a bloom filter to memory.");
-  @Deprecated
-  public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = BLOOM_INDEX_KEYS_PER_BUCKET.key();
 
-  public static final ConfigProperty<String> BLOOM_INDEX_INPUT_STORAGE_LEVEL = ConfigProperty
+  public static final ConfigProperty<String> BLOOM_INDEX_INPUT_STORAGE_LEVEL_CFG = ConfigProperty
       .key("hoodie.bloom.index.input.storage.level")
       .defaultValue("MEMORY_AND_DISK_SER")
       .withDocumentation("Only applies when #bloomIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
-  public static final ConfigProperty<String> SIMPLE_INDEX_INPUT_STORAGE_LEVEL = ConfigProperty
+  public static final ConfigProperty<String> SIMPLE_INDEX_INPUT_STORAGE_LEVEL_CFG = ConfigProperty
       .key("hoodie.simple.index.input.storage.level")
       .defaultValue("MEMORY_AND_DISK_SER")
       .withDocumentation("Only applies when #simpleIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
@@ -209,7 +187,7 @@ public class HoodieIndexConfig extends HoodieConfig {
    * <p>
    * When set to false, a record will be updated to the old partition.
    */
-  public static final ConfigProperty<String> BLOOM_INDEX_UPDATE_PARTITION_PATH = ConfigProperty
+  public static final ConfigProperty<String> BLOOM_INDEX_UPDATE_PARTITION_PATH_CFG = ConfigProperty
       .key("hoodie.bloom.index.update.partition.path")
       .defaultValue("true")
       .withDocumentation("Only applies if index type is GLOBAL_BLOOM. "
@@ -217,10 +195,10 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "inserting the incoming record into the new partition and deleting the original record in the old partition. "
           + "When set to false, the original record will only be updated in the old partition");
 
-  public static final ConfigProperty<String> SIMPLE_INDEX_UPDATE_PARTITION_PATH = ConfigProperty
+  public static final ConfigProperty<String> SIMPLE_INDEX_UPDATE_PARTITION_PATH_CFG = ConfigProperty
       .key("hoodie.simple.index.update.partition.path")
       .defaultValue("true")
-      .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH + ", but for simple index.");
+      .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_CFG + ", but for simple index.");
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
@@ -230,13 +208,126 @@ public class HoodieIndexConfig extends HoodieConfig {
   @Deprecated
   public static final String HBASE_ZKPORT_PROP = HBASE_ZKPORT.key();
   @Deprecated
-  public static final String HBASE_ZK_ZNODEPARENT = HoodieHBaseIndexConfig.HBASE_ZK_ZNODEPARENT.key();
+  public static final String HBASE_ZK_ZNODEPARENT = HoodieHBaseIndexConfig.HBASE_ZK_ZNODEPARENT_CFG.key();
   @Deprecated
   public static final String HBASE_TABLENAME_PROP = HBASE_TABLENAME.key();
   @Deprecated
   public static final String HBASE_GET_BATCH_SIZE_PROP = HBASE_GET_BATCH_SIZE.key();
   @Deprecated
   public static final String HBASE_PUT_BATCH_SIZE_PROP = HBASE_PUT_BATCH_SIZE.key();
+  @Deprecated
+  public static final String DEFAULT_HBASE_BATCH_SIZE = "100";
+  /** @deprecated Use {@link #INDEX_TYPE} and its methods instead */
+  @Deprecated
+  public static final String INDEX_TYPE_PROP = INDEX_TYPE.key();
+  /** @deprecated Use {@link #INDEX_CLASS} and its methods instead */
+  @Deprecated
+  public static final String INDEX_CLASS_PROP = INDEX_CLASS.key();
+  /** @deprecated Use {@link #INDEX_CLASS} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_INDEX_CLASS = INDEX_CLASS.defaultValue();
+  /** @deprecated Use {@link #BLOOM_FILTER_NUM_ENTRIES_CFG} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_FILTER_NUM_ENTRIES = BLOOM_FILTER_NUM_ENTRIES_CFG.key();
+  /** @deprecated Use {@link #BLOOM_FILTER_NUM_ENTRIES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_FILTER_NUM_ENTRIES = BLOOM_FILTER_NUM_ENTRIES_CFG.defaultValue();
+  /** @deprecated Use {@link #BLOOM_FILTER_FPP_CFG} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_FILTER_FPP = BLOOM_FILTER_FPP_CFG.key();
+  /** @deprecated Use {@link #BLOOM_FILTER_FPP_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_FILTER_FPP = BLOOM_FILTER_FPP_CFG.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_PARALLELISM} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_PARALLELISM_PROP = BLOOM_INDEX_PARALLELISM.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_PARALLELISM} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_PARALLELISM = BLOOM_INDEX_PARALLELISM.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_PRUNE_BY_RANGES} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP = BLOOM_INDEX_PRUNE_BY_RANGES.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_PRUNE_BY_RANGES} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES = BLOOM_INDEX_PRUNE_BY_RANGES.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_USE_CACHING} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_USE_CACHING_PROP = BLOOM_INDEX_USE_CACHING.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_USE_CACHING} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_USE_CACHING = BLOOM_INDEX_USE_CACHING.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_TREE_BASED_FILTER} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_TREE_BASED_FILTER_PROP = BLOOM_INDEX_TREE_BASED_FILTER.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_TREE_BASED_FILTER} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER = BLOOM_INDEX_TREE_BASED_FILTER.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_BUCKETIZED_CHECKING} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_BUCKETIZED_CHECKING_PROP = BLOOM_INDEX_BUCKETIZED_CHECKING.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_BUCKETIZED_CHECKING} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING = BLOOM_INDEX_BUCKETIZED_CHECKING.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_FILTER_TYPE_CFG} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_FILTER_TYPE = BLOOM_INDEX_FILTER_TYPE_CFG.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_FILTER_TYPE_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = BLOOM_INDEX_FILTER_TYPE_CFG.defaultValue();
+  /** @deprecated Use {@link #HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES_CFG} and its methods instead */
+  @Deprecated
+  public static final String HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES_CFG.key();
+  /** @deprecated Use {@link #HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES_CFG.defaultValue();
+  /** @deprecated Use {@link #SIMPLE_INDEX_USE_CACHING} and its methods instead */
+  @Deprecated
+  public static final String SIMPLE_INDEX_USE_CACHING_PROP = SIMPLE_INDEX_USE_CACHING.key();
+  /** @deprecated Use {@link #SIMPLE_INDEX_USE_CACHING} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_SIMPLE_INDEX_USE_CACHING = SIMPLE_INDEX_USE_CACHING.defaultValue();
+  /** @deprecated Use {@link #SIMPLE_INDEX_PARALLELISM} and its methods instead */
+  @Deprecated
+  public static final String SIMPLE_INDEX_PARALLELISM_PROP = SIMPLE_INDEX_PARALLELISM.key();
+  /** @deprecated Use {@link #SIMPLE_INDEX_PARALLELISM} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_SIMPLE_INDEX_PARALLELISM = SIMPLE_INDEX_PARALLELISM.defaultValue();
+  /** @deprecated Use {@link #GLOBAL_SIMPLE_INDEX_PARALLELISM} and its methods instead */
+  @Deprecated
+  public static final String GLOBAL_SIMPLE_INDEX_PARALLELISM_PROP = GLOBAL_SIMPLE_INDEX_PARALLELISM.key();
+  /** @deprecated Use {@link #GLOBAL_SIMPLE_INDEX_PARALLELISM} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM = GLOBAL_SIMPLE_INDEX_PARALLELISM.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_KEYS_PER_BUCKET} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = BLOOM_INDEX_KEYS_PER_BUCKET.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_KEYS_PER_BUCKET} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET = BLOOM_INDEX_KEYS_PER_BUCKET.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_INPUT_STORAGE_LEVEL_CFG} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = BLOOM_INDEX_INPUT_STORAGE_LEVEL_CFG.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_INPUT_STORAGE_LEVEL_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = BLOOM_INDEX_INPUT_STORAGE_LEVEL_CFG.defaultValue();
+  /** @deprecated Use {@link #SIMPLE_INDEX_INPUT_STORAGE_LEVEL_CFG} and its methods instead */
+  @Deprecated
+  public static final String SIMPLE_INDEX_INPUT_STORAGE_LEVEL = SIMPLE_INDEX_INPUT_STORAGE_LEVEL_CFG.key();
+  /** @deprecated Use {@link #SIMPLE_INDEX_INPUT_STORAGE_LEVEL_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_SIMPLE_INDEX_INPUT_STORAGE_LEVEL = SIMPLE_INDEX_INPUT_STORAGE_LEVEL_CFG.defaultValue();
+  /** @deprecated Use {@link #BLOOM_INDEX_UPDATE_PARTITION_PATH_CFG} and its methods instead */
+  @Deprecated
+  public static final String BLOOM_INDEX_UPDATE_PARTITION_PATH = BLOOM_INDEX_UPDATE_PARTITION_PATH_CFG.key();
+  /** @deprecated Use {@link #BLOOM_INDEX_UPDATE_PARTITION_PATH_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_BLOOM_INDEX_UPDATE_PARTITION_PATH = BLOOM_INDEX_UPDATE_PARTITION_PATH_CFG.defaultValue();
+  /** @deprecated Use {@link #SIMPLE_INDEX_UPDATE_PARTITION_PATH_CFG} and its methods instead */
+  @Deprecated
+  public static final String SIMPLE_INDEX_UPDATE_PARTITION_PATH = SIMPLE_INDEX_UPDATE_PARTITION_PATH_CFG.key();
+  /** @deprecated Use {@link #SIMPLE_INDEX_UPDATE_PARTITION_PATH_CFG} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = SIMPLE_INDEX_UPDATE_PARTITION_PATH_CFG.defaultValue();
 
   private EngineType engineType;
 
@@ -290,12 +381,12 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder bloomFilterNumEntries(int numEntries) {
-      hoodieIndexConfig.setValue(BLOOM_FILTER_NUM_ENTRIES, String.valueOf(numEntries));
+      hoodieIndexConfig.setValue(BLOOM_FILTER_NUM_ENTRIES_CFG, String.valueOf(numEntries));
       return this;
     }
 
     public Builder bloomFilterFPP(double fpp) {
-      hoodieIndexConfig.setValue(BLOOM_FILTER_FPP, String.valueOf(fpp));
+      hoodieIndexConfig.setValue(BLOOM_FILTER_FPP_CFG, String.valueOf(fpp));
       return this;
     }
 
@@ -330,12 +421,12 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder withBloomIndexInputStorageLevel(String level) {
-      hoodieIndexConfig.setValue(BLOOM_INDEX_INPUT_STORAGE_LEVEL, level);
+      hoodieIndexConfig.setValue(BLOOM_INDEX_INPUT_STORAGE_LEVEL_CFG, level);
       return this;
     }
 
     public Builder withBloomIndexUpdatePartitionPath(boolean updatePartitionPath) {
-      hoodieIndexConfig.setValue(BLOOM_INDEX_UPDATE_PARTITION_PATH, String.valueOf(updatePartitionPath));
+      hoodieIndexConfig.setValue(BLOOM_INDEX_UPDATE_PARTITION_PATH_CFG, String.valueOf(updatePartitionPath));
       return this;
     }
 
@@ -350,7 +441,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder withSimpleIndexInputStorageLevel(String level) {
-      hoodieIndexConfig.setValue(SIMPLE_INDEX_INPUT_STORAGE_LEVEL, level);
+      hoodieIndexConfig.setValue(SIMPLE_INDEX_INPUT_STORAGE_LEVEL_CFG, level);
       return this;
     }
 
@@ -360,7 +451,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder withGlobalSimpleIndexUpdatePartitionPath(boolean updatePartitionPath) {
-      hoodieIndexConfig.setValue(SIMPLE_INDEX_UPDATE_PARTITION_PATH, String.valueOf(updatePartitionPath));
+      hoodieIndexConfig.setValue(SIMPLE_INDEX_UPDATE_PARTITION_PATH_CFG, String.valueOf(updatePartitionPath));
       return this;
     }
 

@@ -50,7 +50,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TABLE_NAME_CFG.key -> "hoodie_test"
   )
 
   @BeforeEach override def setUp() {
@@ -198,7 +198,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
       DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> isAsyncCompaction,
       HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMIT_PROP.key -> clusteringNumCommit,
-      HoodieStorageConfig.PARQUET_FILE_MAX_BYTES.key -> dataGen.getEstimatedFileSizeInBytes(fileMaxRecordNum).toString
+      HoodieStorageConfig.PARQUET_FILE_MAX_BYTES_CFG.key -> dataGen.getEstimatedFileSizeInBytes(fileMaxRecordNum).toString
     )
   }
 

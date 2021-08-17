@@ -25,21 +25,21 @@ import org.apache.spark.storage.StorageLevel;
 
 import java.util.Properties;
 
-import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_CFG;
 
 /**
  * Spark config utils.
  */
 public class SparkMemoryUtils {
   public static StorageLevel getWriteStatusStorageLevel(Properties properties) {
-    return StorageLevel.fromString(new HoodieConfig(properties).getString(WRITE_STATUS_STORAGE_LEVEL));
+    return StorageLevel.fromString(new HoodieConfig(properties).getString(WRITE_STATUS_STORAGE_LEVEL_CFG));
   }
 
   public static StorageLevel getBloomIndexInputStorageLevel(Properties properties) {
-    return StorageLevel.fromString(new HoodieConfig(properties).getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
+    return StorageLevel.fromString(new HoodieConfig(properties).getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_CFG));
   }
 
   public static StorageLevel getSimpleIndexInputStorageLevel(Properties properties) {
-    return StorageLevel.fromString(new HoodieConfig(properties).getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL));
+    return StorageLevel.fromString(new HoodieConfig(properties).getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_CFG));
   }
 }

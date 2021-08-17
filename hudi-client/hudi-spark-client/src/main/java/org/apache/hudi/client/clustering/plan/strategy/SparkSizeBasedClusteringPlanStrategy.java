@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.config.HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY;
+import static org.apache.hudi.config.HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS;
 
 /**
  * Clustering Strategy based on following.
@@ -102,7 +102,7 @@ public class SparkSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<
   protected Map<String, String> getStrategyParams() {
     Map<String, String> params = new HashMap<>();
     if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
-      params.put(CLUSTERING_SORT_COLUMNS_PROPERTY.key(), getWriteConfig().getClusteringSortColumns());
+      params.put(CLUSTERING_SORT_COLUMNS.key(), getWriteConfig().getClusteringSortColumns());
     }
     return params;
   }

@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
+import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_CFG
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.spark.sql._
@@ -97,7 +97,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
         RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
         KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
         PRECOMBINE_FIELD.key -> primaryColumns.head, //set the default preCombine field.
-        TABLE_NAME.key -> tableId.table,
+        TABLE_NAME_CFG.key -> tableId.table,
         OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
         META_SYNC_ENABLED.key -> enableHive.toString,
@@ -110,7 +110,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
         URL_ENCODE_PARTITIONING.key -> "true",
         HIVE_SUPPORT_TIMESTAMP.key -> "true",
         HIVE_STYLE_PARTITIONING.key -> "true",
-        HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
+        HoodieWriteConfig.UPSERT_PARALLELISM_CFG.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
       )
     }

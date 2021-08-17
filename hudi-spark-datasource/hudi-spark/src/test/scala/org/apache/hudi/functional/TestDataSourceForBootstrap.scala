@@ -40,16 +40,16 @@ class TestDataSourceForBootstrap {
 
   var spark: SparkSession = _
   val commonOpts: Map[String, String] = Map(
-    HoodieWriteConfig.INSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.UPSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.DELETE_PARALLELISM.key -> "4",
-    HoodieWriteConfig.BULKINSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM.key -> "4",
-    HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM.key -> "4",
+    HoodieWriteConfig.INSERT_PARALLELISM_CFG.key -> "4",
+    HoodieWriteConfig.UPSERT_PARALLELISM_CFG.key -> "4",
+    HoodieWriteConfig.DELETE_PARALLELISM_CFG.key -> "4",
+    HoodieWriteConfig.BULKINSERT_PARALLELISM_CFG.key -> "4",
+    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_CFG.key -> "4",
+    HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM_CFG.key -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TABLE_NAME_CFG.key -> "hoodie_test"
   )
   var basePath: String = _
   var srcPath: String = _
@@ -430,9 +430,9 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH.key, srcPath)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key, classOf[SimpleKeyGenerator].getName)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR.key, classOf[FullRecordBootstrapModeSelector].getName)
-      .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER.key, classOf[SparkParquetBootstrapDataProvider].getName)
+      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS_CFG.key, classOf[SimpleKeyGenerator].getName)
+      .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_CFG.key, classOf[FullRecordBootstrapModeSelector].getName)
+      .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CFG.key, classOf[SparkParquetBootstrapDataProvider].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -481,7 +481,7 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, partitionColumns.getOrElse(""))
       .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH.key, srcPath)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key, classOf[SimpleKeyGenerator].getName)
+      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS_CFG.key, classOf[SimpleKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
