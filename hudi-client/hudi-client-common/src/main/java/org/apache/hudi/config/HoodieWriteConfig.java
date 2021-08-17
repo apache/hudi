@@ -397,7 +397,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getCleanerHoursRetained() {
-
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_HOURS_RETAINED_PROP));
   }
 
   public int getMaxCommitsToKeep() {
