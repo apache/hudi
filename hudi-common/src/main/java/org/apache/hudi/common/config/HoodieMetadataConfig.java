@@ -39,21 +39,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final String METADATA_PREFIX = "hoodie.metadata";
 
   // Enable the internal Metadata Table which saves file listings
-  public static final ConfigProperty<Boolean> METADATA_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".enable")
       .defaultValue(false)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
   // Enable syncing the Metadata Table
-  public static final ConfigProperty<Boolean> METADATA_SYNC_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> SYNC_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".sync.enable")
       .defaultValue(true)
       .sinceVersion("0.9.0")
       .withDocumentation("Enable syncing of metadata table from actions on the dataset");
 
   // Validate contents of Metadata Table on each access against the actual filesystem
-  public static final ConfigProperty<Boolean> METADATA_VALIDATE_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> VALIDATE_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".validate")
       .defaultValue(false)
       .sinceVersion("0.7.0")
@@ -62,28 +62,28 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
   // Enable metrics for internal Metadata Table
-  public static final ConfigProperty<Boolean> METADATA_METRICS_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> METRICS_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".metrics.enable")
       .defaultValue(false)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable publishing of metrics around metadata table.");
 
   // Parallelism for inserts
-  public static final ConfigProperty<Integer> METADATA_INSERT_PARALLELISM_VALUE = ConfigProperty
+  public static final ConfigProperty<Integer> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key(METADATA_PREFIX + ".insert.parallelism")
       .defaultValue(1)
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use when inserting to the metadata table");
 
   // Async clean
-  public static final ConfigProperty<Boolean> METADATA_ASYNC_CLEAN_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> ASYNC_CLEAN_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".clean.async")
       .defaultValue(false)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable asynchronous cleaning for metadata table");
 
   // Maximum delta commits before compaction occurs
-  public static final ConfigProperty<Integer> METADATA_COMPACT_NUM_DELTA_COMMITS = ConfigProperty
+  public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.commits")
       .defaultValue(24)
       .sinceVersion("0.7.0")
@@ -146,19 +146,19 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean enabled() {
-    return getBoolean(METADATA_ENABLE);
+    return getBoolean(ENABLE);
   }
 
   public boolean enableSync() {
-    return enabled() && getBoolean(HoodieMetadataConfig.METADATA_SYNC_ENABLE);
+    return enabled() && getBoolean(HoodieMetadataConfig.SYNC_ENABLE);
   }
 
   public boolean validateFileListingMetadata() {
-    return getBoolean(METADATA_VALIDATE_ENABLE);
+    return getBoolean(VALIDATE_ENABLE);
   }
 
   public boolean enableMetrics() {
-    return getBoolean(METADATA_METRICS_ENABLE);
+    return getBoolean(METRICS_ENABLE);
   }
 
   public String getDirectoryFilterRegex() {
@@ -182,37 +182,37 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     }
 
     public Builder enable(boolean enable) {
-      metadataConfig.setValue(METADATA_ENABLE, String.valueOf(enable));
+      metadataConfig.setValue(ENABLE, String.valueOf(enable));
       return this;
     }
 
     public Builder enableSync(boolean enable) {
-      metadataConfig.setValue(METADATA_SYNC_ENABLE, String.valueOf(enable));
+      metadataConfig.setValue(SYNC_ENABLE, String.valueOf(enable));
       return this;
     }
 
     public Builder enableMetrics(boolean enableMetrics) {
-      metadataConfig.setValue(METADATA_METRICS_ENABLE, String.valueOf(enableMetrics));
+      metadataConfig.setValue(METRICS_ENABLE, String.valueOf(enableMetrics));
       return this;
     }
 
     public Builder validate(boolean validate) {
-      metadataConfig.setValue(METADATA_VALIDATE_ENABLE, String.valueOf(validate));
+      metadataConfig.setValue(VALIDATE_ENABLE, String.valueOf(validate));
       return this;
     }
 
     public Builder withInsertParallelism(int parallelism) {
-      metadataConfig.setValue(METADATA_INSERT_PARALLELISM_VALUE, String.valueOf(parallelism));
+      metadataConfig.setValue(INSERT_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
     }
 
     public Builder withAsyncClean(boolean asyncClean) {
-      metadataConfig.setValue(METADATA_ASYNC_CLEAN_ENABLE, String.valueOf(asyncClean));
+      metadataConfig.setValue(ASYNC_CLEAN_ENABLE, String.valueOf(asyncClean));
       return this;
     }
 
     public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
-      metadataConfig.setValue(METADATA_COMPACT_NUM_DELTA_COMMITS, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      metadataConfig.setValue(COMPACT_NUM_DELTA_COMMITS, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
       return this;
     }
 
@@ -249,69 +249,69 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   /**
-   * @deprecated Use {@link #METADATA_ENABLE} and its methods.
+   * @deprecated Use {@link #ENABLE} and its methods.
    */
   @Deprecated
-  public static final String METADATA_ENABLE_PROP = METADATA_ENABLE.key();
+  public static final String METADATA_ENABLE_PROP = ENABLE.key();
   /**
-   * @deprecated Use {@link #METADATA_ENABLE} and its methods.
+   * @deprecated Use {@link #ENABLE} and its methods.
    */
   @Deprecated
-  public static final boolean DEFAULT_METADATA_ENABLE = METADATA_ENABLE.defaultValue();
+  public static final boolean DEFAULT_METADATA_ENABLE = ENABLE.defaultValue();
   /**
-   * @deprecated Use {@link #METADATA_VALIDATE_ENABLE} and its methods.
+   * @deprecated Use {@link #VALIDATE_ENABLE} and its methods.
    */
   @Deprecated
-  public static final String METADATA_VALIDATE_PROP = METADATA_VALIDATE_ENABLE.key();
+  public static final String METADATA_VALIDATE_PROP = VALIDATE_ENABLE.key();
   /**
-   * @deprecated Use {@link #METADATA_VALIDATE_ENABLE} and its methods.
+   * @deprecated Use {@link #VALIDATE_ENABLE} and its methods.
    */
   @Deprecated
-  public static final boolean DEFAULT_METADATA_VALIDATE = METADATA_VALIDATE_ENABLE.defaultValue();
+  public static final boolean DEFAULT_METADATA_VALIDATE = VALIDATE_ENABLE.defaultValue();
 
   /**
-   * @deprecated Use {@link #METADATA_METRICS_ENABLE} and its methods.
+   * @deprecated Use {@link #METRICS_ENABLE} and its methods.
    */
   @Deprecated
-  public static final String METADATA_METRICS_ENABLE_PROP = METADATA_METRICS_ENABLE.key();
+  public static final String METADATA_METRICS_ENABLE_PROP = METRICS_ENABLE.key();
   /**
-   * @deprecated Use {@link #METADATA_METRICS_ENABLE} and its methods.
+   * @deprecated Use {@link #METRICS_ENABLE} and its methods.
    */
   @Deprecated
-  public static final boolean DEFAULT_METADATA_METRICS_ENABLE = METADATA_METRICS_ENABLE.defaultValue();
+  public static final boolean DEFAULT_METADATA_METRICS_ENABLE = METRICS_ENABLE.defaultValue();
 
   /**
-   * @deprecated Use {@link #METADATA_INSERT_PARALLELISM_VALUE} and its methods.
+   * @deprecated Use {@link #INSERT_PARALLELISM_VALUE} and its methods.
    */
   @Deprecated
-  public static final String METADATA_INSERT_PARALLELISM_PROP = METADATA_INSERT_PARALLELISM_VALUE.key();
+  public static final String METADATA_INSERT_PARALLELISM_PROP = INSERT_PARALLELISM_VALUE.key();
   /**
-   * @deprecated Use {@link #METADATA_INSERT_PARALLELISM_VALUE} and its methods.
+   * @deprecated Use {@link #INSERT_PARALLELISM_VALUE} and its methods.
    */
   @Deprecated
-  public static final int DEFAULT_METADATA_INSERT_PARALLELISM = METADATA_INSERT_PARALLELISM_VALUE.defaultValue();
+  public static final int DEFAULT_METADATA_INSERT_PARALLELISM = INSERT_PARALLELISM_VALUE.defaultValue();
 
   /**
-   * @deprecated Use {@link #METADATA_ASYNC_CLEAN_ENABLE} and its methods.
+   * @deprecated Use {@link #ASYNC_CLEAN_ENABLE} and its methods.
    */
   @Deprecated
-  public static final String METADATA_ASYNC_CLEAN_PROP = METADATA_ASYNC_CLEAN_ENABLE.key();
+  public static final String METADATA_ASYNC_CLEAN_PROP = ASYNC_CLEAN_ENABLE.key();
   /**
-   * @deprecated Use {@link #METADATA_ASYNC_CLEAN_ENABLE} and its methods.
+   * @deprecated Use {@link #ASYNC_CLEAN_ENABLE} and its methods.
    */
   @Deprecated
-  public static final boolean DEFAULT_METADATA_ASYNC_CLEAN = METADATA_ASYNC_CLEAN_ENABLE.defaultValue();
+  public static final boolean DEFAULT_METADATA_ASYNC_CLEAN = ASYNC_CLEAN_ENABLE.defaultValue();
 
   /**
-   * @deprecated Use {@link #METADATA_COMPACT_NUM_DELTA_COMMITS} and its methods.
+   * @deprecated Use {@link #COMPACT_NUM_DELTA_COMMITS} and its methods.
    */
   @Deprecated
-  public static final String METADATA_COMPACT_NUM_DELTA_COMMITS_PROP = METADATA_COMPACT_NUM_DELTA_COMMITS.key();
+  public static final String METADATA_COMPACT_NUM_DELTA_COMMITS_PROP = COMPACT_NUM_DELTA_COMMITS.key();
   /**
-   * @deprecated Use {@link #METADATA_COMPACT_NUM_DELTA_COMMITS} and its methods.
+   * @deprecated Use {@link #COMPACT_NUM_DELTA_COMMITS} and its methods.
    */
   @Deprecated
-  public static final int DEFAULT_METADATA_COMPACT_NUM_DELTA_COMMITS = METADATA_COMPACT_NUM_DELTA_COMMITS.defaultValue();
+  public static final int DEFAULT_METADATA_COMPACT_NUM_DELTA_COMMITS = COMPACT_NUM_DELTA_COMMITS.defaultValue();
 
   /**
    * @deprecated Use {@link #MIN_COMMITS_TO_KEEP} and its methods.

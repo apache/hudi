@@ -18,30 +18,28 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.Path
-
-import scala.collection.JavaConverters._
-import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS, PARTITIONPATH_FIELD, PAYLOAD_CLASS, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Tests on Spark DataSource for MOR table.
@@ -56,7 +54,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME_VALUE.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
   val verificationCol: String = "driver"
@@ -89,7 +87,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -98,7 +96,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     // Read RO View
     val hudiRODF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath + "/*/*/*")
 
     assertEquals(100, hudiRODF1.count()) // still 100, since we only updated
@@ -111,7 +109,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -119,7 +117,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     val updateCommitTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath + "/*/*/*")
 
     val updateCommitTimes = hudiSnapshotDF2.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
@@ -131,12 +129,12 @@ class TestMORDataSource extends HoodieClientTestBase {
 
     inputDF3.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
 
     val hudiSnapshotDF3 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath + "/*/*/*")
     assertEquals(100, hudiSnapshotDF3.count())
     assertEquals(updatedVerificationVal, hudiSnapshotDF3.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
@@ -639,7 +637,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, partitionEncode)
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
@@ -647,7 +645,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
     // query the partition by filter
     val count1 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath)
       .filter("partition = '2016/03/15'")
       .count()
@@ -656,7 +654,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     // query the partition by path
     val partitionPath = if (partitionEncode) "2016%2F03%2F15" else "2016/03/15"
     val count2 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .load(basePath + s"/$partitionPath")
       .count()
     assertEquals(countIn20160315, count2)
@@ -669,7 +667,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, partitionEncode)
-      .option(HoodieMetadataConfig.METADATA_ENABLE.key, isMetadataEnabled)
+      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
     // Incremental query without "*" in path

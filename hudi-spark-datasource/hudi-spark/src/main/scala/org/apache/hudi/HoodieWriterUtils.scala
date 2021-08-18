@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieMetadataConfig.{METADATA_ENABLE, METADATA_VALIDATE_ENABLE}
+import org.apache.hudi.common.config.HoodieMetadataConfig.{ENABLE, VALIDATE_ENABLE}
 import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 
@@ -49,8 +49,8 @@ object HoodieWriterUtils {
       RECORDKEY_FIELD.key -> RECORDKEY_FIELD.defaultValue,
       PARTITIONPATH_FIELD.key -> PARTITIONPATH_FIELD.defaultValue,
       KEYGENERATOR_CLASS.key -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,
-      METADATA_ENABLE.key -> METADATA_ENABLE.defaultValue.toString,
-      METADATA_VALIDATE_ENABLE.key -> METADATA_VALIDATE_ENABLE.defaultValue.toString,
+      ENABLE.key -> ENABLE.defaultValue.toString,
+      VALIDATE_ENABLE.key -> VALIDATE_ENABLE.defaultValue.toString,
       COMMIT_METADATA_KEYPREFIX.key -> COMMIT_METADATA_KEYPREFIX.defaultValue,
       INSERT_DROP_DUPS.key -> INSERT_DROP_DUPS.defaultValue,
       STREAMING_RETRY_CNT.key -> STREAMING_RETRY_CNT.defaultValue,

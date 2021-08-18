@@ -34,11 +34,11 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.config.HoodieHBaseIndexConfig.HBASE_GET_BATCH_SIZE;
-import static org.apache.hudi.config.HoodieHBaseIndexConfig.HBASE_PUT_BATCH_SIZE;
-import static org.apache.hudi.config.HoodieHBaseIndexConfig.HBASE_TABLENAME;
-import static org.apache.hudi.config.HoodieHBaseIndexConfig.HBASE_ZKPORT;
-import static org.apache.hudi.config.HoodieHBaseIndexConfig.HBASE_ZKQUORUM;
+import static org.apache.hudi.config.HoodieHBaseIndexConfig.GET_BATCH_SIZE;
+import static org.apache.hudi.config.HoodieHBaseIndexConfig.PUT_BATCH_SIZE;
+import static org.apache.hudi.config.HoodieHBaseIndexConfig.TABLENAME;
+import static org.apache.hudi.config.HoodieHBaseIndexConfig.ZKPORT;
+import static org.apache.hudi.config.HoodieHBaseIndexConfig.ZKQUORUM;
 
 /**
  * Indexing related config.
@@ -204,17 +204,17 @@ public class HoodieIndexConfig extends HoodieConfig {
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
    */
   @Deprecated
-  public static final String HBASE_ZKQUORUM_PROP = HBASE_ZKQUORUM.key();
+  public static final String HBASE_ZKQUORUM_PROP = ZKQUORUM.key();
   @Deprecated
-  public static final String HBASE_ZKPORT_PROP = HBASE_ZKPORT.key();
+  public static final String HBASE_ZKPORT_PROP = ZKPORT.key();
   @Deprecated
-  public static final String HBASE_ZK_ZNODEPARENT = HoodieHBaseIndexConfig.HBASE_ZK_NODE_PATH.key();
+  public static final String HBASE_ZK_ZNODEPARENT = HoodieHBaseIndexConfig.ZK_NODE_PATH.key();
   @Deprecated
-  public static final String HBASE_TABLENAME_PROP = HBASE_TABLENAME.key();
+  public static final String HBASE_TABLENAME_PROP = TABLENAME.key();
   @Deprecated
-  public static final String HBASE_GET_BATCH_SIZE_PROP = HBASE_GET_BATCH_SIZE.key();
+  public static final String HBASE_GET_BATCH_SIZE_PROP = GET_BATCH_SIZE.key();
   @Deprecated
-  public static final String HBASE_PUT_BATCH_SIZE_PROP = HBASE_PUT_BATCH_SIZE.key();
+  public static final String HBASE_PUT_BATCH_SIZE_PROP = PUT_BATCH_SIZE.key();
   @Deprecated
   public static final String DEFAULT_HBASE_BATCH_SIZE = "100";
   /** @deprecated Use {@link #INDEX_TYPE} and its methods instead */

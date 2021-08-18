@@ -32,19 +32,19 @@ import static org.apache.hudi.config.HoodieWriteCommitCallbackConfig.CALLBACK_PR
     description = "Controls notifications sent to Kafka, on events happening to a hudi table.")
 public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> KAFKA_BOOTSTRAP_SERVERS = ConfigProperty
+  public static final ConfigProperty<String> BOOTSTRAP_SERVERS = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.bootstrap.servers")
       .noDefaultValue()
       .sinceVersion("0.7.0")
       .withDocumentation("Bootstrap servers of kafka cluster, to be used for publishing commit metadata.");
 
-  public static final ConfigProperty<String> KAFKA_TOPIC = ConfigProperty
+  public static final ConfigProperty<String> TOPIC = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.topic")
       .noDefaultValue()
       .sinceVersion("0.7.0")
       .withDocumentation("Kafka topic name to publish timeline activity into.");
 
-  public static final ConfigProperty<String> KAFKA_PARTITION = ConfigProperty
+  public static final ConfigProperty<String> PARTITION = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.partition")
       .noDefaultValue()
       .sinceVersion("0.7.0")
@@ -52,13 +52,13 @@ public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
           + " for providing strict ordering. By default, Kafka messages are keyed by table name, which "
           + " guarantees ordering at the table level, but not globally (or when new partitions are added)");
 
-  public static final ConfigProperty<String> KAFKA_ACKS = ConfigProperty
+  public static final ConfigProperty<String> ACKS = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.acks")
       .defaultValue("all")
       .sinceVersion("0.7.0")
       .withDocumentation("kafka acks level, all by default to ensure strong durability.");
 
-  public static final ConfigProperty<Integer> KAFKA_RETRIES = ConfigProperty
+  public static final ConfigProperty<Integer> RETRIES = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.retries")
       .defaultValue(3)
       .sinceVersion("0.7.0")
@@ -68,43 +68,43 @@ public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
    * Set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
    */
   public static void setCallbackKafkaConfigIfNeeded(HoodieConfig config) {
-    config.setDefaultValue(KAFKA_ACKS);
-    config.setDefaultValue(KAFKA_RETRIES);
+    config.setDefaultValue(ACKS);
+    config.setDefaultValue(RETRIES);
   }
 
   /**
-   * @deprecated Use {@link #KAFKA_BOOTSTRAP_SERVERS} and its methods.
+   * @deprecated Use {@link #BOOTSTRAP_SERVERS} and its methods.
    */
   @Deprecated
-  public static final String CALLBACK_KAFKA_BOOTSTRAP_SERVERS = KAFKA_BOOTSTRAP_SERVERS.key();
+  public static final String CALLBACK_KAFKA_BOOTSTRAP_SERVERS = BOOTSTRAP_SERVERS.key();
   /**
-   * @deprecated Use {@link #KAFKA_TOPIC} and its methods.
+   * @deprecated Use {@link #TOPIC} and its methods.
    */
   @Deprecated
-  public static final String CALLBACK_KAFKA_TOPIC = KAFKA_TOPIC.key();
+  public static final String CALLBACK_KAFKA_TOPIC = TOPIC.key();
   /**
-   * @deprecated Use {@link #KAFKA_PARTITION} and its methods.
+   * @deprecated Use {@link #PARTITION} and its methods.
    */
   @Deprecated
-  public static final String CALLBACK_KAFKA_PARTITION = KAFKA_PARTITION.key();
+  public static final String CALLBACK_KAFKA_PARTITION = PARTITION.key();
   /**
-   * @deprecated Use {@link #KAFKA_ACKS} and its methods.
+   * @deprecated Use {@link #ACKS} and its methods.
    */
   @Deprecated
-  public static final String CALLBACK_KAFKA_ACKS = KAFKA_ACKS.key();
+  public static final String CALLBACK_KAFKA_ACKS = ACKS.key();
   /**
-   * @deprecated Use {@link #KAFKA_ACKS} and its methods.
+   * @deprecated Use {@link #ACKS} and its methods.
    */
   @Deprecated
-  public static final String DEFAULT_CALLBACK_KAFKA_ACKS = KAFKA_ACKS.defaultValue();
+  public static final String DEFAULT_CALLBACK_KAFKA_ACKS = ACKS.defaultValue();
   /**
-   * @deprecated Use {@link #KAFKA_RETRIES} and its methods.
+   * @deprecated Use {@link #RETRIES} and its methods.
    */
   @Deprecated
-  public static final String CALLBACK_KAFKA_RETRIES = KAFKA_RETRIES.key();
+  public static final String CALLBACK_KAFKA_RETRIES = RETRIES.key();
   /**
-   * @deprecated Use {@link #KAFKA_RETRIES} and its methods.
+   * @deprecated Use {@link #RETRIES} and its methods.
    */
   @Deprecated
-  public static final int DEFAULT_CALLBACK_KAFKA_RETRIES = KAFKA_RETRIES.defaultValue();
+  public static final int DEFAULT_CALLBACK_KAFKA_RETRIES = RETRIES.defaultValue();
 }

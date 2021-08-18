@@ -1250,7 +1250,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       props.load(inputStream);
     }
 
-    assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP), DummyAvroPayload.class.getName());
+    assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), DummyAvroPayload.class.getName());
   }
 
   @Test
@@ -1276,7 +1276,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       props.load(inputStream);
     }
 
-    assertFalse(props.containsKey(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP.key()));
+    assertFalse(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
   @Test

@@ -46,7 +46,7 @@ public class TestHBaseQPSResourceAllocator {
 
   @Test
   public void testsExplicitDefaultQPSResourceAllocator() {
-    HoodieWriteConfig config = getConfig(Option.of(HoodieHBaseIndexConfig.HBASE_INDEX_QPS_ALLOCATOR_CLASS_NAME.defaultValue()));
+    HoodieWriteConfig config = getConfig(Option.of(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME.defaultValue()));
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
     assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),

@@ -150,7 +150,7 @@ public class HoodieJavaApp {
         // use to combine duplicate records in input/with disk val
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         // Used by hive sync and queries
-        .option(HoodieWriteConfig.TABLE_NAME_VALUE.key(), tableName)
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         // Add Key Extractor
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
@@ -185,7 +185,7 @@ public class HoodieJavaApp {
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME_VALUE.key(), tableName).mode(SaveMode.Append);
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
     writer.save(tablePath);
@@ -213,7 +213,7 @@ public class HoodieJavaApp {
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME_VALUE.key(), tableName).mode(SaveMode.Append);
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
     writer.save(tablePath);

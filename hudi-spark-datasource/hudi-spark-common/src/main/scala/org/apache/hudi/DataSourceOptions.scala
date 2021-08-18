@@ -722,13 +722,13 @@ object DataSourceOptionsHelper {
   val allConfigsWithAlternatives = List(
     DataSourceReadOptions.QUERY_TYPE,
     DataSourceWriteOptions.TABLE_TYPE,
-    HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP,
-    HoodieTableConfig.HOODIE_LOG_FILE_FORMAT_PROP
+    HoodieTableConfig.BASE_FILE_FORMAT,
+    HoodieTableConfig.LOG_FILE_FORMAT
   )
 
   // put all the deprecated configs here
   val allDeprecatedConfigs: Set[String] = Set(
-    ConsistencyGuardConfig.CONSISTENCY_CHECK_ENABLE.key
+    ConsistencyGuardConfig.ENABLE.key
   )
 
   // maps the deprecated config name to its latest name

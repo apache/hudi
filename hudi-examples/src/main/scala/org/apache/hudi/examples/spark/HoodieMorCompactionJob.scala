@@ -25,7 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.util.Option
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_VALUE
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.examples.common.{HoodieExampleDataGenerator, HoodieExampleSparkUtils}
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
@@ -89,7 +89,7 @@ object HoodieMorCompactionJob {
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
       option(PARTITIONPATH_FIELD.key, "partitionpath").
-      option(TABLE_NAME_VALUE.key, tableName).
+      option(TBL_NAME.key, tableName).
       option(TABLE_TYPE.key, tableType).
       mode(Overwrite).
       save(tablePath)
@@ -105,7 +105,7 @@ object HoodieMorCompactionJob {
       option(PRECOMBINE_FIELD.key, "ts").
       option(RECORDKEY_FIELD.key, "uuid").
       option(PARTITIONPATH_FIELD.key, "partitionpath").
-      option(TABLE_NAME_VALUE.key, tableName).
+      option(TBL_NAME.key, tableName).
       option(TABLE_TYPE.key, tableType).
       mode(Append).
       save(tablePath)

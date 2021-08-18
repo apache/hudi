@@ -41,7 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.hudi.config.HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
 /**
  * Clustering Strategy based on following.
@@ -77,8 +77,8 @@ public class SparkSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
    * Create BulkInsertPartitioner based on strategy params.
    */
   protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
-    if (strategyParams.containsKey(CLUSTERING_SORT_COLUMNS.key())) {
-      return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(CLUSTERING_SORT_COLUMNS.key()).split(","),
+    if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
+      return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
           HoodieAvroUtils.addMetadataFields(schema)));
     } else {
       return Option.empty();

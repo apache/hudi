@@ -79,7 +79,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   private static final long serialVersionUID = 0L;
 
-  public static final ConfigProperty<String> TABLE_NAME_VALUE = ConfigProperty
+  public static final ConfigProperty<String> TBL_NAME = ConfigProperty
       .key("hoodie.table.name")
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
@@ -418,10 +418,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   private EngineType engineType;
 
   /**
-   * @deprecated Use {@link #TABLE_NAME_VALUE} and its methods instead
+   * @deprecated Use {@link #TBL_NAME} and its methods instead
    */
   @Deprecated
-  public static final String TABLE_NAME = TABLE_NAME_VALUE.key();
+  public static final String TABLE_NAME = TBL_NAME.key();
   /**
    * @deprecated Use {@link #PRECOMBINE_FIELD} and its methods instead
    */
@@ -855,7 +855,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getTableName() {
-    return getString(TABLE_NAME_VALUE);
+    return getString(TBL_NAME);
   }
 
   public String getPreCombineField() {
@@ -1021,8 +1021,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean populateMetaFields() {
-    return Boolean.parseBoolean(getStringOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS,
-        HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()));
+    return Boolean.parseBoolean(getStringOrDefault(HoodieTableConfig.POPULATE_META_FIELDS,
+        HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
   }
 
   /**
@@ -1125,7 +1125,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isPreserveHoodieCommitMetadata() {
-    return getBoolean(HoodieClusteringConfig.CLUSTERING_PRESERVE_HOODIE_COMMIT_METADATA);
+    return getBoolean(HoodieClusteringConfig.PRESERVE_COMMIT_METADATA);
   }
 
   public boolean isClusteringEnabled() {
@@ -1158,7 +1158,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getClusteringUpdatesStrategyClass() {
-    return getString(HoodieClusteringConfig.CLUSTERING_UPDATES_STRATEGY);
+    return getString(HoodieClusteringConfig.UPDATES_STRATEGY);
   }
 
   public HoodieFailedWritesCleaningPolicy getFailedWritesCleanPolicy() {
@@ -1170,39 +1170,39 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Clustering properties.
    */
   public String getClusteringPlanStrategyClass() {
-    return getString(HoodieClusteringConfig.CLUSTERING_PLAN_STRATEGY_CLASS_NAME);
+    return getString(HoodieClusteringConfig.PLAN_STRATEGY_CLASS_NAME);
   }
 
   public String getClusteringExecutionStrategyClass() {
-    return getString(HoodieClusteringConfig.CLUSTERING_EXECUTION_STRATEGY_CLASS_NAME);
+    return getString(HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME);
   }
 
   public long getClusteringMaxBytesInGroup() {
-    return getLong(HoodieClusteringConfig.CLUSTERING_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP);
+    return getLong(HoodieClusteringConfig.PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP);
   }
 
   public long getClusteringSmallFileLimit() {
-    return getLong(HoodieClusteringConfig.CLUSTERING_STRATEGY_SMALL_FILE_LIMIT);
+    return getLong(HoodieClusteringConfig.PLAN_STRATEGY_SMALL_FILE_LIMIT);
   }
 
   public int getClusteringMaxNumGroups() {
-    return getInt(HoodieClusteringConfig.CLUSTERING_STRATEGY_MAX_GROUPS);
+    return getInt(HoodieClusteringConfig.PLAN_STRATEGY_MAX_GROUPS);
   }
 
   public long getClusteringTargetFileMaxBytes() {
-    return getLong(HoodieClusteringConfig.CLUSTERING_STRATEGY_TARGET_FILE_MAX_BYTES);
+    return getLong(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES);
   }
 
   public int getTargetPartitionsForClustering() {
-    return getInt(HoodieClusteringConfig.CLUSTERING_DAYBASED_LOOKBACK_PARTITIONS);
+    return getInt(HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS);
   }
 
   public int getSkipPartitionsFromLatestForClustering() {
-    return getInt(HoodieClusteringConfig.CLUSTERING_SKIP_PARTITIONS_FROM_LATEST);
+    return getInt(HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST);
   }
 
   public String getClusteringSortColumns() {
-    return getString(HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS);
+    return getString(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS);
   }
 
   /**
@@ -1225,59 +1225,59 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getHbaseZkQuorum() {
-    return getString(HoodieHBaseIndexConfig.HBASE_ZKQUORUM);
+    return getString(HoodieHBaseIndexConfig.ZKQUORUM);
   }
 
   public int getHbaseZkPort() {
-    return getInt(HoodieHBaseIndexConfig.HBASE_ZKPORT);
+    return getInt(HoodieHBaseIndexConfig.ZKPORT);
   }
 
   public String getHBaseZkZnodeParent() {
-    return getString(HoodieHBaseIndexConfig.HBASE_ZK_NODE_PATH);
+    return getString(HoodieHBaseIndexConfig.ZK_NODE_PATH);
   }
 
   public String getHbaseTableName() {
-    return getString(HoodieHBaseIndexConfig.HBASE_TABLENAME);
+    return getString(HoodieHBaseIndexConfig.TABLENAME);
   }
 
   public int getHbaseIndexGetBatchSize() {
-    return getInt(HoodieHBaseIndexConfig.HBASE_GET_BATCH_SIZE);
+    return getInt(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
   }
 
   public Boolean getHBaseIndexRollbackSync() {
-    return getBoolean(HoodieHBaseIndexConfig.HBASE_INDEX_ROLLBACK_SYNC_ENABLE);
+    return getBoolean(HoodieHBaseIndexConfig.ROLLBACK_SYNC_ENABLE);
   }
 
   public int getHbaseIndexPutBatchSize() {
-    return getInt(HoodieHBaseIndexConfig.HBASE_PUT_BATCH_SIZE);
+    return getInt(HoodieHBaseIndexConfig.PUT_BATCH_SIZE);
   }
 
   public Boolean getHbaseIndexPutBatchSizeAutoCompute() {
-    return getBoolean(HoodieHBaseIndexConfig.HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE);
+    return getBoolean(HoodieHBaseIndexConfig.PUT_BATCH_SIZE_AUTO_COMPUTE);
   }
 
   public String getHBaseQPSResourceAllocatorClass() {
-    return getString(HoodieHBaseIndexConfig.HBASE_INDEX_QPS_ALLOCATOR_CLASS_NAME);
+    return getString(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME);
   }
 
   public String getHBaseQPSZKnodePath() {
-    return getString(HoodieHBaseIndexConfig.HBASE_ZKPATH_QPS_ROOT);
+    return getString(HoodieHBaseIndexConfig.ZKPATH_QPS_ROOT);
   }
 
   public String getHBaseZkZnodeSessionTimeout() {
-    return getString(HoodieHBaseIndexConfig.HBASE_INDEX_ZK_SESSION_TIMEOUT_MS);
+    return getString(HoodieHBaseIndexConfig.ZK_SESSION_TIMEOUT_MS);
   }
 
   public String getHBaseZkZnodeConnectionTimeout() {
-    return getString(HoodieHBaseIndexConfig.HBASE_INDEX_ZK_CONNECTION_TIMEOUT_MS);
+    return getString(HoodieHBaseIndexConfig.ZK_CONNECTION_TIMEOUT_MS);
   }
 
   public boolean getHBaseIndexShouldComputeQPSDynamically() {
-    return getBoolean(HoodieHBaseIndexConfig.HBASE_INDEX_COMPUTE_QPS_DYNAMICALLY);
+    return getBoolean(HoodieHBaseIndexConfig.COMPUTE_QPS_DYNAMICALLY);
   }
 
   public int getHBaseIndexDesiredPutsTime() {
-    return getInt(HoodieHBaseIndexConfig.HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECONDS);
+    return getInt(HoodieHBaseIndexConfig.DESIRED_PUTS_TIME_IN_SECONDS);
   }
 
   public String getBloomFilterType() {
@@ -1294,15 +1294,15 @@ public class HoodieWriteConfig extends HoodieConfig {
    * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
    */
   public float getHbaseIndexQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.HBASE_QPS_FRACTION);
+    return getFloat(HoodieHBaseIndexConfig.QPS_FRACTION);
   }
 
   public float getHBaseIndexMinQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.HBASE_MIN_QPS_FRACTION);
+    return getFloat(HoodieHBaseIndexConfig.MIN_QPS_FRACTION);
   }
 
   public float getHBaseIndexMaxQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.HBASE_MAX_QPS_FRACTION);
+    return getFloat(HoodieHBaseIndexConfig.MAX_QPS_FRACTION);
   }
 
   /**
@@ -1310,11 +1310,11 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Hoodie jobs to an Hbase Region Server
    */
   public int getHbaseIndexMaxQPSPerRegionServer() {
-    return getInt(HoodieHBaseIndexConfig.HBASE_MAX_QPS_PER_REGION_SERVER);
+    return getInt(HoodieHBaseIndexConfig.MAX_QPS_PER_REGION_SERVER);
   }
 
   public boolean getHbaseIndexUpdatePartitionPath() {
-    return getBoolean(HoodieHBaseIndexConfig.HBASE_INDEX_UPDATE_PARTITION_PATH_ENABLE);
+    return getBoolean(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
   }
 
   public int getBloomIndexParallelism() {
@@ -1461,42 +1461,42 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getDatadogReportPeriodSeconds() {
-    return getInt(HoodieMetricsDatadogConfig.DATADOG_REPORT_PERIOD_IN_SECONDS);
+    return getInt(HoodieMetricsDatadogConfig.REPORT_PERIOD_IN_SECONDS);
   }
 
   public ApiSite getDatadogApiSite() {
-    return ApiSite.valueOf(getString(HoodieMetricsDatadogConfig.DATADOG_API_SITE_VALUE));
+    return ApiSite.valueOf(getString(HoodieMetricsDatadogConfig.API_SITE_VALUE));
   }
 
   public String getDatadogApiKey() {
-    if (props.containsKey(HoodieMetricsDatadogConfig.DATADOG_APIKEY.key())) {
-      return getString(HoodieMetricsDatadogConfig.DATADOG_APIKEY);
+    if (props.containsKey(HoodieMetricsDatadogConfig.API_KEY.key())) {
+      return getString(HoodieMetricsDatadogConfig.API_KEY);
     } else {
       Supplier<String> apiKeySupplier = ReflectionUtils.loadClass(
-          getString(HoodieMetricsDatadogConfig.DATADOG_APIKEY_SUPPLIER));
+          getString(HoodieMetricsDatadogConfig.API_KEY_SUPPLIER));
       return apiKeySupplier.get();
     }
   }
 
   public boolean getDatadogApiKeySkipValidation() {
-    return getBoolean(HoodieMetricsDatadogConfig.DATADOG_APIKEY_SKIP_VALIDATION);
+    return getBoolean(HoodieMetricsDatadogConfig.API_KEY_SKIP_VALIDATION);
   }
 
   public int getDatadogApiTimeoutSeconds() {
-    return getInt(HoodieMetricsDatadogConfig.DATADOG_API_TIMEOUT_IN_SECONDS);
+    return getInt(HoodieMetricsDatadogConfig.API_TIMEOUT_IN_SECONDS);
   }
 
   public String getDatadogMetricPrefix() {
-    return getString(HoodieMetricsDatadogConfig.DATADOG_METRIC_PREFIX_VALUE);
+    return getString(HoodieMetricsDatadogConfig.METRIC_PREFIX_VALUE);
   }
 
   public String getDatadogMetricHost() {
-    return getString(HoodieMetricsDatadogConfig.DATADOG_METRIC_HOST_NAME);
+    return getString(HoodieMetricsDatadogConfig.METRIC_HOST_NAME);
   }
 
   public List<String> getDatadogMetricTags() {
     return Arrays.stream(getStringOrDefault(
-        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAG_VALUES, ",").split("\\s*,\\s*")).collect(Collectors.toList());
+        HoodieMetricsDatadogConfig.METRIC_TAG_VALUES, ",").split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
   public String getMetricReporterClassName() {
@@ -1594,39 +1594,39 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getBootstrapSourceBasePath() {
-    return getString(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH);
+    return getString(HoodieBootstrapConfig.BASE_PATH);
   }
 
   public String getBootstrapModeSelectorClass() {
-    return getString(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_CLASS);
+    return getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS);
   }
 
   public String getFullBootstrapInputProvider() {
-    return getString(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS);
+    return getString(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME);
   }
 
   public String getBootstrapKeyGeneratorClass() {
-    return getString(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS_NAME);
+    return getString(HoodieBootstrapConfig.KEYGEN_CLASS_NAME);
   }
 
   public String getBootstrapKeyGeneratorType() {
-    return getString(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_TYPE);
+    return getString(HoodieBootstrapConfig.KEYGEN_TYPE);
   }
 
   public String getBootstrapModeSelectorRegex() {
-    return getString(HoodieBootstrapConfig.BOOTSTRAP_PARTITION_SELECTOR_REGEX_PATTERN);
+    return getString(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_PATTERN);
   }
 
   public BootstrapMode getBootstrapModeForRegexMatch() {
-    return BootstrapMode.valueOf(getString(HoodieBootstrapConfig.BOOTSTRAP_PARTITION_SELECTOR_REGEX_MODE));
+    return BootstrapMode.valueOf(getString(HoodieBootstrapConfig.PARTITION_SELECTOR_REGEX_MODE));
   }
 
   public String getBootstrapPartitionPathTranslatorClass() {
-    return getString(HoodieBootstrapConfig.BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS_NAME);
+    return getString(HoodieBootstrapConfig.PARTITION_PATH_TRANSLATOR_CLASS_NAME);
   }
 
   public int getBootstrapParallelism() {
-    return getInt(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM_VALUE);
+    return getInt(HoodieBootstrapConfig.PARALLELISM_VALUE);
   }
 
   public Long getMaxMemoryPerPartitionMerge() {
@@ -1653,15 +1653,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getMetadataInsertParallelism() {
-    return getInt(HoodieMetadataConfig.METADATA_INSERT_PARALLELISM_VALUE);
+    return getInt(HoodieMetadataConfig.INSERT_PARALLELISM_VALUE);
   }
 
   public int getMetadataCompactDeltaCommitMax() {
-    return getInt(HoodieMetadataConfig.METADATA_COMPACT_NUM_DELTA_COMMITS);
+    return getInt(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS);
   }
 
   public boolean isMetadataAsyncClean() {
-    return getBoolean(HoodieMetadataConfig.METADATA_ASYNC_CLEAN_ENABLE);
+    return getBoolean(HoodieMetadataConfig.ASYNC_CLEAN_ENABLE);
   }
 
   public int getMetadataMaxCommitsToKeep() {
@@ -1714,19 +1714,19 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getPreCommitValidators() {
-    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS);
+    return getString(HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES);
   }
 
   public String getPreCommitValidatorEqualitySqlQueries() {
-    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_EQUALITY_SQL_QUERIES);
+    return getString(HoodiePreCommitValidatorConfig.EQUALITY_SQL_QUERIES);
   }
 
   public String getPreCommitValidatorSingleResultSqlQueries() {
-    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_SINGLE_VALUE_SQL_QUERIES);
+    return getString(HoodiePreCommitValidatorConfig.SINGLE_VALUE_SQL_QUERIES);
   }
 
   public String getPreCommitValidatorInequalitySqlQueries() {
-    return getString(HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_INEQUALITY_SQL_QUERIES);
+    return getString(HoodiePreCommitValidatorConfig.INEQUALITY_SQL_QUERIES);
   }
 
   public boolean allowEmptyCommit() {
@@ -1798,7 +1798,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder forTable(String tableName) {
-      writeConfig.setValue(TABLE_NAME_VALUE, tableName);
+      writeConfig.setValue(TBL_NAME, tableName);
       return this;
     }
 
@@ -2054,7 +2054,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
-      writeConfig.setValue(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       return this;
     }
 

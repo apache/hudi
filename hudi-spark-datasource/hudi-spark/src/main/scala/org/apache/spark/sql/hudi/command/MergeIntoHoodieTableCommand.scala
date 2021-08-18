@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_VALUE
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils, SparkAdapterSupport}
@@ -434,7 +434,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
           RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
           KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
           PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
-          TABLE_NAME_VALUE.key -> targetTableName,
+          TBL_NAME.key -> targetTableName,
           PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
           PAYLOAD_CLASS.key -> classOf[ExpressionPayload].getCanonicalName,
           META_SYNC_ENABLED.key -> enableHive.toString,

@@ -128,7 +128,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     dfs.mkdirs(new Path(basePath));
 
     Properties properties = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
-    properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.key(), baseFileFormat.toString());
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
 
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, properties);
     initTestDataGenerator();
@@ -140,7 +140,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
   @BeforeEach
   public void init() throws IOException {
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), true);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), true);
   }
 
   @AfterEach
@@ -165,7 +165,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   @MethodSource("populateMetaFieldsParams")
   public void testSimpleInsertAndUpdate(boolean populateMetaFields) throws Exception {
     clean();
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
 
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
@@ -266,7 +266,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
   public void testSimpleClusteringNoUpdates(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
     clean();
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
     testClustering(false, populateMetaFields, preserveCommitMetadata);
   }
 
@@ -274,7 +274,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
   public void testSimpleClusteringWithUpdates(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
     clean();
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
     testClustering(true, populateMetaFields, preserveCommitMetadata);
   }
 
@@ -478,7 +478,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   @MethodSource("populateMetaFieldsParams")
   public void testSimpleInsertUpdateAndDelete(boolean populateMetaFields) throws Exception {
     clean();
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
@@ -777,7 +777,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   @MethodSource("populateMetaFieldsParams")
   public void testRollbackWithDeltaAndCompactionCommitUsingFileList(boolean populateMetaFields) throws Exception {
     clean();
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
     testRollbackWithDeltaAndCompactionCommit(false, populateMetaFields);
   }
 
@@ -785,7 +785,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   @MethodSource("populateMetaFieldsParams")
   public void testRollbackWithDeltaAndCompactionCommitUsingMarkers(boolean populateMetaFields) throws Exception {
     clean();
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
     testRollbackWithDeltaAndCompactionCommit(true, populateMetaFields);
   }
 
@@ -793,7 +793,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   @MethodSource("populateMetaFieldsParams")
   public void testMultiRollbackWithDeltaAndCompactionCommit(boolean populateMetaFields) throws Exception {
     clean();
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
@@ -966,7 +966,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   @MethodSource("populateMetaFieldsParams")
   public void testUpsertPartitioner(boolean populateMetaFields) throws Exception {
     clean();
-    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
+    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();

@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, _}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_VALUE
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql._
@@ -67,7 +67,7 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
       Map(
         "path" -> path,
         KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        TABLE_NAME_VALUE.key -> tableId.table,
+        TBL_NAME.key -> tableId.table,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),

@@ -297,10 +297,10 @@ public class TimelineServerPerf implements Serializable {
 
     @Parameter(names = {"--base-store-path", "-sp"},
         description = "Directory where spilled view entries will be stored. Used for SPILLABLE_DISK storage type")
-    public String baseStorePathForFileGroups = FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue();
+    public String baseStorePathForFileGroups = FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue();
 
     @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
-    public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH_PROP.defaultValue();
+    public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
 
     @Parameter(names = {"--wait-for-manual-queries", "-ww"})
     public Boolean waitForManualQueries = false;
@@ -309,7 +309,7 @@ public class TimelineServerPerf implements Serializable {
     public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 
     @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.METADATA_VALIDATE_ENABLE.defaultValue();
+    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue();
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;

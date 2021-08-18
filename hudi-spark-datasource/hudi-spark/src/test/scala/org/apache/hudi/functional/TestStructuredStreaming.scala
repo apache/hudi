@@ -50,7 +50,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME_VALUE.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
   @BeforeEach override def setUp() {

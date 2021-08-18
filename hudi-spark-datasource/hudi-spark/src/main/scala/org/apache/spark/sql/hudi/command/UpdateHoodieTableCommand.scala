@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_VALUE
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
@@ -97,7 +97,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
         RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
         KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
         PRECOMBINE_FIELD.key -> primaryColumns.head, //set the default preCombine field.
-        TABLE_NAME_VALUE.key -> tableId.table,
+        TBL_NAME.key -> tableId.table,
         OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
         META_SYNC_ENABLED.key -> enableHive.toString,

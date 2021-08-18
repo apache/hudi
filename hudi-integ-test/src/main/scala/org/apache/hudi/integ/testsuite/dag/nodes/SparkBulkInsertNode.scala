@@ -59,7 +59,7 @@ class SparkBulkInsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
       .option(DataSourceWriteOptions.ENABLE_ROW_WRITER.key(), String.valueOf(config.enableRowWriting()))
       .option(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX.key(), "deltastreamer.checkpoint.key")
       .option("deltastreamer.checkpoint.key", context.getWriterContext.getHoodieTestSuiteWriter.getLastCheckpoint.orElse(""))
-      .option(HoodieWriteConfig.TABLE_NAME_VALUE.key(), context.getHoodieTestSuiteWriter.getCfg.targetTableName)
+      .option(HoodieWriteConfig.TBL_NAME.key(), context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .mode(saveMode)
       .save(context.getHoodieTestSuiteWriter.getWriteConfig.getBasePath)
   }

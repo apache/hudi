@@ -35,12 +35,12 @@ import org.apache.log4j.Logger;
 
 import java.util.Properties;
 
-import static org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_VALUE;
-import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.KAFKA_ACKS;
-import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.KAFKA_BOOTSTRAP_SERVERS;
-import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.KAFKA_PARTITION;
-import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.KAFKA_RETRIES;
-import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.KAFKA_TOPIC;
+import static org.apache.hudi.config.HoodieWriteConfig.TBL_NAME;
+import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.ACKS;
+import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.BOOTSTRAP_SERVERS;
+import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.PARTITION;
+import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.RETRIES;
+import static org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig.TOPIC;
 
 /**
  * Kafka implementation of {@link HoodieWriteCommitCallback}.
@@ -55,8 +55,8 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
 
   public HoodieWriteCommitKafkaCallback(HoodieWriteConfig config) {
     this.hoodieConfig = config;
-    this.bootstrapServers = config.getString(KAFKA_BOOTSTRAP_SERVERS);
-    this.topic = config.getString(KAFKA_TOPIC);
+    this.bootstrapServers = config.getString(BOOTSTRAP_SERVERS);
+    this.topic = config.getString(TOPIC);
     validateKafkaConfig();
   }
 
@@ -85,10 +85,10 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     kafkaProducerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     // default "all" to ensure no message loss
     kafkaProducerProps.setProperty(ProducerConfig.ACKS_CONFIG, hoodieConfig
-        .getString(KAFKA_ACKS));
+        .getString(ACKS));
     // retries 3 times by default
     kafkaProducerProps.setProperty(ProducerConfig.RETRIES_CONFIG, hoodieConfig
-        .getString(KAFKA_RETRIES));
+        .getString(RETRIES));
     kafkaProducerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
         "org.apache.kafka.common.serialization.StringSerializer");
     kafkaProducerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -109,13 +109,13 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
    * @return Callback {@link ProducerRecord}
    */
   private ProducerRecord<String, String> buildProducerRecord(HoodieConfig hoodieConfig, String callbackMsg) {
-    String partition = hoodieConfig.getString(KAFKA_PARTITION);
+    String partition = hoodieConfig.getString(PARTITION);
     if (null != partition) {
       return new ProducerRecord<String, String>(topic, Integer.valueOf(partition), hoodieConfig
-          .getString(TABLE_NAME_VALUE),
+          .getString(TBL_NAME),
           callbackMsg);
     } else {
-      return new ProducerRecord<String, String>(topic, hoodieConfig.getString(TABLE_NAME_VALUE), callbackMsg);
+      return new ProducerRecord<String, String>(topic, hoodieConfig.getString(TBL_NAME), callbackMsg);
     }
   }
 
@@ -125,9 +125,9 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
    */
   private void validateKafkaConfig() {
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(bootstrapServers), String.format("Config %s can not be "
-        + "null or empty", KAFKA_BOOTSTRAP_SERVERS.key()));
+        + "null or empty", BOOTSTRAP_SERVERS.key()));
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(topic), String.format("Config %s can not be null or empty",
-        KAFKA_TOPIC.key()));
+        TOPIC.key()));
   }
 
   /**

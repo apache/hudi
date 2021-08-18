@@ -49,7 +49,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 
 /**
  * Performs bootstrap from a non-hudi source.
@@ -111,10 +111,10 @@ public class BootstrapExecutor  implements Serializable {
     this.configuration = conf;
     this.props = properties;
 
-    ValidationUtils.checkArgument(properties.containsKey(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH_PROP
+    ValidationUtils.checkArgument(properties.containsKey(HoodieTableConfig.BOOTSTRAP_BASE_PATH
             .key()),
-        HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH_PROP.key() + " must be specified.");
-    this.bootstrapBasePath = properties.getString(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH_PROP.key());
+        HoodieTableConfig.BOOTSTRAP_BASE_PATH.key() + " must be specified.");
+    this.bootstrapBasePath = properties.getString(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key());
 
     // Add more defaults if full bootstrap requested
     this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS().key(),
@@ -175,7 +175,7 @@ public class BootstrapExecutor  implements Serializable {
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)

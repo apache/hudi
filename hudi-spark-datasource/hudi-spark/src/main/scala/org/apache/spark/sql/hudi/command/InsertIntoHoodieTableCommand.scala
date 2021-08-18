@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME_VALUE
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
@@ -263,7 +263,7 @@ object InsertIntoHoodieTableCommand extends Logging {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
-        TABLE_NAME_VALUE.key -> table.identifier.table,
+        TBL_NAME.key -> table.identifier.table,
         PRECOMBINE_FIELD.key -> tableSchema.fields.last.name,
         OPERATION.key -> operation,
         KEYGENERATOR_CLASS.key -> keyGenClass,

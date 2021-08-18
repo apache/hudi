@@ -288,7 +288,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
         // Write a table by spark dataframe.
         df.write.format("hudi")
-          .option(HoodieWriteConfig.TABLE_NAME_VALUE.key, tableName)
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
@@ -319,9 +319,9 @@ class TestCreateTable extends TestHoodieSqlBase {
           .setConf(spark.sessionState.newHadoopConf())
           .build()
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA.key))
-        assertResult("dt")(properties(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP.key))
-        assertResult("ts")(properties(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP.key))
+        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+        assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
+        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
 
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$partitionValue')")
@@ -365,7 +365,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.
         df.write.format("hudi")
-          .option(HoodieWriteConfig.TABLE_NAME_VALUE.key, tableName)
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
@@ -396,9 +396,9 @@ class TestCreateTable extends TestHoodieSqlBase {
           .setConf(spark.sessionState.newHadoopConf())
           .build()
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA.key))
-        assertResult("day,hh")(properties(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP.key))
-        assertResult("ts")(properties(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP.key))
+        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+        assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
+        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
 
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$day', 12)")
@@ -440,7 +440,7 @@ class TestCreateTable extends TestHoodieSqlBase {
       import spark.implicits._
       val df = Seq((1, "a1", 10, 1000)).toDF("id", "name", "value", "ts")
       df.write.format("hudi")
-        .option(HoodieWriteConfig.TABLE_NAME_VALUE.key, tableName)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
         .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
         .option(RECORDKEY_FIELD.key, "id")
         .option(PRECOMBINE_FIELD.key, "ts")
@@ -470,8 +470,8 @@ class TestCreateTable extends TestHoodieSqlBase {
         .setConf(spark.sessionState.newHadoopConf())
         .build()
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult(true)(properties.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA.key))
-      assertResult("ts")(properties(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP.key))
+      assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+      assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
 
       // Test insert into
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
