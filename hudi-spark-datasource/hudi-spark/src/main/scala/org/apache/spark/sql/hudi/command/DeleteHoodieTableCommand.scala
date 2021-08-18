@@ -71,7 +71,7 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
-        HIVE_SUPPORT_TIMESTAMP.key -> "true",
+        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
         HIVE_STYLE_PARTITIONING.key -> "true",
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL

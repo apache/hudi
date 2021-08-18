@@ -277,7 +277,7 @@ object InsertIntoHoodieTableCommand extends Logging {
         HIVE_USE_JDBC.key -> "false",
         HIVE_DATABASE.key -> table.identifier.database.getOrElse("default"),
         HIVE_TABLE.key -> table.identifier.table,
-        HIVE_SUPPORT_TIMESTAMP.key -> "true",
+        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
         HIVE_STYLE_PARTITIONING.key -> "true",
         HIVE_PARTITION_FIELDS.key -> partitionFields,
         HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,

@@ -551,7 +551,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       "path" -> basePath,
       DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
       DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition",
-      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX.key -> "true",
+      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key -> "true",
       DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> "true"
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)

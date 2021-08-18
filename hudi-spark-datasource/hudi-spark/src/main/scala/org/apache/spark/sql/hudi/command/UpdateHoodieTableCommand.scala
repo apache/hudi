@@ -108,7 +108,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
         HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
         HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
         URL_ENCODE_PARTITIONING.key -> "true",
-        HIVE_SUPPORT_TIMESTAMP.key -> "true",
+        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
         HIVE_STYLE_PARTITIONING.key -> "true",
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL

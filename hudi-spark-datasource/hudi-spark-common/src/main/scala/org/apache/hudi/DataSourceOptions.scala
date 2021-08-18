@@ -327,7 +327,7 @@ object DataSourceWriteOptions {
     .withDocumentation("Config to indicate whether to ignore any non exception error (e.g. writestatus error)"
       + " within a streaming microbatch")
 
-  val META_SYNC_CLIENT_TOOL_CLASS: ConfigProperty[String] = ConfigProperty
+  val META_SYNC_CLIENT_TOOL_CLASS_NAME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.meta.sync.client.tool.class")
     .defaultValue(classOf[HiveSyncTool].getName)
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
@@ -402,7 +402,7 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .withDocumentation("")
 
-  /* @deprecated We should use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
+  /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
   @Deprecated
   val HIVE_USE_JDBC: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.use_jdbc")
@@ -420,12 +420,12 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .withDocumentation("")
 
-  val HIVE_SKIP_RO_SUFFIX: ConfigProperty[String] = ConfigProperty
+  val HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.skip_ro_suffix")
     .defaultValue("false")
     .withDocumentation("Skip the _ro suffix for Read optimized table, when registering")
 
-  val HIVE_SUPPORT_TIMESTAMP: ConfigProperty[String] = ConfigProperty
+  val HIVE_SUPPORT_TIMESTAMP_TYPE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.support_timestamp")
     .defaultValue("false")
     .withDocumentation("‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. " +
@@ -513,9 +513,12 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link STREAMING_IGNORE_FAILED_BATCH} and its methods instead */
   @Deprecated
   val DEFAULT_STREAMING_IGNORE_FAILED_BATCH_OPT_VAL = STREAMING_IGNORE_FAILED_BATCH.defaultValue()
-  /** @deprecated Use {@link META_SYNC_CLIENT_TOOL_CLASS} and its methods instead */
+  /** @deprecated Use {@link META_SYNC_CLIENT_TOOL_CLASS_NAME} and its methods instead */
   @Deprecated
-  val DEFAULT_META_SYNC_CLIENT_TOOL_CLASS = META_SYNC_CLIENT_TOOL_CLASS.defaultValue()
+  val META_SYNC_CLIENT_TOOL_CLASS = META_SYNC_CLIENT_TOOL_CLASS_NAME.key()
+  /** @deprecated Use {@link META_SYNC_CLIENT_TOOL_CLASS_NAME} and its methods instead */
+  @Deprecated
+  val DEFAULT_META_SYNC_CLIENT_TOOL_CLASS = META_SYNC_CLIENT_TOOL_CLASS_NAME.defaultValue()
   /** @deprecated Use {@link HIVE_SYNC_ENABLED} and its methods instead */
   @Deprecated
   val HIVE_SYNC_ENABLED_OPT_KEY = HIVE_SYNC_ENABLED.key()
@@ -637,7 +640,7 @@ object DataSourceWriteOptions {
 
   /** @deprecated Use {@link TABLE_TYPE} and its methods instead */
   @Deprecated
-  val STORAGE_TYPE_OPT = "hoodie.datasource.write.storage.type"
+  val STORAGE_TYPE_OPT_KEY = "hoodie.datasource.write.storage.type"
   @Deprecated
   val COW_STORAGE_TYPE_OPT_VAL = HoodieTableType.COPY_ON_WRITE.name
   @Deprecated
@@ -697,12 +700,18 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link HIVE_IGNORE_EXCEPTIONS} and its methods instead */
   @Deprecated
   val DEFAULT_HIVE_IGNORE_EXCEPTIONS_OPT_KEY = HIVE_IGNORE_EXCEPTIONS.defaultValue()
-  /** @deprecated Use {@link HIVE_SKIP_RO_SUFFIX} and its methods instead */
+  /** @deprecated Use {@link HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = HIVE_SKIP_RO_SUFFIX.defaultValue()
-  /** @deprecated Use {@link HIVE_SUPPORT_TIMESTAMP} and its methods instead */
+  val HIVE_SKIP_RO_SUFFIX = HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key()
+  /** @deprecated Use {@link HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_SUPPORT_TIMESTAMP = HIVE_SUPPORT_TIMESTAMP.defaultValue()
+  val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.defaultValue()
+  /** @deprecated Use {@link HIVE_SUPPORT_TIMESTAMP_TYPE} and its methods instead */
+  @Deprecated
+  val HIVE_SUPPORT_TIMESTAMP = HIVE_SUPPORT_TIMESTAMP_TYPE.key()
+  /** @deprecated Use {@link HIVE_SUPPORT_TIMESTAMP_TYPE} and its methods instead */
+  @Deprecated
+  val DEFAULT_HIVE_SUPPORT_TIMESTAMP = HIVE_SUPPORT_TIMESTAMP_TYPE.defaultValue()
   /** @deprecated Use {@link ASYNC_COMPACT_ENABLE} and its methods instead */
   @Deprecated
   val ASYNC_COMPACT_ENABLE_OPT_KEY = ASYNC_COMPACT_ENABLE.key()
@@ -712,6 +721,8 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link KAFKA_AVRO_VALUE_DESERIALIZER_CLASS} and its methods instead */
   @Deprecated
   val KAFKA_AVRO_VALUE_DESERIALIZER = KAFKA_AVRO_VALUE_DESERIALIZER_CLASS.key()
+  @Deprecated
+  val SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class"
 }
 
 object DataSourceOptionsHelper {

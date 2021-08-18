@@ -442,7 +442,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
           HIVE_USE_JDBC.key -> "false",
           HIVE_DATABASE.key -> targetTableDb,
           HIVE_TABLE.key -> targetTableName,
-          HIVE_SUPPORT_TIMESTAMP.key -> "true",
+          HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
           HIVE_STYLE_PARTITIONING.key -> "true",
           HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
           HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
