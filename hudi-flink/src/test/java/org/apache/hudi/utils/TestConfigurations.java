@@ -56,18 +56,24 @@ public class TestConfigurations {
       .build();
 
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
-    String createTable = "create table " + tableName + "(\n"
+    return getCreateHoodieTableDDL(tableName, options, true);
+  }
+
+  public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options, boolean havePartition) {
+    StringBuilder builder = new StringBuilder();
+    builder.append("create table " + tableName + "(\n"
         + "  uuid varchar(20),\n"
         + "  name varchar(10),\n"
         + "  age int,\n"
         + "  ts timestamp(3),\n"
         + "  `partition` varchar(20),\n"
         + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
-        + ")\n"
-        + "PARTITIONED BY (`partition`)\n"
-        + "with (\n"
-        + "  'connector' = 'hudi'";
-    StringBuilder builder = new StringBuilder(createTable);
+        + ")\n");
+    if (havePartition) {
+      builder.append("PARTITIONED BY (`partition`)\n");
+    }
+    builder.append("with (\n"
+        + "  'connector' = 'hudi'");
     options.forEach((k, v) -> builder.append(",\n")
         .append("  '").append(k).append("' = '").append(v).append("'"));
     builder.append("\n)");

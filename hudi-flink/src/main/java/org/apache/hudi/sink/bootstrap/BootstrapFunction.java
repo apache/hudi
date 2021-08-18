@@ -72,12 +72,12 @@ public class BootstrapFunction<I, O extends HoodieRecord>
 
   private static final Logger LOG = LoggerFactory.getLogger(BootstrapFunction.class);
 
-  private HoodieTable<?, ?, ?, ?> hoodieTable;
+  protected HoodieTable<?, ?, ?, ?> hoodieTable;
 
-  private final Configuration conf;
+  protected final Configuration conf;
 
-  private transient org.apache.hadoop.conf.Configuration hadoopConf;
-  private transient HoodieWriteConfig writeConfig;
+  protected transient org.apache.hadoop.conf.Configuration hadoopConf;
+  protected transient HoodieWriteConfig writeConfig;
 
   private GlobalAggregateManager aggregateManager;
 
@@ -153,7 +153,7 @@ public class BootstrapFunction<I, O extends HoodieRecord>
    * @param partitionPath The partition path
    */
   @SuppressWarnings("unchecked")
-  private void loadRecords(String partitionPath, Collector<O> out) throws Exception {
+  protected void loadRecords(String partitionPath, Collector<O> out) throws Exception {
     long start = System.currentTimeMillis();
 
     BaseFileUtils fileUtils = BaseFileUtils.getInstance(this.hoodieTable.getBaseFileFormat());
