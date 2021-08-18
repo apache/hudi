@@ -18,12 +18,16 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -59,6 +63,7 @@ public class SparkRecordLevelIndex<T extends HoodieRecordPayload> extends SparkH
   }
 
   @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, HoodieEngineContext context,
                                               HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     final int numShards = config.getRecordLevelIndexShardCount();
@@ -67,14 +72,17 @@ public class SparkRecordLevelIndex<T extends HoodieRecordPayload> extends SparkH
         .map(t -> t._2);
     ValidationUtils.checkState(y.getNumPartitions() <= numShards);
 
-    return y.mapPartitions(new LocationTagFunction(hoodieTable));
+    registry.ifPresent(r -> r.add(TAG_LOCATION_NUM_PARTITIONS, y.getNumPartitions()));
+    return y.mapPartitions(new LocationTagFunction(hoodieTable, registry));
   }
 
   @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
                                              HoodieEngineContext context,
                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
-
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    long[] counts = { 0L, 0L, 0L }; // insert, update, delete
     JavaRDD<HoodieRecord> indexUpdateRDD = writeStatusRDD.flatMap(writeStatus -> {
       List<HoodieRecord> records = new LinkedList<>();
       for (HoodieRecord writtenRecord : writeStatus.getWrittenRecords()) {
@@ -84,16 +92,30 @@ public class SparkRecordLevelIndex<T extends HoodieRecordPayload> extends SparkH
           ValidationUtils.checkState(!key.getRecordKey().contains("Option"));
           Option<HoodieRecordLocation> newLocation = writtenRecord.getNewLocation();
           if (newLocation.isPresent()) {
+            if (writtenRecord.getCurrentLocation() != null) {
+              // Update
+              counts[1] += 1;
+              // TODO: updates are not currently supported but are required for clustering use-case. We should make
+              // sure that if the fileID has changed then we update it.
+              // TODO: How to differentiate dupes here?
+              continue;
+            } else {
+              // Insert
+              counts[0] += 1;
+            }
+
             indexRecord = HoodieMetadataPayload.createRecordLevelIndexRecord(key.getRecordKey(), key.getPartitionPath(),
                 newLocation.get().getFileId(), newLocation.get().getInstantTime());
           } else {
             // Delete existing index for a deleted record
+            counts[2] += 1;
             indexRecord = HoodieMetadataPayload.createRecordLevelIndexDelete(key.getRecordKey());
           }
 
           records.add(indexRecord);
         }
       }
+
 
       return records.iterator();
     });
@@ -104,12 +126,17 @@ public class SparkRecordLevelIndex<T extends HoodieRecordPayload> extends SparkH
       metadataWriter.queueForUpdate(indexUpdateRDD, MetadataPartitionType.RECORD_LEVEL_INDEX, "");
     }
 
+    registry.ifPresent(r -> r.add(UPDATE_DURATION, timer.endTimer()));
+    registry.ifPresent(r -> r.add(UPDATE_COUNT, counts[1]));
+    registry.ifPresent(r -> r.add(INSERT_COUNT, counts[0]));
+    registry.ifPresent(r -> r.add(DELETE_COUNT, counts[2]));
     return writeStatusRDD;
   }
 
   @Override
   public boolean rollbackCommit(String instantTime) {
-    return true;
+    // TODO: needs to be implemented
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -132,13 +159,17 @@ public class SparkRecordLevelIndex<T extends HoodieRecordPayload> extends SparkH
    */
   class LocationTagFunction implements FlatMapFunction<Iterator<HoodieRecord<T>>, HoodieRecord<T>> {
     HoodieTable hoodieTable;
+    Option<Registry> registry;
 
-    public LocationTagFunction(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
+    public LocationTagFunction(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable,
+        Option<Registry> registry2) {
       this.hoodieTable = hoodieTable;
+      this.registry = registry2;
     }
 
     @Override
     public Iterator<HoodieRecord<T>> call(Iterator<HoodieRecord<T>> hoodieRecordIterator) {
+      HoodieTimer timer = new HoodieTimer().startTimer();
       List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
       Map<String, Integer> keyToIndexMap = new HashMap<>();
       while (hoodieRecordIterator.hasNext()) {
@@ -158,6 +189,9 @@ public class SparkRecordLevelIndex<T extends HoodieRecordPayload> extends SparkH
         rec.seal();
       }
 
+      registry.ifPresent(r -> r.add(TAG_LOCATION_DURATION, timer.endTimer()));
+      registry.ifPresent(r -> r.add(TAG_LOCATION_COUNT, recordKeys.size()));
+      registry.ifPresent(r -> r.add(TAG_LOCATION_HITS, recordIndexInfo.size()));
       return taggedRecords.iterator();
     }
   }

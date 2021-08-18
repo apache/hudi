@@ -22,9 +22,11 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
@@ -42,10 +44,26 @@ import java.io.Serializable;
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
+  // Metric names
+  protected static final String UPDATE_DURATION = "update.duration";
+  protected static final String UPDATE_COUNT = "update.count";
+  protected static final String INSERT_COUNT = "insert.count";
+  protected static final String DELETE_COUNT = "delete.count";
+  protected static final String TAG_LOCATION_DURATION = "tag.duration";
+  protected static final String TAG_LOCATION_COUNT = "tag.count";
+  protected static final String TAG_LOCATION_NUM_PARTITIONS = "tag.num_partitions";
+  protected static final String TAG_LOCATION_HITS = "tag.hits";
+
+  // Metric registry
+  protected Option<Registry> registry;
+
   protected final HoodieWriteConfig config;
 
   protected HoodieIndex(HoodieWriteConfig config) {
     this.config = config;
+    if (config.getTableName() != null) {
+      this.registry = Option.of(Registry.getRegistry(config.getTableName() + "." + this.getClass().getSimpleName()));
+    }
   }
 
   /**
