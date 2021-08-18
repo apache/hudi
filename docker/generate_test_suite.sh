@@ -32,9 +32,18 @@ where:
     --include_medium_test_suite_yaml  include medium infra test suite (DEFAULT false)
     --cluster_num_itr  number of cluster iterations (DEFAULT 30)
     --include_cluster_yaml  include cluster infra test suite (DEFAULT false)
-    --include_cluster_yaml  include cluster infra test suite (DEFAULT false)
     --input_path input path for test in docker image (DEFAULT /user/hive/warehouse/hudi-integ-test-suite/input/)
     --output_path input path for test in docker image (DEFAULT /user/hive/warehouse/hudi-integ-test-suite/output/)
+
+Example:
+Note - Execute the command from within docker folder
+
+  1. To generate and run all test suites
+      ./generate_test_suite.sh --all true
+  2. To only generate test suites
+      ./generate_test_suite.sh --all --execute_test_suite false
+  3. To run only specific test suite yaml
+      ./generate_test_suite.sh --execute_test_suite true --include_medium_test_suite_yaml true
      "
 
 
