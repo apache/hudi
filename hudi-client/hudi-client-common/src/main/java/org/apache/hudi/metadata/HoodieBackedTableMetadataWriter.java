@@ -298,21 +298,28 @@ public abstract class HoodieBackedTableMetadataWriter<R> implements HoodieTableM
           String.format("Found %d shards for record index which is different than configured count %d", foundShardCount,
             datasetWriteConfig.getRecordLevelIndexShardCount()));
 
-      // If we did not bootstrap file listing, we need to get the list of partitions
-      if (!partitionsBootstrapped.isPresent()) {
-        partitionsBootstrapped = Option.of(FSUtils.getAllPartitionPaths(engineContext, datasetMetaClient.getBasePath(), false, datasetWriteConfig.shouldAssumeDatePartitioning()));
-      }
+      if (foundShardCount == 0) {
+        exists = false;
 
-      if (bootstrapRecordLevelIndex(engineContext, datasetMetaClient, createInstantTime, partitionsBootstrapped.get())) {
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_RECORD_INDEX_STR, timer.endTimer()));
-      } else {
-        // Failure to bootstrap is a fatal error as we wont be able to tag records for commit and it may lead to
-        // duplicates.
-        throw new HoodieMetadataException("Failed to bootstrap file listing for Metadata Table");
+        // If we did not bootstrap file listing, we need to get the list of partitions
+        if (!partitionsBootstrapped.isPresent()) {
+          partitionsBootstrapped = Option.of(FSUtils.getAllPartitionPaths(engineContext, datasetMetaClient.getBasePath(), false, datasetWriteConfig.shouldAssumeDatePartitioning()));
+        }
+
+        if (bootstrapRecordLevelIndex(engineContext, datasetMetaClient, createInstantTime, partitionsBootstrapped.get())) {
+          metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_RECORD_INDEX_STR, timer.endTimer()));
+        } else {
+          // Failure to bootstrap is a fatal error as we wont be able to tag records for commit and it may lead to
+          // duplicates.
+          throw new HoodieMetadataException("Failed to bootstrap file listing for Metadata Table");
+        }
+
       }
     }
 
-    performInsert(createInstantTime);
+    if (!exists) {
+      performInsert(createInstantTime);
+    }
   }
 
   /**

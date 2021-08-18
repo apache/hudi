@@ -84,8 +84,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         {IndexType.GLOBAL_BLOOM, true},
         {IndexType.SIMPLE, true},
         {IndexType.GLOBAL_SIMPLE, true},
+        {IndexType.RECORD_LEVEL, true},
         {IndexType.SIMPLE, false},
-        {IndexType.GLOBAL_SIMPLE, false}
+        {IndexType.GLOBAL_SIMPLE, false},
+        {IndexType.RECORD_LEVEL, false}
     };
     return Stream.of(data).map(Arguments::of);
   }

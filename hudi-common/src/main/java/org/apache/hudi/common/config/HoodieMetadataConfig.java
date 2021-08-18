@@ -155,7 +155,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   private HoodieMetadataConfig() {
     super();
-
   }
 
   public static HoodieMetadataConfig.Builder newBuilder() {

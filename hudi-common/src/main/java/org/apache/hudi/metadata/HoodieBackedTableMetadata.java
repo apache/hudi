@@ -76,7 +76,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // Readers for each shard identified of a partition
   private Map<String, List<ShardReader>> shardReaders = new ConcurrentHashMap<>();
   // Cache of records loaded from metadata
-  protected final ExternalSpillableMap<String, HoodieRecord> cachedRecords;
+  protected transient ExternalSpillableMap<String, HoodieRecord> cachedRecords;
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                    String datasetBasePath, String spillableMapDirectory) {

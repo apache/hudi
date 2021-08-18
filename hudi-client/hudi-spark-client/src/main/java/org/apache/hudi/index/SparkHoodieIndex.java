@@ -66,6 +66,8 @@ public abstract class SparkHoodieIndex<T extends HoodieRecordPayload> extends Ho
         return new SparkHoodieSimpleIndex(config);
       case GLOBAL_SIMPLE:
         return new SparkHoodieGlobalSimpleIndex(config);
+      case RECORD_LEVEL:
+        return new SparkRecordLevelIndex(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }

@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
@@ -106,6 +107,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void commit(String instantTime, boolean isInsert) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
+    ValidationUtils.checkState(recordsQueuedForCommit != null);
 
     JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
     JavaRDD<HoodieRecord> recordRDD = recordsQueuedForCommit.isEmpty() ? jsc.emptyRDD() : recordsQueuedForCommit.get(0);
@@ -211,14 +213,16 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   protected Pair<JavaRDD<HoodieRecord>, Long> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
       List<Pair<String, String>> partitionBaseFilePairs) {
     JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+    final String datasetBasePath = datasetWriteConfig.getBasePath();
+    final SerializableConfiguration conf = new SerializableConfiguration(hadoopConf.get());
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(partitionBaseFilePairs, partitionBaseFilePairs.size()).flatMap(p -> {
       final String partition = p.getKey();
       final String filename = p.getValue();
-      Path dataFilePath = new Path(datasetWriteConfig.getBasePath(), partition + Path.SEPARATOR + filename);
+      Path dataFilePath = new Path(datasetBasePath, partition + Path.SEPARATOR + filename);
 
       final String fileId = FSUtils.getFileId(filename);
       final String instantTime = FSUtils.getCommitTime(filename);
-      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), dataFilePath);
+      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(conf.get(), dataFilePath);
       Iterator<String> recordKeyIterator = reader.getRecordKeyIterator();
 
       return new Iterator<HoodieRecord>() {
@@ -242,7 +246,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void queueForUpdate(JavaRDD<HoodieRecord> records, MetadataPartitionType partitionType, String instantTime) {
+  public void queueForUpdate(JavaRDD<HoodieRecord> records, MetadataPartitionType partitionType, String instantTime) {
     List<FileSlice> shards = HoodieTableMetadataUtil.loadPartitionShards(metaClient, partitionType.partitionPath());
 
     JavaRDD<HoodieRecord> taggedRecordRDD = records.map(r -> {
