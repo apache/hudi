@@ -379,4 +379,8 @@ public class StreamerUtil {
     WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
     return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkOptions.INSERT_DEDUP);
   }
+
+  public static boolean haveSuccessfulCommits(HoodieTableMetaClient metaClient) {
+    return !metaClient.getCommitsTimeline().filterCompletedInstants().empty();
+  }
 }

@@ -294,7 +294,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource("configParams")
+  @MethodSource("executionModeAndPartitioningParams")
   void testWriteAndRead(ExecMode execMode, boolean hiveStylePartitioning) {
     TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
     Map<String, String> options = new HashMap<>();
@@ -317,6 +317,56 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "id6,Emma,20,1970-01-01T00:00:06,par3, "
         + "id7,Bob,44,1970-01-01T00:00:07,par4, "
         + "id8,Han,56,1970-01-01T00:00:08,par4]");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testBatchModeUpsertWithoutPartition(HoodieTableType tableType) {
+    TableEnvironment tableEnv = batchTableEnv;
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.TABLE_NAME.key(), tableType.name());
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options, false);
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+
+    // batchMode update
+    execInsertSql(tableEnv, TestSQL.UPDATE_INSERT_T1);
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result2, TestData.DATA_SET_SOURCE_MERGED);
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableTypeAndPartitioningParams")
+  void testBatchModeUpsert(HoodieTableType tableType, boolean hiveStylePartitioning) {
+    TableEnvironment tableEnv = batchTableEnv;
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.TABLE_NAME.key(), tableType.name());
+    if (hiveStylePartitioning) {
+      options.put(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), "true");
+    }
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+
+    // batchMode update
+    execInsertSql(tableEnv, TestSQL.UPDATE_INSERT_T1);
+
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result2, TestData.DATA_SET_SOURCE_MERGED);
   }
 
   @ParameterizedTest
@@ -438,18 +488,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   @EnumSource(value = ExecMode.class)
   void testWriteNonPartitionedTable(ExecMode execMode) {
     TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
-    String hoodieTableDDL = "create table t1(\n"
-        + "  uuid varchar(20),\n"
-        + "  name varchar(10),\n"
-        + "  age int,\n"
-        + "  ts timestamp(3),\n"
-        + "  `partition` varchar(20),\n"
-        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
-        + ")\n"
-        + "with (\n"
-        + "  'connector' = 'hudi',\n"
-        + "  'path' = '" + tempFile.getAbsolutePath() + "'\n"
-        + ")";
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options, false);
     tableEnv.executeSql(hoodieTableDDL);
 
     final String insertInto1 = "insert into t1 values\n"
@@ -629,19 +670,10 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   @Test
   void testBulkInsertNonPartitionedTable() {
     TableEnvironment tableEnv = batchTableEnv;
-    String hoodieTableDDL = "create table t1(\n"
-        + "  uuid varchar(20),\n"
-        + "  name varchar(10),\n"
-        + "  age int,\n"
-        + "  ts timestamp(3),\n"
-        + "  `partition` varchar(20),\n"
-        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
-        + ")\n"
-        + "with (\n"
-        + "  'connector' = 'hudi',\n"
-        + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
-        + "  'write.operation' = 'bulk_insert'\n"
-        + ")";
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.OPERATION.key(), "bulk_insert");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options, false);
     tableEnv.executeSql(hoodieTableDDL);
 
     final String insertInto1 = "insert into t1 values\n"
@@ -677,13 +709,26 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   /**
    * Return test params => (execution mode, hive style partitioning).
    */
-  private static Stream<Arguments> configParams() {
+  private static Stream<Arguments> executionModeAndPartitioningParams() {
     Object[][] data =
         new Object[][] {
             {ExecMode.BATCH, false},
             {ExecMode.BATCH, true},
             {ExecMode.STREAM, false},
             {ExecMode.STREAM, true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (HoodieTableType, hive style partitioning).
+   */
+  private static Stream<Arguments> tableTypeAndPartitioningParams() {
+    Object[][] data =
+        new Object[][] {
+            {HoodieTableType.COPY_ON_WRITE, false},
+            {HoodieTableType.COPY_ON_WRITE, true},
+            {HoodieTableType.MERGE_ON_READ, false},
+            {HoodieTableType.MERGE_ON_READ, true}};
     return Stream.of(data).map(Arguments::of);
   }
 
