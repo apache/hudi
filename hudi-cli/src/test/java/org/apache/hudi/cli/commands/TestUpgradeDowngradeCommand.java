@@ -112,6 +112,6 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
     HoodieConfig hoodieConfig = HoodieConfig.create(fsDataInputStream);
     fsDataInputStream.close();
     assertEquals(Integer.toString(HoodieTableVersion.ZERO.versionCode()), hoodieConfig
-        .getString(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP));
+        .getString(HoodieTableConfig.VERSION));
   }
 }

@@ -17,13 +17,13 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -42,7 +42,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
   @BeforeEach override def setUp() {
@@ -74,7 +74,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
-      .option(KEYGENERATOR_CLASS.key, classOf[NonpartitionedKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -88,7 +88,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
-      .option(KEYGENERATOR_CLASS.key, classOf[NonpartitionedKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
     metaClient.reloadActiveTimeline()
@@ -102,7 +102,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
-      .option(KEYGENERATOR_CLASS.key, classOf[NonpartitionedKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
     metaClient.reloadActiveTimeline()
@@ -148,7 +148,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "dt")
-      .option(KEYGENERATOR_CLASS.key, classOf[ComplexKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -162,7 +162,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "dt")
-      .option(KEYGENERATOR_CLASS.key, classOf[ComplexKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
     metaClient.reloadActiveTimeline()
@@ -176,7 +176,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "dt")
-      .option(KEYGENERATOR_CLASS.key, classOf[ComplexKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
     metaClient.reloadActiveTimeline()

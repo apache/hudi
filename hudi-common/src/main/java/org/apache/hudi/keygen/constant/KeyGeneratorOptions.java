@@ -55,5 +55,36 @@ public class KeyGeneratorOptions extends HoodieConfig {
       .defaultValue("partitionpath")
       .withDocumentation("Partition path field. Value to be used at the partitionPath component of HoodieKey. "
           + "Actual value ontained by invoking .toString()");
+
+  /**
+   * @deprecated Use {@link #URL_ENCODE_PARTITIONING} and its methods.
+   */
+  @Deprecated
+  public static final String URL_ENCODE_PARTITIONING_OPT_KEY = URL_ENCODE_PARTITIONING.key();
+  /**
+   * @deprecated Use {@link #URL_ENCODE_PARTITIONING} and its methods.
+   */
+  @Deprecated
+  public static final String DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = URL_ENCODE_PARTITIONING.defaultValue();
+  /**
+   * @deprecated Use {@link #HIVE_STYLE_PARTITIONING} and its methods.
+   */
+  @Deprecated
+  public static final String HIVE_STYLE_PARTITIONING_OPT_KEY = HIVE_STYLE_PARTITIONING.key();
+  /**
+   * @deprecated Use {@link #HIVE_STYLE_PARTITIONING} and its methods.
+   */
+  @Deprecated
+  public static final String DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = HIVE_STYLE_PARTITIONING.defaultValue();
+  /**
+   * @deprecated Use {@link #RECORDKEY_FIELD} and its methods.
+   */
+  @Deprecated
+  public static final String RECORDKEY_FIELD_OPT_KEY = RECORDKEY_FIELD.key();
+  /**
+   * @deprecated Use {@link #PARTITIONPATH_FIELD} and its methods.
+   */
+  @Deprecated
+  public static final String PARTITIONPATH_FIELD_OPT_KEY = PARTITIONPATH_FIELD.key();
 }
 

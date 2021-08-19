@@ -97,10 +97,10 @@ public class TimelineService {
 
     @Parameter(names = {"--base-store-path", "-sp"},
         description = "Directory where spilled view entries will be stored. Used for SPILLABLE_DISK storage type")
-    public String baseStorePathForFileGroups = FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue();
+    public String baseStorePathForFileGroups = FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue();
 
     @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
-    public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH_PROP.defaultValue();
+    public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
 
     @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests")
     public int numThreads = DEFAULT_NUM_THREADS;
@@ -138,8 +138,8 @@ public class TimelineService {
       private FileSystemViewStorageType viewStorageType = FileSystemViewStorageType.SPILLABLE_DISK;
       private Integer maxViewMemPerTableInMB = 2048;
       private Double memFractionForCompactionPerTable = 0.001;
-      private String baseStorePathForFileGroups = FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue();
-      private String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH_PROP.defaultValue();
+      private String baseStorePathForFileGroups = FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue();
+      private String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
       private int numThreads = DEFAULT_NUM_THREADS;
       private boolean async = false;
       private boolean compress = true;
@@ -148,7 +148,8 @@ public class TimelineService {
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
 
-      public Builder() {}
+      public Builder() {
+      }
 
       public Builder serverPort(int serverPort) {
         this.serverPort = serverPort;

@@ -74,6 +74,60 @@ public class LockConfiguration implements Serializable {
 
   public static final String ZK_LOCK_KEY_PROP_KEY = ZOOKEEPER_BASED_LOCK_PROPERTY_PREFIX + "lock_key";
 
+  /** @deprecated Use {@link #LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY} */
+  @Deprecated
+  public static final String LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
+  /** @deprecated Use {@link #LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY} */
+  @Deprecated
+  public static final String LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY;
+  @Deprecated
+  public static final String DEFAULT_LOCK_ACQUIRE_MAX_RETRY_WAIT_TIME_IN_MILLIS = String.valueOf(5000L);
+  /** @deprecated Use {@link #LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY} */
+  @Deprecated
+  public static final String LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
+  @Deprecated
+  public static final String DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS = String.valueOf(10000L);
+  /** @deprecated Use {@link #LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY} */
+  @Deprecated
+  public static final String LOCK_ACQUIRE_NUM_RETRIES_PROP = LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
+  /** @deprecated Use {@link #LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY} */
+  @Deprecated
+  public static final String LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP = LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY;
+  @Deprecated
+  public static final String DEFAULT_LOCK_ACQUIRE_CLIENT_NUM_RETRIES = String.valueOf(0);
+  /** @deprecated Use {@link #LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY} */
+  @Deprecated
+  public static final String LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP = LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
+  @Deprecated
+  public static final int DEFAULT_ACQUIRE_LOCK_WAIT_TIMEOUT_MS = 60 * 1000;
+  /** @deprecated Use {@link #HIVE_DATABASE_NAME_PROP_KEY} */
+  @Deprecated
+  public static final String HIVE_DATABASE_NAME_PROP = HIVE_DATABASE_NAME_PROP_KEY;
+  /** @deprecated Use {@link #HIVE_TABLE_NAME_PROP_KEY} */
+  @Deprecated
+  public static final String HIVE_TABLE_NAME_PROP = HIVE_TABLE_NAME_PROP_KEY;
+  /** @deprecated Use {@link #HIVE_METASTORE_URI_PROP_KEY} */
+  @Deprecated
+  public static final String HIVE_METASTORE_URI_PROP = HIVE_METASTORE_URI_PROP_KEY;
+  /** @deprecated Use {@link #ZK_BASE_PATH_PROP_KEY} */
+  @Deprecated
+  public static final String ZK_BASE_PATH_PROP = ZK_BASE_PATH_PROP_KEY;
+  /** @deprecated Use {@link #ZK_SESSION_TIMEOUT_MS_PROP_KEY} */
+  @Deprecated
+  public static final String ZK_SESSION_TIMEOUT_MS_PROP = ZK_SESSION_TIMEOUT_MS_PROP_KEY;
+  /** @deprecated Use {@link #ZK_CONNECTION_TIMEOUT_MS_PROP_KEY} */
+  @Deprecated
+  public static final String ZK_CONNECTION_TIMEOUT_MS_PROP = ZK_CONNECTION_TIMEOUT_MS_PROP_KEY;
+  /** @deprecated Use {@link #ZK_CONNECT_URL_PROP_KEY} */
+  @Deprecated
+  public static final String ZK_CONNECT_URL_PROP = ZK_CONNECT_URL_PROP_KEY;
+  /** @deprecated Use {@link #ZK_PORT_PROP_KEY} */
+  @Deprecated
+  public static final String ZK_PORT_PROP = ZK_PORT_PROP_KEY;
+  /** @deprecated Use {@link #ZK_LOCK_KEY_PROP_KEY} */
+  @Deprecated
+  public static final String ZK_LOCK_KEY_PROP = ZK_LOCK_KEY_PROP_KEY;
+
   private final TypedProperties props;
 
   public LockConfiguration(Properties props) {

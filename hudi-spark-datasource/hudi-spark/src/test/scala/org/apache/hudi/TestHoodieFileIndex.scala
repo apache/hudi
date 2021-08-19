@@ -29,10 +29,10 @@ import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.{Config, TimestampType}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.PartitionDirectory
 import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
@@ -50,7 +50,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
   var queryOpts = Map(
@@ -95,7 +95,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS.key, keyGenerator)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, TimestampType.DATE_STRING.name())
       .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
@@ -116,7 +116,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS.key, keyGenerator)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partition:simple")
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -176,14 +176,14 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "dt,hh")
-      .option(KEYGENERATOR_CLASS.key, classOf[ComplexKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, useMetaFileList)
+      .option(HoodieMetadataConfig.ENABLE.key, useMetaFileList)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val fileIndex = HoodieFileIndex(spark, metaClient, None,
-      queryOpts ++ Map(HoodieMetadataConfig.METADATA_ENABLE_PROP.key -> useMetaFileList.toString))
+      queryOpts ++ Map(HoodieMetadataConfig.ENABLE.key -> useMetaFileList.toString))
 
     val partitionFilter1 = And(
       EqualTo(attribute("dt"), literal("2021-03-01")),
@@ -198,7 +198,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     assertEquals(getFileCountInPartitionPath("2021-03-01/10"), filesAfterPrune.size)
 
     val readDF1 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key(), useMetaFileList)
+      .option(HoodieMetadataConfig.ENABLE.key(), useMetaFileList)
       .load(basePath)
     assertEquals(10, readDF1.count())
     assertEquals(5, readDF1.filter("dt = '2021-03-01' and hh = '10'").count())
@@ -213,9 +213,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "dt,hh")
-      .option(KEYGENERATOR_CLASS.key, classOf[ComplexKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
       .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, "false")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key(), useMetaFileList)
+      .option(HoodieMetadataConfig.ENABLE.key(), useMetaFileList)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -235,7 +235,7 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     assertEquals(getFileCountInPartitionPaths("2021/03/01/10", "2021/03/02/10"),
       filesAfterPrune2.length)
     val readDF2 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, useMetaFileList)
+      .option(HoodieMetadataConfig.ENABLE.key, useMetaFileList)
       .load(basePath)
 
     assertEquals(10, readDF2.count())
