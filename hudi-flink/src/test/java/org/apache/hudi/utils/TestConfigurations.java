@@ -23,6 +23,7 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
@@ -31,6 +32,7 @@ import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -181,5 +183,49 @@ public class TestConfigurations {
     streamerConf.tableType = "COPY_ON_WRITE";
     streamerConf.checkpointInterval = 4000L;
     return streamerConf;
+  }
+
+  /**
+   * Creates the tool to build hoodie table DDL.
+   */
+  public static Sql sql(String tableName) {
+    return new Sql(tableName);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  /**
+   * Tool to build hoodie table DDL with schema {@link #TABLE_SCHEMA}.
+   */
+  public static class Sql {
+    private final Map<String, String> options;
+    private String tableName;
+    private boolean withPartition = true;
+
+    public Sql(String tableName) {
+      options = new HashMap<>();
+      this.tableName = tableName;
+    }
+
+    public Sql option(ConfigOption<?> option, String val) {
+      this.options.put(option.key(), val);
+      return this;
+    }
+
+    public Sql option(ConfigOption<?> option, boolean val) {
+      this.options.put(option.key(), val + "");
+      return this;
+    }
+
+    public Sql withPartition(boolean withPartition) {
+      this.withPartition = withPartition;
+      return this;
+    }
+
+    public String end() {
+      return TestConfigurations.getCreateHoodieTableDDL(this.tableName, options, this.withPartition);
+    }
   }
 }
