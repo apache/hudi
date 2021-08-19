@@ -115,12 +115,12 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   private JavaRDD<HoodieRecord<T>> clusteringHandleUpdate(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
-    if (config.isClusteringEnabled()) {
-      Set<HoodieFileGroupId> fileGroupsInPendingClustering =
-          table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
+    Set<HoodieFileGroupId> fileGroupsInPendingClustering =
+            table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
+    if (!fileGroupsInPendingClustering.isEmpty()) {
       UpdateStrategy updateStrategy = (UpdateStrategy)ReflectionUtils
           .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
-      return (JavaRDD<HoodieRecord<T>>)updateStrategy.handleUpdate(inputRecordsRDD);
+      return (JavaRDD<HoodieRecord<T>>)updateStrategy.handleUpdate(inputRecordsRDD, table);
     } else {
       return inputRecordsRDD;
     }

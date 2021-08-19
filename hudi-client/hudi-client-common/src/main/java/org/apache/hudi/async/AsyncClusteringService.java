@@ -23,6 +23,7 @@ import org.apache.hudi.client.AbstractClusteringClient;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.log4j.LogManager;
@@ -83,6 +84,8 @@ public abstract class AsyncClusteringService extends HoodieAsyncService {
         LOG.info("Clustering executor shutting down properly");
       } catch (InterruptedException ie) {
         LOG.warn("Clustering executor got interrupted exception! Stopping", ie);
+      } catch (HoodieClusteringUpdateException e) {
+        LOG.warn("Clustering job failed because of incoming update data", e);
       } catch (IOException e) {
         LOG.error("Clustering executor failed", e);
         throw new HoodieIOException(e.getMessage(), e);

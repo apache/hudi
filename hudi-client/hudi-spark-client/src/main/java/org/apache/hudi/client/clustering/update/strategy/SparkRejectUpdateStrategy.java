@@ -22,7 +22,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieClusteringUpdateException;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -50,7 +52,7 @@ public class SparkRejectUpdateStrategy<T extends HoodieRecordPayload<T>> extends
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> handleUpdate(JavaRDD<HoodieRecord<T>> taggedRecordsRDD) {
+  public JavaRDD<HoodieRecord<T>> handleUpdate(JavaRDD<HoodieRecord<T>> taggedRecordsRDD, HoodieTable table) {
     List<HoodieFileGroupId> fileGroupIdsWithRecordUpdate = getGroupIdsWithUpdate(taggedRecordsRDD);
     fileGroupIdsWithRecordUpdate.forEach(fileGroupIdWithRecordUpdate -> {
       if (fileGroupsInPendingClustering.contains(fileGroupIdWithRecordUpdate)) {
@@ -64,4 +66,9 @@ public class SparkRejectUpdateStrategy<T extends HoodieRecordPayload<T>> extends
     return taggedRecordsRDD;
   }
 
+  @Override
+  public boolean validateClustering(HoodieInstant instant, HoodieTable table) {
+    // do nothing
+    return false;
+  }
 }

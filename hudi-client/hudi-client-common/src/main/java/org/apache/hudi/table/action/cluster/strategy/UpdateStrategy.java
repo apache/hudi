@@ -21,6 +21,8 @@ package org.apache.hudi.table.action.cluster.strategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.table.HoodieTable;
 
 import java.util.Set;
 
@@ -43,6 +45,8 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
    *                         future can update tagged records location to a different fileId.
    * @return the recordsRDD strategy updated
    */
-  public abstract I handleUpdate(I taggedRecordsRDD);
+  public abstract I handleUpdate(I taggedRecordsRDD, HoodieTable table);
+
+  public abstract boolean validateClustering(HoodieInstant instant, HoodieTable table);
 
 }
