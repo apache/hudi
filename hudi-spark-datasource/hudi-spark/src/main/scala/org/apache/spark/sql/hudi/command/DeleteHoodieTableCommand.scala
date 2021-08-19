@@ -66,7 +66,7 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
     withSparkConf(sparkSession, targetTable.storage.properties) {
       Map(
         "path" -> path,
-        KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         TBL_NAME.key -> tableId.table,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),

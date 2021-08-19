@@ -58,7 +58,7 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "Bloom filters removes the dependency on a external system "
           + "and is stored in the footer of the Parquet Data Files");
 
-  public static final ConfigProperty<String> INDEX_CLASS = ConfigProperty
+  public static final ConfigProperty<String> INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.index.class")
       .defaultValue("")
       .withDocumentation("Full path of user-defined index class and must be a subclass of HoodieIndex class. "
@@ -221,15 +221,15 @@ public class HoodieIndexConfig extends HoodieConfig {
   @Deprecated
   public static final String INDEX_TYPE_PROP = INDEX_TYPE.key();
   /**
-   * @deprecated Use {@link #INDEX_CLASS} and its methods instead
+   * @deprecated Use {@link #INDEX_CLASS_NAME} and its methods instead
    */
   @Deprecated
-  public static final String INDEX_CLASS_PROP = INDEX_CLASS.key();
+  public static final String INDEX_CLASS_PROP = INDEX_CLASS_NAME.key();
   /**
-   * @deprecated Use {@link #INDEX_CLASS} and its methods instead
+   * @deprecated Use {@link #INDEX_CLASS_NAME} and its methods instead
    */
   @Deprecated
-  public static final String DEFAULT_INDEX_CLASS = INDEX_CLASS.defaultValue();
+  public static final String DEFAULT_INDEX_CLASS = INDEX_CLASS_NAME.defaultValue();
   /**
    * @deprecated Use {@link #BLOOM_FILTER_NUM_ENTRIES_VALUE} and its methods instead
    */
@@ -427,7 +427,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder withIndexClass(String indexClass) {
-      hoodieIndexConfig.setValue(INDEX_CLASS, indexClass);
+      hoodieIndexConfig.setValue(INDEX_CLASS_NAME, indexClass);
       return this;
     }
 

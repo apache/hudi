@@ -152,7 +152,7 @@ public class HoodieJavaApp {
         // Used by hive sync and queries
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
@@ -179,7 +179,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
@@ -207,7 +207,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "_row_key")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")

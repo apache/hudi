@@ -60,7 +60,7 @@ object HoodieOptionConfig {
 
   val SQL_PAYLOAD_CLASS: HoodieOption[String] = buildConf()
     .withSqlKey("payloadClass")
-    .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS.key)
+    .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key)
     .withTableConfigKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key)
     .defaultValue(classOf[DefaultHoodieRecordPayload].getName)
     .build()

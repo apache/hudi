@@ -432,11 +432,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
         Map(
           "path" -> path,
           RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
-          KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
+          KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
           PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
           TBL_NAME.key -> targetTableName,
           PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
-          PAYLOAD_CLASS.key -> classOf[ExpressionPayload].getCanonicalName,
+          PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
           META_SYNC_ENABLED.key -> enableHive.toString,
           HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
           HIVE_USE_JDBC.key -> "false",

@@ -203,7 +203,7 @@ object DataSourceWriteOptions {
       val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
         .map(SparkDataSourceUtils.decodePartitioningColumns)
         .getOrElse(Nil)
-      val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS.key(),
+      val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key(),
         DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL)
 
       val partitionPathField =
@@ -243,7 +243,7 @@ object DataSourceWriteOptions {
    * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
    * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
    */
-  val PAYLOAD_CLASS = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
+  val PAYLOAD_CLASS_NAME = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
@@ -266,7 +266,7 @@ object DataSourceWriteOptions {
    */
   val HIVE_STYLE_PARTITIONING = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING
 
-  val KEYGENERATOR_CLASS = ConfigProperty.key("hoodie.datasource.write.keygenerator.class")
+  val KEYGENERATOR_CLASS_NAME = ConfigProperty.key("hoodie.datasource.write.keygenerator.class")
     .defaultValue(classOf[SimpleKeyGenerator].getName)
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
 
@@ -552,10 +552,10 @@ object DataSourceWriteOptions {
 
   /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
   @Deprecated
-  val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = KEYGENERATOR_CLASS.defaultValue()
+  val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = KEYGENERATOR_CLASS_NAME.defaultValue()
   /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
   @Deprecated
-  val KEYGENERATOR_CLASS_OPT_KEY = HoodieWriteConfig.KEYGENERATOR_CLASS.key()
+  val KEYGENERATOR_CLASS_OPT_KEY = HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()
   /** @deprecated Use {@link ENABLE_ROW_WRITER} and its methods instead */
   @Deprecated
   val ENABLE_ROW_WRITER_OPT_KEY = ENABLE_ROW_WRITER.key()
@@ -629,7 +629,7 @@ object DataSourceWriteOptions {
   val PAYLOAD_CLASS_OPT_KEY = HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()
   /** @deprecated Use {@link HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
-  val DEFAULT_PAYLOAD_OPT_VAL = PAYLOAD_CLASS.defaultValue()
+  val DEFAULT_PAYLOAD_OPT_VAL = PAYLOAD_CLASS_NAME.defaultValue()
 
   /** @deprecated Use {@link TABLE_TYPE} and its methods instead */
   @Deprecated

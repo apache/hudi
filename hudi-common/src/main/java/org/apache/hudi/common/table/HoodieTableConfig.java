@@ -368,7 +368,6 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
   }
 
-
   /**
    * @deprecated Use {@link #BASE_FILE_FORMAT} and its methods.
    */

@@ -44,7 +44,7 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Turn commit callback on/off. off by default.");
 
-  public static final ConfigProperty<String> CALLBACK_CLASS = ConfigProperty
+  public static final ConfigProperty<String> CALLBACK_CLASS_NAME = ConfigProperty
       .key(CALLBACK_PREFIX + "class")
       .defaultValue("org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback")
       .sinceVersion("0.6.0")
@@ -81,15 +81,15 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
   @Deprecated
   public static final boolean DEFAULT_CALLBACK_ON = TURN_CALLBACK_ON.defaultValue();
   /**
-   * @deprecated Use {@link #CALLBACK_CLASS} and its methods instead
+   * @deprecated Use {@link #CALLBACK_CLASS_NAME} and its methods instead
    */
   @Deprecated
-  public static final String CALLBACK_CLASS_PROP = CALLBACK_CLASS.key();
+  public static final String CALLBACK_CLASS_PROP = CALLBACK_CLASS_NAME.key();
   /**
-   * @deprecated Use {@link #CALLBACK_CLASS} and its methods instead
+   * @deprecated Use {@link #CALLBACK_CLASS_NAME} and its methods instead
    */
   @Deprecated
-  public static final String DEFAULT_CALLBACK_CLASS_PROP = CALLBACK_CLASS.defaultValue();
+  public static final String DEFAULT_CALLBACK_CLASS_PROP = CALLBACK_CLASS_NAME.defaultValue();
   /**
    * @deprecated Use {@link #CALLBACK_HTTP_URL} and its methods instead
    */
@@ -146,7 +146,7 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
     }
 
     public HoodieWriteCommitCallbackConfig.Builder withCallbackClass(String callbackClass) {
-      writeCommitCallbackConfig.setValue(CALLBACK_CLASS, callbackClass);
+      writeCommitCallbackConfig.setValue(CALLBACK_CLASS_NAME, callbackClass);
       return this;
     }
 

@@ -50,7 +50,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
 
-  public static final ConfigProperty<String> MODE_SELECTOR_CLASS = ConfigProperty
+  public static final ConfigProperty<String> MODE_SELECTOR_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.mode.selector")
       .defaultValue(MetadataOnlyBootstrapModeSelector.class.getCanonicalName())
       .sinceVersion("0.6.0")
@@ -122,10 +122,10 @@ public class HoodieBootstrapConfig extends HoodieConfig {
   @Deprecated
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = INDEX_CLASS_NAME.defaultValue();
   /**
-   * @deprecated Use {@link #MODE_SELECTOR_CLASS} and its methods instead
+   * @deprecated Use {@link #MODE_SELECTOR_CLASS_NAME} and its methods instead
    */
   @Deprecated
-  public static final String BOOTSTRAP_MODE_SELECTOR = MODE_SELECTOR_CLASS.key();
+  public static final String BOOTSTRAP_MODE_SELECTOR = MODE_SELECTOR_CLASS_NAME.key();
   /**
    * @deprecated Use {@link #FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME} and its methods instead
    */
@@ -207,7 +207,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
     }
 
     public Builder withBootstrapModeSelector(String partitionSelectorClass) {
-      bootstrapConfig.setValue(MODE_SELECTOR_CLASS, partitionSelectorClass);
+      bootstrapConfig.setValue(MODE_SELECTOR_CLASS_NAME, partitionSelectorClass);
       return this;
     }
 

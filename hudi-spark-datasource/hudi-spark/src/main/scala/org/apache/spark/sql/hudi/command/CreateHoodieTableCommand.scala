@@ -118,7 +118,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       // Use the origin keygen to generate record key to keep the rowkey consistent with the old table for spark sql.
       // See SqlKeyGenerator#getRecordKey for detail.
       upgrateConfig = if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
-        upgrateConfig + (SqlKeyGenerator.ORIGIN_KEYGEN_CLASS -> originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+        upgrateConfig + (SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
       } else {
         upgrateConfig
       }

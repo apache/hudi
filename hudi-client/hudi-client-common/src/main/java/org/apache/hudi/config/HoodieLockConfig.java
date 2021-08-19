@@ -165,7 +165,7 @@ public class HoodieLockConfig extends HoodieConfig {
           + "Final path on zk will look like base_path/lock_key. We recommend setting this to the table name");
 
   // Pluggable type of lock provider
-  public static final ConfigProperty<String> LOCK_PROVIDER_CLASS = ConfigProperty
+  public static final ConfigProperty<String> LOCK_PROVIDER_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "provider")
       .defaultValue(ZookeeperBasedLockProvider.class.getName())
       .sinceVersion("0.8.0")
@@ -173,25 +173,25 @@ public class HoodieLockConfig extends HoodieConfig {
           + "which should be subclass of org.apache.hudi.common.lock.LockProvider");
 
   // Pluggable strategies to use when resolving conflicts
-  public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS = ConfigProperty
+  public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "conflict.resolution.strategy")
       .defaultValue(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
 
-  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS} and its methods instead */
+  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
   @Deprecated
-  public static final String WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS.key();
-  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS} and its methods instead */
+  public static final String WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key();
+  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
   @Deprecated
-  public static final String DEFAULT_WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS.defaultValue();
-  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS} and its methods instead */
+  public static final String DEFAULT_WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.defaultValue();
+  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead */
   @Deprecated
-  public static final String LOCK_PROVIDER_CLASS_PROP = LOCK_PROVIDER_CLASS.key();
-  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS} and its methods instead */
+  public static final String LOCK_PROVIDER_CLASS_PROP = LOCK_PROVIDER_CLASS_NAME.key();
+  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead */
   @Deprecated
-  public static final String DEFAULT_LOCK_PROVIDER_CLASS = LOCK_PROVIDER_CLASS.defaultValue();
+  public static final String DEFAULT_LOCK_PROVIDER_CLASS = LOCK_PROVIDER_CLASS_NAME.defaultValue();
 
   private HoodieLockConfig() {
     super();
@@ -218,7 +218,7 @@ public class HoodieLockConfig extends HoodieConfig {
     }
 
     public HoodieLockConfig.Builder withLockProvider(Class<? extends LockProvider> lockProvider) {
-      lockConfig.setValue(LOCK_PROVIDER_CLASS, lockProvider.getName());
+      lockConfig.setValue(LOCK_PROVIDER_CLASS_NAME, lockProvider.getName());
       return this;
     }
 
@@ -298,7 +298,7 @@ public class HoodieLockConfig extends HoodieConfig {
     }
 
     public HoodieLockConfig.Builder withConflictResolutionStrategy(ConflictResolutionStrategy conflictResolutionStrategy) {
-      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS, conflictResolutionStrategy.getClass().getName());
+      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, conflictResolutionStrategy.getClass().getName());
       return this;
     }
 

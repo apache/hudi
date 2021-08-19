@@ -50,7 +50,7 @@ class TestStreamingSource extends StreamTest {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(COPY_ON_WRITE)
           .setTableName(getTableName(tablePath))
-          .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS.defaultValue)
+          .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
           .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -100,7 +100,7 @@ class TestStreamingSource extends StreamTest {
       HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
-        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS.defaultValue)
+        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))

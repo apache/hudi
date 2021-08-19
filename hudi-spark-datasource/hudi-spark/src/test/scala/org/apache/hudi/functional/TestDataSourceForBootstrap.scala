@@ -118,7 +118,7 @@ class TestDataSourceForBootstrap {
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -431,7 +431,7 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
       .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
       .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
-      .option(HoodieBootstrapConfig.MODE_SELECTOR_CLASS.key, classOf[FullRecordBootstrapModeSelector].getName)
+      .option(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key, classOf[FullRecordBootstrapModeSelector].getName)
       .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key, classOf[SparkParquetBootstrapDataProvider].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)

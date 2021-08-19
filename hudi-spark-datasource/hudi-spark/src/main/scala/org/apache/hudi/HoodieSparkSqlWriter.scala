@@ -131,12 +131,12 @@ object HoodieSparkSqlWriter {
           .setRecordKeyFields(recordKeyFields)
           .setBaseFileFormat(baseFileFormat)
           .setArchiveLogFolder(archiveLogFolder)
-          .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS))
+          .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_NAME))
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
           .setPartitionFields(partitionColumns)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
-          .setKeyGeneratorClassProp(hoodieConfig.getString(KEYGENERATOR_CLASS))
+          .setKeyGeneratorClassProp(hoodieConfig.getString(KEYGENERATOR_CLASS_NAME))
           .initTable(sparkContext.hadoopConfiguration, path.get)
         tableConfig = tableMetaClient.getTableConfig
       }
@@ -234,9 +234,9 @@ object HoodieSparkSqlWriter {
                   .asInstanceOf[Comparable[_]]
                 DataSourceUtils.createHoodieRecord(processedRecord,
                   orderingVal, keyGenerator.getKey(gr),
-                  hoodieConfig.getString(PAYLOAD_CLASS))
+                  hoodieConfig.getString(PAYLOAD_CLASS_NAME))
               } else {
-                DataSourceUtils.createHoodieRecord(processedRecord, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS))
+                DataSourceUtils.createHoodieRecord(processedRecord, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS_NAME))
               }
               hoodieRecord
             }).toJavaRDD()
@@ -373,7 +373,7 @@ object HoodieSparkSqlWriter {
         .setTableName(tableName)
         .setRecordKeyFields(recordKeyFields)
         .setArchiveLogFolder(archiveLogFolder)
-        .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS))
+        .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS_NAME))
         .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
         .setBootstrapIndexClass(bootstrapIndexClass)
         .setBootstrapBasePath(bootstrapBasePath)

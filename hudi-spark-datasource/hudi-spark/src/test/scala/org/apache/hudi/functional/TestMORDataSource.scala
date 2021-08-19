@@ -418,7 +418,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PAYLOAD_CLASS.key, classOf[DefaultHoodieRecordPayload].getName)
+      .option(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key, classOf[DefaultHoodieRecordPayload].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
@@ -580,12 +580,12 @@ class TestMORDataSource extends HoodieClientTestBase {
     df.write.format("org.apache.hudi")
       .options(commonOpts)
       // use DefaultHoodieRecordPayload here
-      .option(PAYLOAD_CLASS.key, classOf[DefaultHoodieRecordPayload].getCanonicalName)
+      .option(PAYLOAD_CLASS_NAME.key, classOf[DefaultHoodieRecordPayload].getCanonicalName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
-      .option(KEYGENERATOR_CLASS.key, classOf[NonpartitionedKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
   }

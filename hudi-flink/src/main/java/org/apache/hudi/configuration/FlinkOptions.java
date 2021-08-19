@@ -240,7 +240,7 @@ public class FlinkOptions extends HoodieConfig {
           + "key value, we will pick the one with the largest value for the precombine field,\n"
           + "determined by Object.compareTo(..)");
 
-  public static final ConfigOption<String> PAYLOAD_CLASS = ConfigOptions
+  public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
       .key("write.payload.class")
       .stringType()
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
@@ -308,8 +308,8 @@ public class FlinkOptions extends HoodieConfig {
           + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
           + "By default false (the names of partition folders are only partition values)");
 
-  public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_CLASS.key())
+  public static final ConfigOption<String> KEYGEN_CLASS_NAME = ConfigOptions
+      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key())
       .stringType()
       .defaultValue("")
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
@@ -549,7 +549,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("")
       .withDescription("Partition fields for hive sync, default ''");
 
-  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigOptions
+  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME = ConfigOptions
       .key("hive_sync.partition_extractor_class")
       .stringType()
       .defaultValue(SlashEncodedDayPartitionValueExtractor.class.getCanonicalName())

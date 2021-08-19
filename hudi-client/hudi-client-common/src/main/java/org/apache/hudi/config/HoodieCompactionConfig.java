@@ -173,21 +173,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "compaction during each compaction run. By default. Hudi picks the log file "
           + "with most accumulated unmerged data");
 
-  public static final ConfigProperty<String> PAYLOAD_CLASS = ConfigProperty
+  public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
       .withDocumentation("This needs to be same as class used during insert/upserts. Just like writing, compaction also uses "
           + "the record payload class to merge records in the log against each other, merge again with the base file and "
           + "produce the final record to be written after compaction.");
 
-  public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLED = ConfigProperty
+  public static final ConfigProperty<String> COMPACTION_LAZY_BLOCK_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.lazy.block.read")
       .defaultValue("false")
       .withDocumentation("When merging the delta log files, this config helps to choose whether the log blocks "
           + "should be read lazily or not. Choose true to use lazy block reading (low memory usage, but incurs seeks to each block"
           + " header) or false for immediate block read (higher memory usage)");
 
-  public static final ConfigProperty<String> COMPACTION_REVERSE_LOG_READ_ENABLED = ConfigProperty
+  public static final ConfigProperty<String> COMPACTION_REVERSE_LOG_READ_ENABLE = ConfigProperty
       .key("hoodie.compaction.reverse.log.read")
       .defaultValue("false")
       .withDocumentation("HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. "
@@ -363,24 +363,24 @@ public class HoodieCompactionConfig extends HoodieConfig {
   /** @deprecated Use {@link #COMPACTION_STRATEGY} and its methods instead */
   @Deprecated
   public static final String DEFAULT_COMPACTION_STRATEGY = COMPACTION_STRATEGY.defaultValue();
-  /** @deprecated Use {@link #PAYLOAD_CLASS} and its methods instead */
+  /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
-  public static final String DEFAULT_PAYLOAD_CLASS = PAYLOAD_CLASS.defaultValue();
-  /** @deprecated Use {@link #PAYLOAD_CLASS} and its methods instead */
+  public static final String DEFAULT_PAYLOAD_CLASS = PAYLOAD_CLASS_NAME.defaultValue();
+  /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
-  public static final String PAYLOAD_CLASS_PROP = PAYLOAD_CLASS.key();
-  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLED} and its methods instead */
+  public static final String PAYLOAD_CLASS_PROP = PAYLOAD_CLASS_NAME.key();
+  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead */
   @Deprecated
-  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = COMPACTION_LAZY_BLOCK_READ_ENABLED.key();
-  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLED} and its methods instead */
+  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = COMPACTION_LAZY_BLOCK_READ_ENABLE.key();
+  /** @deprecated Use {@link #COMPACTION_LAZY_BLOCK_READ_ENABLE} and its methods instead */
   @Deprecated
-  public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLED.defaultValue();
-  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLED} and its methods instead */
+  public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
+  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead */
   @Deprecated
-  public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = COMPACTION_REVERSE_LOG_READ_ENABLED.key();
-  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLED} and its methods instead */
+  public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = COMPACTION_REVERSE_LOG_READ_ENABLE.key();
+  /** @deprecated Use {@link #COMPACTION_REVERSE_LOG_READ_ENABLE} and its methods instead */
   @Deprecated
-  public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLED.defaultValue();
+  public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue();
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
   private static final String DEFAULT_CLEANER_POLICY = CLEANER_POLICY.defaultValue();
@@ -554,7 +554,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder withPayloadClass(String payloadClassName) {
-      compactionConfig.setValue(PAYLOAD_CLASS, payloadClassName);
+      compactionConfig.setValue(PAYLOAD_CLASS_NAME, payloadClassName);
       return this;
     }
 
@@ -574,12 +574,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder withCompactionLazyBlockReadEnabled(Boolean compactionLazyBlockReadEnabled) {
-      compactionConfig.setValue(COMPACTION_LAZY_BLOCK_READ_ENABLED, String.valueOf(compactionLazyBlockReadEnabled));
+      compactionConfig.setValue(COMPACTION_LAZY_BLOCK_READ_ENABLE, String.valueOf(compactionLazyBlockReadEnabled));
       return this;
     }
 
     public Builder withCompactionReverseLogReadEnabled(Boolean compactionReverseLogReadEnabled) {
-      compactionConfig.setValue(COMPACTION_REVERSE_LOG_READ_ENABLED, String.valueOf(compactionReverseLogReadEnabled));
+      compactionConfig.setValue(COMPACTION_REVERSE_LOG_READ_ENABLE, String.valueOf(compactionReverseLogReadEnabled));
       return this;
     }
 

@@ -185,7 +185,7 @@ public class DataSourceUtils {
     return builder.forTable(tblName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS().key()))
+            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key()))
             .withInlineCompaction(inlineCompact).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withInlineClustering(inlineClusteringEnabled)

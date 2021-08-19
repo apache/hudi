@@ -96,7 +96,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
-  public static final ConfigProperty<String> KEYGENERATOR_CLASS = ConfigProperty
+  public static final ConfigProperty<String> KEYGENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.class")
       .noDefaultValue()
       .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator` "
@@ -303,7 +303,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Controls whether or not, the requests to the timeline server are processed in asynchronous fashion, "
           + "potentially improving throughput.");
 
-  public static final ConfigProperty<String> FAIL_ON_TIMELINE_ARCHIVING_ENABLED = ConfigProperty
+  public static final ConfigProperty<String> FAIL_ON_TIMELINE_ARCHIVING_ENABLE = ConfigProperty
       .key("hoodie.fail.on.timeline.archiving")
       .defaultValue("true")
       .withDocumentation("Timeline archiving removes older instants from the timeline, after each write operation, to minimize metadata overhead. "
@@ -438,12 +438,12 @@ public class HoodieWriteConfig extends HoodieConfig {
   @Deprecated
   public static final String DEFAULT_WRITE_PAYLOAD_CLASS = WRITE_PAYLOAD_CLASS_NAME.defaultValue();
   /**
-   * @deprecated Use {@link #KEYGENERATOR_CLASS} and its methods instead
+   * @deprecated Use {@link #KEYGENERATOR_CLASS_NAME} and its methods instead
    */
   @Deprecated
-  public static final String KEYGENERATOR_CLASS_PROP = KEYGENERATOR_CLASS.key();
+  public static final String KEYGENERATOR_CLASS_PROP = KEYGENERATOR_CLASS_NAME.key();
   /**
-   * @deprecated Use {@link #KEYGENERATOR_CLASS} and its methods instead
+   * @deprecated Use {@link #KEYGENERATOR_CLASS_NAME} and its methods instead
    */
   @Deprecated
   public static final String DEFAULT_KEYGENERATOR_CLASS = SimpleAvroKeyGenerator.class.getName();
@@ -675,15 +675,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   @Deprecated
   public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ASYNC = EMBEDDED_TIMELINE_SERVER_USE_ASYNC_ENABLE.defaultValue();
   /**
-   * @deprecated Use {@link #FAIL_ON_TIMELINE_ARCHIVING_ENABLED} and its methods instead
+   * @deprecated Use {@link #FAIL_ON_TIMELINE_ARCHIVING_ENABLE} and its methods instead
    */
   @Deprecated
-  public static final String FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP = FAIL_ON_TIMELINE_ARCHIVING_ENABLED.key();
+  public static final String FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP = FAIL_ON_TIMELINE_ARCHIVING_ENABLE.key();
   /**
-   * @deprecated Use {@link #FAIL_ON_TIMELINE_ARCHIVING_ENABLED} and its methods instead
+   * @deprecated Use {@link #FAIL_ON_TIMELINE_ARCHIVING_ENABLE} and its methods instead
    */
   @Deprecated
-  public static final String DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED = FAIL_ON_TIMELINE_ARCHIVING_ENABLED.defaultValue();
+  public static final String DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED = FAIL_ON_TIMELINE_ARCHIVING_ENABLE.defaultValue();
   /**
    * @deprecated Use {@link #INITIAL_CONSISTENCY_CHECK_INTERVAL_MS} and its methods instead
    */
@@ -867,7 +867,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getKeyGeneratorClass() {
-    return getString(KEYGENERATOR_CLASS);
+    return getString(KEYGENERATOR_CLASS_NAME);
   }
 
   public Boolean shouldAutoCommit() {
@@ -988,7 +988,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isFailOnTimelineArchivingEnabled() {
-    return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
+    return getBoolean(FAIL_ON_TIMELINE_ARCHIVING_ENABLE);
   }
 
   public int getMaxConsistencyChecks() {
@@ -1109,11 +1109,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public Boolean getCompactionLazyBlockReadEnabled() {
-    return getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED);
+    return getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE);
   }
 
   public Boolean getCompactionReverseLogReadEnabled() {
-    return getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED);
+    return getBoolean(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLE);
   }
 
   public boolean inlineClusteringEnabled() {
@@ -1142,7 +1142,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getPayloadClass() {
-    return getString(HoodieCompactionConfig.PAYLOAD_CLASS);
+    return getString(HoodieCompactionConfig.PAYLOAD_CLASS_NAME);
   }
 
   public int getTargetPartitionsPerDayBasedCompaction() {
@@ -1213,7 +1213,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getIndexClass() {
-    return getString(HoodieIndexConfig.INDEX_CLASS);
+    return getString(HoodieIndexConfig.INDEX_CLASS_NAME);
   }
 
   public int getBloomFilterNumEntries() {
@@ -1409,7 +1409,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public long getOrcMaxFileSize() {
-    return getLong(HoodieStorageConfig.ORC_FILE_MAX_BYTES);
+    return getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE);
   }
 
   public int getOrcStripeSize() {
@@ -1590,7 +1590,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getCallbackClass() {
-    return getString(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS);
+    return getString(HoodieWriteCommitCallbackConfig.CALLBACK_CLASS_NAME);
   }
 
   public String getBootstrapSourceBasePath() {
@@ -1598,7 +1598,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getBootstrapModeSelectorClass() {
-    return getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS);
+    return getString(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME);
   }
 
   public String getFullBootstrapInputProvider() {
@@ -1682,7 +1682,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
 
   public String getLockProviderClass() {
-    return getString(HoodieLockConfig.LOCK_PROVIDER_CLASS);
+    return getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME);
   }
 
   public String getLockHiveDatabaseName() {
@@ -1694,7 +1694,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public ConflictResolutionStrategy getWriteConflictResolutionStrategy() {
-    return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS));
+    return ReflectionUtils.loadClass(getString(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME));
   }
 
   public Long getLockAcquireWaitTimeoutInMs() {
@@ -1813,7 +1813,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withKeyGenerator(String keyGeneratorClass) {
-      writeConfig.setValue(KEYGENERATOR_CLASS, keyGeneratorClass);
+      writeConfig.setValue(KEYGENERATOR_CLASS_NAME, keyGeneratorClass);
       return this;
     }
 

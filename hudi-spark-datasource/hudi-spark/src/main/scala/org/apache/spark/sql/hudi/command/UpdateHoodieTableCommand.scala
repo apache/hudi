@@ -95,7 +95,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
-        KEYGENERATOR_CLASS.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         PRECOMBINE_FIELD.key -> primaryColumns.head, //set the default preCombine field.
         TBL_NAME.key -> tableId.table,
         OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,

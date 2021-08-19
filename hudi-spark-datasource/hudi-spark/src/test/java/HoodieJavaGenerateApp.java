@@ -177,7 +177,7 @@ public class HoodieJavaGenerateApp {
         // Used by hive sync and queries
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
         .mode(commitType);

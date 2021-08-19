@@ -359,7 +359,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
             DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
             DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
             HoodieTableConfig.POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields),
-            DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> classOf[SimpleKeyGenerator].getCanonicalName)
+            DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
           val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
           // generate the inserts
@@ -620,7 +620,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "col3",
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
-        DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
         HoodieWriteConfig.TBL_NAME.key -> "hoodie_test")
       try {
         val df = spark.range(0, 1000).toDF("keyid")
@@ -755,7 +755,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.KEYGENERATOR_CLASS.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
   }
 
   test("test Non partition table with metatable support") {
@@ -774,7 +774,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "col3")
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "keyid")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "")
-          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
           .option(DataSourceWriteOptions.OPERATION.key, "insert")
           .option("hoodie.insert.shuffle.parallelism", "1")
           .option("hoodie.metadata.enable", "true")
@@ -789,7 +789,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "col3")
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "keyid")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "")
-          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
           .option(DataSourceWriteOptions.OPERATION.key, "upsert")
           .option("hoodie.upsert.shuffle.parallelism", "1")
           .option("hoodie.metadata.enable", "true")

@@ -51,7 +51,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
 
     // set KeyGenerator class only
     props = getCommonProps();
-    props.put(HoodieWriteConfig.KEYGENERATOR_CLASS.key(), SimpleKeyGenerator.class.getName());
+    props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
     KeyGenerator keyGenerator2 = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     Assertions.assertEquals(SimpleKeyGenerator.class.getName(), keyGenerator2.getClass().getName());
 
@@ -63,7 +63,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
 
     // set wrong class name
     final TypedProperties props2 = getCommonProps();
-    props2.put(HoodieWriteConfig.KEYGENERATOR_CLASS.key(), TestHoodieSparkKeyGeneratorFactory.class.getName());
+    props2.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), TestHoodieSparkKeyGeneratorFactory.class.getName());
     assertThrows(IOException.class, () -> HoodieSparkKeyGeneratorFactory.createKeyGenerator(props2));
 
     // set wrong keyGenerator type

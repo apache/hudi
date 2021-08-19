@@ -371,7 +371,7 @@ public class SparkMain {
 
     properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key(), fullBootstrapInputProvider);
     properties.setProperty(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), parallelism);
-    properties.setProperty(HoodieBootstrapConfig.MODE_SELECTOR_CLASS.key(), selectorClass);
+    properties.setProperty(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), selectorClass);
     properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKeyCols);
     properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionFields);
 

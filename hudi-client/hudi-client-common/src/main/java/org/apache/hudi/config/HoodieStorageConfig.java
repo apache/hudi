@@ -57,7 +57,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Parquet page size. Page is the unit of read within a parquet file. "
           + "Within a block, pages are compressed separately.");
 
-  public static final ConfigProperty<String> ORC_FILE_MAX_BYTES = ConfigProperty
+  public static final ConfigProperty<String> ORC_FILE_MAX_SIZE = ConfigProperty
       .key("hoodie.orc.max.file.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
       .withDocumentation("Target file size for ORC base files.");
@@ -69,7 +69,7 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ORC_BLOCK_SIZE = ConfigProperty
       .key("hoodie.orc.block.size")
-      .defaultValue(ORC_FILE_MAX_BYTES.defaultValue())
+      .defaultValue(ORC_FILE_MAX_SIZE.defaultValue())
       .withDocumentation("ORC block size, recommended to be aligned with the target file size.");
 
   public static final ConfigProperty<String> HFILE_MAX_FILE_SIZE = ConfigProperty
@@ -318,7 +318,7 @@ public class HoodieStorageConfig extends HoodieConfig {
     }
 
     public Builder orcMaxFileSize(long maxFileSize) {
-      storageConfig.setValue(ORC_FILE_MAX_BYTES, String.valueOf(maxFileSize));
+      storageConfig.setValue(ORC_FILE_MAX_SIZE, String.valueOf(maxFileSize));
       return this;
     }
 

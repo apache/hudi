@@ -523,7 +523,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     inputDF.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS.key, keyGenerator)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .mode(SaveMode.Overwrite)
   }
 
