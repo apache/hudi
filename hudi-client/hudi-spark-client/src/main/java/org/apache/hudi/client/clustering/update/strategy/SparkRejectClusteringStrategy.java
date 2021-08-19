@@ -42,7 +42,18 @@ import java.util.stream.Collectors;
 
 /**
  * Update strategy based on following.
- * if some file group have update record, Then let clustering job failing.
+ * If some file group have update record, Then let clustering job failing.
+ *
+ * When update happened after clustering plan created and before clustering executed.
+ *      -> There will be a request replace commit.
+ *      -> SparkRejectClusteringStrategy will create a clustering reject file under .tmp dir named xxx.replacement.request.reject.
+ *      -> Before perform clustering job, hudi can check this reject file using SparkRejectClusteringStrategy.validateClustering() function.
+ *        -> if reject file is exists then abort this clustering plan and remove reject file.
+ * When update happened after clustering executed but not finished.
+ *      -> There will be a inflight replace commit.
+ *      -> SparkRejectClusteringStrategy will create a clustering reject file under .tmp dir named xxx.replacement.inflight.reject.
+ *      -> Before clustering job finished and committed, hudi can check this reject file using SparkRejectClusteringStrategy.validateClustering() function.
+ *        -> if reject file is exists then failed this clustering execution and remove reject file.
  */
 public class SparkRejectClusteringStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, JavaRDD<HoodieRecord<T>>> {
   private static final Logger LOG = LogManager.getLogger(SparkRejectClusteringStrategy.class);
@@ -137,13 +148,12 @@ public class SparkRejectClusteringStrategy<T extends HoodieRecordPayload<T>> ext
       updatedDuringClustering = true;
       postAction(clusteringRejectFile, table);
     }
-
-    return updatedDuringClustering;
+    return !updatedDuringClustering;
   }
 
   /**
    * For now just delete this reject file which let clustering job failed.
-   * In the future, We can use this post action to correct clustering plan like remove the updated file slice and overwrite a new clustering plan.
+   * In the future, We can use this post action to correct clustering plan like remove the updated file slice in clustering plan and overwrite with a new one.
    * @param clusteringRejectFile
    * @param table
    */

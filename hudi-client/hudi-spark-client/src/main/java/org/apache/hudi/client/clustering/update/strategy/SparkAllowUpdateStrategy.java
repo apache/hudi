@@ -47,6 +47,6 @@ public class SparkAllowUpdateStrategy<T extends HoodieRecordPayload<T>> extends 
   @Override
   public boolean validateClustering(HoodieInstant instant, HoodieTable table) {
     // do nothing
-    return false;
+    return true;
   }
 }

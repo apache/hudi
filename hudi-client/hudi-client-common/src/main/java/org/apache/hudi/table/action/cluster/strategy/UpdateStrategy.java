@@ -47,6 +47,12 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
    */
   public abstract I handleUpdate(I taggedRecordsRDD, HoodieTable table);
 
+  /**
+   *
+   * @param instant clustering instant could be request or inflight
+   * @param table HoodieTable
+   * @return true if clustering is validate or false if clustering in-validate and can't be performed.
+   */
   public abstract boolean validateClustering(HoodieInstant instant, HoodieTable table);
 
 }

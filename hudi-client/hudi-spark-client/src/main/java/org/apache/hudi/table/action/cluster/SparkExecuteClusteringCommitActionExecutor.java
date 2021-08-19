@@ -103,7 +103,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
             .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, new HashSet<HoodieFileGroupId>());
 
     // HoodieClusteringUpdateException will be caught in async clustering service and will not shutdown async clustering service
-    if (updateStrategy.validateClustering(instant, table)) {
+    if (!updateStrategy.validateClustering(instant, table)) {
       if (instant.isRequested()) {
         throw new HoodieClusteringUpdateException("Current clustering plan conflicts with incoming data updated. Skip this clustering plan + " + instant);
       } else {
