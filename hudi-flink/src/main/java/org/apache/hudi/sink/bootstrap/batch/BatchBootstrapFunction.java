@@ -29,7 +29,15 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * The function to load specify partition index from existing hoodieTable.
+ * The function to load index from existing hoodieTable.
+ *
+ * <p>This function should only be used for bounded source.
+ *
+ * <p>When a record comes in, the function firstly checks whether the partition path of the record is already loaded,
+ * if the partition is not loaded yet, loads the entire partition and sends the index records to downstream operators
+ * before it sends the input record; if the partition is loaded already, sends the input record directly.
+ *
+ * <p>The input records should shuffle by the partition path to avoid repeated loading.
  */
 public class BatchBootstrapFunction<I, O extends HoodieRecord>
     extends BootstrapFunction<I, O> {
@@ -61,5 +69,4 @@ public class BatchBootstrapFunction<I, O extends HoodieRecord>
     // send the trigger record
     out.collect((O) value);
   }
-
 }

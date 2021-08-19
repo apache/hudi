@@ -85,7 +85,22 @@ public class Pipelines {
         .name("clean_commits");
   }
 
-  public static DataStream<HoodieRecord> bootstrap(Configuration conf, RowType rowType, int defaultParallelism, DataStream<RowData> dataStream) {
+  public static DataStream<HoodieRecord> bootstrap(
+      Configuration conf,
+      RowType rowType,
+      int defaultParallelism,
+      DataStream<RowData> dataStream,
+      boolean bounded) {
+    return bounded
+        ? boundedBootstrap(conf, rowType, defaultParallelism, dataStream)
+        : streamBootstrap(conf, rowType, defaultParallelism, dataStream);
+  }
+
+  private static DataStream<HoodieRecord> streamBootstrap(
+      Configuration conf,
+      RowType rowType,
+      int defaultParallelism,
+      DataStream<RowData> dataStream) {
     DataStream<HoodieRecord> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
@@ -101,8 +116,11 @@ public class Pipelines {
     return dataStream1;
   }
 
-  public static DataStream<HoodieRecord> batchBootstrap(Configuration conf, RowType rowType, int defaultParallelism, DataStream<RowData> dataStream) {
-    // shuffle and sort by partition keys
+  private static DataStream<HoodieRecord> boundedBootstrap(
+      Configuration conf,
+      RowType rowType,
+      int defaultParallelism,
+      DataStream<RowData> dataStream) {
     final String[] partitionFields = FilePathUtils.extractPartitionKeys(conf);
     if (partitionFields.length > 0) {
       RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);

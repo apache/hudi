@@ -148,7 +148,7 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   }
 
   /**
-   * Load all the indices of give partition path into the backup state.
+   * Loads all the indices of give partition path into the backup state.
    *
    * @param partitionPath The partition path
    */
