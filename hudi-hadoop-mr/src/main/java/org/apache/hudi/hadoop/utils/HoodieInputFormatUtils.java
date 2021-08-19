@@ -18,9 +18,6 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
-import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
-import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -51,6 +48,9 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
@@ -71,8 +71,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.VALIDATE_ENABLE;
 
 public class HoodieInputFormatUtils {
 
@@ -418,8 +418,8 @@ public class HoodieInputFormatUtils {
 
   public static HoodieMetadataConfig buildMetadataConfig(Configuration conf) {
     return HoodieMetadataConfig.newBuilder()
-        .enable(conf.getBoolean(METADATA_ENABLE_PROP.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
-        .validate(conf.getBoolean(METADATA_VALIDATE_PROP.key(), METADATA_VALIDATE_PROP.defaultValue()))
+        .enable(conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
+        .validate(conf.getBoolean(VALIDATE_ENABLE.key(), VALIDATE_ENABLE.defaultValue()))
         .build();
   }
 

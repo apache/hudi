@@ -174,17 +174,17 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     // tweak the key gen class if possible
     final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
     if (partitions.length == 1 && partitions[0].equals("")) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS, NonpartitionedAvroKeyGenerator.class.getName());
+      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
-          FlinkOptions.KEYGEN_CLASS.key(), NonpartitionedAvroKeyGenerator.class.getName());
+          FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
       return;
     }
     final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
     boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
-    if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS)) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS, ComplexAvroKeyGenerator.class.getName());
+    if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
+      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
-          FlinkOptions.KEYGEN_CLASS.key(), ComplexAvroKeyGenerator.class.getName());
+          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
   }
 
@@ -220,8 +220,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * */
   private static void setupHiveOptions(Configuration conf) {
     if (!conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING)
-        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS)) {
-      conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS, MultiPartKeysValueExtractor.class.getName());
+        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME)) {
+      conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME, MultiPartKeysValueExtractor.class.getName());
     }
   }
 

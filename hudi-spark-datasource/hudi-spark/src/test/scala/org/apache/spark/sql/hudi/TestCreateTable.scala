@@ -18,8 +18,6 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-
-import scala.collection.JavaConverters._
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -28,7 +26,9 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
-import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField}
+import org.apache.spark.sql.types._
+
+import scala.collection.JavaConverters._
 
 class TestCreateTable extends TestHoodieSqlBase {
 
@@ -288,14 +288,14 @@ class TestCreateTable extends TestHoodieSqlBase {
         val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
         // Write a table by spark dataframe.
         df.write.format("hudi")
-          .option(HoodieWriteConfig.TABLE_NAME.key, tableName)
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
-          .option(KEYGENERATOR_CLASS.key, classOf[SimpleKeyGenerator].getName)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM.key, "1")
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
@@ -319,9 +319,9 @@ class TestCreateTable extends TestHoodieSqlBase {
           .setConf(spark.sessionState.newHadoopConf())
           .build()
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA.key))
-        assertResult("dt")(properties(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP.key))
-        assertResult("ts")(properties(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP.key))
+        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+        assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
+        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
 
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$partitionValue')")
@@ -365,14 +365,14 @@ class TestCreateTable extends TestHoodieSqlBase {
         val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.
         df.write.format("hudi")
-          .option(HoodieWriteConfig.TABLE_NAME.key, tableName)
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
-          .option(KEYGENERATOR_CLASS.key, classOf[ComplexKeyGenerator].getName)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM.key, "1")
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
@@ -396,9 +396,9 @@ class TestCreateTable extends TestHoodieSqlBase {
           .setConf(spark.sessionState.newHadoopConf())
           .build()
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
-        assertResult(true)(properties.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA.key))
-        assertResult("day,hh")(properties(HoodieTableConfig.HOODIE_TABLE_PARTITION_FIELDS_PROP.key))
-        assertResult("ts")(properties(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP.key))
+        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+        assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
+        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
 
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$day', 12)")
@@ -440,14 +440,14 @@ class TestCreateTable extends TestHoodieSqlBase {
       import spark.implicits._
       val df = Seq((1, "a1", 10, 1000)).toDF("id", "name", "value", "ts")
       df.write.format("hudi")
-        .option(HoodieWriteConfig.TABLE_NAME.key, tableName)
+        .option(HoodieWriteConfig.TBL_NAME.key, tableName)
         .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
         .option(RECORDKEY_FIELD.key, "id")
         .option(PRECOMBINE_FIELD.key, "ts")
         .option(PARTITIONPATH_FIELD.key, "")
-        .option(KEYGENERATOR_CLASS.key, classOf[NonpartitionedKeyGenerator].getName)
-        .option(HoodieWriteConfig.INSERT_PARALLELISM.key, "1")
-        .option(HoodieWriteConfig.UPSERT_PARALLELISM.key, "1")
+        .option(KEYGENERATOR_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getName)
+        .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+        .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
         .mode(SaveMode.Overwrite)
         .save(tmp.getCanonicalPath)
 
@@ -470,8 +470,8 @@ class TestCreateTable extends TestHoodieSqlBase {
         .setConf(spark.sessionState.newHadoopConf())
         .build()
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
-      assertResult(true)(properties.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA.key))
-      assertResult("ts")(properties(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP.key))
+      assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+      assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
 
       // Test insert into
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")

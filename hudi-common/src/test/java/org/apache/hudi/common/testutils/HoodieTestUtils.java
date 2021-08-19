@@ -65,7 +65,7 @@ public class HoodieTestUtils {
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath) throws IOException {
     Properties props = new Properties();
-    props.setProperty(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH_PROP.key(), bootstrapBasePath);
+    props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 
@@ -86,7 +86,7 @@ public class HoodieTestUtils {
                                            String tableName)
       throws IOException {
     Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP.key(), tableName);
+    properties.setProperty(HoodieTableConfig.NAME.key(), tableName);
     return init(hadoopConf, basePath, tableType, properties);
   }
 
@@ -94,7 +94,7 @@ public class HoodieTestUtils {
                                            HoodieFileFormat baseFileFormat)
       throws IOException {
     Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.key(), baseFileFormat.toString());
+    properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
     return init(hadoopConf, basePath, tableType, properties);
   }
 

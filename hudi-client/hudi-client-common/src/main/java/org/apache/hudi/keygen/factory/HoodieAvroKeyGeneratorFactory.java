@@ -41,7 +41,7 @@ import java.util.Objects;
 /**
  * Factory help to create {@link org.apache.hudi.keygen.KeyGenerator}.
  * <p>
- * This factory will try {@link HoodieWriteConfig#KEYGENERATOR_CLASS} firstly, this ensures the class prop
+ * This factory will try {@link HoodieWriteConfig#KEYGENERATOR_CLASS_NAME} firstly, this ensures the class prop
  * will not be overwritten by {@link KeyGeneratorType}
  */
 public class HoodieAvroKeyGeneratorFactory {

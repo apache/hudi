@@ -92,12 +92,12 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
     FileCreateUtils.createPartitionMetaFile(basePath, partition);
     String fileName = baseFileName(currentInstantTime, fileId);
 
-    if (HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().equals(HoodieFileFormat.PARQUET)) {
+    if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
       HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
           new AvroSchemaConverter().convert(schema), schema, Option.of(filter), false);
       HoodieAvroParquetConfig config = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
           ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
-          new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO.defaultValue()));
+          new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()));
       try (HoodieParquetWriter writer = new HoodieParquetWriter(
           currentInstantTime,
           new Path(Paths.get(basePath, partition, fileName).toString()),
@@ -115,11 +115,11 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
           }
         }
       }
-    } else if (HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().equals(HoodieFileFormat.ORC)) {
+    } else if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.ORC)) {
       Configuration conf = new Configuration();
       int orcStripSize = Integer.parseInt(HoodieStorageConfig.ORC_STRIPE_SIZE.defaultValue());
       int orcBlockSize = Integer.parseInt(HoodieStorageConfig.ORC_BLOCK_SIZE.defaultValue());
-      int maxFileSize = Integer.parseInt(HoodieStorageConfig.ORC_FILE_MAX_BYTES.defaultValue());
+      int maxFileSize = Integer.parseInt(HoodieStorageConfig.ORC_FILE_MAX_SIZE.defaultValue());
       HoodieOrcConfig config = new HoodieOrcConfig(conf, CompressionKind.ZLIB, orcStripSize, orcBlockSize, maxFileSize, filter);
       try (HoodieOrcWriter writer = new HoodieOrcWriter(
           currentInstantTime,

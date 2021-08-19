@@ -76,7 +76,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 
 /**
  * Utilities for Flink stream read and write.
@@ -157,7 +157,7 @@ public class StreamerUtil {
             .withMergeAllowDuplicateOnInserts(allowDuplicateInserts(conf))
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
-                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
+                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
                     .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
                     .withInlineCompactionTriggerStrategy(
                         CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
@@ -236,8 +236,8 @@ public class StreamerUtil {
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
-          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))
-          .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
           .setPreCombineField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
           .setTimelineLayoutVersion(1)

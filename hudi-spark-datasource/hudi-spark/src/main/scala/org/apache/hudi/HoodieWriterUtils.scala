@@ -17,13 +17,12 @@
 
 package org.apache.hudi
 
-import java.util.Properties
-
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieMetadataConfig.{METADATA_ENABLE_PROP, METADATA_VALIDATE_PROP}
+import org.apache.hudi.common.config.HoodieMetadataConfig.{ENABLE, VALIDATE_ENABLE}
 import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 
+import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.{mapAsScalaMapConverter, _}
 
@@ -46,18 +45,18 @@ object HoodieWriterUtils {
     Map(OPERATION.key -> OPERATION.defaultValue,
       TABLE_TYPE.key -> TABLE_TYPE.defaultValue,
       PRECOMBINE_FIELD.key -> PRECOMBINE_FIELD.defaultValue,
-      PAYLOAD_CLASS.key -> PAYLOAD_CLASS.defaultValue,
+      PAYLOAD_CLASS_NAME.key -> PAYLOAD_CLASS_NAME.defaultValue,
       RECORDKEY_FIELD.key -> RECORDKEY_FIELD.defaultValue,
       PARTITIONPATH_FIELD.key -> PARTITIONPATH_FIELD.defaultValue,
-      KEYGENERATOR_CLASS.key -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,
-      METADATA_ENABLE_PROP.key -> METADATA_ENABLE_PROP.defaultValue.toString,
-      METADATA_VALIDATE_PROP.key -> METADATA_VALIDATE_PROP.defaultValue.toString,
+      KEYGENERATOR_CLASS_NAME.key -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,
+      ENABLE.key -> ENABLE.defaultValue.toString,
+      VALIDATE_ENABLE.key -> VALIDATE_ENABLE.defaultValue.toString,
       COMMIT_METADATA_KEYPREFIX.key -> COMMIT_METADATA_KEYPREFIX.defaultValue,
       INSERT_DROP_DUPS.key -> INSERT_DROP_DUPS.defaultValue,
       STREAMING_RETRY_CNT.key -> STREAMING_RETRY_CNT.defaultValue,
       STREAMING_RETRY_INTERVAL_MS.key -> STREAMING_RETRY_INTERVAL_MS.defaultValue,
       STREAMING_IGNORE_FAILED_BATCH.key -> STREAMING_IGNORE_FAILED_BATCH.defaultValue,
-      META_SYNC_CLIENT_TOOL_CLASS.key -> META_SYNC_CLIENT_TOOL_CLASS.defaultValue,
+      META_SYNC_CLIENT_TOOL_CLASS_NAME.key -> META_SYNC_CLIENT_TOOL_CLASS_NAME.defaultValue,
       HIVE_SYNC_ENABLED.key -> HIVE_SYNC_ENABLED.defaultValue,
       META_SYNC_ENABLED.key -> META_SYNC_ENABLED.defaultValue,
       HIVE_DATABASE.key -> HIVE_DATABASE.defaultValue,

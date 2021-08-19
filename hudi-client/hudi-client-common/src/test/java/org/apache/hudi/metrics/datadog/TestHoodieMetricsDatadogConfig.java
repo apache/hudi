@@ -33,7 +33,7 @@ public class TestHoodieMetricsDatadogConfig {
   @Test
   public void getDatadogMetricTagsShouldReturnEmptyListWhenNotSet() {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
-    writeConfig.getProps().remove(HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS.key());
+    writeConfig.getProps().remove(HoodieMetricsDatadogConfig.METRIC_TAG_VALUES.key());
     assertIterableEquals(Collections.emptyList(), writeConfig.getDatadogMetricTags());
   }
 }
