@@ -1,6 +1,6 @@
 ---
-title: "Virtual keys support for Immutable data lake use-cases"
-excerpt: "Adding first class support for immutable data use-cases by reducing storage overhead"
+title: "Virtual keys support in Hudi"
+excerpt: "Supporting Virtual keys in Hudi by reducing storage overhead"
 author: shivnarayan
 category: blog
 ---
@@ -8,17 +8,16 @@ category: blog
 Apache Hudi helps you build and manage data lakes with different table types, config knobs to cater to everyone's need.
 Hudi adds metadata to each record like the record key, partition path, commit time etc. This serves multiple purposes. 
 This assist in avoiding re-computing the record key, partition path during merges, compaction and other table operations 
-and also assists in supporting incremental queries. But we are hearing to lot of use-cases of data lakes being used for 
-immutable data with no updates and occasional deletes. So, Hudi is adding Virtual keys support to cater to such needs of 
-immutable data. 
+and also assists in supporting incremental queries. But one of the repeated asks from the community is to leverage 
+existing fields and not to add additional meta fields. So, Hudi is adding Virtual keys support to cater to such needs. 
 
-# Data lakes for immutable data
+# Virtual key support
 Hudi now supports Virtual keys, where Hudi meta fields can be computed on demand from existing user
 fields for all records. In regular path, these are computed once and stored as per record metadata and re-used during 
 various operations like merging incoming records to those in storage, compaction, etc. Hudi also stores commit time at 
-record level to support incremental queries. If one's use-case is mostly immutable data with just occasional 
-deletes/updates, Hudi's Virutal key support will come in handy as it reduces the storage overhead due to these per record 
-metadata. 
+record level to support incremental queries. If one does not need incremental support, they can start leverageing 
+Hudi's Virutal key support and still go about using Hudi to build and manage their data lake to reduce the storage 
+overhead due to per record metadata. 
 
 ## Configurations
 Virtual keys can be enabled for a given table using the below config. When disabled, 
@@ -32,22 +31,31 @@ the meta fields populated. But if you have an existing table from an older versi
 Just that going back is not feasible. 
 Another constraint wrt virtual key support is that, Key generator properties for a given table cannot be changed through
 the course of the lifecycle of a given hudi table.
-For instance, if you configure record key to point to field5 for few ingestions and later switch to field10 after 
-sometime, it may not pan out well with hudi table where virtual keys are enabled. 
+For instance, if you configure record key to point to field5 for few batches of write and later switch to field10, 
+it may not pan out well with hudi table where virtual keys are enabled. 
 
-As its evident, record keys and partition path will have to re-computed everytime when in need (merges, compaction, 
-MOR snapshot read). Hence only SimpleKeyGenerator is supported (i.e. both record key and partition path has to refer 
-to an existing user field ). If we zoom into Merge On Read table's snapshot query, hudi does real time merging of base 
-data file with records from delta log files and hence query latencies will shoot up, if we were to support all different
-types of key generators.
+As its evident, record keys and partition path will have to be re-computed everytime when in need (merges, compaction, 
+MOR snapshot read). Hence we are supporting only built-in key generators with Virtual Keys for COW table type. Incase of 
+MOR, we support only SimpleKeyGenerator (i.e. both record key and partition path has to refer
+to an existing user field ) for now. If we zoom into Merge On Read table's snapshot query, hudi does real time merging of base 
+data file with records from delta log files and hence query latencies will shoot up if we were to support all different
+types of key generators. 
 
-Index type: 
-Only "SIMPLE" and "GLOBAL_SIMPLE" index types are supported in the first cut. We plan to add support for other index (BLOOM, etc) in future. 
+### Supported Key Generators with CopyOnWrite(COW) table:
+SimpleKeyGenerator, ComplexKeyGenerator, CustomKeyGenerator, TimestampBasedKeyGenerator and NonPartitionedKeyGenerator. 
+
+### Supported Key Generators with MergeOnRead(MOR) table:
+SimpleKeyGenerator
+
+### Supported Index types: 
+Only "SIMPLE" and "GLOBAL_SIMPLE" index types are supported in the first cut. We plan to add support for other index 
+(BLOOM, etc) in future releases. 
 
 ## Supported Operations
-Even though this is catered towards immutable data, all operations are supported for a hudi table with virtual keys 
-except the incremental query support. This also includes clearning, archiving, metadata table, clustering, etc. 
-So, if one's requirement fits into this model, would recommend using virtual keys as it reduces the storage overhead. 
+Good news is that, all existing operations are supported for a hudi table with virtual keys except the incremental 
+query support. Which means, cleaning, archiving, metadata table, clustering, etc can be enabled for a hudi table with 
+virtual keys enabled. So, if one's requirement fits into this model, would recommend using virtual keys as it reduces 
+the storage overhead. 
 
 ## Code snippet
 We can go through our quick start and see how it plays out when virtual keys are enabled.
@@ -277,8 +285,8 @@ res11: Long = 8
 Note: Before deletes, there were 10 records and now we have 8 records (as 2 were deleted). 
 
 ## Conclusion 
-For immutable use-cases, virtual keys will definitely be beneficial given your requirements adheres to the model 
-listed above. Hope this blog was useful for you to learn yet another feature in Apache Hudi. If you are interested in 
+Virtual keys will definitely be beneficial given your requirements adheres to the model listed above. Hope this blog 
+was useful for you to learn yet another feature in Apache Hudi. If you are interested in 
 Hudi and looking to contribute, do check out [here](https://hudi.apache.org/contribute/get-involved). 
 
 
