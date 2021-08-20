@@ -65,7 +65,7 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .withDocumentation("Comma separated list of file paths to read within a Hudi table.")
 
-  val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD
+  val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.file.index.enable")
@@ -238,7 +238,7 @@ object DataSourceWriteOptions {
    * key value, we will pick the one with the largest value for the precombine field,
    * determined by Object.compareTo(..)
    */
-  val PRECOMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD
+  val PRECOMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
   /**
    * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
@@ -252,20 +252,20 @@ object DataSourceWriteOptions {
    * the dot notation eg: `a.b.c`
    *
    */
-  val RECORDKEY_FIELD = KeyGeneratorOptions.RECORDKEY_FIELD
+  val RECORDKEY_FIELD = KeyGeneratorOptions.RECORDKEY_FIELD_NAME
 
   /**
    * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
    * value obtained by invoking .toString()
    */
-  val PARTITIONPATH_FIELD = KeyGeneratorOptions.PARTITIONPATH_FIELD
+  val PARTITIONPATH_FIELD = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME
 
   /**
    * Flag to indicate whether to use Hive style partitioning.
    * If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
    * By default false (the names of partition folders are only partition values)
    */
-  val HIVE_STYLE_PARTITIONING = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING
+  val HIVE_STYLE_PARTITIONING = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE
 
   val KEYGENERATOR_CLASS_NAME = ConfigProperty.key("hoodie.datasource.write.keygenerator.class")
     .defaultValue(classOf[SimpleKeyGenerator].getName)
@@ -565,7 +565,7 @@ object DataSourceWriteOptions {
   val DEFAULT_ENABLE_ROW_WRITER_OPT_VAL = ENABLE_ROW_WRITER.defaultValue()
   /** @deprecated Use {@link HIVE_STYLE_PARTITIONING} and its methods instead */
   @Deprecated
-  val HIVE_STYLE_PARTITIONING_OPT_KEY = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key()
+  val HIVE_STYLE_PARTITIONING_OPT_KEY = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()
   /** @deprecated Use {@link HIVE_STYLE_PARTITIONING} and its methods instead */
   @Deprecated
   val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = HIVE_STYLE_PARTITIONING.defaultValue()
@@ -604,13 +604,13 @@ object DataSourceWriteOptions {
 
   /** @deprecated Use {@link RECORDKEY_FIELD} and its methods instead */
   @Deprecated
-  val RECORDKEY_FIELD_OPT_KEY = KeyGeneratorOptions.RECORDKEY_FIELD.key()
+  val RECORDKEY_FIELD_OPT_KEY = KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()
   /** @deprecated Use {@link RECORDKEY_FIELD} and its methods instead */
   @Deprecated
   val DEFAULT_RECORDKEY_FIELD_OPT_VAL = RECORDKEY_FIELD.defaultValue()
   /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
   @Deprecated
-  val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD.key()
+  val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()
   /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
   @Deprecated
   val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = PARTITIONPATH_FIELD.defaultValue()
@@ -620,7 +620,7 @@ object DataSourceWriteOptions {
   val TABLE_NAME_OPT_KEY = TABLE_NAME.key()
   /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
   @Deprecated
-  val PRECOMBINE_FIELD_OPT_KEY = HoodieWriteConfig.PRECOMBINE_FIELD.key()
+  val PRECOMBINE_FIELD_OPT_KEY = HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()
   /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
   @Deprecated
   val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = PRECOMBINE_FIELD.defaultValue()
