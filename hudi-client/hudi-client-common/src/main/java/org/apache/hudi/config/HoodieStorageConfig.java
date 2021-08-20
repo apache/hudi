@@ -338,7 +338,6 @@ public class HoodieStorageConfig extends HoodieConfig {
     }
 
     public HoodieStorageConfig build() {
-      storageConfig.setDefaults(HoodieStorageConfig.class.getName());
       return storageConfig;
     }
   }

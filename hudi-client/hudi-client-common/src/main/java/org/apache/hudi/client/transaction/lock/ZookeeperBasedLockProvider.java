@@ -36,6 +36,8 @@ import org.apache.log4j.Logger;
 import javax.annotation.concurrent.NotThreadSafe;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_NUM_RETRIES;
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
@@ -66,7 +68,8 @@ public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMute
     this.curatorFrameworkClient = CuratorFrameworkFactory.builder()
         .connectString(lockConfiguration.getConfig().getString(ZK_CONNECT_URL_PROP_KEY))
         .retryPolicy(new BoundedExponentialBackoffRetry(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY),
-            lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY), lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY)))
+            lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY, Integer.parseInt(DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS)),
+            lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, Integer.parseInt(DEFAULT_LOCK_ACQUIRE_NUM_RETRIES))))
         .sessionTimeoutMs(lockConfiguration.getConfig().getInteger(ZK_SESSION_TIMEOUT_MS_PROP_KEY, DEFAULT_ZK_SESSION_TIMEOUT_MS))
         .connectionTimeoutMs(lockConfiguration.getConfig().getInteger(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, DEFAULT_ZK_CONNECTION_TIMEOUT_MS))
         .build();

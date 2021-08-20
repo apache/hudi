@@ -163,7 +163,6 @@ public class ConsistencyGuardConfig extends HoodieConfig {
     }
 
     public ConsistencyGuardConfig build() {
-      consistencyGuardConfig.setDefaults(ConsistencyGuardConfig.class.getName());
       return consistencyGuardConfig;
     }
   }

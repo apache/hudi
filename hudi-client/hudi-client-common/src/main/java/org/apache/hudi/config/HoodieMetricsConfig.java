@@ -257,8 +257,6 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
     public HoodieMetricsConfig build() {
 
-      hoodieMetricsConfig.setDefaults(HoodieMetricsConfig.class.getName());
-
       MetricsReporterType reporterType = MetricsReporterType.valueOf(hoodieMetricsConfig.getString(METRICS_REPORTER_TYPE_VALUE));
 
       hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.DATADOG,

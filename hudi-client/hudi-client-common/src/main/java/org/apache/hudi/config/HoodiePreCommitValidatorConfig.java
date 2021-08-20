@@ -115,7 +115,6 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
     }
 
     public HoodiePreCommitValidatorConfig build() {
-      preCommitValidatorConfig.setDefaults(HoodiePreCommitValidatorConfig.class.getName());
       return preCommitValidatorConfig;
     }
   }

@@ -271,7 +271,6 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
     }
 
     public FileSystemViewStorageConfig build() {
-      fileSystemViewStorageConfig.setDefaults(FileSystemViewStorageConfig.class.getName());
       // Validations
       FileSystemViewStorageType.valueOf(fileSystemViewStorageConfig.getString(VIEW_TYPE));
       FileSystemViewStorageType.valueOf(fileSystemViewStorageConfig.getString(SECONDARY_VIEW_TYPE));

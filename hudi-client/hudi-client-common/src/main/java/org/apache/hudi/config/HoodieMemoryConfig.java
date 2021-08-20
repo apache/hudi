@@ -177,7 +177,6 @@ public class HoodieMemoryConfig extends HoodieConfig {
     }
 
     public HoodieMemoryConfig build() {
-      memoryConfig.setDefaults(HoodieMemoryConfig.class.getName());
       return memoryConfig;
     }
   }

@@ -16,12 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.config;
-
-import org.apache.hudi.common.config.ConfigClassProperty;
-import org.apache.hudi.common.config.ConfigGroups;
-import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieConfig;
+package org.apache.hudi.common.config;
 
 import java.io.File;
 import java.io.FileReader;
@@ -56,8 +51,8 @@ public class HoodiePayloadConfig extends HoodieConfig {
     super();
   }
 
-  public static HoodiePayloadConfig.Builder newBuilder() {
-    return new HoodiePayloadConfig.Builder();
+  public static Builder newBuilder() {
+    return new Builder();
   }
 
   public static class Builder {
@@ -87,7 +82,6 @@ public class HoodiePayloadConfig extends HoodieConfig {
     }
 
     public HoodiePayloadConfig build() {
-      payloadConfig.setDefaults(HoodiePayloadConfig.class.getName());
       return payloadConfig;
     }
   }

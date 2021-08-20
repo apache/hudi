@@ -86,7 +86,6 @@ public class HoodieCommonConfig extends HoodieConfig {
     }
 
     public HoodieCommonConfig build() {
-      commonConfig.setDefaults(HoodieCommonConfig.class.getName());
       return commonConfig;
     }
   }

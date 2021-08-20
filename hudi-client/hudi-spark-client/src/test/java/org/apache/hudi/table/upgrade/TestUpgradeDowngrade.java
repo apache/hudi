@@ -289,8 +289,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       // set table configs
       HoodieTableConfig tableConfig = metaClient.getTableConfig();
       tableConfig.setValue(HoodieTableConfig.NAME, cfg.getTableName());
-      tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
-      tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, cfg.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
+      tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME));
+      tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, cfg.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
       tableConfig.setValue(BASE_FILE_FORMAT, cfg.getString(BASE_FILE_FORMAT));
     }
 

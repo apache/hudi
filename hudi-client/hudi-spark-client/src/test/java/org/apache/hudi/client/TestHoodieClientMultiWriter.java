@@ -65,7 +65,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     initFileSystem();
     fs.mkdirs(new Path(basePath));
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, HoodieFileFormat.PARQUET);
-    initTestDataGenerator();
   }
 
   @AfterEach

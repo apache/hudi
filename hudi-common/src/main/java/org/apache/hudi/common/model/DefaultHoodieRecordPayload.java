@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodiePayloadConfig;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -69,7 +70,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
      * We reached a point where the value is disk is older than the incoming record.
      */
     eventTime = Option.ofNullable(getNestedFieldVal(incomingRecord, hoodieConfig
-        .getString(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY), true));
+        .getString(HoodiePayloadConfig.EVENT_TIME_FIELD), true));
 
     /*
      * Now check if the incoming record is a delete record.

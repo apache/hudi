@@ -175,7 +175,6 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
     }
 
     public HoodieMetricsPrometheusConfig build() {
-      hoodieMetricsPrometheusConfig.setDefaults(HoodieMetricsPrometheusConfig.class.getName());
       return hoodieMetricsPrometheusConfig;
     }
   }

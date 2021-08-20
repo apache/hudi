@@ -224,7 +224,6 @@ public class HoodieMetricsDatadogConfig extends HoodieConfig {
     }
 
     public HoodieMetricsDatadogConfig build() {
-      metricsDatadogConfig.setDefaults(HoodieMetricsDatadogConfig.class.getName());
       return metricsDatadogConfig;
     }
   }

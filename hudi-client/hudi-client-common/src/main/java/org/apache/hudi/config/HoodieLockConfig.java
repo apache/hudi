@@ -303,7 +303,6 @@ public class HoodieLockConfig extends HoodieConfig {
     }
 
     public HoodieLockConfig build() {
-      lockConfig.setDefaults(HoodieLockConfig.class.getName());
       return lockConfig;
     }
   }

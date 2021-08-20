@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestConfigProperty extends HoodieConfig {
@@ -54,11 +53,11 @@ public class TestConfigProperty extends HoodieConfig {
   @Test
   public void testGetTypedValue() {
     HoodieConfig hoodieConfig = new HoodieConfig();
-    assertNull(hoodieConfig.getInt(FAKE_STRING_CONFIG));
+    assertEquals(1, hoodieConfig.getInt(FAKE_STRING_CONFIG));
     hoodieConfig.setValue(FAKE_STRING_CONFIG, "5");
     assertEquals(5, hoodieConfig.getInt(FAKE_STRING_CONFIG));
 
-    assertNull(hoodieConfig.getBoolean(FAKE_BOOLEAN_CONFIG));
+    assertEquals(false, hoodieConfig.getBoolean(FAKE_BOOLEAN_CONFIG));
     hoodieConfig.setValue(FAKE_BOOLEAN_CONFIG, "true");
     assertEquals(true, hoodieConfig.getBoolean(FAKE_BOOLEAN_CONFIG));
   }
@@ -91,11 +90,5 @@ public class TestConfigProperty extends HoodieConfig {
     hoodieConfig2.setValue(FAKE_STRING_CONFIG, "5");
     hoodieConfig2.setDefaultValue(FAKE_INTEGER_CONFIG);
     assertEquals(100, hoodieConfig2.getInt(FAKE_INTEGER_CONFIG));
-  }
-
-  @Test
-  public void testSetDefaults() {
-    setDefaults(this.getClass().getName());
-    assertEquals(3, getProps().size());
   }
 }

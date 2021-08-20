@@ -604,7 +604,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public HoodieCompactionConfig build() {
-      compactionConfig.setDefaults(HoodieCompactionConfig.class.getName());
       // validation
       HoodieCleaningPolicy.valueOf(compactionConfig.getString(CLEANER_POLICY));
 

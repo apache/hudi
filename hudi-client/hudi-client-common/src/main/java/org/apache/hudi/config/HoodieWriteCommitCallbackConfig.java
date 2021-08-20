@@ -166,7 +166,6 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
     }
 
     public HoodieWriteCommitCallbackConfig build() {
-      writeCommitCallbackConfig.setDefaults(HoodieWriteCommitCallbackConfig.class.getName());
       return writeCommitCallbackConfig;
     }
   }

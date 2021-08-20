@@ -256,7 +256,6 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       // TODO: use infer function instead
       bootstrapConfig.setDefaultValue(INDEX_CLASS_NAME, HoodieTableConfig.getDefaultBootstrapIndexClass(
           bootstrapConfig.getProps()));
-      bootstrapConfig.setDefaults(HoodieBootstrapConfig.class.getName());
       return bootstrapConfig;
     }
   }

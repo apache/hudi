@@ -243,7 +243,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     }
 
     public HoodieMetadataConfig build() {
-      metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
     }
   }

@@ -462,7 +462,6 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
     }
 
     public HoodieHBaseIndexConfig build() {
-      hBaseIndexConfig.setDefaults(HoodieHBaseIndexConfig.class.getName());
       return hBaseIndexConfig;
     }
 

@@ -351,7 +351,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public HoodieClusteringConfig build() {
-      clusteringConfig.setDefaults(HoodieClusteringConfig.class.getName());
       return clusteringConfig;
     }
   }

@@ -518,7 +518,6 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public HoodieIndexConfig build() {
       hoodieIndexConfig.setDefaultValue(INDEX_TYPE, getDefaultIndexType(engineType));
-      hoodieIndexConfig.setDefaults(HoodieIndexConfig.class.getName());
 
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(hoodieIndexConfig.getString(INDEX_TYPE));
