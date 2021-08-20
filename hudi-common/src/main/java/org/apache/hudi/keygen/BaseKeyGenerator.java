@@ -37,8 +37,8 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
     super(config);
     this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key(),
         Boolean.parseBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.defaultValue()));
-    this.hiveStylePartitioning = config.getBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key(),
-        Boolean.parseBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.defaultValue()));
+    this.hiveStylePartitioning = config.getBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.defaultValue()));
   }
 
   /**
