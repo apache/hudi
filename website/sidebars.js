@@ -19,6 +19,7 @@ module.exports = {
         },
         'use_cases',
         'writing_data',
+        'schema_evolution',
         'concurrency_control',
         'querying_data',
         'configurations',
