@@ -25,6 +25,6 @@ public class OneToTwoUpgradeHandler extends BaseOneToTwoUpgradeHandler {
 
   @Override
   String getPartitionColumns(HoodieWriteConfig config) {
-    return config.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD.key());
+    return config.getProps().getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
   }
 }

@@ -84,7 +84,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
 
-  public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
+  public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
       .defaultValue("ts")
       .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
@@ -423,10 +423,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   @Deprecated
   public static final String TABLE_NAME = TBL_NAME.key();
   /**
-   * @deprecated Use {@link #PRECOMBINE_FIELD} and its methods instead
+   * @deprecated Use {@link #PRECOMBINE_FIELD_NAME} and its methods instead
    */
   @Deprecated
-  public static final String PRECOMBINE_FIELD_PROP = PRECOMBINE_FIELD.key();
+  public static final String PRECOMBINE_FIELD_PROP = PRECOMBINE_FIELD_NAME.key();
   /**
    * @deprecated Use {@link #WRITE_PAYLOAD_CLASS_NAME} and its methods instead
    */
@@ -859,7 +859,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getPreCombineField() {
-    return getString(PRECOMBINE_FIELD);
+    return getString(PRECOMBINE_FIELD_NAME);
   }
 
   public String getWritePayloadClass() {
@@ -1807,7 +1807,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withPreCombineField(String preCombineField) {
-      writeConfig.setValue(PRECOMBINE_FIELD, preCombineField);
+      writeConfig.setValue(PRECOMBINE_FIELD_NAME, preCombineField);
       return this;
     }
 

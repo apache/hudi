@@ -74,9 +74,9 @@ public class TestHoodieSparkKeyGeneratorFactory {
 
   private TypedProperties getCommonProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD.key(), "_row_key");
-    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key(), "true");
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
     return properties;
   }
 }
