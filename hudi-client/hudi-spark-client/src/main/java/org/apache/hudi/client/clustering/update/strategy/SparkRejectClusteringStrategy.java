@@ -87,8 +87,6 @@ public class SparkRejectClusteringStrategy<T extends HoodieRecordPayload<T>> ext
       }
       LOG.info("Clustering Reject Path=" + rejectFile);
       fs.create(rejectFile, false).close();
-      boolean exists = fs.exists(rejectFile);
-      System.out.println();
     } catch (IOException e) {
       throw new HoodieException("Failed to create clustering reject file " + rejectFile, e);
     }
