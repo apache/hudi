@@ -24,8 +24,9 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -35,13 +36,23 @@ import java.io.IOException;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload> extends UserDefinedBulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;
   private final SerializableSchema serializableSchema;
 
+  public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
+    super(config);
+    this.serializableSchema = new SerializableSchema(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema())));
+    this.sortColumnNames = getSortColumnName();
+  }
+
+  private String[] getSortColumnName() {
+    return null;
+  }
+
   public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema) {
+    super(HoodieWriteConfig.newBuilder().build());
     this.sortColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
   }

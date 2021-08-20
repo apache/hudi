@@ -34,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -193,7 +194,11 @@ public class TestDataSourceUtils {
   }
 
   public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
-      implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+      extends UserDefinedBulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+
+    public NoOpBulkInsertPartitioner(HoodieWriteConfig config) {
+      super(config);
+    }
 
     @Override
     public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
@@ -207,7 +212,11 @@ public class TestDataSourceUtils {
   }
 
   public static class NoOpBulkInsertPartitionerRows
-      implements BulkInsertPartitioner<Dataset<Row>> {
+      extends UserDefinedBulkInsertPartitioner<Dataset<Row>> {
+
+    public NoOpBulkInsertPartitionerRows(HoodieWriteConfig config) {
+      super(config);
+    }
 
     @Override
     public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputSparkPartitions) {
