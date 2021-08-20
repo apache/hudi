@@ -91,6 +91,17 @@ public class FormatUtils {
     }
   }
 
+  /**
+   * Returns the RowKind of the given record, never null.
+   * Returns RowKind.INSERT when the given field value not found.
+   */
+  public static RowKind getRowKindSafely(IndexedRecord record, int index) {
+    if (index == -1) {
+      return RowKind.INSERT;
+    }
+    return getRowKind(record, index);
+  }
+
   public static GenericRecord buildAvroRecordBySchema(
       IndexedRecord record,
       Schema requiredSchema,

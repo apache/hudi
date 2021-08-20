@@ -326,9 +326,41 @@ public class TestInputFormat {
   }
 
   @Test
+  void testReadChangesMergedMOR() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> result1 = readData(inputFormat);
+
+    final String actual1 = TestData.rowDataToString(result1);
+    // the data set is merged when the data source is bounded.
+    final String expected1 = "[]";
+    assertThat(actual1, is(expected1));
+
+    // refresh the input format and set isEmitDelete to true.
+    this.tableSource.reset();
+    inputFormat = this.tableSource.getInputFormat();
+    ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+
+    List<RowData> result2 = readData(inputFormat);
+
+    final String actual2 = TestData.rowDataToString(result2);
+    final String expected2 = "[-D[id1, Danny, 22, 1970-01-01T00:00:00.005, par1]]";
+    assertThat(actual2, is(expected2));
+  }
+
+  @Test
   void testReadChangesUnMergedMOR() throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
     // write another commit to read again
@@ -340,6 +372,7 @@ public class TestInputFormat {
     List<RowData> result = readData(inputFormat);
 
     final String actual = TestData.rowDataToString(result);
+    // the data set is merged when the data source is bounded.
     final String expected = "["
         + "+I[id1, Danny, 19, 1970-01-01T00:00:00.001, par1], "
         + "-U[id1, Danny, 19, 1970-01-01T00:00:00.001, par1], "
