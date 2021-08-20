@@ -231,8 +231,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   }
 
   private void addNewTableParamsToProps(Map<String, String> params) {
-    params.put(KeyGeneratorOptions.RECORDKEY_FIELD.key(), "uuid");
-    params.put(KeyGeneratorOptions.PARTITIONPATH_FIELD.key(), "partition_path");
+    params.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid");
+    params.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
     params.put(HoodieTableConfig.NAME.key(), metaClient.getTableConfig().getTableName());
     params.put(BASE_FILE_FORMAT.key(), BASE_FILE_FORMAT.defaultValue().name());
   }
@@ -262,8 +262,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   private void assertTableProps(HoodieWriteConfig cfg) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     Properties originalProps = cfg.getProps();
-    assertEquals(tableConfig.getPartitionFieldProp(), originalProps.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD.key()));
-    assertEquals(tableConfig.getRecordKeyFieldProp(), originalProps.getProperty(KeyGeneratorOptions.RECORDKEY_FIELD.key()));
+    assertEquals(tableConfig.getPartitionFieldProp(), originalProps.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+    assertEquals(tableConfig.getRecordKeyFieldProp(), originalProps.getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     assertEquals(tableConfig.getTableName(), cfg.getTableName());
     assertEquals(tableConfig.getBaseFileFormat().name(), originalProps.getProperty(BASE_FILE_FORMAT.key()));
   }
@@ -289,8 +289,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       // set table configs
       HoodieTableConfig tableConfig = metaClient.getTableConfig();
       tableConfig.setValue(HoodieTableConfig.NAME, cfg.getTableName());
-      tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD.key()));
-      tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, cfg.getString(KeyGeneratorOptions.RECORDKEY_FIELD.key()));
+      tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+      tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, cfg.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
       tableConfig.setValue(BASE_FILE_FORMAT, cfg.getString(BASE_FILE_FORMAT));
     }
 
