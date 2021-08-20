@@ -177,7 +177,8 @@ public class MergeOnReadInputFormat
       }
     } else if (!split.getBasePath().isPresent()) {
       // log files only
-      if (conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)) {
+      if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
+          && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)) {
         this.iterator = new LogFileOnlyIterator(getUnMergedLogFileIterator(split));
       } else {
         this.iterator = new LogFileOnlyIterator(getLogFileIterator(split));
@@ -350,13 +351,18 @@ public class MergeOnReadInputFormat
             // continue;
           } else {
             final IndexedRecord avroRecord = curAvroRecord.get();
+            final RowKind rowKind = FormatUtils.getRowKindSafely(avroRecord, tableState.getOperationPos());
+            if (rowKind == RowKind.DELETE && !emitDelete) {
+              // skip the delete record
+              continue;
+            }
             GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
                 avroRecord,
                 requiredSchema,
                 requiredPos,
                 recordBuilder);
             currentRecord = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
-            FormatUtils.setRowKind(currentRecord, avroRecord, tableState.getOperationPos());
+            currentRecord.setRowKind(rowKind);
             return true;
           }
         }
