@@ -48,6 +48,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload> exte
   }
 
   private String[] getSortColumnName() {
+    config.getUserDefinedBulkInsertPartitionerSortColumns();
     return null;
   }
 
