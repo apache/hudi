@@ -505,4 +505,29 @@ class TestCreateTable extends TestHoodieSqlBase {
     }
   }
 
+  test("Test Create Table Exists In Catalog") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         |create table $tableName (
+         | id int,
+         | name string,
+         | price double
+         |) using hudi
+         |""".stripMargin
+    )
+
+    spark.sql(s"alter table $tableName add columns(ts bigint)")
+
+    // Check "create table if not exist" works after schema evolution.
+    spark.sql(
+      s"""
+         |create table if not exists $tableName (
+         | id int,
+         | name string,
+         | price double
+         |) using hudi
+         |""".stripMargin
+    )
+  }
 }
