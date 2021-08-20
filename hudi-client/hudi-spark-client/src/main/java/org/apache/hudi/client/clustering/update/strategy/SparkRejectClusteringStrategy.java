@@ -45,13 +45,13 @@ import java.util.stream.Collectors;
  * If some file group have update record, Then let clustering job failing.
  *
  * When update happened after clustering plan created and before clustering executed.
- *      -> There will be a request replace commit.
- *      -> SparkRejectClusteringStrategy will create a clustering reject file under .tmp dir named xxx.replacement.request.reject.
+ *      -> There will be a requested replace commit.
+ *      -> SparkRejectClusteringStrategy will create a clustering reject file under .tmp dir named xxx.replacecommit.requested.reject.
  *      -> Before perform clustering job, hudi can check this reject file using SparkRejectClusteringStrategy.validateClustering() function.
  *        -> if reject file is exists then abort this clustering plan and remove reject file.
  * When update happened after clustering executed but not finished.
  *      -> There will be a inflight replace commit.
- *      -> SparkRejectClusteringStrategy will create a clustering reject file under .tmp dir named xxx.replacement.inflight.reject.
+ *      -> SparkRejectClusteringStrategy will create a clustering reject file under .tmp dir named xxx.replacecommit.inflight.reject.
  *      -> Before clustering job finished and committed, hudi can check this reject file using SparkRejectClusteringStrategy.validateClustering() function.
  *        -> if reject file is exists then failed this clustering execution and remove reject file.
  */
