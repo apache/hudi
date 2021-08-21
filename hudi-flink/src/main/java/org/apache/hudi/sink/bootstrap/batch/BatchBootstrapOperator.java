@@ -19,17 +19,17 @@
 package org.apache.hudi.sink.bootstrap.batch;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.sink.bootstrap.BootstrapFunction;
+import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.util.Collector;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 import java.util.HashSet;
 import java.util.Set;
 
 /**
- * The function to load index from existing hoodieTable.
+ * The operator to load index from existing hoodieTable.
  *
  * <p>This function should only be used for bounded source.
  *
@@ -39,34 +39,30 @@ import java.util.Set;
  *
  * <p>The input records should shuffle by the partition path to avoid repeated loading.
  */
-public class BatchBootstrapFunction<I, O extends HoodieRecord>
-    extends BootstrapFunction<I, O> {
+public class BatchBootstrapOperator<I, O extends HoodieRecord>
+    extends BootstrapOperator<I, O> {
 
-  private Set<String> partitionPathSet;
-  private boolean haveSuccessfulCommits;
+  private final Set<String> partitionPathSet;
+  private final boolean haveSuccessfulCommits;
 
-  public BatchBootstrapFunction(Configuration conf) {
+  public BatchBootstrapOperator(Configuration conf) {
     super(conf);
-  }
-
-  @Override
-  public void open(Configuration parameters) throws Exception {
-    super.open(parameters);
     this.partitionPathSet = new HashSet<>();
     this.haveSuccessfulCommits = StreamerUtil.haveSuccessfulCommits(hoodieTable.getMetaClient());
   }
 
   @Override
-  public void processElement(I value, Context context, Collector<O> out) throws Exception {
-    final HoodieRecord record = (HoodieRecord<?>) value;
+  @SuppressWarnings("unchecked")
+  public void processElement(StreamRecord<I> element) throws Exception {
+    final HoodieRecord record = (HoodieRecord<?>) element.getValue();
     final String partitionPath = record.getKey().getPartitionPath();
 
     if (haveSuccessfulCommits && !partitionPathSet.contains(partitionPath)) {
-      loadRecords(partitionPath, out);
+      loadRecords(partitionPath);
       partitionPathSet.add(partitionPath);
     }
 
     // send the trigger record
-    out.collect((O) value);
+    output.collect((StreamRecord<O>) element);
   }
 }
