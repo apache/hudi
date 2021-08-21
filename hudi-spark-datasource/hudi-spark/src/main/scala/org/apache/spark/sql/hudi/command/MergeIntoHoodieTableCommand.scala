@@ -196,9 +196,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
   }
 
   private def isEqualToTarget(targetColumnName: String, sourceExpression: Expression): Boolean = {
+    val sourceColNameMap = sourceDFOutput.map(attr => (attr.name.toLowerCase, attr.name)).toMap
+
     sourceExpression match {
-      case attr: AttributeReference if attr.name.equalsIgnoreCase(targetColumnName) => true
-      case Cast(attr: AttributeReference, _, _) if attr.name.equalsIgnoreCase(targetColumnName) => true
+      case attr: AttributeReference if sourceColNameMap(attr.name.toLowerCase).equals(targetColumnName) => true
+      case Cast(attr: AttributeReference, _, _) if sourceColNameMap(attr.name.toLowerCase).equals(targetColumnName) => true
       case _=> false
     }
   }
