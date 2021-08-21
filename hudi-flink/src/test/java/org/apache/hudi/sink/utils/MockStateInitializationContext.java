@@ -19,15 +19,18 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
+import org.apache.flink.runtime.state.KeyGroupStatePartitionStreamProvider;
+import org.apache.flink.runtime.state.StateInitializationContext;
+import org.apache.flink.runtime.state.StatePartitionStreamProvider;
 
 /**
  * A {@link FunctionInitializationContext} for testing purpose.
  */
-public class MockFunctionInitializationContext implements FunctionInitializationContext {
+public class MockStateInitializationContext implements StateInitializationContext {
 
   private final MockOperatorStateStore operatorStateStore;
 
-  public MockFunctionInitializationContext() {
+  public MockStateInitializationContext() {
     operatorStateStore = new MockOperatorStateStore();
   }
 
@@ -44,5 +47,15 @@ public class MockFunctionInitializationContext implements FunctionInitialization
   @Override
   public KeyedStateStore getKeyedStateStore() {
     return operatorStateStore;
+  }
+
+  @Override
+  public Iterable<StatePartitionStreamProvider> getRawOperatorStateInputs() {
+    return null;
+  }
+
+  @Override
+  public Iterable<KeyGroupStatePartitionStreamProvider> getRawKeyedStateInputs() {
+    return null;
   }
 }

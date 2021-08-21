@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.bootstrap.BootstrapFunction;
+import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
@@ -277,7 +277,7 @@ public class StreamWriteITCase extends TestLogger {
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
           TypeInformation.of(HoodieRecord.class),
-          new ProcessOperator<>(new BootstrapFunction<>(conf)));
+          new BootstrapOperator<>(conf));
     }
 
     DataStream<Object> pipeline = hoodieDataStream
@@ -370,7 +370,7 @@ public class StreamWriteITCase extends TestLogger {
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
           TypeInformation.of(HoodieRecord.class),
-          new ProcessOperator<>(new BootstrapFunction<>(conf)));
+          new BootstrapOperator<>(conf));
     }
 
     DataStream<Object> pipeline = hoodieDataStream
