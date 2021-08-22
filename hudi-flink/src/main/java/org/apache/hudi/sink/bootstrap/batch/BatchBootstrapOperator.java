@@ -42,11 +42,16 @@ import java.util.Set;
 public class BatchBootstrapOperator<I, O extends HoodieRecord>
     extends BootstrapOperator<I, O> {
 
-  private final Set<String> partitionPathSet;
-  private final boolean haveSuccessfulCommits;
+  private Set<String> partitionPathSet;
+  private boolean haveSuccessfulCommits;
 
   public BatchBootstrapOperator(Configuration conf) {
     super(conf);
+  }
+
+  @Override
+  public void open() throws Exception {
+    super.open();
     this.partitionPathSet = new HashSet<>();
     this.haveSuccessfulCommits = StreamerUtil.haveSuccessfulCommits(hoodieTable.getMetaClient());
   }
