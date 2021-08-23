@@ -39,13 +39,13 @@ import java.util.Map;
  * Configurations for Hoodie Flink streamer.
  */
 public class FlinkStreamerConfig extends Configuration {
-  @Parameter(names = {"--kafka-topic"}, description = "Kafka topic name.", required = true)
+  @Parameter(names = {"--kafka-topic"}, description = "Kafka topic name.")
   public String kafkaTopic;
 
-  @Parameter(names = {"--kafka-group-id"}, description = "Kafka consumer group id.", required = true)
+  @Parameter(names = {"--kafka-group-id"}, description = "Kafka consumer group id.")
   public String kafkaGroupId;
 
-  @Parameter(names = {"--kafka-bootstrap-servers"}, description = "Kafka bootstrap.servers.", required = true)
+  @Parameter(names = {"--kafka-bootstrap-servers"}, description = "Kafka bootstrap.servers.")
   public String kafkaBootstrapServers;
 
   @Parameter(names = {"--flink-checkpoint-path"}, description = "Flink checkpoint path.")
@@ -292,6 +292,33 @@ public class FlinkStreamerConfig extends Configuration {
           + "Disabled by default for backward compatibility.")
   public Boolean hiveSyncSupportTimestamp = false;
 
+  @Parameter(names = {"--mysql-cdc-host"}, description = "MySQL connection host..")
+  public String mysqlCdcHost = "";
+
+  @Parameter(names = {"--mysql-cdc-port"}, description = "MySQL connection port. default is 3306")
+  public Integer mysqlCdcPort = 3306;
+
+  @Parameter(names = {"--mysql-cdc-database"}, description = "Specify the MySQL db name. You can fill in multiple "
+          + "database.")
+  public List<String> mysqlCdcDbs = new ArrayList<>();
+
+  @Parameter(names = {"--mysql-cdc-table"}, description = "Specify the MySQL table name. You can fill in multiple tables.")
+  public List<String> mysqlCdcTables = new ArrayList<>();
+
+  @Parameter(names = {"--mysql-cdc-user"}, description = "UserName for connecting to MySQL.")
+  public String mysqlCdcUser = "";
+
+  @Parameter(names = {"--mysql-cdc-password"}, description = "Password for connecting to MySQL.")
+  public String mysqlCdcPassword = "";
+
+  @Parameter(names = {"--mysql-server-id"}, description = "The serverId of MySQL CDC. Please enter different IDs for "
+          + "different tasks in the same table.")
+  public Integer mysqlCdcServerId = 0;
+
+  @Parameter(names = {"--source-type"}, description = "Type of data source: kafka or mysql-cdc.",required = true)
+  public String sourceType = FlinkStreamerType.KAFKA.name();
+
+
 
   /**
    * Transforms a {@code HoodieFlinkStreamer.Config} into {@code Configuration}.
@@ -331,8 +358,11 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setDouble(FlinkOptions.INDEX_STATE_TTL, config.indexStateTtl);
     conf.setBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED, config.indexGlobalEnabled);
     conf.setString(FlinkOptions.INDEX_PARTITION_REGEX, config.indexPartitionRegex);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH, config.sourceAvroSchemaPath);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, config.sourceAvroSchema);
+    if (StringUtils.isNullOrEmpty(config.sourceAvroSchema)) {
+      conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH, config.sourceAvroSchemaPath);
+    } else {
+      conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, config.sourceAvroSchema);
+    }
     conf.setBoolean(FlinkOptions.UTC_TIMEZONE, config.utcTimezone);
     conf.setBoolean(FlinkOptions.URL_ENCODE_PARTITIONING, config.writePartitionUrlEncode);
     conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, config.hiveStylePartitioning);

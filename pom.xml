@@ -111,6 +111,7 @@
     <spark.version>${spark2.version}</spark.version>
     <sparkbundle.version>${spark2bundle.version}</sparkbundle.version>
     <flink.version>1.13.1</flink.version>
+    <mysql-cdc.version>2.0.0</mysql-cdc.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.0.0</spark3.version>
     <spark2bundle.version></spark2bundle.version>
@@ -596,6 +597,12 @@
         <groupId>org.apache.flink</groupId>
         <artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
         <version>${flink.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.ververica</groupId>
+        <artifactId>flink-connector-mysql-cdc</artifactId>
+        <version>${mysql-cdc.version}</version>
         <scope>provided</scope>
       </dependency>
 

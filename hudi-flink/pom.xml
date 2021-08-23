@@ -345,5 +345,11 @@
       <version>${flink.version}</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.ververica</groupId>
+      <artifactId>flink-connector-mysql-cdc</artifactId>
+      <version>${mysql-cdc.version}</version>
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
 </project>
