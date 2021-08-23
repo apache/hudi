@@ -27,19 +27,15 @@ import org.apache.spark.sql.types.{StructField, _}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
-/**
- * Basic tests on the spark datasource for COW table.
- */
-
 class TestErrorTableDataSource extends HoodieClientTestBase {
   var spark: SparkSession = null
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key() -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key() -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key() -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME.key() -> "hoodie_test"
+    DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "_row_key",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
+    DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "timestamp",
+    HoodieWriteConfig.TBL_NAME.key() -> "hoodie_test"
   )
 
   @BeforeEach override def setUp() {
@@ -67,8 +63,8 @@ class TestErrorTableDataSource extends HoodieClientTestBase {
 
     inputDF1.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key(), DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
       .option("hoodie.write.error.table.enabled", true)
       .option("hoodie.memory.writestatus.failure.fraction", 1.0)
       .mode(SaveMode.Append)
@@ -82,8 +78,8 @@ class TestErrorTableDataSource extends HoodieClientTestBase {
 
     inputDF2.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key(), DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
       .option("hoodie.write.error.table.enabled", true)
       .option("hoodie.memory.writestatus.failure.fraction", 1.0)
       .option("hoodie.datasource.write.payload.class", classOf[OverwriteWithLatestAvroSchemaPayload].getName)
@@ -91,13 +87,13 @@ class TestErrorTableDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     val hudiRODF1 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME  + "/*/*/*/")
       assertEquals(2, hudiRODF1.count())
 
 
     val hudiRODF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .load(basePath + "/*")
     assertEquals(2, hudiRODF2.count())
   }

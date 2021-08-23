@@ -477,8 +477,7 @@ public class DeltaSync implements Serializable {
           }
         }
       } else {
-        HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-            (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
+        HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr);
         return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
       }
     });

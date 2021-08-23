@@ -236,14 +236,15 @@ object HoodieSparkSqlWriter {
 
           if (errorTableEnable) {
             val errorRecordsWriteStatus = genericRecords.map(gr => {
+              val processedRecord = getProcessedRecord(partitionColumns, gr, dropPartitionColumns)
               val writeStatus = new WriteStatus()
               val hoodieRecord = if (shouldCombine) {
                 try {
-                  HoodieAvroUtils.checkRecordField(gr, hoodieConfig.getString(PRECOMBINE_FIELD_OPT_KEY))
+                  HoodieAvroUtils.checkRecordField(gr, hoodieConfig.getString(PRECOMBINE_FIELD))
                   writeStatus
                 } catch {
                   case e : HoodieException => {
-                    val hoodieRecord = DataSourceUtils.createHoodieRecord(gr, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
+                    val hoodieRecord = DataSourceUtils.createHoodieRecord(processedRecord, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS_NAME))
                     writeStatus.markFailure(hoodieRecord, e, null)
                     writeStatus
                   }
@@ -261,11 +262,12 @@ object HoodieSparkSqlWriter {
           }
 
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
+            val processedRecord = getProcessedRecord(partitionColumns, gr, dropPartitionColumns)
             val hoodieRecord = if (shouldCombine) {
               try {
-                val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD_OPT_KEY), false)
+                val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD), false)
                   .asInstanceOf[Comparable[_]]
-                DataSourceUtils.createHoodieRecord(gr,
+                DataSourceUtils.createHoodieRecord(processedRecord,
                   orderingVal, keyGenerator.getKey(gr),
                   hoodieConfig.getString(PAYLOAD_CLASS_NAME))
               } catch {
@@ -276,7 +278,7 @@ object HoodieSparkSqlWriter {
                 }
               }
             } else {
-              DataSourceUtils.createHoodieRecord(gr, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
+              DataSourceUtils.createHoodieRecord(processedRecord, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS_NAME))
             }
             hoodieRecord
           }).filter(x =>x.getKey != null).toJavaRDD()
