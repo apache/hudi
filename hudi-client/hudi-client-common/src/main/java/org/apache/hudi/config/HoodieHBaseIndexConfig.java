@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
@@ -27,29 +29,42 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
+@ConfigClassProperty(name = "HBase Index Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control indexing behavior "
+        + "(when HBase based indexing is enabled), which tags incoming "
+        + "records as either inserts or updates to older records.")
 public class HoodieHBaseIndexConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> HBASE_ZKQUORUM_PROP = ConfigProperty
+  public static final ConfigProperty<String> HBASE_ZKQUORUM = ConfigProperty
       .key("hoodie.index.hbase.zkquorum")
       .noDefaultValue()
       .withDocumentation("Only applies if index type is HBASE. HBase ZK Quorum url to connect to");
+  @Deprecated
+  public static final String HBASE_ZKQUORUM_PROP = HBASE_ZKQUORUM.key();
 
-  public static final ConfigProperty<String> HBASE_ZKPORT_PROP = ConfigProperty
+  public static final ConfigProperty<String> HBASE_ZKPORT = ConfigProperty
       .key("hoodie.index.hbase.zkport")
       .noDefaultValue()
       .withDocumentation("Only applies if index type is HBASE. HBase ZK Quorum port to connect to");
+  @Deprecated
+  public static final String HBASE_ZKPORT_PROP = HBASE_ZKPORT.key();
 
-  public static final ConfigProperty<String> HBASE_TABLENAME_PROP = ConfigProperty
+  public static final ConfigProperty<String> HBASE_TABLENAME = ConfigProperty
       .key("hoodie.index.hbase.table")
       .noDefaultValue()
       .withDocumentation("Only applies if index type is HBASE. HBase Table name to use as the index. "
           + "Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table");
+  @Deprecated
+  public static final String HBASE_TABLENAME_PROP = HBASE_TABLENAME.key();
 
-  public static final ConfigProperty<Integer> HBASE_GET_BATCH_SIZE_PROP = ConfigProperty
+  public static final ConfigProperty<Integer> HBASE_GET_BATCH_SIZE = ConfigProperty
       .key("hoodie.index.hbase.get.batch.size")
       .defaultValue(100)
       .withDocumentation("Controls the batch size for performing gets against HBase. "
           + "Batching improves throughput, by saving round trips.");
+  @Deprecated
+  public static final String HBASE_GET_BATCH_SIZE_PROP = HBASE_GET_BATCH_SIZE.key();
 
   public static final ConfigProperty<String> HBASE_ZK_ZNODEPARENT = ConfigProperty
       .key("hoodie.index.hbase.zknode.path")
@@ -57,11 +72,13 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is HBASE. This is the root znode that will contain "
           + "all the znodes created/used by HBase");
 
-  public static final ConfigProperty<Integer> HBASE_PUT_BATCH_SIZE_PROP = ConfigProperty
+  public static final ConfigProperty<Integer> HBASE_PUT_BATCH_SIZE = ConfigProperty
       .key("hoodie.index.hbase.put.batch.size")
       .defaultValue(100)
       .withDocumentation("Controls the batch size for performing puts against HBase. "
           + "Batching improves throughput, by saving round trips.");
+  @Deprecated
+  public static final String HBASE_PUT_BATCH_SIZE_PROP = HBASE_PUT_BATCH_SIZE.key();
 
   public static final ConfigProperty<String> HBASE_INDEX_QPS_ALLOCATOR_CLASS = ConfigProperty
       .key("hoodie.index.hbase.qps.allocator.class")
@@ -69,56 +86,70 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .withDocumentation("Property to set which implementation of HBase QPS resource allocator to be used, which"
           + "controls the batching rate dynamically.");
 
-  public static final ConfigProperty<String> HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP = ConfigProperty
+  public static final ConfigProperty<String> HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE = ConfigProperty
       .key("hoodie.index.hbase.put.batch.size.autocompute")
       .defaultValue("false")
       .withDocumentation("Property to set to enable auto computation of put batch size");
+  @Deprecated
+  public static final String HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP = HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE.key();
 
-  public static final ConfigProperty<Float> HBASE_QPS_FRACTION_PROP = ConfigProperty
+  public static final ConfigProperty<Float> HBASE_QPS_FRACTION = ConfigProperty
       .key("hoodie.index.hbase.qps.fraction")
       .defaultValue(0.5f)
       .withDocumentation("Property to set the fraction of the global share of QPS that should be allocated to this job. Let's say there are 3"
           + " jobs which have input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then"
           + " this fraction for the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively."
           + " Default is 50%, which means a total of 2 jobs can run using HbaseIndex without overwhelming Region Servers.");
+  @Deprecated
+  public static final String HBASE_QPS_FRACTION_PROP = HBASE_QPS_FRACTION.key();
 
-  public static final ConfigProperty<Integer> HBASE_MAX_QPS_PER_REGION_SERVER_PROP = ConfigProperty
+  public static final ConfigProperty<Integer> HBASE_MAX_QPS_PER_REGION_SERVER = ConfigProperty
       .key("hoodie.index.hbase.max.qps.per.region.server")
       .defaultValue(1000)
       .withDocumentation("Property to set maximum QPS allowed per Region Server. This should be same across various jobs. This is intended to\n"
           + " limit the aggregate QPS generated across various jobs to an Hbase Region Server. It is recommended to set this\n"
           + " value based on global indexing throughput needs and most importantly, how much the HBase installation in use is\n"
           + " able to tolerate without Region Servers going down.");
+  @Deprecated
+  public static final String HBASE_MAX_QPS_PER_REGION_SERVER_PROP = HBASE_MAX_QPS_PER_REGION_SERVER.key();
 
   public static final ConfigProperty<Boolean> HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = ConfigProperty
       .key("hoodie.index.hbase.dynamic_qps")
       .defaultValue(false)
       .withDocumentation("Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on write volume.");
 
-  public static final ConfigProperty<String> HBASE_MIN_QPS_FRACTION_PROP = ConfigProperty
+  public static final ConfigProperty<String> HBASE_MIN_QPS_FRACTION = ConfigProperty
       .key("hoodie.index.hbase.min.qps.fraction")
       .noDefaultValue()
       .withDocumentation("Minimum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads");
+  @Deprecated
+  public static final String HBASE_MIN_QPS_FRACTION_PROP = HBASE_MIN_QPS_FRACTION.key();
 
-  public static final ConfigProperty<String> HBASE_MAX_QPS_FRACTION_PROP = ConfigProperty
+  public static final ConfigProperty<String> HBASE_MAX_QPS_FRACTION = ConfigProperty
       .key("hoodie.index.hbase.max.qps.fraction")
       .noDefaultValue()
       .withDocumentation("Maximum for HBASE_QPS_FRACTION_PROP to stabilize skewed write workloads");
+  @Deprecated
+  public static final String HBASE_MAX_QPS_FRACTION_PROP = HBASE_MAX_QPS_FRACTION.key();
 
   public static final ConfigProperty<Integer> HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS = ConfigProperty
       .key("hoodie.index.hbase.desired_puts_time_in_secs")
       .defaultValue(600)
       .withDocumentation("");
 
-  public static final ConfigProperty<String> HBASE_SLEEP_MS_PUT_BATCH_PROP = ConfigProperty
+  public static final ConfigProperty<String> HBASE_SLEEP_MS_PUT_BATCH = ConfigProperty
       .key("hoodie.index.hbase.sleep.ms.for.put.batch")
       .noDefaultValue()
       .withDocumentation("");
+  @Deprecated
+  public static final String HBASE_SLEEP_MS_PUT_BATCH_PROP = HBASE_SLEEP_MS_PUT_BATCH.key();
 
-  public static final ConfigProperty<String> HBASE_SLEEP_MS_GET_BATCH_PROP = ConfigProperty
+  public static final ConfigProperty<String> HBASE_SLEEP_MS_GET_BATCH = ConfigProperty
       .key("hoodie.index.hbase.sleep.ms.for.get.batch")
       .noDefaultValue()
       .withDocumentation("");
+  @Deprecated
+  public static final String HBASE_SLEEP_MS_GET_BATCH_PROP = HBASE_SLEEP_MS_GET_BATCH.key();;
 
   public static final ConfigProperty<Integer> HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS = ConfigProperty
       .key("hoodie.index.hbase.zk.session_timeout_ms")
@@ -175,17 +206,17 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
     }
 
     public HoodieHBaseIndexConfig.Builder hbaseZkQuorum(String zkString) {
-      hBaseIndexConfig.setValue(HBASE_ZKQUORUM_PROP, zkString);
+      hBaseIndexConfig.setValue(HBASE_ZKQUORUM, zkString);
       return this;
     }
 
     public HoodieHBaseIndexConfig.Builder hbaseZkPort(int port) {
-      hBaseIndexConfig.setValue(HBASE_ZKPORT_PROP, String.valueOf(port));
+      hBaseIndexConfig.setValue(HBASE_ZKPORT, String.valueOf(port));
       return this;
     }
 
     public HoodieHBaseIndexConfig.Builder hbaseTableName(String tableName) {
-      hBaseIndexConfig.setValue(HBASE_TABLENAME_PROP, tableName);
+      hBaseIndexConfig.setValue(HBASE_TABLENAME, tableName);
       return this;
     }
 
@@ -195,17 +226,17 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
     }
 
     public Builder hbaseIndexGetBatchSize(int getBatchSize) {
-      hBaseIndexConfig.setValue(HBASE_GET_BATCH_SIZE_PROP, String.valueOf(getBatchSize));
+      hBaseIndexConfig.setValue(HBASE_GET_BATCH_SIZE, String.valueOf(getBatchSize));
       return this;
     }
 
     public Builder hbaseIndexPutBatchSize(int putBatchSize) {
-      hBaseIndexConfig.setValue(HBASE_PUT_BATCH_SIZE_PROP, String.valueOf(putBatchSize));
+      hBaseIndexConfig.setValue(HBASE_PUT_BATCH_SIZE, String.valueOf(putBatchSize));
       return this;
     }
 
     public Builder hbaseIndexPutBatchSizeAutoCompute(boolean putBatchSizeAutoCompute) {
-      hBaseIndexConfig.setValue(HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP, String.valueOf(putBatchSizeAutoCompute));
+      hBaseIndexConfig.setValue(HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE, String.valueOf(putBatchSizeAutoCompute));
       return this;
     }
 
@@ -220,27 +251,27 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
     }
 
     public Builder hbaseIndexQPSFraction(float qpsFraction) {
-      hBaseIndexConfig.setValue(HBASE_QPS_FRACTION_PROP, String.valueOf(qpsFraction));
+      hBaseIndexConfig.setValue(HBASE_QPS_FRACTION, String.valueOf(qpsFraction));
       return this;
     }
 
     public Builder hbaseIndexMinQPSFraction(float minQPSFraction) {
-      hBaseIndexConfig.setValue(HBASE_MIN_QPS_FRACTION_PROP, String.valueOf(minQPSFraction));
+      hBaseIndexConfig.setValue(HBASE_MIN_QPS_FRACTION, String.valueOf(minQPSFraction));
       return this;
     }
 
     public Builder hbaseIndexMaxQPSFraction(float maxQPSFraction) {
-      hBaseIndexConfig.setValue(HBASE_MAX_QPS_FRACTION_PROP, String.valueOf(maxQPSFraction));
+      hBaseIndexConfig.setValue(HBASE_MAX_QPS_FRACTION, String.valueOf(maxQPSFraction));
       return this;
     }
 
     public Builder hbaseIndexSleepMsBetweenPutBatch(int sleepMsBetweenPutBatch) {
-      hBaseIndexConfig.setValue(HBASE_SLEEP_MS_PUT_BATCH_PROP, String.valueOf(sleepMsBetweenPutBatch));
+      hBaseIndexConfig.setValue(HBASE_SLEEP_MS_PUT_BATCH, String.valueOf(sleepMsBetweenPutBatch));
       return this;
     }
 
     public Builder hbaseIndexSleepMsBetweenGetBatch(int sleepMsBetweenGetBatch) {
-      hBaseIndexConfig.setValue(HBASE_SLEEP_MS_GET_BATCH_PROP, String.valueOf(sleepMsBetweenGetBatch));
+      hBaseIndexConfig.setValue(HBASE_SLEEP_MS_GET_BATCH, String.valueOf(sleepMsBetweenGetBatch));
       return this;
     }
 
@@ -286,7 +317,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
      */
     public HoodieHBaseIndexConfig.Builder hbaseIndexMaxQPSPerRegionServer(int maxQPSPerRegionServer) {
       // This should be same across various jobs
-      hBaseIndexConfig.setValue(HoodieHBaseIndexConfig.HBASE_MAX_QPS_PER_REGION_SERVER_PROP,
+      hBaseIndexConfig.setValue(HoodieHBaseIndexConfig.HBASE_MAX_QPS_PER_REGION_SERVER,
           String.valueOf(maxQPSPerRegionServer));
       return this;
     }

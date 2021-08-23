@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -29,6 +31,10 @@ import java.util.Properties;
 /**
  * The consistency guard relevant config options.
  */
+@ConfigClassProperty(name = "Consistency Guard Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "The consistency guard related config options, to help talk to eventually consistent object storage."
+        + "(Tip: S3 is NOT eventually consistent anymore!)")
 public class ConsistencyGuardConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CONSISTENCY_CHECK_ENABLED_PROP = ConfigProperty
@@ -71,7 +77,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
   // config to enable OptimisticConsistencyGuard in finalizeWrite instead of FailSafeConsistencyGuard
   public static final ConfigProperty<Boolean> ENABLE_OPTIMISTIC_CONSISTENCY_GUARD_PROP = ConfigProperty
       .key("_hoodie.optimistic.consistency.guard.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("0.6.0")
       .withDocumentation("Enable consistency guard, which optimistically assumes consistency is achieved after a certain time period.");
 

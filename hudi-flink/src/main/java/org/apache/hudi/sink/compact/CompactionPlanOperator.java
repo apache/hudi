@@ -84,7 +84,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void notifyCheckpointComplete(long checkpointId) {
     try {
       HoodieFlinkTable hoodieTable = writeClient.getHoodieTable();
-      CompactionUtil.rollbackCompaction(hoodieTable, conf);
+      CompactionUtil.rollbackCompaction(hoodieTable, writeClient, conf);
       scheduleCompaction(hoodieTable, checkpointId);
     } catch (Throwable throwable) {
       // make it fail safe

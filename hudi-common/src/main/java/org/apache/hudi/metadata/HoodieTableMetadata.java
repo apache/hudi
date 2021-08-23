@@ -30,6 +30,7 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
@@ -67,6 +68,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @param basePath The base path to check
    */
   static boolean isMetadataTable(String basePath) {
+    if (basePath.endsWith(Path.SEPARATOR)) {
+      basePath = basePath.substring(0, basePath.length() - 1);
+    }
     return basePath.endsWith(METADATA_TABLE_REL_PATH);
   }
 
@@ -77,7 +81,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,
                                     String spillableMapPath, boolean reuse) {
-    if (metadataConfig.useFileListingMetadata()) {
+    if (metadataConfig.enabled()) {
       return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, spillableMapPath, reuse);
     } else {
       return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
@@ -96,9 +100,16 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   List<String> getAllPartitionPaths() throws IOException;
 
   /**
-   * Get the instant time to which the metadata is synced w.r.t data timeline.
+   * Fetch all files for given partition paths.
    */
-  Option<String> getSyncedInstantTime();
+  Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
+
+  /**
+   * Get the instant time at which Metadata Table was last updated.
+   *
+   * This is the timestamp of the Instant on the dataset which was last synced to the Metadata Table.
+   */
+  Option<String> getUpdateTime();
 
   boolean isInSync();
 }

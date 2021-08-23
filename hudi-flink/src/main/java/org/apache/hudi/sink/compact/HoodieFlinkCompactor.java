@@ -69,10 +69,6 @@ public class HoodieFlinkCompactor {
     HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
-    // rolls back inflight compaction first
-    // condition: the schedule compaction is in INFLIGHT state for max delta seconds.
-    CompactionUtil.rollbackCompaction(table, conf);
-
     // judge whether have operation
     // to compute the compaction instant time and do compaction.
     if (cfg.schedule) {
@@ -83,13 +79,11 @@ public class HoodieFlinkCompactor {
         LOG.info("No compaction plan for this job ");
         return;
       }
+      table.getMetaClient().reloadActiveTimeline();
     }
 
-    table.getMetaClient().reloadActiveTimeline();
-
     // fetch the instant based on the configured execution sequence
-    HoodieTimeline timeline = table.getActiveTimeline().filterPendingCompactionTimeline()
-        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
+    HoodieTimeline timeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     Option<HoodieInstant> requested = CompactionUtil.isLIFO(cfg.compactionSeq) ? timeline.lastInstant() : timeline.firstInstant();
     if (!requested.isPresent()) {
       // do nothing.
@@ -98,6 +92,14 @@ public class HoodieFlinkCompactor {
     }
 
     String compactionInstantTime = requested.get().getTimestamp();
+
+    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
+    if (timeline.containsInstant(inflightInstant)) {
+      LOG.info("Rollback inflight compaction instant: [" + compactionInstantTime + "]");
+      writeClient.rollbackInflightCompaction(inflightInstant, table);
+      table.getMetaClient().reloadActiveTimeline();
+    }
+
     // generate compaction plan
     // should support configurable commit metadata
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
@@ -129,7 +131,10 @@ public class HoodieFlinkCompactor {
     int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
         ? compactionPlan.getOperations().size() : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
 
-    env.addSource(new CompactionPlanSourceFunction(table, instant, compactionPlan, compactionInstantTime))
+    // Mark instant as compaction inflight
+    table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+
+    env.addSource(new CompactionPlanSourceFunction(compactionPlan, compactionInstantTime))
         .name("compaction_source")
         .uid("uid_compaction_source")
         .rebalance()

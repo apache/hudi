@@ -38,9 +38,10 @@ public class TestHoodieConsoleMetrics {
 
   @BeforeEach
   public void start() {
+    when(config.getTableName()).thenReturn("console_metrics_test");
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
-    new HoodieMetrics(config, "raw_table");
+    new HoodieMetrics(config);
   }
 
   @AfterEach

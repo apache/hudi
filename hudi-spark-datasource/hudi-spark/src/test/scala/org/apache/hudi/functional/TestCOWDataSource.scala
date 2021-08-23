@@ -17,20 +17,15 @@
 
 package org.apache.hudi.functional
 
-import java.sql.{Date, Timestamp}
-
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters._
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.testutils.RawTripTestPayload.deleteRecordsToStrings
+import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieUpsertException
-import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
+import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
@@ -41,13 +36,16 @@ import org.joda.time.format.DateTimeFormat
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+
+import java.sql.{Date, Timestamp}
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 
 /**
  * Basic tests on the spark datasource for COW table.
  */
-
 class TestCOWDataSource extends HoodieClientTestBase {
   var spark: SparkSession = null
   val commonOpts = Map(
@@ -55,9 +53,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
-    DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key -> "timestamp",
+    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
   )
 
@@ -84,7 +82,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -112,7 +110,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
         .option("hoodie.keep.max.commits", "2")
         .option("hoodie.cleaner.commits.retained", "0")
         .option("hoodie.datasource.write.row.writer.enable", "true")
-        .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
         .mode(if (i == 0) SaveMode.Overwrite else SaveMode.Append)
         .save(basePath)
     }
@@ -149,7 +147,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -160,16 +158,14 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
 
   @ParameterizedTest
-  //TODO(metadata): Needs HUDI-1459 to be fixed
-  //@ValueSource(booleans = Array(true, false))
-  @ValueSource(booleans = Array(false))
+  @ValueSource(booleans = Array(true, false))
   def testCopyOnWriteStorage(isMetadataEnabled: Boolean) {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -180,7 +176,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Snapshot query
     val snapshotDF1 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF1.count())
 
     // Upsert based on the written table with Hudi metadata columns
@@ -189,11 +185,14 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     updateDf.write.format("org.apache.hudi")
       .options(commonOpts)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
-    val snapshotDF2 = spark.read.format("hudi").load(basePath + "/*/*/*/*")
+    val snapshotDF2 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
+      .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF2.count())
     assertEquals(updatedVerificationVal, snapshotDF2.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
 
@@ -214,21 +213,29 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Snapshot Query
     val snapshotDF3 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath + "/*/*/*")
     assertEquals(100, snapshotDF3.count()) // still 100, since we only updated
 
     // Read Incremental Query
     // we have 2 commits, try pulling the first commit (which is not the latest)
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, firstCommit)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
       .load(basePath)
     assertEquals(100, hoodieIncViewDF1.count()) // 100 initial inserts must be pulled
     var countsPerCommit = hoodieIncViewDF1.groupBy("_hoodie_commit_time").count().collect()
     assertEquals(1, countsPerCommit.length)
     assertEquals(firstCommit, countsPerCommit(0).get(0))
+
+    // Test incremental query has no instant in range
+    val emptyIncDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, "001")
+      .load(basePath)
+    assertEquals(0, emptyIncDF.count())
 
     // Upsert an empty dataFrame
     val emptyRecords = recordsToStrings(dataGen.generateUpdates("002", 0)).toList
@@ -241,8 +248,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // pull the latest commit
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, commitInstantTime2)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime2)
       .load(basePath)
 
     assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
@@ -252,16 +259,16 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // pull the latest commit within certain partitions
     val hoodieIncViewDF3 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, commitInstantTime2)
-      .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.key, "/2016/*/*/*")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime2)
+      .option(DataSourceReadOptions.INCR_PATH_GLOB.key, "/2016/*/*/*")
       .load(basePath)
     assertEquals(hoodieIncViewDF2.filter(col("_hoodie_partition_path").contains("2016")).count(), hoodieIncViewDF3.count())
 
     val timeTravelDF = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, firstCommit)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
       .load(basePath)
     assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled
   }
@@ -271,7 +278,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -279,7 +286,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -297,7 +304,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -305,7 +312,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -324,7 +331,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -333,7 +340,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -342,7 +349,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -380,7 +387,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -389,7 +396,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -439,7 +446,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
@@ -451,7 +458,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY.key, "true")
+      .option(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "true")
       .mode(SaveMode.Append)
       .save(basePath)
     val hoodieROViewDF2 = spark.read.format("org.apache.hudi")
@@ -459,8 +466,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(hoodieROViewDF2.count(), totalUniqueKeyToGenerate)
 
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, commitInstantTime1)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime1)
       .load(basePath)
     assertEquals(hoodieIncViewDF2.count(), insert2NewKeyCnt)
   }
@@ -502,8 +509,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(HoodieWriteConfig.HOODIE_AUTO_COMMIT_PROP.key, "true")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.HOODIE_AUTO_COMMIT.key, "true")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -516,7 +523,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     inputDF.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, keyGenerator)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS.key, keyGenerator)
       .mode(SaveMode.Overwrite)
   }
 
@@ -525,10 +532,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("current_ts")
       .save(basePath)
-
     var recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_ts").cast("string")).count() == 0)
 
     // Specify fieldType as TIMESTAMP
@@ -537,10 +542,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
       .save(basePath)
-
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
 
@@ -550,7 +553,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
       .save(basePath)
-
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*/*")
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!=
@@ -566,7 +568,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       fail("should fail when invalid PartitionKeyType is provided!")
     } catch {
       case e: Exception =>
-        assertTrue(e.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
+        assertTrue(e.getCause.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
     }
   }
 
@@ -575,20 +577,16 @@ class TestCOWDataSource extends HoodieClientTestBase {
     var writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
     writer.partitionBy("driver")
       .save(basePath)
-
     var recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
 
     // Use the `driver,rider` field as the partition key, If no such field exists, the default value `default` is used
     writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
     writer.partitionBy("driver", "rider")
       .save(basePath)
-
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("default")).count() == 0)
   }
 
@@ -597,20 +595,16 @@ class TestCOWDataSource extends HoodieClientTestBase {
     var writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName)
     writer.partitionBy("driver")
       .save(basePath)
-
     var recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
 
     // Use the `driver`,`rider` field as the partition key
     writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName)
     writer.partitionBy("driver", "rider")
       .save(basePath)
-
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= concat(col("driver"), lit("/"), col("rider"))).count() == 0)
   }
 
@@ -642,7 +636,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
     var writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
     writer.partitionBy("")
       .save(basePath)
-
     var recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*")
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
@@ -651,23 +644,23 @@ class TestCOWDataSource extends HoodieClientTestBase {
     writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
     writer.partitionBy("abc")
       .save(basePath)
-
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*")
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testQueryCOWWithBasePathAndFileIndex(partitionEncode: Boolean): Unit = {
+  @CsvSource(Array("true,false", "true,true", "false,true", "false,false"))
+  def testQueryCOWWithBasePathAndFileIndex(partitionEncode: Boolean, isMetadataEnabled: Boolean): Unit = {
     val N = 20
-    // Test query with partition prune if URL_ENCODE_PARTITIONING_OPT_KEY has enable
+    // Test query with partition prune if URL_ENCODE_PARTITIONING has enable
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", N)
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, partitionEncode)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, partitionEncode)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
@@ -675,6 +668,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
     // query the partition by filter
     val count1 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .load(basePath)
       .filter("partition = '2016/03/15'")
       .count()
@@ -683,6 +677,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // query the partition by path
     val partitionPath = if (partitionEncode) "2016%2F03%2F15" else "2016/03/15"
     val count2 = spark.read.format("hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .load(basePath + s"/$partitionPath")
       .count()
     assertEquals(countIn20160315, count2)
@@ -692,23 +687,25 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
     inputDF2.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, partitionEncode)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, partitionEncode)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
     // Incremental query without "*" in path
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, commitInstantTime1)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime1)
       .load(basePath)
     assertEquals(N + 1, hoodieIncViewDF1.count())
   }
 
   @Test def testSchemaEvolution(): Unit = {
     // open the schema validate
-    val  opts = commonOpts ++ Map("hoodie.avro.schema.validate" -> "true")
+    val  opts = commonOpts ++ Map("hoodie.avro.schema.validate" -> "true") ++
+      Map(DataSourceWriteOptions.RECONCILE_SCHEMA.key() -> "true")
     // 1. write records with schema1
-    val schema1 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, true)::
+    val schema1 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, false)::
       StructField("timestamp", IntegerType, true) :: StructField("partition", IntegerType, true)::Nil)
     val records1 = Seq(Row("1", "Andy", 1, 1),
       Row("2", "lisi", 1, 1),
@@ -721,10 +718,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     // 2. write records with schema2 add column age
-    val schema2 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, true) ::
+    val schema2 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, false) ::
       StructField("age", StringType, true) :: StructField("timestamp", IntegerType, true) ::
       StructField("partition", IntegerType, true)::Nil)
-
     val records2 = Seq(Row("11", "Andy", "10", 1, 1),
       Row("22", "lisi", "11",1, 1),
       Row("33", "zhangsan", "12", 1, 1))
@@ -734,24 +730,25 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
-
     val recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-    val resultSchema = new StructType(recordsReadDF.schema.filter(p=> !p.name.startsWith("_hoodie")).toArray)
-    assertEquals(resultSchema, schema2)
+    val tableMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).build()
+    val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
+    assertTrue(actualSchema != null)
+    val actualStructType = AvroConversionUtils.convertAvroSchemaToStructType(actualSchema)
+    assertEquals(actualStructType, schema2)
 
-    // 3. write records with schema3 delete column name
+    // 3. write records with schema4 by omitting a non nullable column(name). should fail
     try {
-      val schema3 = StructType(StructField("_row_key", StringType, true) ::
+      val schema4 = StructType(StructField("_row_key", StringType, true) ::
         StructField("age", StringType, true) :: StructField("timestamp", IntegerType, true) ::
         StructField("partition", IntegerType, true)::Nil)
-
-      val records3 = Seq(Row("11", "10", 1, 1),
+      val records4 = Seq(Row("11", "10", 1, 1),
         Row("22", "11",1, 1),
         Row("33", "12", 1, 1))
-      val rdd3 = jsc.parallelize(records3)
-      val  recordsDF3 = spark.createDataFrame(rdd3, schema3)
-      recordsDF3.write.format("org.apache.hudi")
+      val rdd4 = jsc.parallelize(records4)
+      val  recordsDF4 = spark.createDataFrame(rdd4, schema4)
+      recordsDF4.write.format("org.apache.hudi")
         .options(opts)
         .mode(SaveMode.Append)
         .save(basePath)
@@ -762,26 +759,42 @@ class TestCOWDataSource extends HoodieClientTestBase {
     }
   }
 
-
   @Test def testSchemaNotEqualData(): Unit = {
     val  opts = commonOpts ++ Map("hoodie.avro.schema.validate" -> "true")
     val schema1 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, true)::
       StructField("timestamp", IntegerType, true):: StructField("age", StringType, true)  :: StructField("partition", IntegerType, true)::Nil)
-
     val records = Array("{\"_row_key\":\"1\",\"name\":\"lisi\",\"timestamp\":1,\"partition\":1}",
       "{\"_row_key\":\"1\",\"name\":\"lisi\",\"timestamp\":1,\"partition\":1}")
-
     val inputDF = spark.read.schema(schema1.toDDL).json(spark.sparkContext.parallelize(records, 2))
-
     inputDF.write.format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
-
     val recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-
     val resultSchema = new StructType(recordsReadDF.schema.filter(p=> !p.name.startsWith("_hoodie")).toArray)
     assertEquals(resultSchema, schema1)
+  }
+
+  @ParameterizedTest @ValueSource(booleans = Array(true, false))
+  def testCopyOnWriteWithDropPartitionColumns(enableDropPartitionColumns: Boolean) {
+    val resultContainPartitionColumn = copyOnWriteTableSelect(enableDropPartitionColumns)
+    assertEquals(enableDropPartitionColumns, !resultContainPartitionColumn)
+  }
+
+  def copyOnWriteTableSelect(enableDropPartitionColumns: Boolean): Boolean = {
+    val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 3)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.DROP_PARTITION_COLUMNS.key, enableDropPartitionColumns)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/*")
+    snapshotDF1.registerTempTable("tmptable")
+    val result = spark.sql("select * from tmptable limit 1").collect()(0)
+    result.schema.contains(new StructField("partition", StringType, true))
   }
 }

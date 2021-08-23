@@ -21,7 +21,10 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
@@ -29,9 +32,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
+import org.apache.hudi.table.marker.WriteMarkers;
 
+import org.apache.hadoop.fs.FileStatus;
+
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -45,17 +53,18 @@ public class FlinkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
   @Override
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     try {
-      MarkerFiles markerFiles = new MarkerFiles(table, instantToRollback.getTimestamp());
-      List<HoodieRollbackStat> rollbackStats = context.map(markerFiles.allMarkerFilePaths(), markerFilePath -> {
+      List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
+          table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
+      List<HoodieRollbackStat> rollbackStats = context.map(markerPaths, markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
         switch (type) {
           case MERGE:
-            return undoMerge(MarkerFiles.stripMarkerSuffix(markerFilePath));
+            return undoMerge(WriteMarkers.stripMarkerSuffix(markerFilePath));
           case APPEND:
-            return undoAppend(MarkerFiles.stripMarkerSuffix(markerFilePath), instantToRollback);
+            return undoAppend(WriteMarkers.stripMarkerSuffix(markerFilePath), instantToRollback);
           case CREATE:
-            return undoCreate(MarkerFiles.stripMarkerSuffix(markerFilePath));
+            return undoCreate(WriteMarkers.stripMarkerSuffix(markerFilePath));
           default:
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
         }
@@ -70,5 +79,12 @@ public class FlinkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
     } catch (Exception e) {
       throw new HoodieRollbackException("Error rolling back using marker files written for " + instantToRollback, e);
     }
+  }
+
+  protected Map<FileStatus, Long> getWrittenLogFileSizeMap(String partitionPathStr, String baseCommitTime, String fileId) throws IOException {
+    // collect all log files that is supposed to be deleted with this rollback
+    return FSUtils.getAllLogFiles(table.getMetaClient().getFs(),
+        FSUtils.getPartitionPath(config.getBasePath(), partitionPathStr), fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime)
+        .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen()));
   }
 }

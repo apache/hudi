@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -52,6 +53,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
 
   private final Set<String> deltaRecordKeys;
+  private int recordKeyIndex = HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
   private Iterator<String> deltaItr;
 
   public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
@@ -60,6 +62,9 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     this.parquetReader = realReader;
     this.deltaRecordMap = getMergedLogRecordScanner().getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
+    if (split.getHoodieVirtualKeyInfo().isPresent()) {
+      this.recordKeyIndex = split.getHoodieVirtualKeyInfo().get().getRecordKeyFieldIndex();
+    }
   }
 
   /**
@@ -81,6 +86,9 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .withReverseReader(false)
         .withBufferSize(jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
         .withSpillableMapBasePath(jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
+        .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+            HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
         .build();
   }
 
@@ -98,7 +106,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // with a new block of values
     while (this.parquetReader.next(aVoid, arrayWritable)) {
       if (!deltaRecordMap.isEmpty()) {
-        String key = arrayWritable.get()[HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS].toString();
+        String key = arrayWritable.get()[recordKeyIndex].toString();
         if (deltaRecordMap.containsKey(key)) {
           // mark the key as handled
           this.deltaRecordKeys.remove(key);

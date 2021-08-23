@@ -357,7 +357,7 @@ object AvroConversionHelper {
             val fieldNamesIterator = dataType.asInstanceOf[StructType].fieldNames.iterator
             val rowIterator = item.asInstanceOf[Row].toSeq.iterator
 
-            while (convertersIterator.hasNext) {
+            while (convertersIterator.hasNext && rowIterator.hasNext) {
               val converter = convertersIterator.next()
               record.put(fieldNamesIterator.next(), converter(rowIterator.next()))
             }

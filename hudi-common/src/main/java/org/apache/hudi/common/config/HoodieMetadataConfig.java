@@ -28,6 +28,11 @@ import java.util.Properties;
  * Configurations used by the HUDI Metadata Table.
  */
 @Immutable
+@ConfigClassProperty(name = "Metadata Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations used by the Hudi Metadata Table. "
+        + "This table maintains the metadata about a given Hudi table (e.g file listings) "
+        + " to avoid overhead of accessing cloud storage, during queries.")
 public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
@@ -38,6 +43,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
+
+  // Enable syncing the Metadata Table
+  public static final ConfigProperty<Boolean> METADATA_SYNC_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".sync.enable")
+      .defaultValue(true)
+      .sinceVersion("0.9.0")
+      .withDocumentation("Enable syncing of metadata table from actions on the dataset");
 
   // Validate contents of Metadata Table on each access against the actual filesystem
   public static final ConfigProperty<Boolean> METADATA_VALIDATE_PROP = ConfigProperty
@@ -132,8 +144,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.HOODIE_ASSUME_DATE_PARTITIONING_PROP);
   }
 
-  public boolean useFileListingMetadata() {
+  public boolean enabled() {
     return getBoolean(METADATA_ENABLE_PROP);
+  }
+
+  public boolean enableSync() {
+    return enabled() && getBoolean(HoodieMetadataConfig.METADATA_SYNC_ENABLE_PROP);
   }
 
   public boolean validateFileListingMetadata() {
@@ -166,6 +182,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder enable(boolean enable) {
       metadataConfig.setValue(METADATA_ENABLE_PROP, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder enableSync(boolean enable) {
+      metadataConfig.setValue(METADATA_SYNC_ENABLE_PROP, String.valueOf(enable));
       return this;
     }
 

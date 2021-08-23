@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -50,9 +51,6 @@ import org.apache.hive.service.server.HiveServer2;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
@@ -66,6 +64,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -113,7 +114,7 @@ public class TestCluster implements BeforeAllCallback, AfterAllCallback,
     conf.setInt(ConfVars.HIVE_SERVER2_WEBUI_PORT.varname, port++);
     hiveTestService = new HiveTestService(conf);
     server2 = hiveTestService.start();
-    dtfOut = DateTimeFormat.forPattern("yyyy/MM/dd");
+    dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     hiveSiteXml = File.createTempFile("hive-site", ".xml");
     hiveSiteXml.deleteOnExit();
     try (OutputStream os = new FileOutputStream(hiveSiteXml)) {
@@ -171,7 +172,7 @@ public class TestCluster implements BeforeAllCallback, AfterAllCallback,
     if (!result) {
       throw new InitializationError("cannot initialize table");
     }
-    DateTime dateTime = DateTime.now();
+    ZonedDateTime dateTime = ZonedDateTime.now();
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, true, dateTime, commitTime, path.toString());
     createCommitFile(commitMetadata, commitTime, path.toString());
   }
@@ -186,12 +187,12 @@ public class TestCluster implements BeforeAllCallback, AfterAllCallback,
   }
 
   private HoodieCommitMetadata createPartitions(int numberOfPartitions, boolean isParquetSchemaSimple,
-      DateTime startFrom, String commitTime, String basePath) throws IOException, URISyntaxException {
-    startFrom = startFrom.withTimeAtStartOfDay();
+      ZonedDateTime startFrom, String commitTime, String basePath) throws IOException, URISyntaxException {
+    startFrom = startFrom.truncatedTo(ChronoUnit.DAYS);
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     for (int i = 0; i < numberOfPartitions; i++) {
-      String partitionPath = dtfOut.print(startFrom);
+      String partitionPath = startFrom.format(dtfOut);
       Path partPath = new Path(basePath + "/" + partitionPath);
       dfsCluster.getFileSystem().makeQualified(partPath);
       dfsCluster.getFileSystem().mkdirs(partPath);
@@ -226,7 +227,7 @@ public class TestCluster implements BeforeAllCallback, AfterAllCallback,
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, filter);
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter));
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, dfsCluster.getFileSystem().getConf());

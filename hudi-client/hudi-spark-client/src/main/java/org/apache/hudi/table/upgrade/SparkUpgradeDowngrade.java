@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -25,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 
 import java.io.IOException;
+import java.util.Map;
 
 public class SparkUpgradeDowngrade extends AbstractUpgradeDowngrade {
 
@@ -43,22 +45,25 @@ public class SparkUpgradeDowngrade extends AbstractUpgradeDowngrade {
     } catch (IOException e) {
       throw new HoodieUpgradeDowngradeException("Error during upgrade/downgrade to version:" + toVersion, e);
     }
-
   }
 
   @Override
-  protected void upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
+  protected Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
     if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
-      new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime);
+      return new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime);
+    } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
+      return new OneToTwoUpgradeHandler().upgrade(config, context, instantTime);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
     }
   }
 
   @Override
-  protected void downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
+  protected Map<ConfigProperty, String> downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
     if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.ZERO) {
-      new OneToZeroDowngradeHandler().downgrade(config, context, instantTime);
+      return new OneToZeroDowngradeHandler().downgrade(config, context, instantTime);
+    } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {
+      return new TwoToOneDowngradeHandler().downgrade(config, context, instantTime);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }

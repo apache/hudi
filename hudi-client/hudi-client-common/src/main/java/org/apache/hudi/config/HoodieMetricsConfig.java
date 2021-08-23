@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -33,6 +35,10 @@ import java.util.Properties;
  * Fetch the configurations used by the Metrics system.
  */
 @Immutable
+@ConfigClassProperty(name = "Metrics Configurations",
+    groupName = ConfigGroups.Names.METRICS,
+    description = "Enables reporting on Hudi metrics. Hudi publishes metrics on "
+        + "every commit, clean, rollback etc. The following sections list the supported reporters.")
 public class HoodieMetricsConfig extends HoodieConfig {
 
   public static final String METRIC_PREFIX = "hoodie.metrics";

@@ -64,9 +64,9 @@ public class TestTimestampBasedKeyGenerator {
     baseRow = genericRecordToRow(baseRecord);
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
 
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "field1");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "createTime");
-    properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "false");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD.key(), "field1");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD.key(), "createTime");
+    properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key(), "false");
   }
 
   private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone, String scalarType) {

@@ -26,17 +26,18 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.util.ConfigUtils;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.hive.util.Parquet2SparkSchemaUtils;
+
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncTool;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.GroupType;
@@ -149,7 +150,9 @@ public class HiveSyncTool extends AbstractSyncTool {
     // check if the database exists else create it
     if (cfg.autoCreateDatabase) {
       try {
-        hoodieHiveClient.updateHiveSQL("create database if not exists " + cfg.databaseName);
+        if (!hoodieHiveClient.doesDataBaseExist(cfg.databaseName)) {
+          hoodieHiveClient.createDatabase(cfg.databaseName);
+        }
       } catch (Exception e) {
         // this is harmless since table creation will fail anyways, creation of DB is needed for in-memory testing
         LOG.warn("Unable to create database", e);

@@ -33,7 +33,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
+import org.apache.hudi.table.marker.WriteMarkers;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.api.java.JavaRDD;
@@ -56,21 +57,21 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     try {
-      MarkerFiles markerFiles = new MarkerFiles(table, instantToRollback.getTimestamp());
-      List<String> markerFilePaths = markerFiles.allMarkerFilePaths();
-      int parallelism = Math.max(Math.min(markerFilePaths.size(), config.getRollbackParallelism()), 1);
+      List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
+          table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
+      int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
       jsc.setJobGroup(this.getClass().getSimpleName(), "Rolling back using marker files");
-      return jsc.parallelize(markerFilePaths, parallelism)
+      return jsc.parallelize(markerPaths, parallelism)
           .map(markerFilePath -> {
             String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
             IOType type = IOType.valueOf(typeStr);
             switch (type) {
               case MERGE:
-                return undoMerge(MarkerFiles.stripMarkerSuffix(markerFilePath));
+                return undoMerge(WriteMarkers.stripMarkerSuffix(markerFilePath));
               case APPEND:
-                return undoAppend(MarkerFiles.stripMarkerSuffix(markerFilePath), instantToRollback);
+                return undoAppend(WriteMarkers.stripMarkerSuffix(markerFilePath), instantToRollback);
               case CREATE:
-                return undoCreate(MarkerFiles.stripMarkerSuffix(markerFilePath));
+                return undoCreate(WriteMarkers.stripMarkerSuffix(markerFilePath));
               default:
                 throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
             }

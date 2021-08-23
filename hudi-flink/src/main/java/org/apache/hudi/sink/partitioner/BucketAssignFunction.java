@@ -91,8 +91,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   private final Configuration conf;
 
-  private transient org.apache.hadoop.conf.Configuration hadoopConf;
-
   private final boolean isChangingRecords;
 
   /**
@@ -117,18 +115,23 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(this.hadoopConf),
+        new SerializableConfiguration(StreamerUtil.getHadoopConf()),
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(
         getRuntimeContext().getIndexOfThisSubtask(),
+        getRuntimeContext().getMaxNumberOfParallelSubtasks(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
-        WriteOperationType.isOverwrite(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION))),
+        ignoreSmallFiles(writeConfig),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
     this.payloadCreation = PayloadCreation.instance(this.conf);
+  }
+
+  private boolean ignoreSmallFiles(HoodieWriteConfig writeConfig) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return WriteOperationType.isOverwrite(operationType) || writeConfig.allowDuplicateInserts();
   }
 
   @Override
@@ -194,9 +197,10 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     } else {
       location = getNewRecordLocation(partitionPath);
       this.context.setCurrentKey(recordKey);
-      if (isChangingRecords) {
-        updateIndexState(partitionPath, location);
-      }
+    }
+    // always refresh the index
+    if (isChangingRecords) {
+      updateIndexState(partitionPath, location);
     }
     record.setCurrentLocation(location);
     out.collect((O) record);

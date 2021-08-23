@@ -21,6 +21,8 @@ package org.apache.hudi.keygen;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -40,6 +42,26 @@ public class KeyGenUtils {
 
   protected static final String DEFAULT_PARTITION_PATH = "default";
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+
+  /**
+   * Fetches record key from the GenericRecord.
+   * @param genericRecord generic record of interest.
+   * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
+   * @return the record key for the passed in generic record.
+   */
+  public static String getRecordKeyFromGenericRecord(GenericRecord genericRecord, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey(genericRecord) : genericRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+  }
+
+  /**
+   * Fetches partition path from the GenericRecord.
+   * @param genericRecord generic record of interest.
+   * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
+   * @return the partition path for the passed in generic record.
+   */
+  public static String getPartitionPathFromGenericRecord(GenericRecord genericRecord, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getPartitionPath(genericRecord) : genericRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+  }
 
   /**
    * Extracts the record key fields in strings out of the given record key,
@@ -164,7 +186,7 @@ public class KeyGenUtils {
    */
   public static KeyGenerator createKeyGeneratorByClassName(TypedProperties props) throws IOException {
     KeyGenerator keyGenerator = null;
-    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), null);
+    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS.key(), null);
     if (!StringUtils.isNullOrEmpty(keyGeneratorClass)) {
       try {
         keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);

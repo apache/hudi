@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -32,6 +34,9 @@ import java.util.Properties;
  * Storage related config.
  */
 @Immutable
+@ConfigClassProperty(name = "Storage Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control aspects around writing, sizing, reading base and log files.")
 public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARQUET_FILE_MAX_BYTES = ConfigProperty

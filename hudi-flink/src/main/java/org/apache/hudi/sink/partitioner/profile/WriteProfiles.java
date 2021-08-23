@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.conf.Configuration;
@@ -53,22 +54,22 @@ public class WriteProfiles {
 
   private WriteProfiles() {}
 
-  public static synchronized  WriteProfile singleton(
-      boolean overwrite,
+  public static synchronized WriteProfile singleton(
+      boolean ignoreSmallFiles,
       boolean delta,
       HoodieWriteConfig config,
       HoodieFlinkEngineContext context) {
     return PROFILES.computeIfAbsent(config.getBasePath(),
-        k -> getWriteProfile(overwrite, delta, config, context));
+        k -> getWriteProfile(ignoreSmallFiles, delta, config, context));
   }
 
   private static WriteProfile getWriteProfile(
-      boolean overwrite,
+      boolean ignoreSmallFiles,
       boolean delta,
       HoodieWriteConfig config,
       HoodieFlinkEngineContext context) {
-    if (overwrite) {
-      return new OverwriteWriteProfile(config, context);
+    if (ignoreSmallFiles) {
+      return new EmptyWriteProfile(config, context);
     } else if (delta) {
       return new DeltaWriteProfile(config, context);
     } else {
@@ -131,7 +132,7 @@ public class WriteProfiles {
         })
         // filter out crushed files
         .filter(Objects::nonNull)
-        .filter(fileStatus -> fileStatus.getLen() > 0)
+        .filter(StreamerUtil::isValidFile)
         .collect(Collectors.toList());
   }
 

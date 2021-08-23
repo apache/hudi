@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -59,20 +60,36 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
   protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
+  private boolean preserveHoodieMetadata = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier);
+        taskContextSupplier, false);
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
+                            boolean preserveHoodieMetadata) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
+        taskContextSupplier, preserveHoodieMetadata);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
                             TaskContextSupplier taskContextSupplier) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, false);
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                            String partitionPath, String fileId, Option<Schema> overriddenSchema,
+                            TaskContextSupplier taskContextSupplier, boolean preserveHoodieMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
         taskContextSupplier);
+    this.preserveHoodieMetadata = preserveHoodieMetadata;
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
+    writeStatus.setStat(new HoodieWriteStat());
 
     this.path = makeNewPath(partitionPath);
 
@@ -111,6 +128,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
   @Override
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord) {
     Option recordMetadata = record.getData().getMetadata();
+    if (HoodieOperation.isDelete(record.getOperation())) {
+      avroRecord = Option.empty();
+    }
     try {
       if (avroRecord.isPresent()) {
         if (avroRecord.get().equals(IGNORE_RECORD)) {
@@ -118,7 +138,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
-        fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
+        if (preserveHoodieMetadata) {
+          fileWriter.writeAvro(record.getRecordKey(), recordWithMetadataInSchema);
+        } else {
+          fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
+        }
         // update the new location of record, so we know where to find it next
         record.unseal();
         record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
@@ -200,7 +224,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
    * @throws IOException if error occurs
    */
   protected void setupWriteStatus() throws IOException {
-    HoodieWriteStat stat = new HoodieWriteStat();
+    HoodieWriteStat stat = writeStatus.getStat();
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setNumWrites(recordsWritten);
     stat.setNumDeletes(recordsDeleted);
@@ -214,7 +238,6 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
-    writeStatus.setStat(stat);
   }
 
   protected long computeTotalWriteBytes() throws IOException {

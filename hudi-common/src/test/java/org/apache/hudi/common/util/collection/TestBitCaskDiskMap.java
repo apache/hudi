@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
@@ -50,6 +51,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -89,6 +91,8 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
       Option<IndexedRecord> value = payload.getInsertValue(HoodieAvroUtils.addMetadataFields(getSimpleSchema()));
       assertEquals(originalRecord, value.get());
     }
+
+    verifyCleanup(records);
   }
 
   @ParameterizedTest
@@ -111,6 +115,8 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
       oRecords.add(rec);
       assert recordKeys.contains(rec.getRecordKey());
     }
+
+    verifyCleanup(records);
   }
 
   @ParameterizedTest
@@ -154,6 +160,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
         throw new UncheckedIOException(io);
       }
     }
+    verifyCleanup(records);
   }
 
   @Test
@@ -235,5 +242,12 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     long timeTaken = System.currentTimeMillis() - startTime;
     System.out.println("Time taken :" + timeTaken);
     assertTrue(timeTaken < 100);
+  }
+
+  private void verifyCleanup(BitCaskDiskMap<String, HoodieRecord> records) {
+    File basePathDir = new File(basePath);
+    assert Objects.requireNonNull(basePathDir.list()).length > 0;
+    records.close();
+    assertEquals(Objects.requireNonNull(basePathDir.list()).length, 0);
   }
 }

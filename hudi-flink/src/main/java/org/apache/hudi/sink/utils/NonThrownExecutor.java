@@ -35,11 +35,21 @@ public class NonThrownExecutor implements AutoCloseable {
   /**
    * A single-thread executor to handle all the asynchronous jobs.
    */
-  protected final ExecutorService executor;
+  private final ExecutorService executor;
 
-  public NonThrownExecutor(Logger logger) {
+  /**
+   * Flag saying whether to wait for the tasks finish on #close.
+   */
+  private final boolean waitForTaskFinishOnClose;
+
+  public NonThrownExecutor(Logger logger, boolean waitForTaskFinishOnClose) {
     this.executor = Executors.newSingleThreadExecutor();
     this.logger = logger;
+    this.waitForTaskFinishOnClose = waitForTaskFinishOnClose;
+  }
+
+  public NonThrownExecutor(Logger logger) {
+    this(logger, false);
   }
 
   /**
@@ -75,7 +85,11 @@ public class NonThrownExecutor implements AutoCloseable {
   @Override
   public void close() throws Exception {
     if (executor != null) {
-      executor.shutdownNow();
+      if (waitForTaskFinishOnClose) {
+        executor.shutdown();
+      } else {
+        executor.shutdownNow();
+      }
       // We do not expect this to actually block for long. At this point, there should
       // be very few task running in the executor, if any.
       executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);

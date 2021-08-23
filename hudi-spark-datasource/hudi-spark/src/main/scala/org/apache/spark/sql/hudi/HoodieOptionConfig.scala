@@ -41,26 +41,26 @@ object HoodieOptionConfig {
 
   val SQL_KEY_TABLE_PRIMARY_KEY: HoodieOption[String] = buildConf()
     .withSqlKey("primaryKey")
-    .withHoodieKey(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key)
+    .withHoodieKey(DataSourceWriteOptions.RECORDKEY_FIELD.key)
     .withTableConfigKey(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS.key)
     .build()
 
   val SQL_KEY_TABLE_TYPE: HoodieOption[String] = buildConf()
     .withSqlKey("type")
-    .withHoodieKey(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key)
+    .withHoodieKey(DataSourceWriteOptions.TABLE_TYPE.key)
     .withTableConfigKey(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP.key)
     .defaultValue(SQL_VALUE_TABLE_TYPE_COW)
     .build()
 
   val SQL_KEY_PRECOMBINE_FIELD: HoodieOption[String] = buildConf()
     .withSqlKey("preCombineField")
-    .withHoodieKey(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key)
+    .withHoodieKey(DataSourceWriteOptions.PRECOMBINE_FIELD.key)
     .withTableConfigKey(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD_PROP.key)
     .build()
 
   val SQL_PAYLOAD_CLASS: HoodieOption[String] = buildConf()
     .withSqlKey("payloadClass")
-    .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY.key)
+    .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS.key)
     .withTableConfigKey(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP.key)
     .defaultValue(classOf[DefaultHoodieRecordPayload].getName)
     .build()
@@ -114,7 +114,7 @@ object HoodieOptionConfig {
 
   /**
    * Mapping the sql options to the hoodie table config which used to store to the hoodie
-   * .properites when create the table.
+   * .properties when create the table.
    * @param options
    * @return
    */
@@ -126,12 +126,9 @@ object HoodieOptionConfig {
 
   /**
    * Mapping the table config (loaded from the hoodie.properties) to the sql options.
-   * @param options
-   * @return
    */
   def mappingTableConfigToSqlOption(options: Map[String, String]): Map[String, String] = {
-    options.filterKeys(k => tableConfigKeyToSqlKey.contains(k))
-      .map(kv => tableConfigKeyToSqlKey(kv._1) -> reverseValueMapping.getOrElse(kv._2, kv._2))
+    options.map(kv => tableConfigKeyToSqlKey.getOrElse(kv._1, kv._1) -> reverseValueMapping.getOrElse(kv._2, kv._2))
   }
 
   private lazy val defaultTableConfig: Map[String, String] = {
@@ -151,7 +148,7 @@ object HoodieOptionConfig {
    */
   def getPrimaryColumns(options: Map[String, String]): Array[String] = {
     val params = mappingSqlOptionToHoodieParam(options)
-    params.get(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key)
+    params.get(DataSourceWriteOptions.RECORDKEY_FIELD.key)
       .map(_.split(",").filter(_.length > 0))
       .getOrElse(Array.empty)
   }
@@ -163,13 +160,13 @@ object HoodieOptionConfig {
    */
   def getTableType(options: Map[String, String]): String = {
     val params = mappingSqlOptionToHoodieParam(options)
-    params.getOrElse(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key,
-      DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.defaultValue)
+    params.getOrElse(DataSourceWriteOptions.TABLE_TYPE.key,
+      DataSourceWriteOptions.TABLE_TYPE.defaultValue)
   }
 
   def getPreCombineField(options: Map[String, String]): Option[String] = {
     val params = mappingSqlOptionToHoodieParam(options)
-    params.get(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key)
+    params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)
   }
 
   def buildConf[T](): HoodieOptions[T] = {

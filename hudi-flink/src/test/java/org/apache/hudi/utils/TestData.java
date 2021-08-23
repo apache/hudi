@@ -20,6 +20,7 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -57,6 +58,7 @@ import java.io.FileFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -159,6 +161,18 @@ public class TestData {
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
 
+  // data set of test_source.data latest commit.
+  public static List<RowData> DATA_SET_SOURCE_INSERT_LATEST_COMMIT = Arrays.asList(
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
   // merged data set of test_source.data and test_source_2.data
   public static List<RowData> DATA_SET_SOURCE_MERGED = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
@@ -221,15 +235,76 @@ public class TestData {
           TimestampData.fromEpochMillis(6), StringData.fromString("par3"))
   );
 
+  public static List<RowData> DATA_SET_INSERT_UPDATE_DELETE = Arrays.asList(
+      // INSERT
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 19,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+      // UPDATE
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 19,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 20,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 20,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 21,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 21,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par1")),
+      // DELETE
+      deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+          TimestampData.fromEpochMillis(5), StringData.fromString("par1"))
+  );
+
+  public static List<RowData> DATA_SET_SINGLE_INSERT = Collections.singletonList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+
+  public static List<RowData> DATA_SET_DISORDER_UPDATE_DELETE = Arrays.asList(
+      // DISORDER UPDATE
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 21,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 20,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 20,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      updateAfterRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par1")),
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 21,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      // DISORDER DELETE
+      deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
+  );
+
   /**
    * Returns string format of a list of RowData.
    */
   public static String rowDataToString(List<RowData> rows) {
+    return rowDataToString(rows, false);
+  }
+
+  /**
+   * Returns string format of a list of RowData.
+   *
+   * @param withChangeFlag whether to print the change flag
+   */
+  public static String rowDataToString(List<RowData> rows, boolean withChangeFlag) {
     DataStructureConverter<Object, Object> converter =
         DataStructureConverters.getConverter(TestConfigurations.ROW_DATA_TYPE);
     return rows.stream()
-        .map(row -> converter.toExternal(row).toString())
-        .sorted(Comparator.naturalOrder())
+        .sorted(Comparator.comparing(o -> toStringSafely(o.getString(0))))
+        .map(row -> {
+          final String rowStr = converter.toExternal(row).toString();
+          if (withChangeFlag) {
+            return row.getRowKind().shortString() + "(" + rowStr + ")";
+          } else {
+            return rowStr;
+          }
+        })
         .collect(Collectors.toList()).toString();
   }
 
@@ -274,7 +349,30 @@ public class TestData {
    * @param expected Expected string of the sorted rows
    */
   public static void assertRowsEquals(List<Row> rows, String expected) {
-    assertRowsEquals(rows, expected, 0);
+    assertRowsEquals(rows, expected, false);
+  }
+
+  /**
+   * Sort the {@code rows} using field at index 0 and asserts
+   * it equals with the expected string {@code expected}.
+   *
+   * @param rows           Actual result rows
+   * @param expected       Expected string of the sorted rows
+   * @param withChangeFlag Whether compares with change flags
+   */
+  public static void assertRowsEquals(List<Row> rows, String expected, boolean withChangeFlag) {
+    String rowsString = rows.stream()
+        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(0))))
+        .map(row -> {
+          final String rowStr = row.toString();
+          if (withChangeFlag) {
+            return row.getKind().shortString() + "(" + rowStr + ")";
+          } else {
+            return rowStr;
+          }
+        })
+        .collect(Collectors.toList()).toString();
+    assertThat(rowsString, is(expected));
   }
 
   /**
@@ -376,6 +474,48 @@ public class TestData {
         readBuffer.add(filterOutVariables(nextRecord));
         nextRecord = reader.read();
       }
+      readBuffer.sort(Comparator.naturalOrder());
+      assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
+    }
+  }
+
+  /**
+   * Checks the source data set are written as expected.
+   * Different with {@link #checkWrittenData}, it reads all the data files.
+   *
+   * <p>Note: Replace it with the Flink reader when it is supported.
+   *
+   * @param baseFile   The file base to check, should be a directory
+   * @param expected   The expected results mapping, the key should be the partition path
+   *                   and value should be values list with the key partition
+   * @param partitions The expected partition number
+   */
+  public static void checkWrittenAllData(
+      File baseFile,
+      Map<String, String> expected,
+      int partitions) throws IOException {
+    assert baseFile.isDirectory();
+    FileFilter filter = file -> !file.getName().startsWith(".");
+    File[] partitionDirs = baseFile.listFiles(filter);
+
+    assertNotNull(partitionDirs);
+    assertThat(partitionDirs.length, is(partitions));
+
+    for (File partitionDir : partitionDirs) {
+      File[] dataFiles = partitionDir.listFiles(filter);
+      assertNotNull(dataFiles);
+
+      List<String> readBuffer = new ArrayList<>();
+      for (File dataFile : dataFiles) {
+        ParquetReader<GenericRecord> reader = AvroParquetReader
+            .<GenericRecord>builder(new Path(dataFile.getAbsolutePath())).build();
+        GenericRecord nextRecord = reader.read();
+        while (nextRecord != null) {
+          readBuffer.add(filterOutVariables(nextRecord));
+          nextRecord = reader.read();
+        }
+      }
+
       readBuffer.sort(Comparator.naturalOrder());
       assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
     }
@@ -497,6 +637,8 @@ public class TestData {
         .withBufferSize(16 * 1024 * 1024)
         .withMaxMemorySizeInBytes(1024 * 1024L)
         .withSpillableMapBasePath("/tmp/")
+        .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
+        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
         .build();
   }
 
@@ -515,8 +657,12 @@ public class TestData {
     return Strings.join(fields, ",");
   }
 
-  private static BinaryRowData insertRow(Object... fields) {
-    LogicalType[] types = TestConfigurations.ROW_TYPE.getFields().stream().map(RowType.RowField::getType)
+  public static BinaryRowData insertRow(Object... fields) {
+    return insertRow(TestConfigurations.ROW_TYPE, fields);
+  }
+
+  public static BinaryRowData insertRow(RowType rowType, Object... fields) {
+    LogicalType[] types = rowType.getFields().stream().map(RowType.RowField::getType)
         .toArray(LogicalType[]::new);
     assertEquals(
         "Filed count inconsistent with type information",
@@ -540,6 +686,18 @@ public class TestData {
   private static BinaryRowData deleteRow(Object... fields) {
     BinaryRowData rowData = insertRow(fields);
     rowData.setRowKind(RowKind.DELETE);
+    return rowData;
+  }
+
+  private static BinaryRowData updateBeforeRow(Object... fields) {
+    BinaryRowData rowData = insertRow(fields);
+    rowData.setRowKind(RowKind.UPDATE_BEFORE);
+    return rowData;
+  }
+
+  private static BinaryRowData updateAfterRow(Object... fields) {
+    BinaryRowData rowData = insertRow(fields);
+    rowData.setRowKind(RowKind.UPDATE_AFTER);
     return rowData;
   }
 }

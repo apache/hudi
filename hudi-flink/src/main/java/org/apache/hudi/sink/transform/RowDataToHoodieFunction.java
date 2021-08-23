@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.transform;
 
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -34,7 +35,6 @@ import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 
@@ -43,7 +43,7 @@ import static org.apache.hudi.util.StreamerUtil.flinkConf2TypedProperties;
 /**
  * Function that transforms RowData to HoodieRecord.
  */
-public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?>>
+public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord>
     extends RichMapFunction<I, O> {
   /**
    * Row type of the input.
@@ -108,9 +108,9 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
   private HoodieRecord toHoodieRecord(I record) throws Exception {
     GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, record);
     final HoodieKey hoodieKey = keyGenerator.getKey(gr);
-    // nullify the payload insert data to mark the record as a DELETE
-    final boolean isDelete = record.getRowKind() == RowKind.DELETE;
-    HoodieRecordPayload payload = payloadCreation.createPayload(gr, isDelete);
-    return new HoodieRecord<>(hoodieKey, payload);
+
+    HoodieRecordPayload payload = payloadCreation.createPayload(gr);
+    HoodieOperation operation = HoodieOperation.fromValue(record.getRowKind().toByteValue());
+    return new HoodieRecord<>(hoodieKey, payload, operation);
   }
 }

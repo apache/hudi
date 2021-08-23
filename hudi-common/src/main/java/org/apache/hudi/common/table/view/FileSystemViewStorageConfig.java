@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -32,6 +34,9 @@ import java.util.stream.Collectors;
 /**
  * File System View Storage Configurations.
  */
+@ConfigClassProperty(name = "File System View Storage Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.")
 public class FileSystemViewStorageConfig extends HoodieConfig {
 
   // Property Names
@@ -67,7 +72,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> FILESYSTEM_VIEW_SPILLABLE_DIR = ConfigProperty
       .key("hoodie.filesystem.view.spillable.dir")
-      .defaultValue("/tmp/view_map/")
+      .defaultValue("/tmp/")
       .withDocumentation("Path on local storage to use, when file system view is held in a spillable map.");
 
   public static final ConfigProperty<Long> FILESYSTEM_VIEW_SPILLABLE_MEM = ConfigProperty

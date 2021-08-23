@@ -52,7 +52,7 @@ public class TestHoodieJmxMetrics {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
     when(config.getJmxHost()).thenReturn("localhost");
     when(config.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
-    new HoodieMetrics(config, "raw_table");
+    new HoodieMetrics(config);
     registerGauge("jmx_metric1", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
         .get("jmx_metric1").getValue().toString());
@@ -65,7 +65,7 @@ public class TestHoodieJmxMetrics {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
     when(config.getJmxHost()).thenReturn("localhost");
     when(config.getJmxPort()).thenReturn(String.valueOf(NetworkTestUtils.nextFreePort()));
-    new HoodieMetrics(config, "raw_table");
+    new HoodieMetrics(config);
     registerGauge("jmx_metric2", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
         .get("jmx_metric2").getValue().toString());

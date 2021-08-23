@@ -86,7 +86,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
   @Override
   public List<WriteStatus> compact(HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
-                                      HoodieTable hoodieTable, HoodieWriteConfig config, String compactionInstantTime) throws IOException {
+                                   HoodieTable hoodieTable, HoodieWriteConfig config, String compactionInstantTime) throws IOException {
     throw new UnsupportedOperationException("HoodieFlinkMergeOnReadTableCompactor does not support compact directly, "
         + "the function works as a separate pipeline");
   }
@@ -98,7 +98,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
                                    String instantTime) throws IOException {
     FileSystem fs = metaClient.getFs();
 
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
+    Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
     // TODO - FIX THIS
@@ -129,6 +129,8 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withSpillableMapBasePath(config.getSpillableMapBasePath())
+        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .build();
     if (!scanner.iterator().hasNext()) {
       return new ArrayList<>();
@@ -162,6 +164,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
       s.getStat().setRuntimeStats(runtimeStats);
+      scanner.close();
     }).collect(toList());
   }
 

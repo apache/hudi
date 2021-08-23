@@ -92,6 +92,7 @@ public class HoodieTestDataGenerator {
   public static final int DEFAULT_PARTITION_DEPTH = 3;
   public static final String TRIP_SCHEMA_PREFIX = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"partition_path\", \"type\": \"string\"},"
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
@@ -128,7 +129,7 @@ public class HoodieTestDataGenerator {
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
+  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
 
@@ -212,8 +213,13 @@ public class HoodieTestDataGenerator {
    */
   public static RawTripTestPayload generateRandomValue(
       HoodieKey key, String instantTime, boolean isFlattened) throws IOException {
+    return generateRandomValue(key, instantTime, isFlattened, 0);
+  }
+
+  public static RawTripTestPayload generateRandomValue(
+      HoodieKey key, String instantTime, boolean isFlattened, int ts) throws IOException {
     GenericRecord rec = generateGenericRecord(
-        key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0,
+        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, ts,
         false, isFlattened);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
@@ -235,9 +241,9 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above schema format for a delete.
    */
   public static RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0,
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
         true, false);
-    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true);
+    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true, 0L);
   }
 
   public RawTripTestPayload generatePayloadForMissTripSchema(HoodieKey key, String commitTime) throws IOException {
@@ -259,13 +265,13 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
   public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String instantTime) {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0);
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0);
     return new HoodieAvroPayload(Option.of(rec));
   }
 
-  public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
+  public static GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
                                                     long timestamp) {
-    return generateGenericRecord(rowKey, riderName, driverName, timestamp, false, false);
+    return generateGenericRecord(rowKey, partitionPath, riderName, driverName, timestamp, false, false);
   }
 
   public GenericRecord generateRecordForMissTripSchema(String rowKey, String driverName, long timestamp) {
@@ -278,12 +284,13 @@ public class HoodieTestDataGenerator {
     return rec;
   }
 
-  public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
+  public static GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
                                                     long timestamp, boolean isDeleteRecord,
                                                     boolean isFlattened) {
     GenericRecord rec = new GenericData.Record(isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
+    rec.put("partition_path", partitionPath);
     rec.put("rider", riderName);
     rec.put("driver", driverName);
     rec.put("begin_lat", RAND.nextDouble());
@@ -602,7 +609,7 @@ public class HoodieTestDataGenerator {
 
   public HoodieRecord generateDeleteRecord(HoodieKey key) throws IOException {
     RawTripTestPayload payload =
-        new RawTripTestPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true);
+        new RawTripTestPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true, 0L);
     return new HoodieRecord(key, payload);
   }
 
@@ -614,6 +621,16 @@ public class HoodieTestDataGenerator {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       HoodieRecord record = generateUpdateRecord(baseRecord.getKey(), instantTime);
+      updates.add(record);
+    }
+    return updates;
+  }
+
+  public List<HoodieRecord> generateUpdatesWithTS(String instantTime, List<HoodieRecord> baseRecords, int ts) throws IOException {
+    List<HoodieRecord> updates = new ArrayList<>();
+    for (HoodieRecord baseRecord : baseRecords) {
+      HoodieRecord record = new HoodieRecord(baseRecord.getKey(),
+          generateRandomValue(baseRecord.getKey(), instantTime, false, ts));
       updates.add(record);
     }
     return updates;
@@ -837,7 +854,7 @@ public class HoodieTestDataGenerator {
   public List<GenericRecord> generateGenericRecords(int numRecords) {
     List<GenericRecord> list = new ArrayList<>();
     IntStream.range(0, numRecords).forEach(i -> {
-      list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
+      list.add(generateGenericRecord(UUID.randomUUID().toString(), "0", UUID.randomUUID().toString(), UUID.randomUUID()
           .toString(), RAND.nextLong()));
     });
     return list;

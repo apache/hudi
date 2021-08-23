@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 /**
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
@@ -41,9 +42,10 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
 
   private HoodieMetadataMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
                                               Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes, int bufferSize,
-                                              String spillableMapBasePath, Set<String> mergeKeyFilter) {
+                                              String spillableMapBasePath, Set<String> mergeKeyFilter,
+                                               ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
-        spillableMapBasePath, Option.empty(), false);
+        spillableMapBasePath, Option.empty(), false, diskMapType, isBitCaskDiskMapCompressionEnabled, false);
     this.mergeKeyFilter = mergeKeyFilter;
 
     performScan();
@@ -134,6 +136,16 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
       return this;
     }
 
+    public Builder withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
+      this.diskMapType = diskMapType;
+      return this;
+    }
+
+    public Builder withBitCaskDiskMapCompressionEnabled(boolean isBitCaskDiskMapCompressionEnabled) {
+      this.isBitCaskDiskMapCompressionEnabled = isBitCaskDiskMapCompressionEnabled;
+      return this;
+    }
+
     public Builder withMergeKeyFilter(Set<String> mergeKeyFilter) {
       this.mergeKeyFilter = mergeKeyFilter;
       return this;
@@ -142,7 +154,8 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
     @Override
     public HoodieMetadataMergedLogRecordScanner build() {
       return new HoodieMetadataMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
-          latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter);
+          latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter,
+          diskMapType, isBitCaskDiskMapCompressionEnabled);
     }
   }
 }

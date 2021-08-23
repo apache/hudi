@@ -17,6 +17,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -28,6 +30,10 @@ import java.util.Properties;
 /**
  * Write callback related config.
  */
+@ConfigClassProperty(name = "Write commit callback configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Controls callback behavior into HTTP endpoints, to push "
+        + " notifications on commits on hudi tables.")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";
@@ -38,19 +44,23 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
       .sinceVersion("0.6.0")
       .withDocumentation("Turn commit callback on/off. off by default.");
 
-  public static final ConfigProperty<String> CALLBACK_CLASS_PROP = ConfigProperty
+  public static final ConfigProperty<String> CALLBACK_CLASS = ConfigProperty
       .key(CALLBACK_PREFIX + "class")
       .defaultValue("org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback")
       .sinceVersion("0.6.0")
       .withDocumentation("Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, "
           + "org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default");
+  @Deprecated
+  public static final String CALLBACK_CLASS_PROP = CALLBACK_CLASS.key();
 
   // ***** HTTP callback configs *****
-  public static final ConfigProperty<String> CALLBACK_HTTP_URL_PROP = ConfigProperty
+  public static final ConfigProperty<String> CALLBACK_HTTP_URL = ConfigProperty
       .key(CALLBACK_PREFIX + "http.url")
       .noDefaultValue()
       .sinceVersion("0.6.0")
       .withDocumentation("Callback host to be sent along with callback messages");
+  @Deprecated
+  public static final String CALLBACK_HTTP_URL_PROP = CALLBACK_HTTP_URL.key();
 
   public static final ConfigProperty<String> CALLBACK_HTTP_API_KEY = ConfigProperty
       .key(CALLBACK_PREFIX + "http.api.key")
@@ -94,12 +104,12 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
     }
 
     public HoodieWriteCommitCallbackConfig.Builder withCallbackClass(String callbackClass) {
-      writeCommitCallbackConfig.setValue(CALLBACK_CLASS_PROP, callbackClass);
+      writeCommitCallbackConfig.setValue(CALLBACK_CLASS, callbackClass);
       return this;
     }
 
     public HoodieWriteCommitCallbackConfig.Builder withCallbackHttpUrl(String url) {
-      writeCommitCallbackConfig.setValue(CALLBACK_HTTP_URL_PROP, url);
+      writeCommitCallbackConfig.setValue(CALLBACK_HTTP_URL, url);
       return this;
     }
 

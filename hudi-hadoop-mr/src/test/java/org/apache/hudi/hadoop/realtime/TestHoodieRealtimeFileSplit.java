@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.FileSplit;
@@ -67,7 +69,7 @@ public class TestHoodieRealtimeFileSplit {
     baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[] {});
     maxCommitTime = "10001";
 
-    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogPaths, maxCommitTime);
+    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogPaths, maxCommitTime, Option.empty());
   }
 
   @Test
@@ -97,6 +99,7 @@ public class TestHoodieRealtimeFileSplit {
     inorder.verify(out, times(1)).writeInt(eq(deltaLogPaths.size()));
     inorder.verify(out, times(1)).writeInt(eq(deltaLogPaths.get(0).length()));
     inorder.verify(out, times(1)).write(aryEq(deltaLogPaths.get(0).getBytes(StandardCharsets.UTF_8)));
+    inorder.verify(out, times(1)).writeBoolean(false);
     // verify there are no more interactions happened on the mocked object
     inorder.verifyNoMoreInteractions();
   }

@@ -32,7 +32,7 @@ import java.util.List;
 
 public class FlinkUpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseFlinkDeltaCommitActionExecutor<T> {
-  private List<HoodieRecord<T>> inputRecords;
+  private final List<HoodieRecord<T>> inputRecords;
 
   public FlinkUpsertDeltaCommitActionExecutor(HoodieEngineContext context,
                                               FlinkAppendHandle<?, ?, ?, ?> writeHandle,

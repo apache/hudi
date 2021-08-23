@@ -21,6 +21,7 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -34,6 +35,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -61,7 +63,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -207,6 +208,7 @@ public class StreamWriteFunction<K, I, O>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
+    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
     if (context.isRestored()) {
       restoreWriteMetadata();
     } else {
@@ -323,13 +325,7 @@ public class StreamWriteFunction<K, I, O>
   }
 
   private void sendBootstrapEvent() {
-    WriteMetadataEvent event = WriteMetadataEvent.builder()
-        .taskID(taskID)
-        .writeStatus(Collections.emptyList())
-        .instantTime("")
-        .bootstrap(true)
-        .build();
-    this.eventGateway.sendEventToCoordinator(event);
+    this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }
 
@@ -365,23 +361,26 @@ public class StreamWriteFunction<K, I, O>
     private final String key; // record key
     private final String instant; // 'U' or 'I'
     private final HoodieRecordPayload<?> data; // record payload
+    private final HoodieOperation operation; // operation
 
-    private DataItem(String key, String instant, HoodieRecordPayload<?> data) {
+    private DataItem(String key, String instant, HoodieRecordPayload<?> data, HoodieOperation operation) {
       this.key = key;
       this.instant = instant;
       this.data = data;
+      this.operation = operation;
     }
 
     public static DataItem fromHoodieRecord(HoodieRecord<?> record) {
       return new DataItem(
           record.getRecordKey(),
           record.getCurrentLocation().getInstantTime(),
-          record.getData());
+          record.getData(),
+          record.getOperation());
     }
 
     public HoodieRecord<?> toHoodieRecord(String partitionPath) {
       HoodieKey hoodieKey = new HoodieKey(this.key, partitionPath);
-      HoodieRecord<?> record = new HoodieRecord<>(hoodieKey, data);
+      HoodieRecord<?> record = new HoodieRecord<>(hoodieKey, data, operation);
       HoodieRecordLocation loc = new HoodieRecordLocation(instant, null);
       record.setCurrentLocation(loc);
       return record;
@@ -422,7 +421,7 @@ public class StreamWriteFunction<K, I, O>
     public void preWrite(List<HoodieRecord> records) {
       // rewrite the first record with expected fileID
       HoodieRecord<?> first = records.get(0);
-      HoodieRecord<?> record = new HoodieRecord<>(first.getKey(), first.getData());
+      HoodieRecord<?> record = new HoodieRecord<>(first.getKey(), first.getData(), first.getOperation());
       HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
       record.setCurrentLocation(newLoc);
 
@@ -534,6 +533,7 @@ public class StreamWriteFunction<K, I, O>
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
         k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
     final DataItem item = DataItem.fromHoodieRecord(value);
+
     boolean flushBucket = bucket.detector.detect(item);
     boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
     if (flushBucket) {
@@ -566,24 +566,17 @@ public class StreamWriteFunction<K, I, O>
     String instant = this.writeClient.getLastPendingInstant(this.actionType);
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
-    long waitingTime = 0L;
-    long ckpTimeout = config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
-    long interval = 500L;
+    TimeWait timeWait = TimeWait.builder()
+        .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
+        .action("instant initialize")
+        .build();
     while (confirming) {
       // wait condition:
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
       if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
         // sleep for a while
-        try {
-          if (waitingTime > ckpTimeout) {
-            throw new HoodieException("Timeout(" + waitingTime + "ms) while waiting for instant " + instant + " to commit");
-          }
-          TimeUnit.MILLISECONDS.sleep(interval);
-          waitingTime += interval;
-        } catch (InterruptedException e) {
-          throw new HoodieException("Error while waiting for instant " + instant + " to commit", e);
-        }
+        timeWait.waitFor();
         // refresh the inflight instant
         instant = this.writeClient.getLastPendingInstant(this.actionType);
       } else {

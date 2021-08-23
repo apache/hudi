@@ -70,6 +70,36 @@ public class TestStreamReadMonitoringFunction {
 
   @Test
   public void testConsumeFromLatestCommit() throws Exception {
+    // write 2 commits first， and all the splits should come from the second commit.
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+    StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
+    try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
+      harness.setup();
+      harness.open();
+
+      CountDownLatch latch = new CountDownLatch(4);
+      CollectingSourceContext sourceContext = new CollectingSourceContext(latch);
+
+      runAsync(sourceContext, function);
+
+      assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
+      assertThat("Should produce the expected splits",
+          sourceContext.getPartitionPaths(), is("par1,par2,par3,par4"));
+
+      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
+          "All the instants should have range limit");
+      String latestCommit = TestUtils.getLatestCommit(tempFile.getAbsolutePath());
+      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getLatestCommit().equals(latestCommit)),
+          "All the splits should be with latestCommit instant time");
+
+      // Stop the stream task.
+      function.close();
+    }
+  }
+
+  @Test
+  public void testConsumeFromLastCommit() throws Exception {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
@@ -84,8 +114,8 @@ public class TestStreamReadMonitoringFunction {
       assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits",
           sourceContext.getPartitionPaths(), is("par1,par2,par3,par4"));
-      assertTrue(sourceContext.splits.stream().noneMatch(split -> split.getInstantRange().isPresent()),
-          "No instants should have range limit");
+      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
+          "All instants should have range limit");
 
       Thread.sleep(1000L);
 
@@ -163,8 +193,8 @@ public class TestStreamReadMonitoringFunction {
       assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits",
           sourceContext.getPartitionPaths(), is("par1,par2,par3,par4"));
-      assertTrue(sourceContext.splits.stream().noneMatch(split -> split.getInstantRange().isPresent()),
-          "No instants should have range limit");
+      assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
+          "All instants should have range limit");
 
     }
 

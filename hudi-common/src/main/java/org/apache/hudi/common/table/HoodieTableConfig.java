@@ -20,6 +20,8 @@ package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -53,6 +55,14 @@ import java.util.stream.Collectors;
  * @see HoodieTableMetaClient
  * @since 0.3.0
  */
+@ConfigClassProperty(name = "Table Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that persist across writes and read on a Hudi table "
+        + " like  base, log file formats, table name, creation schema, table version layouts. "
+        + " Configurations are loaded from hoodie.properties, these properties are usually set during "
+        + "initializing a path as hoodie base path and rarely changes during "
+        + "the lifetime of the table. Writers/Queries' configurations are validated against these "
+        + " each time for compatibility.")
 public class HoodieTableConfig extends HoodieConfig implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
@@ -81,10 +91,10 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
       .withDocumentation("Field used in preCombining before actual write. By default, when two records have the same key value, "
           + "the largest value for the precombine field determined by Object.compareTo(..), is picked.");
 
-  public static final ConfigProperty<String> HOODIE_TABLE_PARTITION_COLUMNS_PROP = ConfigProperty
-      .key("hoodie.table.partition.columns")
+  public static final ConfigProperty<String> HOODIE_TABLE_PARTITION_FIELDS_PROP = ConfigProperty
+      .key("hoodie.table.partition.fields")
       .noDefaultValue()
-      .withDocumentation("Columns used to partition the table. Concatenated values of these fields are used as "
+      .withDocumentation("Fields used to partition the table. Concatenated values of these fields are used as "
           + "the partition path, by invoking toString()");
 
   public static final ConfigProperty<String> HOODIE_TABLE_RECORDKEY_FIELDS = ConfigProperty
@@ -146,6 +156,11 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
       .defaultValue("true")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
+
+  public static final ConfigProperty<String> HOODIE_TABLE_KEY_GENERATOR_CLASS = ConfigProperty
+      .key("hoodie.table.keygenerator.class")
+      .noDefaultValue()
+      .withDocumentation("Key Generator class property for the hoodie table");
 
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
@@ -250,12 +265,27 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
     return getString(HOODIE_TABLE_PRECOMBINE_FIELD_PROP);
   }
 
-  public Option<String[]> getPartitionColumns() {
-    if (contains(HOODIE_TABLE_PARTITION_COLUMNS_PROP)) {
-      return Option.of(Arrays.stream(getString(HOODIE_TABLE_PARTITION_COLUMNS_PROP).split(","))
+  public Option<String[]> getRecordKeyFields() {
+    if (contains(HOODIE_TABLE_RECORDKEY_FIELDS)) {
+      return Option.of(Arrays.stream(getString(HOODIE_TABLE_RECORDKEY_FIELDS).split(","))
+              .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[]{}));
+    }
+    return Option.empty();
+  }
+
+  public Option<String[]> getPartitionFields() {
+    if (contains(HOODIE_TABLE_PARTITION_FIELDS_PROP)) {
+      return Option.of(Arrays.stream(getString(HOODIE_TABLE_PARTITION_FIELDS_PROP).split(","))
         .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[]{}));
     }
     return Option.empty();
+  }
+
+  /**
+   * @returns the partition field prop.
+   */
+  public String getPartitionFieldProp() {
+    return getString(HOODIE_TABLE_PARTITION_FIELDS_PROP);
   }
 
   /**
@@ -324,6 +354,13 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
    */
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(HOODIE_POPULATE_META_FIELDS));
+  }
+
+  /**
+   * @returns the record key field prop.
+   */
+  public String getRecordKeyFieldProp() {
+    return getString(HOODIE_TABLE_RECORDKEY_FIELDS);
   }
 
   public Map<String, String> propsMap() {

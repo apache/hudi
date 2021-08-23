@@ -130,7 +130,7 @@ public class FlinkHoodieSimpleIndex<T extends HoodieRecordPayload> extends Flink
                                                                     List<Pair<String, HoodieBaseFile>> latestBaseFiles) {
 
     List<HoodieKeyLocationFetchHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>> hoodieKeyLocationFetchHandles =
-        context.map(latestBaseFiles, partitionPathBaseFile -> new HoodieKeyLocationFetchHandle<>(config, hoodieTable, partitionPathBaseFile), parallelism);
+        context.map(latestBaseFiles, partitionPathBaseFile -> new HoodieKeyLocationFetchHandle<>(config, hoodieTable, partitionPathBaseFile, Option.empty()), parallelism);
     Map<HoodieKey, HoodieRecordLocation> recordLocations = new HashMap<>();
     hoodieKeyLocationFetchHandles.stream()
         .flatMap(handle -> handle.locations())

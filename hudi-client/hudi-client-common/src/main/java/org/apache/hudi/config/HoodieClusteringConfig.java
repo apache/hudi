@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -29,6 +31,10 @@ import java.util.Properties;
 /**
  * Clustering specific configs.
  */
+@ConfigClassProperty(name = "Clustering Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control the clustering table service in hudi, "
+        + "which optimizes the storage layout for better query performance by sorting and sizing data files.")
 public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix
@@ -56,23 +62,33 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + " clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while "
           + " meeting the configured target file sizes.");
 
-  public static final ConfigProperty<String> INLINE_CLUSTERING_PROP = ConfigProperty
+  public static final ConfigProperty<String> INLINE_CLUSTERING = ConfigProperty
       .key("hoodie.clustering.inline")
       .defaultValue("false")
       .sinceVersion("0.7.0")
       .withDocumentation("Turn on inline clustering - clustering will be run after each write operation is complete");
+  @Deprecated
+  public static final String INLINE_CLUSTERING_PROP = INLINE_CLUSTERING.key();
 
-  public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMIT_PROP = ConfigProperty
+  public static final ConfigProperty<String> INLINE_CLUSTERING_MAX_COMMIT = ConfigProperty
       .key("hoodie.clustering.inline.max.commits")
       .defaultValue("4")
       .sinceVersion("0.7.0")
       .withDocumentation("Config to control frequency of clustering planning");
+  @Deprecated
+  public static final String INLINE_CLUSTERING_MAX_COMMIT_PROP = INLINE_CLUSTERING_MAX_COMMIT.key();
 
   public static final ConfigProperty<String> ASYNC_CLUSTERING_MAX_COMMIT_PROP = ConfigProperty
       .key("hoodie.clustering.async.max.commits")
       .defaultValue("4")
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
+
+  public static final ConfigProperty<String> CLUSTERING_SKIP_PARTITIONS_FROM_LATEST = ConfigProperty
+          .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.skipfromlatest.partitions")
+          .defaultValue("0")
+          .sinceVersion("0.9.0")
+          .withDocumentation("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
 
   public static final ConfigProperty<String> CLUSTERING_PLAN_SMALL_FILE_LIMIT = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
@@ -106,20 +122,30 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Columns to sort the data by when clustering");
 
-  public static final ConfigProperty<String> CLUSTERING_UPDATES_STRATEGY_PROP = ConfigProperty
+  public static final ConfigProperty<String> CLUSTERING_UPDATES_STRATEGY = ConfigProperty
       .key("hoodie.clustering.updates.strategy")
       .defaultValue("org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy")
       .sinceVersion("0.7.0")
       .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
           + " Default strategy just rejects the update");
+  @Deprecated
+  public static final String CLUSTERING_UPDATES_STRATEGY_PROP = CLUSTERING_UPDATES_STRATEGY.key();
 
-  public static final ConfigProperty<String> ASYNC_CLUSTERING_ENABLE_OPT_KEY = ConfigProperty
+  public static final ConfigProperty<String> ASYNC_CLUSTERING_ENABLE = ConfigProperty
       .key("hoodie.clustering.async.enabled")
       .defaultValue("false")
       .sinceVersion("0.7.0")
       .withDocumentation("Enable running of clustering service, asynchronously as inserts happen on the table.");
+  @Deprecated
+  public static final String ASYNC_CLUSTERING_ENABLE_OPT_KEY = "hoodie.clustering.async.enabled";
 
-  private HoodieClusteringConfig() {
+  public static final ConfigProperty<Boolean> CLUSTERING_PRESERVE_HOODIE_COMMIT_METADATA = ConfigProperty
+      .key("hoodie.clustering.preserve.commit.metadata")
+      .defaultValue(false)
+      .sinceVersion("0.9.0")
+      .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
+  
+  public HoodieClusteringConfig() {
     super();
   }
 
@@ -153,6 +179,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withClusteringSkipPartitionsFromLatest(int clusteringSkipPartitionsFromLatest) {
+      clusteringConfig.setValue(CLUSTERING_SKIP_PARTITIONS_FROM_LATEST, String.valueOf(clusteringSkipPartitionsFromLatest));
+      return this;
+    }
+
     public Builder withClusteringPlanSmallFileLimit(long clusteringSmallFileLimit) {
       clusteringConfig.setValue(CLUSTERING_PLAN_SMALL_FILE_LIMIT, String.valueOf(clusteringSmallFileLimit));
       return this;
@@ -179,12 +210,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withInlineClustering(Boolean inlineClustering) {
-      clusteringConfig.setValue(INLINE_CLUSTERING_PROP, String.valueOf(inlineClustering));
+      clusteringConfig.setValue(INLINE_CLUSTERING, String.valueOf(inlineClustering));
       return this;
     }
 
     public Builder withInlineClusteringNumCommits(int numCommits) {
-      clusteringConfig.setValue(INLINE_CLUSTERING_MAX_COMMIT_PROP, String.valueOf(numCommits));
+      clusteringConfig.setValue(INLINE_CLUSTERING_MAX_COMMIT, String.valueOf(numCommits));
       return this;
     }
 
@@ -199,12 +230,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withClusteringUpdatesStrategy(String updatesStrategyClass) {
-      clusteringConfig.setValue(CLUSTERING_UPDATES_STRATEGY_PROP, updatesStrategyClass);
+      clusteringConfig.setValue(CLUSTERING_UPDATES_STRATEGY, updatesStrategyClass);
       return this;
     }
 
     public Builder withAsyncClustering(Boolean asyncClustering) {
-      clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE_OPT_KEY, String.valueOf(asyncClustering));
+      clusteringConfig.setValue(ASYNC_CLUSTERING_ENABLE, String.valueOf(asyncClustering));
+      return this;
+    }
+
+    public Builder withPreserveHoodieCommitMetadata(Boolean preserveHoodieCommitMetadata) {
+      clusteringConfig.setValue(CLUSTERING_PRESERVE_HOODIE_COMMIT_METADATA, String.valueOf(preserveHoodieCommitMetadata));
       return this;
     }
 

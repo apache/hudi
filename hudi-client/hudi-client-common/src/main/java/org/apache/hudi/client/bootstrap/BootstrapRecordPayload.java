@@ -34,7 +34,7 @@ public class BootstrapRecordPayload implements HoodieRecordPayload<BootstrapReco
   }
 
   @Override
-  public BootstrapRecordPayload preCombine(BootstrapRecordPayload another) {
+  public BootstrapRecordPayload preCombine(BootstrapRecordPayload oldValue) {
     return this;
   }
 

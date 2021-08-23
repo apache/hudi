@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.9.0-SNAPSHOT</version>
+  <version>0.10.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -152,6 +152,8 @@
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
+    <antlr.version>4.7</antlr.version>
+    <aws.sdk.version>1.12.22</aws.sdk.version>
   </properties>
 
   <scm>
@@ -338,6 +340,9 @@
           <groupId>net.alchim31.maven</groupId>
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
+          <configuration>
+            <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+          </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -1327,6 +1332,7 @@
                   <excludes>
                     <exclude>${project.basedir}/src/main/scala</exclude>
                   </excludes>
+                  <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
                 </configuration>
               </execution>
             </executions>

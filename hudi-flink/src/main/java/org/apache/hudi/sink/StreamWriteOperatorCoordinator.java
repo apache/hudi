@@ -94,7 +94,7 @@ public class StreamWriteOperatorCoordinator
   /**
    * Current REQUESTED instant, for validation.
    */
-  private volatile String instant = "";
+  private volatile String instant = WriteMetadataEvent.BOOTSTRAP_INSTANT;
 
   /**
    * Event buffer for one round of checkpointing. When all the elements are non-null and have the same
@@ -106,11 +106,6 @@ public class StreamWriteOperatorCoordinator
    * Task number of the operator.
    */
   private final int parallelism;
-
-  /**
-   * Whether to schedule compaction plan on finished checkpoints.
-   */
-  private final boolean scheduleCompaction;
 
   /**
    * A single-thread executor to handle all the asynchronous jobs of the coordinator.
@@ -126,6 +121,11 @@ public class StreamWriteOperatorCoordinator
    * Context that holds variables for asynchronous hive sync.
    */
   private HiveSyncContext hiveSyncContext;
+
+  /**
+   * A single-thread executor to handle metadata table sync.
+   */
+  private NonThrownExecutor metadataSyncExecutor;
 
   /**
    * The table state.
@@ -144,22 +144,24 @@ public class StreamWriteOperatorCoordinator
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
-    this.scheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
   }
 
   @Override
   public void start() throws Exception {
     // initialize event buffer
     reset();
-    this.writeClient = StreamerUtil.createWriteClient(conf, null);
+    this.writeClient = StreamerUtil.createWriteClient(conf);
     this.tableState = TableState.create(conf);
     // init table, create it if not exists.
     initTableIfNotExists(this.conf);
     // start the executor
     this.executor = new CoordinatorExecutor(this.context, LOG);
     // start the executor if required
-    if (conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED)) {
+    if (tableState.syncHive) {
       initHiveSync();
+    }
+    if (tableState.syncMetadata) {
+      initMetadataSync();
     }
   }
 
@@ -172,9 +174,9 @@ public class StreamWriteOperatorCoordinator
     if (executor != null) {
       executor.close();
     }
-    // sync Hive if is enabled in batch mode.
-    syncHiveIfEnabled();
-
+    if (hiveSyncExecutor != null) {
+      hiveSyncExecutor.close();
+    }
     this.eventBuffer = null;
   }
 
@@ -205,13 +207,15 @@ public class StreamWriteOperatorCoordinator
           final boolean committed = commitInstant(this.instant);
           if (committed) {
             // if async compaction is on, schedule the compaction
-            if (scheduleCompaction) {
+            if (tableState.scheduleCompaction) {
               writeClient.scheduleCompaction(Option.empty());
             }
             // start new instant.
             startInstant();
             // sync Hive if is enabled
             syncHiveIfEnabled();
+            // sync metadata if is enabled
+            syncMetadataIfEnabled();
           }
         }, "commits the instant %s", this.instant
     );
@@ -243,7 +247,9 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
-    // no operation
+    // reset the event
+    this.eventBuffer[i] = null;
+    LOG.warn("Reset the event for task [" + i + "]", throwable);
   }
 
   @Override
@@ -256,12 +262,12 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
 
   private void initHiveSync() {
-    this.hiveSyncExecutor = new NonThrownExecutor(LOG);
+    this.hiveSyncExecutor = new NonThrownExecutor(LOG, true);
     this.hiveSyncContext = HiveSyncContext.create(conf);
   }
 
   private void syncHiveIfEnabled() {
-    if (conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED)) {
+    if (tableState.syncHive) {
       this.hiveSyncExecutor.execute(this::syncHive, "sync hive metadata for instant %s", this.instant);
     }
   }
@@ -271,6 +277,27 @@ public class StreamWriteOperatorCoordinator
    */
   public void syncHive() {
     hiveSyncContext.hiveSyncTool().syncHoodieTable();
+  }
+
+  private void initMetadataSync() {
+    this.metadataSyncExecutor = new NonThrownExecutor(LOG, true);
+  }
+
+  /**
+   * Sync the write metadata to the metadata table.
+   */
+  private void syncMetadataIfEnabled() {
+    if (tableState.syncMetadata) {
+      this.metadataSyncExecutor.execute(this::syncMetadata,
+          "sync metadata table for instant %s", this.instant);
+    }
+  }
+
+  /**
+   * Sync the write metadata to the metadata table.
+   */
+  private void syncMetadata() {
+    this.writeClient.syncTableMetadata();
   }
 
   private void reset() {
@@ -322,14 +349,19 @@ public class StreamWriteOperatorCoordinator
         LOG.info("Recommit instant {}", instant);
         commitInstant(instant);
       }
+      if (tableState.syncMetadata) {
+        // initialize metadata table first if enabled
+        // condition: the data set timeline has committed instants
+        syncMetadata();
+      }
       // starts a new instant
       startInstant();
     }, "initialize instant %s", instant);
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
-    addEventToBuffer(event);
-    if (Arrays.stream(eventBuffer).allMatch(Objects::nonNull)) {
+    this.eventBuffer[event.getTaskID()] = event;
+    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to initialize the instant.
       initInstant(event.getInstantTime());
     }
@@ -340,7 +372,10 @@ public class StreamWriteOperatorCoordinator
     if (allEventsReceived()) {
       // start to commit the instant.
       commitInstant(this.instant);
-      // no compaction scheduling for batch mode
+      // sync Hive if is enabled in batch mode.
+      syncHiveIfEnabled();
+      // sync metadata if is enabled in batch mode.
+      syncMetadataIfEnabled();
     }
   }
 
@@ -477,6 +512,14 @@ public class StreamWriteOperatorCoordinator
     this.executor = executor;
   }
 
+  @VisibleForTesting
+  public void setMetadataSyncExecutor(NonThrownExecutor executor) throws Exception {
+    if (this.metadataSyncExecutor != null) {
+      this.metadataSyncExecutor.close();
+    }
+    this.metadataSyncExecutor = executor;
+  }
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
@@ -510,15 +553,21 @@ public class StreamWriteOperatorCoordinator
   private static class TableState implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private final WriteOperationType operationType;
-    private final String commitAction;
-    private final boolean isOverwrite;
+    final WriteOperationType operationType;
+    final String commitAction;
+    final boolean isOverwrite;
+    final boolean scheduleCompaction;
+    final boolean syncHive;
+    final boolean syncMetadata;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
       this.commitAction = CommitUtils.getCommitActionType(this.operationType,
           HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE).toUpperCase(Locale.ROOT)));
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
+      this.scheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
+      this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
+      this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
     }
 
     public static TableState create(Configuration conf) {

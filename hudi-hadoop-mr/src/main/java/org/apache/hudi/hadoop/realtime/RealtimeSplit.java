@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.InputSplitUtils;
 
 import org.apache.hadoop.fs.Path;
@@ -53,7 +54,14 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
   String getBasePath();
 
   /**
+   * Returns Virtual key info if meta fields are disabled.
+   * @return
+   */
+  Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo();
+
+  /**
    * Update Log File Paths.
+   *
    * @param deltaLogPaths
    */
   void setDeltaLogPaths(List<String> deltaLogPaths);
@@ -70,12 +78,23 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    */
   void setBasePath(String basePath);
 
+  void setHoodieVirtualKeyInfo(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo);
+
   default void writeToOutput(DataOutput out) throws IOException {
     InputSplitUtils.writeString(getBasePath(), out);
     InputSplitUtils.writeString(getMaxCommitTime(), out);
     out.writeInt(getDeltaLogPaths().size());
     for (String logFilePath : getDeltaLogPaths()) {
       InputSplitUtils.writeString(logFilePath, out);
+    }
+    if (!getHoodieVirtualKeyInfo().isPresent()) {
+      InputSplitUtils.writeBoolean(false, out);
+    } else {
+      InputSplitUtils.writeBoolean(true, out);
+      InputSplitUtils.writeString(getHoodieVirtualKeyInfo().get().getRecordKeyField(), out);
+      InputSplitUtils.writeString(getHoodieVirtualKeyInfo().get().getPartitionPathField(), out);
+      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfo().get().getRecordKeyFieldIndex()), out);
+      InputSplitUtils.writeString(String.valueOf(getHoodieVirtualKeyInfo().get().getPartitionPathFieldIndex()), out);
     }
   }
 
@@ -88,6 +107,14 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
       deltaLogPaths.add(InputSplitUtils.readString(in));
     }
     setDeltaLogPaths(deltaLogPaths);
+    boolean hoodieVirtualKeyPresent = InputSplitUtils.readBoolean(in);
+    if (hoodieVirtualKeyPresent) {
+      String recordKeyField = InputSplitUtils.readString(in);
+      String partitionPathField = InputSplitUtils.readString(in);
+      int recordFieldIndex = Integer.parseInt(InputSplitUtils.readString(in));
+      int partitionPathIndex = Integer.parseInt(InputSplitUtils.readString(in));
+      setHoodieVirtualKeyInfo(Option.of(new HoodieVirtualKeyInfo(recordKeyField, partitionPathField, recordFieldIndex, partitionPathIndex)));
+    }
   }
 
   /**

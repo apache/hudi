@@ -49,18 +49,25 @@ case class AlterHoodieTableChangeColumnCommand(
     }
     // Get the new schema
     val newSqlSchema = StructType(
-      table.dataSchema.fields.map { field =>
+      table.schema.fields.map { field =>
       if (resolver(field.name, columnName)) {
         newColumn
       } else {
         field
       }
     })
+    val newDataSchema = StructType(
+      table.dataSchema.fields.map { field =>
+        if (resolver(field.name, columnName)) {
+          newColumn
+        } else {
+          field
+        }
+      })
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName.table)
     val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
 
     val path = getTableLocation(table, sparkSession)
-      .getOrElse(s"missing location for ${table.identifier}")
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
       .setConf(hadoopConf).build()
@@ -76,8 +83,8 @@ case class AlterHoodieTableChangeColumnCommand(
         log.warn(s"Exception when attempting to uncache table ${tableName.quotedString}", e)
     }
     sparkSession.catalog.refreshTable(tableName.unquotedString)
-    // Change the schema in the meta
-    catalog.alterTableDataSchema(tableName, newSqlSchema)
+    // Change the schema in the meta using new data schema.
+    catalog.alterTableDataSchema(tableName, newDataSchema)
 
     Seq.empty[Row]
   }

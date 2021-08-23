@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client;
 
-import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -51,13 +49,18 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.error.SparkErrorTableWriteStatusWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.SparkCompactHelpers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.AbstractUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
+
+import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -69,6 +72,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
@@ -281,7 +285,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public HoodieWriteResult deletePartitions(List<String> partitions, String instantTime) {
     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table = getTableAndInitCtx(WriteOperationType.DELETE_PARTITION, instantTime);
     preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> result = table.deletePartitions(context,instantTime, partitions);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> result = table.deletePartitions(context, instantTime, partitions);
     return new HoodieWriteResult(postWrite(result, instantTime, table), result.getPartitionToReplaceFileIds());
   }
 
@@ -392,10 +396,12 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                     String clusteringCommitTime) {
 
-    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
-    if (!writeStatuses.filter(WriteStatus::hasErrors).isEmpty()) {
+    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
+        e.getValue().stream()).collect(Collectors.toList());
+
+    if (writeStats.stream().mapToLong(s -> s.getTotalWriteErrors()).sum() > 0) {
       throw new HoodieClusteringException("Clustering failed to write to files:"
-          + writeStatuses.filter(WriteStatus::hasErrors).map(WriteStatus::getFileId).collect());
+          + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(s -> s.getFileId()).collect(Collectors.joining(",")));
     }
     finalizeWrite(table, clusteringCommitTime, writeStats);
     try {
@@ -412,6 +418,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
           table.getConfig().getSchema(), table.getConfig().getTableName());
     }
 
+    WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       try {
@@ -482,6 +490,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public void syncTableMetadata() {
+    if (!config.getMetadataConfig().enableSync()) {
+      LOG.info("Metadata table sync is disabled in the config.");
+      return;
+    }
+
     // Open up the metadata table again, for syncing
     try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
       LOG.info("Successfully synced to metadata table");
@@ -521,5 +534,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
       HoodieWrapperFileSystem.setMetricsRegistry(registry, registryMeta);
     }
+  }
+
+  @Override
+  protected void releaseResources() {
+    ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
+        .forEach(rdd -> rdd.unpersist());
   }
 }

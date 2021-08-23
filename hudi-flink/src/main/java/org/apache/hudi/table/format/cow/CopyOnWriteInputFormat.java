@@ -137,7 +137,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     // take the desired number of splits into account
     minNumSplits = Math.max(minNumSplits, this.numSplits);
 
-    final List<FileInputSplit> inputSplits = new ArrayList<FileInputSplit>(minNumSplits);
+    final List<FileInputSplit> inputSplits = new ArrayList<>(minNumSplits);
 
     // get all the files that are involved in the splits
     List<FileStatus> files = new ArrayList<>();
@@ -148,7 +148,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       final FileSystem fs = FSUtils.getFs(hadoopPath.toString(), this.conf.conf());
       final FileStatus pathFile = fs.getFileStatus(hadoopPath);
 
-      if (pathFile.isDir()) {
+      if (pathFile.isDirectory()) {
         totalLength += addFilesInDir(hadoopPath, files, true);
       } else {
         testForUnsplittable(pathFile);
@@ -164,7 +164,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       for (final FileStatus file : files) {
         final FileSystem fs = FSUtils.getFs(file.getPath().toString(), this.conf.conf());
         final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, file.getLen());
-        Set<String> hosts = new HashSet<String>();
+        Set<String> hosts = new HashSet<>();
         for (BlockLocation block : blocks) {
           hosts.addAll(Arrays.asList(block.getHosts()));
         }
@@ -173,10 +173,10 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           len = READ_WHOLE_SPLIT_FLAG;
         }
         FileInputSplit fis = new FileInputSplit(splitNum++, new Path(file.getPath().toUri()), 0, len,
-            hosts.toArray(new String[hosts.size()]));
+            hosts.toArray(new String[0]));
         inputSplits.add(fis);
       }
-      return inputSplits.toArray(new FileInputSplit[inputSplits.size()]);
+      return inputSplits.toArray(new FileInputSplit[0]);
     }
 
 
@@ -214,7 +214,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           @Override
           public int compare(BlockLocation o1, BlockLocation o2) {
             long diff = o1.getLength() - o2.getOffset();
-            return diff < 0L ? -1 : (diff > 0L ? 1 : 0);
+            return Long.compare(diff, 0L);
           }
         });
 
@@ -257,7 +257,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       }
     }
 
-    return inputSplits.toArray(new FileInputSplit[inputSplits.size()]);
+    return inputSplits.toArray(new FileInputSplit[0]);
   }
 
   @Override
@@ -301,7 +301,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     long length = 0;
 
     for (FileStatus dir : fs.listStatus(hadoopPath)) {
-      if (dir.isDir()) {
+      if (dir.isDirectory()) {
         if (acceptFile(dir) && enumerateNestedFiles) {
           length += addFilesInDir(dir.getPath(), files, logExcludedFiles);
         } else {

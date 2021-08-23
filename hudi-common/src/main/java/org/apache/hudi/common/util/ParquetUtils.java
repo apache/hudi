@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -115,23 +116,36 @@ public class ParquetUtils extends BaseFileUtils {
    */
   @Override
   public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath) {
+    return fetchRecordKeyPartitionPathInternal(configuration, filePath, Option.empty());
+  }
+
+  private List<HoodieKey> fetchRecordKeyPartitionPathInternal(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     List<HoodieKey> hoodieKeys = new ArrayList<>();
     try {
-      if (!filePath.getFileSystem(configuration).exists(filePath)) {
-        return new ArrayList<>();
-      }
-
       Configuration conf = new Configuration(configuration);
       conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
-      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+      Schema readSchema = keyGeneratorOpt.map(keyGenerator -> {
+        List<String> fields = new ArrayList<>();
+        fields.addAll(keyGenerator.getRecordKeyFields());
+        fields.addAll(keyGenerator.getPartitionPathFields());
+        return HoodieAvroUtils.getSchemaForFields(readAvroSchema(conf, filePath), fields);
+      })
+          .orElse(HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
       ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build();
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
-          String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          String partitionPath = ((GenericRecord) obj).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          String recordKey = null;
+          String partitionPath = null;
+          if (keyGeneratorOpt.isPresent()) {
+            recordKey = keyGeneratorOpt.get().getRecordKey((GenericRecord) obj);
+            partitionPath = keyGeneratorOpt.get().getPartitionPath((GenericRecord) obj);
+          } else {
+            recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+            partitionPath = ((GenericRecord) obj).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          }
           hoodieKeys.add(new HoodieKey(recordKey, partitionPath));
           obj = reader.read();
         }
@@ -140,6 +154,19 @@ public class ParquetUtils extends BaseFileUtils {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
     }
     return hoodieKeys;
+  }
+
+  /**
+   * Fetch {@link HoodieKey}s from the given parquet file.
+   *
+   * @param configuration   configuration to build fs object
+   * @param filePath        The parquet file path.
+   * @param keyGeneratorOpt
+   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   */
+  @Override
+  public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return fetchRecordKeyPartitionPathInternal(configuration, filePath, keyGeneratorOpt);
   }
 
   public ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
@@ -223,7 +250,7 @@ public class ParquetUtils extends BaseFileUtils {
   /**
    * Returns the number of records in the parquet file.
    *
-   * @param conf Configuration
+   * @param conf            Configuration
    * @param parquetFilePath path of the file
    */
   @Override

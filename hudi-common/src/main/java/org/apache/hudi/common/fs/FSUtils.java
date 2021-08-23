@@ -52,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
@@ -106,6 +107,16 @@ public class FSUtils {
       return getFs(addSchemeIfLocalPath(path).toString(), conf);
     }
     return getFs(path, conf);
+  }
+
+  /**
+   * Check if table already exists in the given path.
+   * @param path base path of the table.
+   * @param fs instance of {@link FileSystem}.
+   * @return {@code true} if table exists. {@code false} otherwise.
+   */
+  public static boolean isTableExists(String path, FileSystem fs) throws IOException {
+    return fs.exists(new Path(path + "/" + HoodieTableMetaClient.METAFOLDER_NAME));
   }
 
   public static Path addSchemeIfLocalPath(String path) {
@@ -277,13 +288,16 @@ public class FSUtils {
     }
   }
 
-  public static FileStatus[] getFilesInPartition(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                                                 String basePathStr, Path partitionPath) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext,
-        metadataConfig, basePathStr, FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue())) {
-      return tableMetadata.getAllFilesInPartition(partitionPath);
-    } catch (Exception e) {
-      throw new HoodieException("Error get files in partition: " + partitionPath, e);
+  public static Map<String, FileStatus[]> getFilesInPartitions(HoodieEngineContext engineContext,
+                                                               HoodieMetadataConfig metadataConfig,
+                                                               String basePathStr,
+                                                               String[] partitionPaths,
+                                                               String spillableMapPath) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
+        spillableMapPath, true)) {
+      return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
+    } catch (Exception ex) {
+      throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
     }
   }
 

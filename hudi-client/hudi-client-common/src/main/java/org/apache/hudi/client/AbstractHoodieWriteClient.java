@@ -18,9 +18,6 @@
 
 package org.apache.hudi.client;
 
-import com.codahale.metrics.Timer;
-import java.util.stream.Stream;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -67,9 +64,12 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
+
+import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -81,6 +81,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
@@ -130,7 +131,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   public AbstractHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                                    Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-    this.metrics = new HoodieMetrics(config, config.getTableName());
+    this.metrics = new HoodieMetrics(config);
     this.index = createIndex(writeConfig);
     this.txnManager = new TransactionManager(config, fs);
   }
@@ -172,6 +173,11 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds) {
+    // Skip the empty commit if not allowed
+    if (!config.allowEmptyCommit() && stats.isEmpty()) {
+      return true;
+    }
+    LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
@@ -184,6 +190,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
+      releaseResources();
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
@@ -407,7 +414,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         .isPresent()
         ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
-      syncTableMetadata();
+      if (writeOperationType != WriteOperationType.CLUSTER && writeOperationType != WriteOperationType.COMPACT) {
+        syncTableMetadata();
+      }
     } finally {
       this.txnManager.endTransaction();
     }
@@ -434,12 +443,15 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   protected void postCommit(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
       // Delete the marker directory for the instant.
-      new MarkerFiles(table, instantTime).quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
       autoCleanOnCommit();
-      syncTableMetadata();
+      if (operationType != null && operationType != WriteOperationType.CLUSTER && operationType != WriteOperationType.COMPACT) {
+        syncTableMetadata();
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {
@@ -452,19 +464,19 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       // Do an inline compaction if enabled
       if (config.inlineCompactionEnabled()) {
         runAnyPendingCompactions(table);
-        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP.key(), "true");
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
         inlineCompact(extraMetadata);
       } else {
-        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP.key(), "false");
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
       }
 
       // Do an inline clustering if enabled
       if (config.inlineClusteringEnabled()) {
         runAnyPendingClustering(table);
-        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP.key(), "true");
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
         inlineCluster(extraMetadata);
       } else {
-        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP.key(), "false");
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
       }
     }
   }
@@ -1045,6 +1057,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
     }
+  }
+
+  /**
+   * Called after each write, to release any resources used.
+   */
+  protected void releaseResources() {
+    // do nothing here
   }
 
   @Override

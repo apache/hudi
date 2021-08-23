@@ -137,6 +137,22 @@ public class TestConfigurations {
     return builder.toString();
   }
 
+  public static String getCsvSourceDDL(String tableName, String fileName) {
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource(fileName)).toString();
+    return "create table " + tableName + "(\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  ts timestamp(3),\n"
+        + "  `partition` varchar(20)\n"
+        + ") with (\n"
+        + "  'connector' = 'filesystem',\n"
+        + "  'path' = '" + sourcePath + "',\n"
+        + "  'format' = 'csv'\n"
+        + ")";
+  }
+
   public static final RowDataSerializer SERIALIZER = new RowDataSerializer(ROW_TYPE);
 
   public static Configuration getDefaultConf(String tablePath) {
