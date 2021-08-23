@@ -18,9 +18,11 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
@@ -37,6 +39,9 @@ import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
+import com.ververica.cdc.connectors.mysql.MySqlSource;
+import com.ververica.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
+
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.formats.common.TimestampFormat;
@@ -50,6 +55,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.time.ZoneId;
 import java.util.Properties;
 
 /**
@@ -76,14 +82,13 @@ public class HoodieFlinkStreamer {
       env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
     }
 
-    Properties kafkaProps = StreamerUtil.appendKafkaProps(cfg);
+    Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
 
     // Read from kafka source
     RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
 
-    Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
     long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
     int parallelism = env.getParallelism();
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
@@ -91,17 +96,41 @@ public class HoodieFlinkStreamer {
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
         new StreamWriteOperatorFactory<>(conf);
 
-    DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
-        cfg.kafkaTopic,
-        new JsonRowDataDeserializationSchema(
-            rowType,
-            InternalTypeInfo.of(rowType),
-            false,
-            true,
-            TimestampFormat.ISO_8601
-        ), kafkaProps))
-        .name("kafka_source")
-        .uid("uid_kafka_source");
+    DataStream<RowData> dataStream = null;
+
+    if(cfg.sourceType.equals(FlinkStreamerType.KAFKA.getName())){
+      Properties kafkaProps = StreamerUtil.appendKafkaProps(cfg);
+      dataStream = env.addSource(new FlinkKafkaConsumer<>(
+              cfg.kafkaTopic,
+              new JsonRowDataDeserializationSchema(
+                      rowType,
+                      InternalTypeInfo.of(rowType),
+                      false,
+                      true,
+                      TimestampFormat.ISO_8601
+              ), kafkaProps))
+              .name("kafka_source")
+              .uid("uid_kafka_source");
+    }else if(cfg.sourceType.equals(FlinkStreamerType.MYSQL_CDC.getName())){
+      SourceFunction<RowData> sourceFunction = MySqlSource.<RowData>builder()
+              .hostname(cfg.mysqlCdcHost)
+              .port(cfg.mysqlCdcPort)
+              .databaseList(cfg.mysqlCdcDbs.toArray(new String[cfg.mysqlCdcDbs.size()]))
+              .tableList(cfg.mysqlCdcTables.toArray(new String[cfg.mysqlCdcTables.size()]))
+              .username(cfg.mysqlCdcUser)
+              .password(cfg.mysqlCdcPassword)
+              .serverId(cfg.mysqlCdcServerId)
+              .deserializer(new RowDataDebeziumDeserializeSchema(rowType,
+                      InternalTypeInfo.of(rowType),(rowData, rowKind) -> {}, ZoneId.systemDefault()))
+              .build();
+      dataStream  = env.addSource(sourceFunction)
+              .name("mysql_source")
+              .uid("uid_mysql_source");
+    }else{
+      final String errorMsg = String.format("Data source type [%s] is not supported.",
+              cfg.sourceType);
+      throw new HoodieException(errorMsg);
+    }
 
     if (cfg.transformerClassNames != null && !cfg.transformerClassNames.isEmpty()) {
       Option<Transformer> transformer = StreamerUtil.createTransformer(cfg.transformerClassNames);
