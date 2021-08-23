@@ -46,7 +46,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -93,13 +92,13 @@ public class DataSourceUtils {
    */
   private static Option<BulkInsertPartitioner> createUserDefinedBulkInsertPartitioner(HoodieWriteConfig config)
       throws HoodieException {
-    String userDefinedBulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
+    String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {
-      return StringUtils.isNullOrEmpty(userDefinedBulkInsertPartitionerClass)
+      return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
           ? Option.empty() :
-          Option.of((UserDefinedBulkInsertPartitioner) ReflectionUtils.loadClass(userDefinedBulkInsertPartitionerClass, config));
+          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass, config));
     } catch (Throwable e) {
-      throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + userDefinedBulkInsertPartitionerClass, e);
+      throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + bulkInsertPartitionerClass, e);
     }
   }
 
@@ -112,13 +111,13 @@ public class DataSourceUtils {
    */
   public static Option<BulkInsertPartitioner<Dataset<Row>>> createUserDefinedBulkInsertPartitionerWithRows(HoodieWriteConfig config)
       throws HoodieException {
-    String userDefinedBulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
+    String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {
-      return StringUtils.isNullOrEmpty(userDefinedBulkInsertPartitionerClass)
+      return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
           ? Option.empty() :
-          Option.of((UserDefinedBulkInsertPartitioner) ReflectionUtils.loadClass(userDefinedBulkInsertPartitionerClass, config));
+          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass, config));
     } catch (Throwable e) {
-      throw new HoodieException("Could not create UserDefinedBulkInsertPartitionerRows class " + userDefinedBulkInsertPartitionerClass, e);
+      throw new HoodieException("Could not create UserDefinedBulkInsertPartitionerRows class " + bulkInsertPartitionerClass, e);
     }
   }
 
