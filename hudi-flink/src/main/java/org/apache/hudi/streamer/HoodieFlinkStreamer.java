@@ -18,7 +18,6 @@
 
 package org.apache.hudi.streamer;
 
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -41,7 +40,6 @@ import org.apache.hudi.util.StreamerUtil;
 import com.beust.jcommander.JCommander;
 import com.ververica.cdc.connectors.mysql.MySqlSource;
 import com.ververica.cdc.debezium.table.RowDataDebeziumDeserializeSchema;
-
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.formats.common.TimestampFormat;
@@ -49,6 +47,7 @@ import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.table.data.RowData;
@@ -121,7 +120,7 @@ public class HoodieFlinkStreamer {
               .password(cfg.mysqlCdcPassword)
               .serverId(cfg.mysqlCdcServerId)
               .deserializer(new RowDataDebeziumDeserializeSchema(rowType,
-                      InternalTypeInfo.of(rowType),(rowData, rowKind) -> {}, ZoneId.systemDefault()))
+                      InternalTypeInfo.of(rowType),(rowData, rowKind) -> { }, ZoneId.systemDefault()))
               .build();
       dataStream  = env.addSource(sourceFunction)
               .name("mysql_source")

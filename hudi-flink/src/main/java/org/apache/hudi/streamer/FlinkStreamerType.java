@@ -22,14 +22,14 @@ public enum FlinkStreamerType {
 
     KAFKA("kafka"),MYSQL_CDC("mysql-cdc");
 
-    private String name;
+  private String name;
 
-    FlinkStreamerType(String name) {
-        this.name = name;
-    }
+  FlinkStreamerType(String name) {
+    this.name = name;
+  }
 
-    public String getName() {
-        return name;
-    }
+  public String getName() {
+    return name;
+  }
 
 }
