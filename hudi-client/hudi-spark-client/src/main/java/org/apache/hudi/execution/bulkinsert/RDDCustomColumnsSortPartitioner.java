@@ -43,7 +43,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
   private final SerializableSchema serializableSchema;
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
-    this.serializableSchema = new SerializableSchema(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema())));
+    this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
     this.sortColumnNames = getSortColumnName(config);
   }
 
