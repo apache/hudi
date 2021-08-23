@@ -729,6 +729,8 @@ object DataSourceWriteOptions {
     .defaultValue("")
     .withDocumentation("");
 
+  @Deprecated
+  val SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class"
 }
 
 object DataSourceOptionsHelper {

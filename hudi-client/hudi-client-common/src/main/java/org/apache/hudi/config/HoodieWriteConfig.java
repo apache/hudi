@@ -1796,7 +1796,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultOnCondition(!isErrorTableConfigSet,
           HoodieErrorTableConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
-      writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+      writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
     }
 
     private void validate() {
