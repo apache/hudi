@@ -725,8 +725,6 @@ public class TestWriteCopyOnWrite {
       funcWrapper.invoke(rowData);
     }
 
-    assertTrue(funcWrapper.isAlreadyBootstrap());
-
     checkIndexLoaded(
         new HoodieKey("id1", "par1"),
         new HoodieKey("id2", "par1"),
@@ -742,6 +740,8 @@ public class TestWriteCopyOnWrite {
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
+
+    assertTrue(funcWrapper.isAlreadyBootstrap());
 
     String instant = funcWrapper.getWriteClient()
         .getLastPendingInstant(getTableType());

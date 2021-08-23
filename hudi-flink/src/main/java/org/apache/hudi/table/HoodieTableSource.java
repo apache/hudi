@@ -197,7 +197,7 @@ public class HoodieTableSource implements
 
   @Override
   public ChangelogMode getChangelogMode() {
-    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
+    return conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)
         ? ChangelogModes.FULL
         // when all the changes are persisted or read as batch,
         // use INSERT mode.
