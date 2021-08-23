@@ -28,9 +28,9 @@ import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -138,9 +138,9 @@ public class TestInputPathHandler {
   static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
                                              String tableName, HoodieTableType tableType) throws IOException {
     Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP.key(), tableName);
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP.key(), tableType.name());
-    properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP.key(), HoodieAvroPayload.class.getName());
+    properties.setProperty(HoodieTableConfig.NAME.key(), tableName);
+    properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
+    properties.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieAvroPayload.class.getName());
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 

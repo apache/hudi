@@ -44,7 +44,7 @@ public class TestHoodieAvroKeyGeneratorFactory {
 
     // set KeyGenerator class only
     props = getCommonProps();
-    props.put(HoodieWriteConfig.KEYGENERATOR_CLASS.key(), SimpleAvroKeyGenerator.class.getName());
+    props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleAvroKeyGenerator.class.getName());
     KeyGenerator keyGenerator2 = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
     Assertions.assertEquals(SimpleAvroKeyGenerator.class.getName(), keyGenerator2.getClass().getName());
 
@@ -56,7 +56,7 @@ public class TestHoodieAvroKeyGeneratorFactory {
 
     // set wrong class name
     final TypedProperties props2 = getCommonProps();
-    props2.put(HoodieWriteConfig.KEYGENERATOR_CLASS.key(), TestHoodieAvroKeyGeneratorFactory.class.getName());
+    props2.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), TestHoodieAvroKeyGeneratorFactory.class.getName());
     assertThrows(IOException.class, () -> HoodieAvroKeyGeneratorFactory.createKeyGenerator(props2));
 
     // set wrong keyGenerator type
@@ -67,9 +67,9 @@ public class TestHoodieAvroKeyGeneratorFactory {
 
   private TypedProperties getCommonProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD.key(), "_row_key");
-    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key(), "true");
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
     return properties;
   }
 }

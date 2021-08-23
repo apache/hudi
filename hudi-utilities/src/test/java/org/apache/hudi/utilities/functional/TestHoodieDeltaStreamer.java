@@ -984,13 +984,13 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING.key(), inlineCluster));
     }
     if (!StringUtils.isNullOrEmpty(inlineClusterMaxCommit)) {
-      configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT.key(), inlineClusterMaxCommit));
+      configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), inlineClusterMaxCommit));
     }
     if (!StringUtils.isNullOrEmpty(asyncCluster)) {
       configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), asyncCluster));
     }
     if (!StringUtils.isNullOrEmpty(asyncClusterMaxCommit)) {
-      configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMIT_PROP.key(), asyncClusterMaxCommit));
+      configs.add(String.format("%s=%s", HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key(), asyncClusterMaxCommit));
     }
     return configs;
   }
@@ -1251,7 +1251,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       props.load(inputStream);
     }
 
-    assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP), DummyAvroPayload.class.getName());
+    assertEquals(new HoodieConfig(props).getString(HoodieTableConfig.PAYLOAD_CLASS_NAME), DummyAvroPayload.class.getName());
   }
 
   @Test
@@ -1277,7 +1277,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       props.load(inputStream);
     }
 
-    assertFalse(props.containsKey(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP.key()));
+    assertFalse(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
   @Test

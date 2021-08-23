@@ -70,8 +70,6 @@ public class HoodieLockConfig extends HoodieConfig {
       .sinceVersion("0.8.0")
       .withDocumentation("Initial amount of time to wait between retries to acquire locks, "
           + " subsequent retries will exponentially backoff.");
-  @Deprecated
-  public static final String LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS.key();
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY)
@@ -79,72 +77,54 @@ public class HoodieLockConfig extends HoodieConfig {
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum amount of time to wait between retries by lock provider client. This bounds"
           + " the maximum delay from the exponential backoff. Currently used by ZK based lock provider only.");
-  @Deprecated
-  public static final String LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS.key();
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY)
       .defaultValue(String.valueOf(10000L))
       .sinceVersion("0.8.0")
       .withDocumentation("Amount of time to wait between retries on the lock provider by the lock manager");
-  @Deprecated
-  public static final String LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.key();
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY)
       .defaultValue(DEFAULT_LOCK_ACQUIRE_NUM_RETRIES)
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry lock acquire, at each lock provider");
-  @Deprecated
-  public static final String LOCK_ACQUIRE_NUM_RETRIES_PROP = LOCK_ACQUIRE_NUM_RETRIES.key();
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_CLIENT_NUM_RETRIES = ConfigProperty
       .key(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY)
       .defaultValue(String.valueOf(0))
       .sinceVersion("0.8.0")
       .withDocumentation("Maximum number of times to retry to acquire lock additionally from the lock manager.");
-  @Deprecated
-  public static final String LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP = LOCK_ACQUIRE_CLIENT_NUM_RETRIES.key();
 
   public static final ConfigProperty<Integer> LOCK_ACQUIRE_WAIT_TIMEOUT_MS = ConfigProperty
       .key(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY)
       .defaultValue(60 * 1000)
       .sinceVersion("0.8.0")
       .withDocumentation("Timeout in ms, to wait on an individual lock acquire() call, at the lock provider.");
-  @Deprecated
-  public static final String LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP = LOCK_ACQUIRE_WAIT_TIMEOUT_MS.key();
 
   public static final ConfigProperty<String> FILESYSTEM_LOCK_PATH = ConfigProperty
       .key(FILESYSTEM_LOCK_PATH_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
       .withDocumentation("For DFS based lock providers, path to store the locks under.");
-  @Deprecated
-  public static final String FILESYSTEM_LOCK_PATH_PROP = FILESYSTEM_LOCK_PATH.key();
 
   public static final ConfigProperty<String> HIVE_DATABASE_NAME = ConfigProperty
       .key(HIVE_DATABASE_NAME_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
       .withDocumentation("For Hive based lock provider, the Hive database to acquire lock against");
-  @Deprecated
-  public static final String HIVE_DATABASE_NAME_PROP = HIVE_DATABASE_NAME.key();
 
   public static final ConfigProperty<String> HIVE_TABLE_NAME = ConfigProperty
       .key(HIVE_TABLE_NAME_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
       .withDocumentation("For Hive based lock provider, the Hive table to acquire lock against");
-  @Deprecated
-  public static final String HIVE_TABLE_NAME_PROP = HIVE_TABLE_NAME.key();
 
   public static final ConfigProperty<String> HIVE_METASTORE_URI = ConfigProperty
       .key(HIVE_METASTORE_URI_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
       .withDocumentation("For Hive based lock provider, the Hive metastore URI to acquire locks against.");
-  @Deprecated
-  public static final String HIVE_METASTORE_URI_PROP = HIVE_METASTORE_URI.key();
 
   public static final ConfigProperty<String> ZK_BASE_PATH = ConfigProperty
       .key(ZK_BASE_PATH_PROP_KEY)
@@ -152,40 +132,30 @@ public class HoodieLockConfig extends HoodieConfig {
       .sinceVersion("0.8.0")
       .withDocumentation("The base path on Zookeeper under which to create lock related ZNodes. "
           + "This should be same for all concurrent writers to the same table");
-  @Deprecated
-  public static final String ZK_BASE_PATH_PROP = ZK_BASE_PATH.key();
 
   public static final ConfigProperty<Integer> ZK_SESSION_TIMEOUT_MS = ConfigProperty
       .key(ZK_SESSION_TIMEOUT_MS_PROP_KEY)
       .defaultValue(DEFAULT_ZK_SESSION_TIMEOUT_MS)
       .sinceVersion("0.8.0")
       .withDocumentation("Timeout in ms, to wait after losing connection to ZooKeeper, before the session is expired");
-  @Deprecated
-  public static final String ZK_SESSION_TIMEOUT_MS_PROP = ZK_SESSION_TIMEOUT_MS.key();
 
   public static final ConfigProperty<Integer> ZK_CONNECTION_TIMEOUT_MS = ConfigProperty
       .key(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY)
       .defaultValue(DEFAULT_ZK_CONNECTION_TIMEOUT_MS)
       .sinceVersion("0.8.0")
       .withDocumentation("Timeout in ms, to wait for establishing connection with Zookeeper.");
-  @Deprecated
-  public static final String ZK_CONNECTION_TIMEOUT_MS_PROP = ZK_CONNECTION_TIMEOUT_MS.key();
 
   public static final ConfigProperty<String> ZK_CONNECT_URL = ConfigProperty
       .key(ZK_CONNECT_URL_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
       .withDocumentation("Zookeeper URL to connect to.");
-  @Deprecated
-  public static final String ZK_CONNECT_URL_PROP = ZK_CONNECT_URL.key();
 
   public static final ConfigProperty<String> ZK_PORT = ConfigProperty
       .key(ZK_PORT_PROP_KEY)
       .noDefaultValue()
       .sinceVersion("0.8.0")
       .withDocumentation("Zookeeper port to connect to.");
-  @Deprecated
-  public static final String ZK_PORT_PROP = ZK_PORT.key();
 
   public static final ConfigProperty<String> ZK_LOCK_KEY = ConfigProperty
       .key(ZK_LOCK_KEY_PROP_KEY)
@@ -193,28 +163,35 @@ public class HoodieLockConfig extends HoodieConfig {
       .sinceVersion("0.8.0")
       .withDocumentation("Key name under base_path at which to create a ZNode and acquire lock. "
           + "Final path on zk will look like base_path/lock_key. We recommend setting this to the table name");
-  @Deprecated
-  public static final String ZK_LOCK_KEY_PROP = ZK_LOCK_KEY.key();
 
   // Pluggable type of lock provider
-  public static final ConfigProperty<String> LOCK_PROVIDER_CLASS = ConfigProperty
+  public static final ConfigProperty<String> LOCK_PROVIDER_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "provider")
       .defaultValue(ZookeeperBasedLockProvider.class.getName())
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, user can provide their own implementation of LockProvider "
           + "which should be subclass of org.apache.hudi.common.lock.LockProvider");
-  @Deprecated
-  public static final String LOCK_PROVIDER_CLASS_PROP = LOCK_PROVIDER_CLASS.key();
 
   // Pluggable strategies to use when resolving conflicts
-  public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS = ConfigProperty
+  public static final ConfigProperty<String> WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(LOCK_PREFIX + "conflict.resolution.strategy")
       .defaultValue(SimpleConcurrentFileWritesConflictResolutionStrategy.class.getName())
       .sinceVersion("0.8.0")
       .withDocumentation("Lock provider class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
+
+  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
   @Deprecated
-  public static final String WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS.key();
+  public static final String WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key();
+  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.defaultValue();
+  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead */
+  @Deprecated
+  public static final String LOCK_PROVIDER_CLASS_PROP = LOCK_PROVIDER_CLASS_NAME.key();
+  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead */
+  @Deprecated
+  public static final String DEFAULT_LOCK_PROVIDER_CLASS = LOCK_PROVIDER_CLASS_NAME.defaultValue();
 
   private HoodieLockConfig() {
     super();
@@ -241,7 +218,7 @@ public class HoodieLockConfig extends HoodieConfig {
     }
 
     public HoodieLockConfig.Builder withLockProvider(Class<? extends LockProvider> lockProvider) {
-      lockConfig.setValue(LOCK_PROVIDER_CLASS, lockProvider.getName());
+      lockConfig.setValue(LOCK_PROVIDER_CLASS_NAME, lockProvider.getName());
       return this;
     }
 
@@ -321,7 +298,7 @@ public class HoodieLockConfig extends HoodieConfig {
     }
 
     public HoodieLockConfig.Builder withConflictResolutionStrategy(ConflictResolutionStrategy conflictResolutionStrategy) {
-      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS, conflictResolutionStrategy.getClass().getName());
+      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, conflictResolutionStrategy.getClass().getName());
       return this;
     }
 

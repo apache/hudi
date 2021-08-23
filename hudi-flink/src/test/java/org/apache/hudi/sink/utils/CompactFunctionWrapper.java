@@ -52,7 +52,6 @@ public class CompactFunctionWrapper {
 
   private final IOManager ioManager;
   private final StreamingRuntimeContext runtimeContext;
-  private final MockFunctionInitializationContext functionInitializationContext;
 
   /** Function that generates the {@link HoodieCompactionPlan}. */
   private CompactionPlanOperator compactionPlanOperator;
@@ -70,7 +69,6 @@ public class CompactFunctionWrapper {
         .build();
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
     this.conf = conf;
-    this.functionInitializationContext = new MockFunctionInitializationContext();
   }
 
   public void openFunction() throws Exception {

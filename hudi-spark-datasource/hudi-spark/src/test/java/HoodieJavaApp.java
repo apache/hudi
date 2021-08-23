@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
@@ -33,6 +32,7 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -150,9 +150,9 @@ public class HoodieJavaApp {
         // use to combine duplicate records in input/with disk val
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         // Used by hive sync and queries
-        .option(HoodieWriteConfig.TABLE_NAME.key(), tableName)
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
@@ -179,13 +179,13 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).mode(SaveMode.Append);
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
     writer.save(tablePath);
@@ -207,13 +207,13 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "_row_key")
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "false")
         .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).mode(SaveMode.Append);
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
     writer.save(tablePath);

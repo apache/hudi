@@ -223,7 +223,7 @@ public class HoodieAvroUtils {
   }
 
   public static Schema removeMetadataFields(Schema schema) {
-    return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS);
+    return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
   }
 
   public static Schema removeFields(Schema schema, List<String> fieldsToRemove) {

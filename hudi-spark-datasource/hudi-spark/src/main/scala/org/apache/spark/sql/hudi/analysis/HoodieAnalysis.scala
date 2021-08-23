@@ -305,12 +305,14 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
     case c @ CreateTable(tableDesc, _, _)
       if isHoodieTable(tableDesc) =>
         val tablePath = getTableLocation(c.tableDesc, sparkSession)
-        if (tableExistsInPath(tablePath, sparkSession.sessionState.newHadoopConf())) {
+        val tableExistInCatalog = sparkSession.sessionState.catalog.tableExists(tableDesc.identifier)
+        // Only when the table has not exist in catalog, we need to fill the schema info for creating table.
+        if (!tableExistInCatalog && tableExistsInPath(tablePath, sparkSession.sessionState.newHadoopConf())) {
           val metaClient = HoodieTableMetaClient.builder()
             .setBasePath(tablePath)
             .setConf(sparkSession.sessionState.newHadoopConf())
             .build()
-          val tableSchema = HoodieSqlUtils.getTableSqlSchema(metaClient).map(HoodieSqlUtils.addMetaFields)
+          val tableSchema = HoodieSqlUtils.getTableSqlSchema(metaClient)
           if (tableSchema.isDefined && tableDesc.schema.isEmpty) {
             // Fill the schema with the schema from the table
             c.copy(tableDesc.copy(schema = tableSchema.get))

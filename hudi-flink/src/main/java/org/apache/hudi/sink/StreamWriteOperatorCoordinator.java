@@ -41,7 +41,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,6 +84,11 @@ public class StreamWriteOperatorCoordinator
    * Coordinator context.
    */
   private final Context context;
+
+  /**
+   * Gateways for sending events to sub tasks.
+   */
+  private transient SubtaskGateway[] gateways;
 
   /**
    * Write client.
@@ -150,6 +154,7 @@ public class StreamWriteOperatorCoordinator
   public void start() throws Exception {
     // initialize event buffer
     reset();
+    this.gateways = new SubtaskGateway[this.parallelism];
     this.writeClient = StreamerUtil.createWriteClient(conf);
     this.tableState = TableState.create(conf);
     // init table, create it if not exists.
@@ -255,6 +260,11 @@ public class StreamWriteOperatorCoordinator
   @Override
   public void subtaskReset(int i, long l) {
     // no operation
+  }
+
+  @Override
+  public void subtaskReady(int i, SubtaskGateway subtaskGateway) {
+    this.gateways[i] = subtaskGateway;
   }
 
   // -------------------------------------------------------------------------
@@ -397,13 +407,8 @@ public class StreamWriteOperatorCoordinator
    */
   private void sendCommitAckEvents() {
     CompletableFuture<?>[] futures = IntStream.range(0, this.parallelism)
-        .mapToObj(taskID -> {
-          try {
-            return this.context.sendEvent(CommitAckEvent.getInstance(), taskID);
-          } catch (TaskNotRunningException e) {
-            throw new HoodieException("Error while sending commit ack event to task [" + taskID + "]", e);
-          }
-        }).toArray(CompletableFuture<?>[]::new);
+        .mapToObj(taskID -> this.gateways[taskID].sendEvent(CommitAckEvent.getInstance()))
+        .toArray(CompletableFuture<?>[]::new);
     try {
       CompletableFuture.allOf(futures).get();
     } catch (Exception e) {

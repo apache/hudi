@@ -241,6 +241,8 @@ public class QuickstartUtils {
     Map<String, String> demoConfigs = new HashMap<>();
     demoConfigs.put("hoodie.insert.shuffle.parallelism", "2");
     demoConfigs.put("hoodie.upsert.shuffle.parallelism", "2");
+    demoConfigs.put("hoodie.bulkinsert.shuffle.parallelism", "2");
+    demoConfigs.put("hoodie.delete.shuffle.parallelism", "2");
     return demoConfigs;
   }
 }

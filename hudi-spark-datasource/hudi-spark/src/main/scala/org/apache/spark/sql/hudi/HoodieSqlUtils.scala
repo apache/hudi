@@ -77,7 +77,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       case _: Throwable => None
     }
     avroSchema.map(SchemaConverters.toSqlType(_).dataType
-      .asInstanceOf[StructType])
+      .asInstanceOf[StructType]).map(removeMetaFields)
   }
 
   private def tripAlias(plan: LogicalPlan): LogicalPlan = {

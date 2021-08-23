@@ -207,7 +207,7 @@ public class FlinkOptions extends HoodieConfig {
   //  Write Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<String> TABLE_NAME = ConfigOptions
-      .key(HoodieWriteConfig.TABLE_NAME.key())
+      .key(HoodieWriteConfig.TBL_NAME.key())
       .stringType()
       .noDefaultValue()
       .withDescription("Table name to register to Hive metastore");
@@ -240,7 +240,7 @@ public class FlinkOptions extends HoodieConfig {
           + "key value, we will pick the one with the largest value for the precombine field,\n"
           + "determined by Object.compareTo(..)");
 
-  public static final ConfigOption<String> PAYLOAD_CLASS = ConfigOptions
+  public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
       .key("write.payload.class")
       .stringType()
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
@@ -280,7 +280,7 @@ public class FlinkOptions extends HoodieConfig {
           + "By default true (in favor of streaming progressing over data integrity)");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.RECORDKEY_FIELD.key())
+      .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
       .stringType()
       .defaultValue("uuid")
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
@@ -288,7 +288,7 @@ public class FlinkOptions extends HoodieConfig {
           + "the dot notation eg: `a.b.c`");
 
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD.key())
+      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
       .stringType()
       .defaultValue("")
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
@@ -301,15 +301,15 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Whether to encode the partition path url, default false");
 
   public static final ConfigOption<Boolean> HIVE_STYLE_PARTITIONING = ConfigOptions
-      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key())
+      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to use Hive style partitioning.\n"
           + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
           + "By default false (the names of partition folders are only partition values)");
 
-  public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_CLASS.key())
+  public static final ConfigOption<String> KEYGEN_CLASS_NAME = ConfigOptions
+      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key())
       .stringType()
       .defaultValue("")
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
@@ -549,7 +549,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("")
       .withDescription("Partition fields for hive sync, default ''");
 
-  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigOptions
+  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME = ConfigOptions
       .key("hive_sync.partition_extractor_class")
       .stringType()
       .defaultValue(SlashEncodedDayPartitionValueExtractor.class.getCanonicalName())

@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.bootstrap.BootstrapFunction;
+import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
@@ -57,8 +57,8 @@ import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
-import org.apache.flink.formats.json.TimestampFormat;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -277,7 +277,7 @@ public class StreamWriteITCase extends TestLogger {
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
           TypeInformation.of(HoodieRecord.class),
-          new ProcessOperator<>(new BootstrapFunction<>(conf)));
+          new BootstrapOperator<>(conf));
     }
 
     DataStream<Object> pipeline = hoodieDataStream
@@ -370,7 +370,7 @@ public class StreamWriteITCase extends TestLogger {
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
           TypeInformation.of(HoodieRecord.class),
-          new ProcessOperator<>(new BootstrapFunction<>(conf)));
+          new BootstrapOperator<>(conf));
     }
 
     DataStream<Object> pipeline = hoodieDataStream

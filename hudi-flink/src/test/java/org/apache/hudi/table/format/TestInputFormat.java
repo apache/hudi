@@ -104,17 +104,18 @@ public class TestInputFormat {
     result = readData(inputFormat);
 
     actual = TestData.rowDataToString(result);
-    expected = "[id1,Danny,24,1970-01-01T00:00:00.001,par1, "
-        + "id10,Ella,38,1970-01-01T00:00:00.007,par4, "
-        + "id11,Phoebe,52,1970-01-01T00:00:00.008,par4, "
-        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
-        + "id3,Julian,54,1970-01-01T00:00:00.003,par2, "
-        + "id4,Fabian,32,1970-01-01T00:00:00.004,par2, "
-        + "id5,Sophia,18,1970-01-01T00:00:00.005,par3, "
-        + "id6,Emma,20,1970-01-01T00:00:00.006,par3, "
-        + "id7,Bob,44,1970-01-01T00:00:00.007,par4, "
-        + "id8,Han,56,1970-01-01T00:00:00.008,par4, "
-        + "id9,Jane,19,1970-01-01T00:00:00.006,par3]";
+    expected = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id3, Julian, 54, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 32, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4], "
+        + "+I[id9, Jane, 19, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id10, Ella, 38, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id11, Phoebe, 52, 1970-01-01T00:00:00.008, par4]]";
     assertThat(actual, is(expected));
   }
 
@@ -150,21 +151,22 @@ public class TestInputFormat {
     result = readData(inputFormat);
 
     actual = TestData.rowDataToString(result);
-    expected = "[id1,Danny,24,1970-01-01T00:00:00.001,par1, "
-        + "id10,Ella,38,1970-01-01T00:00:00.007,par4, "
-        + "id11,Phoebe,52,1970-01-01T00:00:00.008,par4, "
-        + "id12,Monica,27,1970-01-01T00:00:00.009,par5, "
-        + "id13,Phoebe,31,1970-01-01T00:00:00.010,par5, "
-        + "id14,Rachel,52,1970-01-01T00:00:00.011,par6, "
-        + "id15,Ross,29,1970-01-01T00:00:00.012,par6, "
-        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
-        + "id3,Julian,54,1970-01-01T00:00:00.003,par2, "
-        + "id4,Fabian,32,1970-01-01T00:00:00.004,par2, "
-        + "id5,Sophia,18,1970-01-01T00:00:00.005,par3, "
-        + "id6,Emma,20,1970-01-01T00:00:00.006,par3, "
-        + "id7,Bob,44,1970-01-01T00:00:00.007,par4, "
-        + "id8,Han,56,1970-01-01T00:00:00.008,par4, "
-        + "id9,Jane,19,1970-01-01T00:00:00.006,par3]";
+    expected = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id3, Julian, 54, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 32, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4], "
+        + "+I[id9, Jane, 19, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id10, Ella, 38, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id11, Phoebe, 52, 1970-01-01T00:00:00.008, par4], "
+        + "+I[id12, Monica, 27, 1970-01-01T00:00:00.009, par5], "
+        + "+I[id13, Phoebe, 31, 1970-01-01T00:00:00.010, par5], "
+        + "+I[id14, Rachel, 52, 1970-01-01T00:00:00.011, par6], "
+        + "+I[id15, Ross, 29, 1970-01-01T00:00:00.012, par6]]";
     assertThat(actual, is(expected));
   }
 
@@ -189,14 +191,14 @@ public class TestInputFormat {
     // when isEmitDelete is false.
     List<RowData> result1 = readData(inputFormat);
 
-    final String actual1 = TestData.rowDataToString(result1, true);
+    final String actual1 = TestData.rowDataToString(result1);
     final String expected1 = "["
-        + "+I(id1,Danny,24,1970-01-01T00:00:00.001,par1), "
-        + "+I(id2,Stephen,34,1970-01-01T00:00:00.002,par1), "
-        + "+I(id4,Fabian,31,1970-01-01T00:00:00.004,par2), "
-        + "+I(id6,Emma,20,1970-01-01T00:00:00.006,par3), "
-        + "+I(id7,Bob,44,1970-01-01T00:00:00.007,par4), "
-        + "+I(id8,Han,56,1970-01-01T00:00:00.008,par4)]";
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]";
     assertThat(actual1, is(expected1));
 
     // refresh the input format and set isEmitDelete to true.
@@ -206,17 +208,17 @@ public class TestInputFormat {
 
     List<RowData> result2 = readData(inputFormat);
 
-    final String actual2 = TestData.rowDataToString(result2, true);
+    final String actual2 = TestData.rowDataToString(result2);
     final String expected2 = "["
-        + "+I(id1,Danny,24,1970-01-01T00:00:00.001,par1), "
-        + "+I(id2,Stephen,34,1970-01-01T00:00:00.002,par1), "
-        + "-D(id3,Julian,53,1970-01-01T00:00:00.003,par2), "
-        + "+I(id4,Fabian,31,1970-01-01T00:00:00.004,par2), "
-        + "-D(id5,Sophia,18,1970-01-01T00:00:00.005,par3), "
-        + "+I(id6,Emma,20,1970-01-01T00:00:00.006,par3), "
-        + "+I(id7,Bob,44,1970-01-01T00:00:00.007,par4), "
-        + "+I(id8,Han,56,1970-01-01T00:00:00.008,par4), "
-        + "-D(id9,Jane,19,1970-01-01T00:00:00.006,par3)]";
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "-D[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+        + "-D[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4], "
+        + "-D[id9, Jane, 19, 1970-01-01T00:00:00.006, par3]]";
     assertThat(actual2, is(expected2));
   }
 
@@ -241,8 +243,8 @@ public class TestInputFormat {
     // when isEmitDelete is false.
     List<RowData> result1 = readData(inputFormat);
 
-    final String actual1 = TestData.rowDataToString(result1, true);
-    final String expected1 = "[+U(id1,Danny,22,1970-01-01T00:00:00.004,par1)]";
+    final String actual1 = TestData.rowDataToString(result1);
+    final String expected1 = "[+U[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
     assertThat(actual1, is(expected1));
 
     // refresh the input format and set isEmitDelete to true.
@@ -252,8 +254,8 @@ public class TestInputFormat {
 
     List<RowData> result2 = readData(inputFormat);
 
-    final String actual2 = TestData.rowDataToString(result2, true);
-    final String expected2 = "[+U(id1,Danny,22,1970-01-01T00:00:00.004,par1)]";
+    final String actual2 = TestData.rowDataToString(result2);
+    final String expected2 = "[+U[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
     assertThat(actual2, is(expected2));
   }
 
@@ -272,13 +274,13 @@ public class TestInputFormat {
 
     List<RowData> result = readData(inputFormat);
 
-    final String actual = TestData.rowDataToString(result, true);
+    final String actual = TestData.rowDataToString(result);
     final String expected = "["
-        + "+I(id1,Danny,24,1970-01-01T00:00:00.001,par1), "
-        + "+I(id2,Stephen,34,1970-01-01T00:00:00.002,par1), "
-        + "-D(id3,Julian,53,1970-01-01T00:00:00.003,par2), "
-        + "-D(id5,Sophia,18,1970-01-01T00:00:00.005,par3), "
-        + "-D(id9,Jane,19,1970-01-01T00:00:00.006,par3)]";
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "-D[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+        + "-D[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "-D[id9, Jane, 19, 1970-01-01T00:00:00.006, par3]]";
     assertThat(actual, is(expected));
   }
 
@@ -294,10 +296,10 @@ public class TestInputFormat {
 
     List<RowData> result = readData(inputFormat);
 
-    final String actual = TestData.rowDataToString(result, true);
+    final String actual = TestData.rowDataToString(result);
     final String expected = "["
-        + "+I(id1,Danny,24,1970-01-01T00:00:00.001,par1), "
-        + "+I(id2,Stephen,34,1970-01-01T00:00:00.002,par1)]";
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1]]";
     assertThat(actual, is(expected));
   }
 
@@ -317,12 +319,14 @@ public class TestInputFormat {
     List<RowData> result = readData(inputFormat);
 
     String actual = TestData.rowDataToString(result);
-    String expected = "[id1,Danny,23,1970-01-01T00:00:00.001,par1, id2,Stephen,33,1970-01-01T00:00:00.002,par1]";
+    String expected = "["
+        + "+I[id1, Danny, 23, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1]]";
     assertThat(actual, is(expected));
   }
 
   @Test
-  void testReadChangesUnMergedMOR() throws Exception {
+  void testReadChangesMergedMOR() throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
@@ -333,18 +337,51 @@ public class TestInputFormat {
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
 
+    List<RowData> result1 = readData(inputFormat);
+
+    final String actual1 = TestData.rowDataToString(result1);
+    // the data set is merged when the data source is bounded.
+    final String expected1 = "[]";
+    assertThat(actual1, is(expected1));
+
+    // refresh the input format and set isEmitDelete to true.
+    this.tableSource.reset();
+    inputFormat = this.tableSource.getInputFormat();
+    ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+
+    List<RowData> result2 = readData(inputFormat);
+
+    final String actual2 = TestData.rowDataToString(result2);
+    final String expected2 = "[-D[id1, Danny, 22, 1970-01-01T00:00:00.005, par1]]";
+    assertThat(actual2, is(expected2));
+  }
+
+  @Test
+  void testReadChangesUnMergedMOR() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
     List<RowData> result = readData(inputFormat);
 
-    final String actual = TestData.rowDataToString(result, true);
+    final String actual = TestData.rowDataToString(result);
+    // the data set is merged when the data source is bounded.
     final String expected = "["
-        + "+I(id1,Danny,19,1970-01-01T00:00:00.001,par1), "
-        + "-U(id1,Danny,19,1970-01-01T00:00:00.001,par1), "
-        + "+U(id1,Danny,20,1970-01-01T00:00:00.002,par1), "
-        + "-U(id1,Danny,20,1970-01-01T00:00:00.002,par1), "
-        + "+U(id1,Danny,21,1970-01-01T00:00:00.003,par1), "
-        + "-U(id1,Danny,21,1970-01-01T00:00:00.003,par1), "
-        + "+U(id1,Danny,22,1970-01-01T00:00:00.004,par1), "
-        + "-D(id1,Danny,22,1970-01-01T00:00:00.005,par1)]";
+        + "+I[id1, Danny, 19, 1970-01-01T00:00:00.001, par1], "
+        + "-U[id1, Danny, 19, 1970-01-01T00:00:00.001, par1], "
+        + "+U[id1, Danny, 20, 1970-01-01T00:00:00.002, par1], "
+        + "-U[id1, Danny, 20, 1970-01-01T00:00:00.002, par1], "
+        + "+U[id1, Danny, 21, 1970-01-01T00:00:00.003, par1], "
+        + "-U[id1, Danny, 21, 1970-01-01T00:00:00.003, par1], "
+        + "+U[id1, Danny, 22, 1970-01-01T00:00:00.004, par1], "
+        + "-D[id1, Danny, 22, 1970-01-01T00:00:00.005, par1]]";
     assertThat(actual, is(expected));
   }
 
