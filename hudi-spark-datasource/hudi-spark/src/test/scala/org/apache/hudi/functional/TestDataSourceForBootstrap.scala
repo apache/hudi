@@ -137,7 +137,8 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = false)
   }
 
-  @Test def testMetadataBootstrapCOWHiveStylePartitioned(): Unit = {
+  @Test
+  def testMetadataBootstrapCOWHiveStylePartitioned(): Unit = {
     val timestamp = Instant.now.toEpochMilli
     val jsc = JavaSparkContext.fromSparkContext(spark.sparkContext)
 

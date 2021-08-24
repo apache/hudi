@@ -151,6 +151,12 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
+      <scope>test</scope>
+    </dependency>
+
     <!-- Needed for running HiveServer for Tests -->
     <dependency>
       <groupId>org.eclipse.jetty.aggregate</groupId>

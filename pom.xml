@@ -97,7 +97,7 @@
     <junit.platform.version>1.7.0-M1</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.version>1.2.17</log4j.version>
-    <slf4j.version>1.7.15</slf4j.version>
+    <slf4j.version>1.7.30</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.7.3</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
@@ -112,7 +112,7 @@
     <sparkbundle.version>${spark2bundle.version}</sparkbundle.version>
     <flink.version>1.13.1</flink.version>
     <spark2.version>2.4.4</spark2.version>
-    <spark3.version>3.0.0</spark3.version>
+    <spark3.version>3.1.0</spark3.version>
     <spark2bundle.version></spark2bundle.version>
     <spark3bundle.version>3</spark3bundle.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
@@ -1471,6 +1471,7 @@
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -1484,6 +1485,16 @@
           <name>spark3</name>
         </property>
       </activation>
+    </profile>
+
+    <profile>
+      <id>isSpark3.0</id>
+<!--      for spark 3.0.x we need override the follow propeprties to package and run test-->
+      <properties>
+        <spark3.version>3.0.0</spark3.version>
+        <spark.version>${spark3.version}</spark.version>
+        <scalatest.version>3.0.1</scalatest.version>
+      </properties>
     </profile>
 
     <profile>
