@@ -359,7 +359,7 @@ class HoodieSparkSqlWriterSuite {
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams - DataSourceWriteOptions.PRECOMBINE_FIELD.key, df)
 
-    // collect all parition paths to issue read of parquet files
+    // collect all partition paths to issue read of parquet files
     val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
       HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
     // Check the entire dataset has all records still
@@ -426,53 +426,53 @@ class HoodieSparkSqlWriterSuite {
       "COPY_ON_WRITE,orc,true", "COPY_ON_WRITE,orc,false", "MERGE_ON_READ,orc,true", "MERGE_ON_READ,orc,false"
     ))
   def testDatasourceInsertForTableTypeBaseFileMetaFields(tableType: String, baseFileFormat: String, populateMetaFields: Boolean): Unit = {
-      val hoodieFooTableName = "hoodie_foo_tbl"
-      val fooTableModifier = Map("path" -> tempBasePath,
-        HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-        HoodieWriteConfig.BASE_FILE_FORMAT.key -> baseFileFormat,
-        DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-        HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "4",
-        DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-        HoodieTableConfig.POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields),
-        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
-      val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
-      // generate the inserts
-      val schema = DataSourceTestUtils.getStructTypeExampleSchema
-      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
-      val modifiedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, "trip", "example.schema")
-      val records = DataSourceTestUtils.generateRandomRows(100)
-      val recordsSeq = convertRowListToSeq(records)
-      val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-      val client = spy(DataSourceUtils.createHoodieClient(
-        new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
-        mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
+    val hoodieFooTableName = "hoodie_foo_tbl"
+    val fooTableModifier = Map("path" -> tempBasePath,
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      HoodieWriteConfig.BASE_FILE_FORMAT.key -> baseFileFormat,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "4",
+      DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieTableConfig.POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields),
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
+    val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+    // generate the inserts
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val modifiedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, "trip", "example.schema")
+    val records = DataSourceTestUtils.generateRandomRows(100)
+    val recordsSeq = convertRowListToSeq(records)
+    val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+    val client = spy(DataSourceUtils.createHoodieClient(
+      new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
+      mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df, Option.empty, Option(client))
-      // Verify that asynchronous compaction is not scheduled
-      verify(client, times(0)).scheduleCompaction(any())
-      // Verify that HoodieWriteClient is closed correctly
-      verify(client, times(1)).close()
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df, Option.empty, Option(client))
+    // Verify that asynchronous compaction is not scheduled
+    verify(client, times(0)).scheduleCompaction(any())
+    // Verify that HoodieWriteClient is closed correctly
+    verify(client, times(1)).close()
 
-      // collect all partition paths to issue read of parquet files
-      val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
-        HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
-      // Check the entire dataset has all records still
-      val fullPartitionPaths = new Array[String](3)
-      for (i <- fullPartitionPaths.indices) {
-        fullPartitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
-      }
-      // fetch all records from parquet files generated from write to hudi
-      var actualDf: DataFrame = null
-      if (baseFileFormat.equalsIgnoreCase(HoodieFileFormat.PARQUET.name())) {
-        actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
-      } else if (baseFileFormat.equalsIgnoreCase(HoodieFileFormat.ORC.name())) {
-        actualDf = sqlContext.read.orc(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
-      }
-      // remove metadata columns so that expected and actual DFs can be compared as is
-      val trimmedDf = dropMetaFields(actualDf)
-      assert(df.except(trimmedDf).count() == 0)
+    // collect all partition paths to issue read of parquet files
+    val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+      HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
+    // Check the entire dataset has all records still
+    val fullPartitionPaths = new Array[String](3)
+    for (i <- fullPartitionPaths.indices) {
+      fullPartitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
+    }
+    // fetch all records from parquet files generated from write to hudi
+    var actualDf: DataFrame = null
+    if (baseFileFormat.equalsIgnoreCase(HoodieFileFormat.PARQUET.name())) {
+      actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+    } else if (baseFileFormat.equalsIgnoreCase(HoodieFileFormat.ORC.name())) {
+      actualDf = sqlContext.read.orc(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+    }
+    // remove metadata columns so that expected and actual DFs can be compared as is
+    val trimmedDf = dropMetaFields(actualDf)
+    assert(df.except(trimmedDf).count() == 0)
   }
 
   /**
@@ -557,7 +557,7 @@ class HoodieSparkSqlWriterSuite {
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
 
     val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath+ "/*/*/*/*")
+      .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF2.count())
 
     // remove metadata columns so that expected and actual DFs can be compared as is
@@ -713,11 +713,14 @@ class HoodieSparkSqlWriterSuite {
   }
 
   /**
-   * Test case deletion of partitions.
+   * Test case for deletion of partitions.
+   * @param usePartitionsToDeleteConfig Flag for if use partitions to delete config
    */
-  @Test
-  def testDeletePartitions(): Unit = {
-    val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(commonTableModifier)
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeletePartitionsV2(usePartitionsToDeleteConfig: Boolean): Unit = {
+    val fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+    val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(10)
@@ -725,14 +728,12 @@ class HoodieSparkSqlWriterSuite {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
-
     val snapshotDF1 = spark.read.format("org.apache.hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF1.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf1 = dropMetaFields(snapshotDF1)
     assert(df1.except(trimmedDf1).count() == 0)
-
     // issue updates so that log files are created for MOR table
     val updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
     val updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
@@ -741,20 +742,21 @@ class HoodieSparkSqlWriterSuite {
     val snapshotDF2 = spark.read.format("org.apache.hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF2.count())
-
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf2 = dropMetaFields(snapshotDF2)
     // ensure 2nd batch of updates matches.
     assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
-
-    // delete partitions
+    if (usePartitionsToDeleteConfig) {
+      fooTableParams.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+    }
+    // delete partitions contains the primary key
     val recordsToDelete = df1.filter(entry => {
       val partitionPath: String = entry.getString(1)
-      partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) || partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+      partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) ||
+        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
     })
     val updatedParams = fooTableParams.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete)
-
     val snapshotDF3 = spark.read.format("org.apache.hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(0, snapshotDF3.filter(entry => {
