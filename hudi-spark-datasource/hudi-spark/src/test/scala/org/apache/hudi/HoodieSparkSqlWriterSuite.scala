@@ -427,7 +427,7 @@ class HoodieSparkSqlWriterSuite {
     ))
   def testDatasourceInsertForTableTypeBaseFileMetaFields(tableType: String, baseFileFormat: String, populateMetaFields: Boolean): Unit = {
       val hoodieFooTableName = "hoodie_foo_tbl"
-      val fooTableModifier = Map("path" -> tempPath.toAbsolutePath.toString,
+      val fooTableModifier = Map("path" -> tempBasePath,
         HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
         HoodieWriteConfig.BASE_FILE_FORMAT.key -> baseFileFormat,
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
@@ -446,7 +446,7 @@ class HoodieSparkSqlWriterSuite {
       val recordsSeq = convertRowListToSeq(records)
       val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
       val client = spy(DataSourceUtils.createHoodieClient(
-        new JavaSparkContext(sc), modifiedSchema.toString, tempPath.toAbsolutePath.toString, hoodieFooTableName,
+        new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
         mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df, Option.empty, Option(client))
@@ -461,7 +461,7 @@ class HoodieSparkSqlWriterSuite {
       // Check the entire dataset has all records still
       val fullPartitionPaths = new Array[String](3)
       for (i <- fullPartitionPaths.indices) {
-        fullPartitionPaths(i) = String.format("%s/%s/*", tempPath.toAbsolutePath.toString, partitions(i))
+        fullPartitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
       }
       // fetch all records from parquet files generated from write to hudi
       var actualDf: DataFrame = null
@@ -491,7 +491,7 @@ class HoodieSparkSqlWriterSuite {
       // Write source data non-partitioned
       sourceDF.write.format("parquet").mode(SaveMode.Overwrite).save(srcPath.toAbsolutePath.toString)
 
-      val fooTableModifier = Map("path" -> tempPath.toAbsolutePath.toString,
+      val fooTableModifier = Map("path" -> tempBasePath,
         HoodieBootstrapConfig.BASE_PATH.key -> srcPath.toAbsolutePath.toString,
         HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
@@ -505,7 +505,7 @@ class HoodieSparkSqlWriterSuite {
       val client = spy(DataSourceUtils.createHoodieClient(
         new JavaSparkContext(sc),
         null,
-        tempPath.toAbsolutePath.toString,
+        tempBasePath,
         hoodieFooTableName,
         mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
@@ -515,7 +515,7 @@ class HoodieSparkSqlWriterSuite {
       // Verify that HoodieWriteClient is closed correctly
       verify(client, times(1)).close()
       // fetch all records from parquet files generated from write to hudi
-      val actualDf = sqlContext.read.parquet(tempPath.toAbsolutePath.toString)
+      val actualDf = sqlContext.read.parquet(tempBasePath)
       assert(actualDf.count == 100)
     } finally {
       FileUtils.deleteDirectory(srcPath.toFile)
@@ -544,7 +544,7 @@ class HoodieSparkSqlWriterSuite {
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
 
     val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
+      .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF1.count())
 
     // remove metadata columns so that expected and actual DFs can be compared as is
@@ -557,7 +557,7 @@ class HoodieSparkSqlWriterSuite {
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
 
     val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
+      .load(tempBasePath+ "/*/*/*/*")
     assertEquals(10, snapshotDF2.count())
 
     // remove metadata columns so that expected and actual DFs can be compared as is
@@ -575,7 +575,7 @@ class HoodieSparkSqlWriterSuite {
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df3)
 
     val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
+      .load(tempBasePath + "/*/*/*/*")
     assertEquals(15, snapshotDF3.count())
 
     // remove metadata columns so that expected and actual DFs can be compared as is
@@ -590,11 +590,11 @@ class HoodieSparkSqlWriterSuite {
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df4)
 
     val snapshotDF4 = spark.read.format("org.apache.hudi")
-      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
+      .load(tempBasePath + "/*/*/*/*")
     assertEquals(25, snapshotDF4.count())
 
     val tableMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(tempPath.toAbsolutePath.toString).build()
+      .setBasePath(tempBasePath).build()
     val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
     assertTrue(actualSchema != null)
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(hoodieFooTableName)
@@ -729,7 +729,7 @@ class HoodieSparkSqlWriterSuite {
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
     val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
+      .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF1.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf1 = dropMetaFields(snapshotDF1)
@@ -740,7 +740,7 @@ class HoodieSparkSqlWriterSuite {
     // write updates to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
     val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
+      .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF2.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf2 = dropMetaFields(snapshotDF2)
@@ -758,7 +758,7 @@ class HoodieSparkSqlWriterSuite {
     val updatedParams = fooTableParams.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete)
     val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
+      .load(tempBasePath + "/*/*/*/*")
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
       !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
