@@ -359,7 +359,7 @@ class HoodieSparkSqlWriterSuite {
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams - DataSourceWriteOptions.PRECOMBINE_FIELD.key, df)
 
-    // collect all parition paths to issue read of parquet files
+    // collect all partition paths to issue read of parquet files
     val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
       HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
     // Check the entire dataset has all records still
@@ -713,11 +713,14 @@ class HoodieSparkSqlWriterSuite {
   }
 
   /**
-   * Test case deletion of partitions.
+   * Test case for deletion of partitions.
+   * @param usePartitionsToDeleteConfig Flag for if use partitions to delete config
    */
-  @Test
-  def testDeletePartitions(): Unit = {
-    val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(commonTableModifier)
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDeletePartitionsV2(usePartitionsToDeleteConfig: Boolean): Unit = {
+    val fooTableModifier = getCommonParams(tempPath, hoodieFooTableName, HoodieTableType.COPY_ON_WRITE.name())
+    val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val records = DataSourceTestUtils.generateRandomRows(10)
@@ -725,38 +728,37 @@ class HoodieSparkSqlWriterSuite {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
-
     val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
     assertEquals(10, snapshotDF1.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf1 = dropMetaFields(snapshotDF1)
     assert(df1.except(trimmedDf1).count() == 0)
-
     // issue updates so that log files are created for MOR table
-    val updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
-    val updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
+    var updatesSeq = convertRowListToSeq(DataSourceTestUtils.generateUpdates(records, 5))
+    var updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
     // write updates to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
     val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
     assertEquals(10, snapshotDF2.count())
-
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf2 = dropMetaFields(snapshotDF2)
     // ensure 2nd batch of updates matches.
     assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
-
-    // delete partitions
+    if (usePartitionsToDeleteConfig) {
+      fooTableParams.updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+    }
+    // delete partitions contains the primary key
     val recordsToDelete = df1.filter(entry => {
       val partitionPath: String = entry.getString(1)
-      partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) || partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
+      partitionPath.equals(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH) ||
+        partitionPath.equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)
     })
     val updatedParams = fooTableParams.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, updatedParams, recordsToDelete)
-
     val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+      .load(tempPath.toAbsolutePath.toString + "/*/*/*/*")
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
       !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
