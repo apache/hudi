@@ -353,19 +353,7 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
            |""".stripMargin
 
       if (HoodieSqlUtils.isSpark3) {
-        checkException(mergeSql)(
-            "\nColumns aliases are not allowed in MERGE.(line 5, pos 5)\n\n" +
-            "== SQL ==\n\r\n" +
-            s" merge into $tableName\r\n" +
-            " using (\r\n" +
-            "  select 1, 'a1', 10, 1000, '1'\r\n" +
-            " ) s0(id,name,price,ts,flag)\r\n" +
-            "-----^^^\n" +
-            s" on s0.id = $tableName.id\r\n" +
-            " when matched and flag = '1' then update set\r\n" +
-            " id = s0.id, name = s0.name, price = s0.price, ts = s0.ts\r\n" +
-            " when not matched and flag = '1' then insert *\r\n"
-        )
+        checkExceptionContain(mergeSql)("Columns aliases are not allowed in MERGE")
       } else {
         spark.sql(mergeSql)
         checkAnswer(s"select id, name, price, ts from $tableName")(

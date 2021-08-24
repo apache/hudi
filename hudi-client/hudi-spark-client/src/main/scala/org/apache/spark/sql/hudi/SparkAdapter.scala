@@ -87,4 +87,9 @@ trait SparkAdapter extends Serializable {
    * Create Like expression.
    */
   def createLike(left: Expression, right: Expression): Expression
+
+  /**
+   * ParserInterface#parseMultipartIdentifier is supported since spark3, for spark2 this should not be called.
+   */
+  def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String]
 }

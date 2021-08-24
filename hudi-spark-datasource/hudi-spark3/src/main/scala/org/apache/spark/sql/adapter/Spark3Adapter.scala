@@ -23,6 +23,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
+import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
@@ -67,15 +68,16 @@ class Spark3Adapter extends SparkAdapter {
   override def getInsertIntoChildren(plan: LogicalPlan):
     Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
-      case InsertIntoStatement(table, partitionSpec, query, overwrite, ifPartitionNotExists) =>
-        Some((table, partitionSpec, query, overwrite, ifPartitionNotExists))
-      case _=> None
+      case insert: InsertIntoStatement =>
+        Some((insert.table, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
+      case _ =>
+        None
     }
   }
 
   override def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
      query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan = {
-    InsertIntoStatement(table, partition, query, overwrite, ifPartitionNotExists)
+    InsertIntoStatement(table, partition, Seq.empty, query, overwrite, ifPartitionNotExists)
   }
 
   override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {
@@ -84,5 +86,9 @@ class Spark3Adapter extends SparkAdapter {
 
   override def createLike(left: Expression, right: Expression): Expression = {
     new Like(left, right)
+  }
+
+  override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
+    parser.parseMultipartIdentifier(sqlText)
   }
 }
