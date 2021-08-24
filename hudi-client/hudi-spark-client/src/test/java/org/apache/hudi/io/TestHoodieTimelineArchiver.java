@@ -913,19 +913,21 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         if (i != 7) {
           assertEquals(originalCommits, commitsAfterArchival);
         } else {
-          // on 7th commit, archival will kick in. but will archive only one commit since 2nd compaction commit is inflight.
-          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
+          // on 7th commit, archival will kick in, but cannot archive any commit,
+          // since 1st deltacommit is the greatest completed commit before an oldest inflight commit.
+          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 0);
         }
       } else {
         if (i != 7) {
           assertEquals(originalCommits, commitsAfterArchival);
         } else {
-          // on 7th commit, archival will kick in. but will archive only one commit since 2nd compaction commit is inflight.
-          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 1);
+          // on 7th commit, archival will kick in, but cannot archive any commit,
+          // since 1st deltacommit is the greatest completed commit before an oldest inflight commit.
+          assertEquals(originalCommits.size() - commitsAfterArchival.size(), 0);
           for (int j = 1; j <= 7; j++) {
             if (j == 1) {
-              // first commit should be archived
-              assertFalse(commitsAfterArchival.contains(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j)));
+              // first commit should not be archived
+              assertTrue(commitsAfterArchival.contains(new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "0000000" + j)));
             } else if (j == 2) {
               // 2nd compaction should not be archived
               assertFalse(commitsAfterArchival.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "0000000" + j)));
@@ -1416,6 +1418,91 @@ public class TestHoodieTimelineArchiver extends HoodieClientTestHarness {
         }
       }
     }
+  }
+
+  @Test
+  public void testGetCommitInstantsToArchiveDuringInflightCommits() throws Exception {
+    HoodieWriteConfig cfg = initTestTableAndGetWriteConfig(true, 4, 5, 5);
+    HoodieTestDataGenerator.createCommitFile(basePath, "100", wrapperFs.getConf());
+
+    HoodieTestDataGenerator.createReplaceCommitRequestedFile(basePath, "101", wrapperFs.getConf());
+    HoodieTestDataGenerator.createReplaceCommitInflightFile(basePath, "101", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "102", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "103", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCompactionRequestedFile(basePath, "104", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCompactionAuxiliaryMetadata(basePath,
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "104"), wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "105", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "106", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "107", wrapperFs.getConf());
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getWriteTimeline();//getCommitsAndCompactionTimeline();
+    assertEquals(8, timeline.countInstants(), "Loaded 8 commits and the count should match");
+    boolean result = archiver.archiveIfRequired(context);
+    assertTrue(result);
+    timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();//getCommitsAndCompactionTimeline();
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "100")),
+        "At least one instant before oldest pending replacecommit need to stay in the timeline");
+    assertEquals(8, timeline.countInstants(),
+        "Since we have a pending replacecommit at 101, we should never archive any commit "
+            + "after 101 and also to maintain timeline have at least one completed commit before pending commit");
+    assertTrue(timeline.containsInstant(new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "101")),
+        "Inflight replacecommit must still be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "104")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "105")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "106")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "107")),
+        "Instants greater than oldest pending commit must be present");
+  }
+
+  /**
+   * If replacecommit inflight is the oldest commit in the timeline
+   * then this method tests the archival logic to work by ignoring the inflight commit.
+   */
+  @Test
+  public void testWithOldestReplaceCommit() throws Exception {
+    HoodieWriteConfig cfg = initTestTableAndGetWriteConfig(false, 2, 3, 2);
+
+    HoodieTestDataGenerator.createReplaceCommitRequestedFile(basePath, "101", wrapperFs.getConf());
+    HoodieTestDataGenerator.createReplaceCommitInflightFile(basePath, "101", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "102", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCompactionRequestedFile(basePath, "103", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCompactionAuxiliaryMetadata(basePath,
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103"), wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "104", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "105", wrapperFs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "106", wrapperFs.getConf());
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(cfg, table);
+
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getWriteTimeline();//getCommitsAndCompactionTimeline();
+    assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
+    boolean result = archiver.archiveIfRequired(context);
+    assertTrue(result);
+    timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();//getCommitsAndCompactionTimeline();
+    assertEquals(6, timeline.countInstants(),
+        "Since we have a pending compaction at 101, we should never archive any commit after 101");
+    assertTrue(timeline.containsInstant(new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "101")),
+        "Iiflight replacecommit must still be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "104")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "105")),
+        "Instants greater than oldest pending commit must be present");
+    assertTrue(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "106")),
+        "Instants greater than oldest pending commit must be present");
   }
 
   @Test
