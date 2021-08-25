@@ -104,7 +104,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
-
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
