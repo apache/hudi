@@ -103,7 +103,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
-    resetFileGroupsReplaced(metaClient.reloadActiveTimeline());
+    resetFileGroupsReplaced(visibleActiveTimeline);
 
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
@@ -213,7 +213,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     hoodieTimer.startTimer();
     // for each REPLACE instant, get map of (partitionPath -> deleteFileGroup)
     HoodieTimeline replacedTimeline = timeline.getCompletedReplaceTimeline();
-    Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstants().flatMap(instant -> {
+    Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstants().filter(instant -> {
+      try {
+        // Replace instant could be deleted by archive in timeline
+        // So that we need to check if the replace commit files were existed.
+        return metaClient.getFs().exists(new Path(metaClient.getMetaPath(), instant.getFileName()));
+      } catch (IOException e) {
+        return false;
+      }
+    }).flatMap(instant -> {
       try {
         HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
             HoodieReplaceCommitMetadata.class);
