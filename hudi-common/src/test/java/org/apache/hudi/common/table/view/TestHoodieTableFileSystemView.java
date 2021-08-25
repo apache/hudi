@@ -141,6 +141,30 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     testViewForFileSlicesWithNoBaseFile(1, 0, "");
   }
 
+  @Test
+  public void testCloseHoodieTableFileSystemView() throws Exception {
+    String instantTime1 = "1";
+    String instantTime2 = "2";
+    String clusteringInstantTime3 = "3";
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime2);
+    HoodieInstant clusteringInstant3 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime3);
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    saveAsComplete(commitTimeline, instant2, Option.empty());
+    saveAsComplete(commitTimeline, clusteringInstant3, Option.empty());
+
+    refreshFsView();
+
+    // Now create a scenario where archiving deleted replace commits (requested,inflight and replacecommit)
+    boolean deleteReplaceCommit = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit").delete();
+    boolean deleteReplaceCommitRequested = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.requested").delete();
+    boolean deleteReplaceCommitInflight = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.inflight").delete();
+
+    assertTrue(deleteReplaceCommit && deleteReplaceCommitInflight && deleteReplaceCommitRequested);
+    fsView.close();
+  }
+
   protected void testViewForFileSlicesWithNoBaseFile(int expNumTotalFileSlices, int expNumTotalDataFiles,
       String partitionPath) throws Exception {
     Paths.get(basePath, partitionPath).toFile().mkdirs();

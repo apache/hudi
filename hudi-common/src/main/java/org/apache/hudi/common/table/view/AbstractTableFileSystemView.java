@@ -103,7 +103,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
-    resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
+    resetFileGroupsReplaced(metaClient.reloadActiveTimeline());
+
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
@@ -1014,7 +1015,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Default implementation for fetching latest base-file.
-   * 
+   *
    * @param partitionPath Partition path
    * @param fileId File Id
    * @return base File if present
@@ -1026,7 +1027,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Default implementation for fetching file-slice.
-   * 
+   *
    * @param partitionPath Partition path
    * @param fileId File Id
    * @return File Slice if present
@@ -1060,7 +1061,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     return HoodieTimeline.compareTimestamps(instant, GREATER_THAN, hoodieInstantOption.get().getTimestamp());
   }
-  
+
   private boolean isFileGroupReplacedBeforeOrOn(HoodieFileGroupId fileGroupId, String instant) {
     Option<HoodieInstant> hoodieInstantOption = getReplaceInstant(fileGroupId);
     if (!hoodieInstantOption.isPresent()) {
@@ -1109,7 +1110,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Return Only Commits and Compaction timeline for building file-groups.
-   * 
+   *
    * @return {@code HoodieTimeline}
    */
   public HoodieTimeline getVisibleCommitsAndCompactionTimeline() {
