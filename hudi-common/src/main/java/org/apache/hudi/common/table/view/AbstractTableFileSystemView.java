@@ -103,7 +103,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
-    resetFileGroupsReplaced(visibleActiveTimeline);
+    resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
 
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
     // Load Pending Compaction Operations
