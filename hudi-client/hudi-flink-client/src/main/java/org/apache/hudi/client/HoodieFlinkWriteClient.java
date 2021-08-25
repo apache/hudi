@@ -400,6 +400,17 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   /**
+   * Upgrade downgrade the Hoodie table.
+   *
+   * <p>This action should only be executed once for each commit.
+   * The modification of the table properties is not thread safe.
+   */
+  public void upgradeDowngrade(String instantTime) {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    new FlinkUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
+  }
+
+  /**
    * Clean the write handles within a checkpoint interval.
    * All the handles should have been closed already.
    */
