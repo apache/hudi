@@ -146,13 +146,25 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String instantTime1 = "1";
     String instantTime2 = "2";
     String clusteringInstantTime3 = "3";
+    String clusteringInstantTime4 = "4";
+
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
+    List<String> replacedFileIds = new ArrayList<>();
+    replacedFileIds.add("fake_file_id");
+    partitionToReplaceFileIds.put("fake_partition_path", replacedFileIds);
+
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime2);
     HoodieInstant clusteringInstant3 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime3);
+    HoodieInstant clusteringInstant4 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime4);
+    HoodieCommitMetadata commitMetadata =
+            CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+
     saveAsComplete(commitTimeline, instant1, Option.empty());
     saveAsComplete(commitTimeline, instant2, Option.empty());
     saveAsComplete(commitTimeline, clusteringInstant3, Option.empty());
+    saveAsComplete(commitTimeline, clusteringInstant4, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
     refreshFsView();
 

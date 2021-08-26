@@ -212,15 +212,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     hoodieTimer.startTimer();
     // for each REPLACE instant, get map of (partitionPath -> deleteFileGroup)
     HoodieTimeline replacedTimeline = timeline.getCompletedReplaceTimeline();
-    Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstants().filter(instant -> {
-      try {
-        // Replace instant could be deleted by archive in timeline
-        // So that we need to check if the replace commit files were existed.
-        return metaClient.getFs().exists(new Path(metaClient.getMetaPath(), instant.getFileName()));
-      } catch (IOException e) {
-        return false;
-      }
-    }).flatMap(instant -> {
+    Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstants().flatMap(instant -> {
       try {
         HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
             HoodieReplaceCommitMetadata.class);
@@ -228,6 +220,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // get replace instant mapping for each partition, fileId
         return replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().flatMap(entry -> entry.getValue().stream().map(e ->
                 new AbstractMap.SimpleEntry<>(new HoodieFileGroupId(entry.getKey(), e), instant)));
+      } catch (HoodieIOException e) {
+        // Replace instant could be deleted by archive and HoodieIOException could be threw during getInstantDetails function
+        // So that we need to catch the HoodieIOException here and continue
+        LOG.warn(e.getMessage());
+        return Stream.empty();
       } catch (IOException e) {
         throw new HoodieIOException("error reading commit metadata for " + instant);
       }
