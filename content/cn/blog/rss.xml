@@ -4,9 +4,16 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi! Blog</description>
-        <lastBuildDate>Wed, 21 Jul 2021 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 16 Aug 2021 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Schema evolution with DeltaStreamer using KafkaSource]]></title>
+            <link>https://hudi.apache.org/cn/blog/2021/08/16/kafka-custom-deserializer</link>
+            <guid>Schema evolution with DeltaStreamer using KafkaSource</guid>
+            <pubDate>Mon, 16 Aug 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[The schema used for data exchange between services can change change rapidly with new business requirements.]]></description>
+        </item>
         <item>
             <title><![CDATA[Apache Hudi - The Data Lake Platform]]></title>
             <link>https://hudi.apache.org/cn/blog/2021/07/21/streaming-data-lake-platform</link>
