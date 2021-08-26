@@ -446,11 +446,8 @@ Here we are using the default write operation : `upsert`. If you have a workload
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
 :::
 
-**Note:** For non-partitioned table, set
-  ```
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-  ```
- Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for various key generator options, like Timestamp based,
+complex, custom, NonPartitioned Key gen, etc. 
 
 ## Query data 
 
@@ -478,7 +475,7 @@ spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
 ```
 
-**Time Travel Query**
+### Time Travel Query
 
 Hudi support time travel query since 0.9.0. Currently three query time format are supported:
 ```scala
@@ -903,12 +900,6 @@ Only `Append` mode is supported for delete operation.
 :::
 
 See the [deletion section](/docs/writing_data#deletes) of the writing data page for more details.
-
-**Note:** For non-partitioned table, set
-  ```
-  option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-  ```
- Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for more options
 
 ## Insert Overwrite Table
 
