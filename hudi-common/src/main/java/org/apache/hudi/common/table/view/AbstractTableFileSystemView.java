@@ -44,6 +44,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.AbstractMap;
@@ -220,11 +221,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // get replace instant mapping for each partition, fileId
         return replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().flatMap(entry -> entry.getValue().stream().map(e ->
                 new AbstractMap.SimpleEntry<>(new HoodieFileGroupId(entry.getKey(), e), instant)));
-      } catch (HoodieIOException e) {
-        // Replace instant could be deleted by archive and HoodieIOException could be threw during getInstantDetails function
-        // So that we need to catch the HoodieIOException here and continue
-        LOG.warn(e.getMessage());
-        return Stream.empty();
+      } catch (HoodieIOException ex) {
+
+        if (ex.getIOException() instanceof FileNotFoundException) {
+          // Replace instant could be deleted by archive and FileNotFoundException could be threw during getInstantDetails function
+          // So that we need to catch the FileNotFoundException here and continue
+          LOG.warn(ex.getMessage());
+          return Stream.empty();
+        } else {
+          throw ex;
+        }
+
       } catch (IOException e) {
         throw new HoodieIOException("error reading commit metadata for " + instant);
       }
