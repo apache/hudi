@@ -1,7 +1,7 @@
 ---
 title: "Asynchronous Clustering using Hudi"
 excerpt: "How to setup Hudi for asynchronous clustering"
-author: codope 
+author: codope
 category: blog
 ---
 
@@ -9,6 +9,8 @@ In one of the [previous blog](https://hudi.apache.org/blog/2021/01/27/hudi-clust
 kind of table service called clustering to reorganize data for improved query performance without compromising on
 ingestion speed. We learnt how to setup inline clustering. In this post, we will discuss what has changed since then and
 see how asynchronous clustering can be setup using HoodieClusteringJob as well as DeltaStreamer utility.
+
+<!--truncate-->
 
 ## Introduction
 
@@ -32,9 +34,12 @@ using this [config](https://hudi.apache.org/docs/next/configurations#hoodieclust
 1. `SparkSizeBasedClusteringPlanStrategy`: It selects file slices based on
    the [small file limit](https://hudi.apache.org/docs/next/configurations/#hoodieclusteringplanstrategysmallfilelimit)
    of base files and creates clustering groups upto max file size allowed per group. The max size can be specified using
-   this [config.](https://hudi.apache.org/docs/next/configurations/#hoodieclusteringplanstrategymaxbytespergroup)
+   this [config](https://hudi.apache.org/docs/next/configurations/#hoodieclusteringplanstrategymaxbytespergroup). This
+   strategy is useful for stitching together medium-sized files into larger ones to reduce lot of files spread across
+   cold partitions.
 2. `SparkRecentDaysClusteringPlanStrategy`: It looks back previous 'N' days partitions and creates a plan that will
-   cluster the 'small' file slices within those partitions. This is the default strategy.
+   cluster the 'small' file slices within those partitions. This is the default strategy. It could be useful when the
+   workload is predictable and data is partitioned by timestamp.
 3. `SparkSelectedPartitionsClusteringPlanStrategy`: In case you want to cluster only specific partitions within a range,
    no matter how old or new are those partitions, then this strategy could be useful. To use this partition, one needs
    to set below two configs additionally (both begin and end partitions are inclusive):
@@ -44,8 +49,9 @@ hoodie.clustering.plan.strategy.cluster.begin.partition
 hoodie.clustering.plan.strategy.cluster.end.partition
 ```
 
-**NOTE**: All the strategies are partition-aware and the latter two are still bound by the size limits of the first
-strategy.
+:::note
+All the strategies are partition-aware and the latter two are still bound by the size limits of the first strategy.
+:::
 
 ### Execution Strategy
 
@@ -71,9 +77,9 @@ to `SingleSparkJobExecutionStrategy`.
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
 the [config for update strategy](https://hudi.apache.org/docs/next/configurations/#hoodieclusteringupdatesstrategy) is
-set to ***SparkRejectUpdateStrategy***. However, in some use-cases updates are very sparse and the default strategy to
-simply reject updates and throw an error does not seem fair. In such use-cases, users can set the config to ***
-SparkAllowUpdateStrategy***.
+set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and
+throw an exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default
+strategy to simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
 
 We discussed the critical strategy configurations. All other configurations related to clustering are
 listed [here](https://hudi.apache.org/docs/next/configurations/#Clustering-Configs). Out of this list, a few
@@ -81,7 +87,7 @@ configurations that will be very useful are:
 
 |  Config key  | Remarks | Default |
 |  -----------  | -------  | ------- |
-| `hoodie.clustering.async.enabled` | Enable running of clustering service, asynchronously as inserts happen on the table. | False |
+| `hoodie.clustering.async.enabled` | Enable running of clustering service, asynchronously as writes happen on the table. | False |
 | `hoodie.clustering.async.max.commits` | Control frequency of async clustering by specifying after how many commits clustering should be triggered. | 4 |
 | `hoodie.clustering.preserve.commit.metadata` | When rewriting data, preserves existing _hoodie_commit_time. This means users can run incremental queries on clustered data without any side-effects. | False |
 
