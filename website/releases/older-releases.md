@@ -1,6 +1,6 @@
 ---
 title: "Older Releases"
-sidebar_position: 6
+sidebar_position: 7
 layout: releases
 toc: true
 last_modified_at: 2020-05-28T08:40:00-07:00

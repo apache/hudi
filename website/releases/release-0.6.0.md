@@ -1,6 +1,6 @@
 ---
 title: "Release 0.6.0"
-sidebar_position: 4
+sidebar_position: 5
 layout: releases
 toc: true
 last_modified_at: 2020-05-28T08:40:00-07:00
