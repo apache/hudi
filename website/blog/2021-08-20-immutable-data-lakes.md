@@ -9,6 +9,7 @@ Apache Hudi helps you build and manage data lakes with different table types, co
 We strive to listen to community and build features based on the need. From our interactions with the community, we got 
 to know there are quite a few use-cases where Hudi is being used for immutable or append only data. This blog will go 
 over details on how to leverage Apache Hudi in building your data lake for such immutable or append only data.
+<!--truncate-->
 
 # Immutable data
 Often times, users route log entries to data lakes, where data is immutable. (Add some concrete 
