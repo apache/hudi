@@ -354,7 +354,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected boolean isFileSliceAfterPendingCompaction(FileSlice fileSlice) {
     Option<Pair<String, CompactionOperation>> compactionWithInstantTime =
         getPendingCompactionOperationWithInstant(fileSlice.getFileGroupId());
-    LOG.info("Pending Compaction instant for (" + fileSlice + ") is :" + compactionWithInstantTime);
     return (compactionWithInstantTime.isPresent())
         && fileSlice.getBaseInstantTime().equals(compactionWithInstantTime.get().getKey());
   }
