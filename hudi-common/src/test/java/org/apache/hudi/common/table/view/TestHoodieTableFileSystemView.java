@@ -148,12 +148,14 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String clusteringInstantTime3 = "3";
     String clusteringInstantTime4 = "4";
 
+    // prepare metadata
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
     List<String> replacedFileIds = new ArrayList<>();
     replacedFileIds.add("fake_file_id");
     partitionToReplaceFileIds.put("fake_partition_path", replacedFileIds);
 
+    // prepare Instants
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime2);
     HoodieInstant clusteringInstant3 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime3);
@@ -173,6 +175,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     boolean deleteReplaceCommitRequested = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.requested").delete();
     boolean deleteReplaceCommitInflight = new File(this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.inflight").delete();
 
+    // confirm deleted
     assertTrue(deleteReplaceCommit && deleteReplaceCommitInflight && deleteReplaceCommitRequested);
     fsView.close();
   }
