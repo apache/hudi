@@ -28,11 +28,11 @@ be avoided since data is known to be immutable.
 
 Here is an illustration of steps involved in different operations of interest. 
 
-![Inserts/Upserts](/assets/images/blog/immutable_datalakes/immutable_data_lakes1.jpeg)
+![Inserts/Upserts](/assets/images/blog/immutable_datalakes/immutable_data_lakes1.png)
 
 _Figure: High level steps on Insert/Upsert operation with Hudi._
 
-![Bulk_Insert](/assets/images/blog/immutable_datalakes/immutable_data_lakes2.jpeg)
+![Bulk_Insert](/assets/images/blog/immutable_datalakes/immutable_data_lakes2.png)
 
 _Figure: High level steps on Bulk_insert operation with Hudi._
 
