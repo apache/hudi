@@ -6,10 +6,11 @@ category: blog
 ---
 
 Apache Hudi helps you build and manage data lakes with different table types, config knobs to cater to everyone's need.
-Hudi adds metadata to each record like the record key, partition path, commit time etc. This serves multiple purposes. 
-This assist in avoiding re-computing the record key, partition path during merges, compaction and other table operations 
+Hudi adds per record metadata like the record key, partition path, commit time etc which serves multiple purpose. 
+This assists in avoiding re-computing the record key, partition path during merges, compaction and other table operations 
 and also assists in supporting incremental queries. But one of the repeated asks from the community is to leverage 
 existing fields and not to add additional meta fields. So, Hudi is adding Virtual keys support to cater to such needs. 
+<!--truncate-->
 
 # Virtual key support
 Hudi now supports Virtual keys, where Hudi meta fields can be computed on demand from existing user
