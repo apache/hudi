@@ -6,7 +6,7 @@ category: blog
 ---
 
 In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.
-As of today, to ingest data from S3 into Hudi, users leverage DFS source whose [path selector](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/DFSPathSelector.java) would identify the source files modified since the last checkpoint based on max modification time. 
+As of today, to ingest data from S3 into Hudi, users leverage DFS source whose [path selector](https://github.com/apache/hudi/blob/178767948e906f673d6d4a357c65c11bc574f619/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/DFSPathSelector.java) would identify the source files modified since the last checkpoint based on max modification time. 
 The problem with this approach is that modification time precision is upto seconds in S3. It maybe possible that there were many files (beyond what the configurable source limit allows) modifed in that second and some files might be skipped. 
 For more details, please refer to [HUDI-1723](https://issues.apache.org/jira/browse/HUDI-1723). 
 While the workaround is to ignore the source limit and keep reading, the problem motivated us to redesign so that users can reliably ingest from S3.
@@ -16,7 +16,7 @@ While the workaround is to ignore the source limit and keep reading, the problem
 ## Design
 
 For use-cases where seconds granularity does not suffice, we have a new source in deltastreamer using log-based approach. 
-The new [S3 events source](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java) relies on change notification and incremental processing to ingest from S3. 
+The new [S3 events source](https://github.com/apache/hudi/blob/178767948e906f673d6d4a357c65c11bc574f619/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java) relies on change notification and incremental processing to ingest from S3. 
 The architecture is as shown in the figure below.
 
 ![Different components in the design](/assets/images/blog/s3_events_source_design.png)
@@ -24,10 +24,11 @@ The architecture is as shown in the figure below.
 In this approach, users need to [enable S3 event notifications](https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html). 
 There will be two types of deltastreamers as detailed below. 
 
-1. [S3EventsSource](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java): Create Hudi S3 metadata table. This source leverages AWS SNS and SQS services that subscribe to file events from the source bucket.
+1. [S3EventsSource](https://github.com/apache/hudi/blob/178767948e906f673d6d4a357c65c11bc574f619/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java): Create Hudi S3 metadata table.
+This source leverages AWS [SNS](https://aws.amazon.com/sns) and [SQS](https://aws.amazon.com/sqs/) services that subscribe to file events from the source bucket.
     - Events from SQS will be written to this table, which serves as a changelog for the subsequent incremental puller.
     - When the events are committed to the S3 metadata table they will be deleted from SQS.
-2. [S3EventsHoodieIncrSource](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsHoodieIncrSource.java): Read incrementally from the S3 metadata table. This source extends the already existing [HoodieIncrSource](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/HoodieIncrSource.java) and uses the metadata table written by S3EventsSource.
+3. [S3EventsHoodieIncrSource](https://github.com/apache/hudi/blob/178767948e906f673d6d4a357c65c11bc574f619/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsHoodieIncrSource.java) and uses the metadata table written by S3EventsSource.
     - Read the S3 metadata table and get the objects that were added or modified. These objects contain the S3 path for the source files that were added or modified.
     - Write to Hudi table with source data corresponding to the source files in the S3 bucket.
 
