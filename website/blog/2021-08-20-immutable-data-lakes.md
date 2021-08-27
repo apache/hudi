@@ -1,5 +1,5 @@
 ---
-title: "Immutable data lakes using Apache Hudi"
+title: "How Hudi helps even when you dont care about mutability"
 excerpt: "How to leverage Apache Hudi for your immutable (or) append only data use-case"
 author: shivnarayan
 category: blog
@@ -7,19 +7,19 @@ category: blog
 
 Apache Hudi helps you build and manage data lakes with different table types, config knobs to cater to everyone's need.
 We strive to listen to community and build features based on the need. From our interactions with the community, we got 
-to know there are quite a few use-cases where Hudi is being used for immutable or append only data. This blog will go 
-over details on how to leverage Apache Hudi in building your data lake for such immutable or append only data.
+to know there are quite a few use-cases where Hudi is being used for immutable or append only data. While a lot of our 
+content/talks refer heavily to mutability in the context of incremental data processing, Hudi also excels with such immutable
+use-cases. This blog will go over details on how to leverage Apache Hudi in building your data lake for such immutable or append only data.
 <!--truncate-->
 
 # Immutable data
-Often times, users route log entries to data lakes, where data is immutable. (Add some concrete 
-examples here). Data once ingested won't be updated and can only be deleted. Also, most likely, deletes are issued at 
+Often times, users route log entries to data lakes, where data is immutable. E.g sensor values streamed out of devices. Data once ingested won't be updated and can only be deleted. Also, most likely, deletes are issued at 
 partition level (delete partitions older than 1 week) granularity.
 
 # Immutable data lakes using Apache Hudi 
-Hudi has an efficient way to ingest data into Hudi for such immutable use-cases. "Bulk_Insert" operation in Hudi is 
-commonly used for initial bootstrapping of data into hudi, but also exactly fits the bill for such immutable or append 
-only data. And it is known to be performant when compared to regular "insert"s or "upsert"s. 
+Hudi has an efficient way to ingest data into Hudi for such immutable use-cases. "bulk_insert" operation in Hudi is 
+commonly used for initial loading of data into hudi, but also exactly fits the bill for such immutable or append 
+only data. And it is also to be performant when compared to regular "insert"s or "upsert"s, since avoids a bunch of write optimizations done primarily for incremental updates. 
 
 ## Bulk_insert vs regular Inserts/Upserts
 With regular inserts and upserts, Hudi executes few steps before data can be written to data files. For example, 
@@ -37,13 +37,10 @@ _Figure: High level steps on Insert/Upsert operation with Hudi._
 _Figure: High level steps on Bulk_insert operation with Hudi._
 
 As you could see, bulk_insert skips the unnecessary step of indexing and small file handling which could bring down 
-your write latency by a large degree for append only data. And bulk_insert also supports "Row writer" path which 
-is known to be performant compared to Rdd path (WriteClient). So, users can enjoy the blazing fast writes for such 
-immutable data using bulk_insert operation and row writer.
+your write latency by a large degree for append only data.
 
 :::note
-There won't be any small file handling with bulk_insert. But users can choose to leverage Clustering to batch small 
-files into larger ones if need be. 
+Users can choose to leverage Clustering to batch small files into larger ones if need be, even for the bulk_insert path.
 :::
 
 ## Configurations
