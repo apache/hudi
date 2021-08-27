@@ -7,17 +7,19 @@ category: blog
 
 In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.
 
+<!--truncate-->
+
 ## Motivation
 
-To ingest from S3 Hudi users leverage DFS source whose [path selector](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/DFSPathSelector.java) would identify the source files modified since the last checkpoint based on max modification time. 
+As of today, to ingest data from S3 into Hudi, users leverage DFS source whose [path selector](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/DFSPathSelector.java) would identify the source files modified since the last checkpoint based on max modification time. 
 The problem with this approach is that modification time precision is upto seconds in S3. It maybe possible that there were many files (beyond what the configurable source limit allows) modifed in that second and some files might be skipped. 
-This issue happened in production. For more details, please refer to [HUDI-1723](https://issues.apache.org/jira/browse/HUDI-1723). 
-While the workaround was to ignore the source limit and keep reading, the problem motivated us to redesign so that users can reliably ingest from S3.
+For more details, please refer to [HUDI-1723](https://issues.apache.org/jira/browse/HUDI-1723). 
+While the workaround is to ignore the source limit and keep reading, the problem motivated us to redesign so that users can reliably ingest from S3.
 
 ## Design
 
-We wanted to move away from listing to log-based approach. 
-To that end, we added a new [S3 events source](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java) which relies on change notification and incremental processing to ingest from S3. 
+For use-cases where seconds granularity does not suffice, we have a new source in deltastreamer using log-based approach. 
+The new [S3 events source](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java) relies on change notification and incremental processing to ingest from S3. 
 The architecture is as shown in the figure below.
 
 ![Different components in the design](/assets/images/blog/s3_events_source_design.png)
@@ -26,7 +28,7 @@ In this approach, users need to [enable S3 event notifications](https://docs.aws
 There will be two deltastreamers as detailed below. 
 
 1. [S3EventsSource](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java): Create Hudi S3 metadata table. This source leverages AWS SNS and SQS services that subscribe to file events from the source bucket.
-    - Events from SQS will be dumped to this table, which serves as a changelog for the subsequent incremental puller.
+    - Events from SQS will be written to this table, which serves as a changelog for the subsequent incremental puller.
     - When the events are committed to the S3 metadata table they will be deleted from SQS.
 2. [S3EventsHoodieIncrSource](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsHoodieIncrSource.java): Read incrementally from the S3 metadata table. This source extends the already existing [HoodieIncrSource](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/HoodieIncrSource.java) and uses the metadata table written by S3EventsSource.
     - Read the S3 metadata table and get the objects that were added or modified. These objects contain the S3 path for the source files that were added or modified.
@@ -55,11 +57,14 @@ There are a few other configurations for the metadata source which can be tuned 
 - *`hoodie.deltastreamer.s3.source.queue.visibility.timeout`*: Value can range in [0, 43200] seconds (i.e. max 12 hours). SQS does not automatically delete the messages once consumed. It is the responsibility of metadata source to delete the message after committing. SQS will move the consumed message to in-flight state during which it becomes invisible for the configured timeout period. By default, this value is set to 30 seconds.
 - *`hoodie.deltastreamer.s3.source.queue.max.messages.per.batch`*: Maximum number of messages in a batch of one round of metadata source run. By default, this value is set to 5.
 
-To setup the pipeline, first [enable S3 event notifications](https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html). Then start the S3EventsSource and  S3EventsHoodieIncrSource using the HoodieDeltaStreamer utility as shown in sample commands below.
+To setup the pipeline, first [enable S3 event notifications](https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html). 
+Download the [aws-java-sdk-sqs](https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs) jar. 
+Then start the S3EventsSource and  S3EventsHoodieIncrSource using the HoodieDeltaStreamer utility as shown in sample commands below.
 
 ```bash
 # To start S3EventsSource
-spark-submit --jars /home/hadoop/hudi-packages/hudi-utilities-bundle_2.11-0.9.0-SNAPSHOT.jar, /usr/lib/spark/external/lib/spark-avro.jar \
+spark-submit \
+--jars "/home/hadoop/hudi-utilities-bundle_2.11-0.9.0.jar,/usr/lib/spark/external/lib/spark-avro.jar,/home/hadoop/aws-java-sdk-sqs-1.12.22.jar" \
 --master yarn --deploy-mode client \
 --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer /home/hadoop/hudi-packages/hudi-utilities-bundle_2.11-0.9.0-SNAPSHOT.jar \
 --table-type COPY_ON_WRITE --source-ordering-field eventTime \
@@ -79,14 +84,15 @@ spark-submit --jars /home/hadoop/hudi-packages/hudi-utilities-bundle_2.11-0.9.0-
 --hoodie-conf hoodie.deltastreamer.s3.source.queue.region=us-west-2
 
 # To start S3EventsHoodieIncrSource
-spark-submit --jars /home/hadoop/hudi-packages/hudi-utilities-bundle_2.11-0.9.0-SNAPSHOT.jar, /usr/lib/spark/external/lib/spark-avro.jar \
+spark-submit \
+--jars "/home/hadoop/hudi-utilities-bundle_2.11-0.9.0.jar,/usr/lib/spark/external/lib/spark-avro.jar,/home/hadoop/aws-java-sdk-sqs-1.12.22.jar" \
 --master yarn --deploy-mode client \
 --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer /home/hadoop/hudi-packages/hudi-utilities-bundle_2.11-0.9.0-SNAPSHOT.jar \
 --table-type COPY_ON_WRITE \
 --source-ordering-field eventTime --target-base-path s3://bucket_name/path/for/s3_hudi_table \
 --target-table s3_hudi_table  --continuous --min-sync-interval-seconds 10 \
 --hoodie-conf hoodie.datasource.write.recordkey.field="pull_request_id" \
---hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator \
+--hoodie-conf hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.SimpleKeyGenerator \
 --hoodie-conf hoodie.datasource.write.partitionpath.field=s3.bucket.name --enable-hive-sync \
 --hoodie-conf hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.MultiPartKeysValueExtractor \
 --hoodie-conf hoodie.datasource.write.hive_style_partitioning=true \
