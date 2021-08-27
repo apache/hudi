@@ -5,7 +5,7 @@ author: shivnarayan
 category: blog
 ---
 
-Apache Hudi supports an operation called “bulk_insert” in addition to "insert" and "upsert" to ingest data into a hudi table. 
+Apache Hudi supports a `bulk_insert` operation called “bulk_insert” in addition to "insert" and "upsert" to ingest data into a hudi table. 
 There are different sort modes that one could employ while using bulk_insert operation. This blog will talk about 
 different sort modes available out of the box, and how each compares with others. 
 <!--truncate-->
@@ -13,32 +13,49 @@ different sort modes available out of the box, and how each compares with others
 Apache Hudi supports an operation called “bulk_insert” to assist in initial loading to data to hudi. This is expected
 to be faster when compared to using “insert” or “upsert” operation types. Bulk insert differs from insert in one
 aspect. Small files optimization is not available with “bulk insert”, where as “insert” does small file management. So, 
-existing records/files are never looked up with bulk_insert operation, thus making it faster compared to other write operations. 
+existing records/files are never looked up with bulk_insert operation, thus making it faster compared to other write operations.
 
-Bulk insert offers 3 different sort modes to cater to different needs of users. In general, sorting will give us
-good compression and upsert performance if data is layed out well. Especially if your record keys have some sort of
+Bulk insert offers 3 different sort modes to cater to different needs of users, based on the following principles.
+
+- Sorting will give us good compression and upsert performance if data is laid out well. Especially if your record keys have some sort of
 ordering (timestamp, etc) characteristics, sorting will assist in trimming down a lot of files during upsert. If data is 
-sorted using some of the mostly queried columns, queries will leverage parquet predicate pushdown to trim down the data 
-to ensure lower latency as well.
+sorted by frequently queried columns, queries will leverage parquet predicate pushdown to trim down the data to ensure lower latency as well.
+  
+- Additionally, parquet writing is quite a memory intensive operation. When writing large volumes of data into a table that is also partitioned
+into 1000s of partitions, without sorting of any kind, the writer may have to keep 1000s of parquet writers open simultaneously incurring unsustainable
+  memory pressure and eventually leading to crashes.
+  
+- It's also desirable to start with the smallest amount of files possible when bulk importing data, as to avoid metadata overhead 
+later on for writers and queries. 
 
-3 Sort modes supported out of the box are: PARTITION_SORT, GLOBAL_SORT and NONE
+3 Sort modes supported out of the box are: `PARTITION_SORT`,`GLOBAL_SORT` and `NONE`
 
 ## Configurations 
 Config to set for sort mode is 
 [“hoodie.bulkinsert.sort.mode”](https://hudi.apache.org/docs/configurations.html#withBulkInsertSortMode) and different 
 values are: NONE, GLOBAL_SORT and PARTITION_SORT.
 
-## Partition sort
-
-Records are sorted within each spark partition and then written to hudi. This expected to be faster than Global sort
-and if one does not need global sort, should resort to this sort mode. Be wary of the parallelism used, since if there
-are too many spark partitions assigned to write to the same hudi partition, it could end up creating a lot of small files.
-
 ## Global Sort
 
-As the name suggests, all records are sorted globally before being written. This is the default sort mode with
-“bulk_insert” operation. Since records are globally sorted in this mode, if record keys have some ordering characteristics,
-this will benefit a lot during upsert to trim down a lot of files.
+As the name suggests, Hudi sorts the records globally across the input partitions, which maximizes the number of files 
+pruned using key ranges, during index lookups done for subsequent upserts. This is because each file has non-overlapping 
+min, max values for keys, which really helps when the key has some ordering characteristics such as a time based prefix.
+Given we are writing to a single parquet file on a single output partition path on storage at any given time, this mode
+greatly helps control memory pressure during large partitioned writes. Also due to global sorting, each small table partition path
+will be written from atmost two spark partition and thus contain just 2 files. 
+This is the default sort mode. 
+
+## Partition sort
+? lower sorting overhead, but may suffer from skews.
+? helps with memory pressure same as above
+? each table partition path is written by just one spark partition
+
+Records are sorted within each input partition and then written to hudi. This is often faster than global sort, since 
+it avoids the initial range determination phase of spark global sorting. 
+
+
+<When should I use this?> Be wary of the parallelism used, since if there
+are too many spark partitions assigned to write to the same hudi partition, it could end up creating a lot of small files.
 
 ## None
 
