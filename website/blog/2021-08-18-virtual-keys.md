@@ -1,46 +1,40 @@
 ---
-title: "Virtual keys support in Hudi"
-excerpt: "Supporting Virtual keys in Hudi by reducing storage overhead"
+title: "Adding support for Virtual Keys in Hudi"
+excerpt: "Supporting Virtual keys in Hudi for reducing storage overhead"
 author: shivnarayan
 category: blog
 ---
 
 Apache Hudi helps you build and manage data lakes with different table types, config knobs to cater to everyone's need.
-Hudi adds per record metadata like the record key, partition path, commit time etc which serves multiple purpose. 
-This assists in avoiding re-computing the record key, partition path during merges, compaction and other table operations 
-and also assists in supporting incremental queries. But one of the repeated asks from the community is to leverage 
-existing fields and not to add additional meta fields. So, Hudi is adding Virtual keys support to cater to such needs. 
+Hudi adds per record metadata fields like `_hoodie_record_key`, `_hoodie_partition path`, `_hoodie_commit_time` which serves multiple purposes. 
+They assist in avoiding re-computing the record key, partition path during merges, compaction and other table operations 
+and also assists in supporting [record-level](/blog/2021/07/21/streaming-data-lake-platform#readers) incremental queries (in comparison to other table formats, that merely track files).
+In addition, it ensures data quality by ensuring unique key constraints are enforced even if the key field changes for a given table, during its lifetime.
+But one of the repeated asks from the community is to leverage existing fields and not to add additional meta fields, for simple use-cases where such benefits are not desired or key changes are very rare.  
 <!--truncate-->
 
-# Virtual key support
-Hudi now supports Virtual keys, where Hudi meta fields can be computed on demand from existing user
-fields for all records. In regular path, these are computed once and stored as per record metadata and re-used during 
-various operations like merging incoming records to those in storage, compaction, etc. Hudi also stores commit time at 
-record level to support incremental queries. If one does not need incremental support, they can start leverageing 
-Hudi's Virutal key support and still go about using Hudi to build and manage their data lake to reduce the storage 
+# Virtual Key support
+Hudi now supports virtual keys, where Hudi meta fields can be computed on demand from the data fields. Currently, the meta fields are 
+computed once and stored as per record metadata and re-used across various operations. If one does not need incremental query support, 
+they can start leveraging Hudi's Virtual key support and still go about using Hudi to build and manage their data lake to reduce the storage 
 overhead due to per record metadata. 
 
 ## Configurations
-Virtual keys can be enabled for a given table using the below config. When disabled, 
-Hudi will enforce virtual keys for the corresponding table. Default value for this config is true, which means, all 
-meta fields will be added by default. <br/> <br/>
-`"hoodie.populate.meta.fields"`
+Virtual keys can be enabled for a given table using the below config. When set to `hoodie.populate.meta.fields=false`, Hudi will use virtual keys for the 
+corresponding table. Default value for this config is `true`, which means, all  meta fields will be added by default.
 
-Note: 
 Once virtual keys are enabled, it can't be disabled for a given hudi table, because already stored records may not have 
 the meta fields populated. But if you have an existing table from an older version of hudi, virtual keys can be enabled. 
-Just that going back is not feasible. 
-Another constraint wrt virtual key support is that, Key generator properties for a given table cannot be changed through
-the course of the lifecycle of a given hudi table.
-For instance, if you configure record key to point to field5 for few batches of write and later switch to field10, 
-it may not pan out well with hudi table where virtual keys are enabled. 
+Another constraint w.r.t virtual key support is that, Key generator properties for a given table cannot be changed through
+the course of the lifecycle of a given hudi table. In this model, the user also shares responsibility of ensuring uniqueness 
+of key within a table. For instance, if you configure record key to point to `field_5` for few batches of write and later switch to `field_10`, 
+Hudi cannot guarantee uniqueness of key, since older writes could have had duplicates for `field_10`. 
 
-As its evident, record keys and partition path will have to be re-computed everytime when in need (merges, compaction, 
-MOR snapshot read). Hence we are supporting only built-in key generators with Virtual Keys for COW table type. Incase of 
-MOR, we support only SimpleKeyGenerator (i.e. both record key and partition path has to refer
-to an existing user field ) for now. If we zoom into Merge On Read table's snapshot query, hudi does real time merging of base 
-data file with records from delta log files and hence query latencies will shoot up if we were to support all different
-types of key generators. 
+With virtual keys, keys will have to be re-computed everytime when in need (merges, compaction, MOR snapshot read). Hence we 
+support virtual keys for all built-in key generators on Copy-On-Write tables. Supporting all key generators on Merge-On-Read table 
+would entail reading all fields out of base and delta logs, sacrificing core columnar query performance, which will be prohibitively expensive 
+for users. Thus, we support only simple key generators (the default key generator, where both record key and partition path refer
+to an existing field ) for now.
 
 ### Supported Key Generators with CopyOnWrite(COW) table:
 SimpleKeyGenerator, ComplexKeyGenerator, CustomKeyGenerator, TimestampBasedKeyGenerator and NonPartitionedKeyGenerator. 
@@ -53,13 +47,14 @@ Only "SIMPLE" and "GLOBAL_SIMPLE" index types are supported in the first cut. We
 (BLOOM, etc) in future releases. 
 
 ## Supported Operations
-Good news is that, all existing operations are supported for a hudi table with virtual keys except the incremental 
-query support. Which means, cleaning, archiving, metadata table, clustering, etc can be enabled for a hudi table with 
-virtual keys enabled. So, if one's requirement fits into this model, would recommend using virtual keys as it reduces 
-the storage overhead. 
+All existing features are supported for a hudi table with virtual keys, except the incremental 
+queries. Which means, cleaning, archiving, metadata table, clustering, etc can be enabled for a hudi table with 
+virtual keys enabled. So, you are able to merely use Hudi as a transactional table format with all the awesome 
+table service runtimes and platform services, if you wish to do so, without incurring any overheads associated with 
+support for incremental data processing.
 
-## Code snippet
-We can go through our quick start and see how it plays out when virtual keys are enabled.
+## Code Samples
+Let's go through our quick start and see how virtual keys work in practice.
 
 ### Inserts
 ```
@@ -95,7 +90,6 @@ val tripsSnapshotDF = spark.
   read.
   format("hudi").
   load(basePath + "/*/*/*/*")
-//load(basePath) use "/partitionKey=partitionValue" folder structure for Spark auto partition discovery
 tripsSnapshotDF.createOrReplaceTempView("hudi_trips_snapshot")
 ```
 
@@ -285,9 +279,7 @@ res11: Long = 8
 ```
 Note: Before deletes, there were 10 records and now we have 8 records (as 2 were deleted). 
 
-## Conclusion 
-Virtual keys will definitely be beneficial given your requirements adheres to the model listed above. Hope this blog 
-was useful for you to learn yet another feature in Apache Hudi. If you are interested in 
+Hope this blog was useful for you to learn yet another feature in Apache Hudi. If you are interested in 
 Hudi and looking to contribute, do check out [here](https://hudi.apache.org/contribute/get-involved). 
 
 
