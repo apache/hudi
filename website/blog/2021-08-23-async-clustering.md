@@ -107,6 +107,12 @@ specify the `—mode` or `-m` option. There are three modes:
 2. `execute`: Execute a clustering plan at given instant which means --instant-time is required here.
 3. `scheduleAndExecute`: Make a clustering plan first and execute that plan immediately.
 
+Note that to run this job while the original writer is still running, please enable multi-writing:
+```
+hoodie.write.concurrency.mode=optimistic_concurrency_control
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
+```
+
 A sample spark-submit command to setup HoodieClusteringJob is as below:
 
 ```bash
@@ -118,6 +124,15 @@ spark-submit \
 --base-path /path/to/hudi_table/basePath \
 --table-name hudi_table_schedule_clustering \
 --spark-memory 1g
+```
+A sample `clusteringjob.properties` file:
+```
+hoodie.clustering.async.enabled=true
+hoodie.clustering.async.max.commits=4
+hoodie.clustering.plan.strategy.target.file.max.bytes=1073741824
+hoodie.clustering.plan.strategy.small.file.limit=629145600
+hoodie.clustering.execution.strategy.class=org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy
+hoodie.clustering.plan.strategy.sort.columns=column1,column2
 ```
 
 ### HoodieDeltaStreamer
@@ -140,7 +155,54 @@ spark-submit \
 --target-base-path /path/to/hudi_table/basePath \
 --target-table impressions_cow_cluster \
 --op INSERT \
---hoodie-conf hoodie.clustering.async.enabled=true
+--hoodie-conf hoodie.clustering.async.enabled=true \
+--continuous
+```
+
+### Spark Structured Streaming
+
+We can also enable asynchronous clustering with Spark structured streaming sink as shown below. 
+```scala
+val commonOpts = Map(
+   "hoodie.insert.shuffle.parallelism" -> "4",
+   "hoodie.upsert.shuffle.parallelism" -> "4",
+   DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+   DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+   DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+   HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+)
+
+def getAsyncClusteringOpts(isAsyncClustering: String, 
+                           clusteringNumCommit: String, 
+                           executionStrategy: String):Map[String, String] = {
+   commonOpts + (DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
+           HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
+           HoodieClusteringConfig.EXECUTION_STRATEGY_CLASS_NAME.key -> executionStrategy
+   )
+}
+
+def initStreamingWriteFuture(hudiOptions: Map[String, String]): Future[Unit] = {
+   val streamingInput = // define the source of streaming
+   Future {
+      println("streaming starting")
+      streamingInput
+              .writeStream
+              .format("org.apache.hudi")
+              .options(hudiOptions)
+              .option("checkpointLocation", basePath + "/checkpoint")
+              .mode(Append)
+              .start()
+              .awaitTermination(10000)
+      println("streaming ends")
+   }
+}
+
+def structuredStreamingWithClustering(): Unit = {
+   val df = //generate data frame
+   val hudiOptions = getClusteringOpts("true", "1", "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
+   val f1 = initStreamingWriteFuture(hudiOptions)
+   Await.result(f1, Duration.Inf)
+}
 ```
 
 ## Conclusion and Future Work
