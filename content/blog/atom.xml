@@ -2,11 +2,25 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2021-08-16T00:00:00.000Z</updated>
+    <updated>2021-08-23T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/blog"/>
     <subtitle>Apache Hudi! Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Reliable ingestion from AWS S3 using Hudi]]></title>
+        <id>Reliable ingestion from AWS S3 using Hudi</id>
+        <link href="https://hudi.apache.org/blog/2021/08/23/s3-events-source"/>
+        <updated>2021-08-23T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Improving Marker Mechanism in Apache Hudi]]></title>
+        <id>Improving Marker Mechanism in Apache Hudi</id>
+        <link href="https://hudi.apache.org/blog/2021/08/18/improving-marker-mechanism"/>
+        <updated>2021-08-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Hudi supports fully automatic cleanup of uncommitted data on storage during its write operations. Write operations in an Apache Hudi table use markers to efficiently track the data files written to storage. In this blog, we dive into the design of the existing direct marker file mechanism and explain its performance problems on cloud storage like AWS S3 for]]></summary>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Schema evolution with DeltaStreamer using KafkaSource]]></title>
         <id>Schema evolution with DeltaStreamer using KafkaSource</id>

@@ -4,9 +4,23 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/blog</link>
         <description>Apache Hudi! Blog</description>
-        <lastBuildDate>Mon, 16 Aug 2021 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 23 Aug 2021 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Reliable ingestion from AWS S3 using Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2021/08/23/s3-events-source</link>
+            <guid>Reliable ingestion from AWS S3 using Hudi</guid>
+            <pubDate>Mon, 23 Aug 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Improving Marker Mechanism in Apache Hudi]]></title>
+            <link>https://hudi.apache.org/blog/2021/08/18/improving-marker-mechanism</link>
+            <guid>Improving Marker Mechanism in Apache Hudi</guid>
+            <pubDate>Wed, 18 Aug 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[Hudi supports fully automatic cleanup of uncommitted data on storage during its write operations. Write operations in an Apache Hudi table use markers to efficiently track the data files written to storage. In this blog, we dive into the design of the existing direct marker file mechanism and explain its performance problems on cloud storage like AWS S3 for]]></description>
+        </item>
         <item>
             <title><![CDATA[Schema evolution with DeltaStreamer using KafkaSource]]></title>
             <link>https://hudi.apache.org/blog/2021/08/16/kafka-custom-deserializer</link>
