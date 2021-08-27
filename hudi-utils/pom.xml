@@ -27,7 +27,7 @@
 
     <properties>
         <jdk.version>1.8</jdk.version>
-        <hudi.version>0.9.0-SNAPSHOT</hudi.version>
+        <hudi.version>0.10.0-SNAPSHOT</hudi.version>
         <scala.binary.version>2.11</scala.binary.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
         <scala.binary.version>2.11</scala.binary.version>

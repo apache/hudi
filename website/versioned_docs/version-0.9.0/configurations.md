@@ -4,7 +4,7 @@ keywords: [ configurations, default, flink options, spark, configs, parameters ]
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2021-08-26T22:21:44.177
+last_modified_at: 2021-08-26T22:04:13.167
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -1217,7 +1217,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 ---
 
 > #### hoodie.bulkinsert.user.defined.partitioner.class
-> If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner which can does sorting based on specified column values set by hoodie.bulkinsert.user.defined.partitioner.sort.columns<br></br>
+> If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data optimally for common query patterns.<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME`<br></br>
 
@@ -1433,13 +1433,6 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > Determines the parallelism for deleting marker files, which are used to track all files (valid or invalid/partial) written during a write operation. Increase this value if delays are observed, with large batch writes.<br></br>
 > **Default Value**: 100 (Optional)<br></br>
 > `Config Param: MARKERS_DELETE_PARALLELISM_VALUE`<br></br>
-
----
-
-> #### hoodie.bulkinsert.user.defined.partitioner.sort.columns
-> Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. For example 'column1,column2'<br></br>
-> **Default Value**: N/A (Required)<br></br>
-> `Config Param: BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS`<br></br>
 
 ---
 
