@@ -6,15 +6,12 @@ category: blog
 ---
 
 In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.
-
-<!--truncate-->
-
-## Motivation
-
 As of today, to ingest data from S3 into Hudi, users leverage DFS source whose [path selector](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/helpers/DFSPathSelector.java) would identify the source files modified since the last checkpoint based on max modification time. 
 The problem with this approach is that modification time precision is upto seconds in S3. It maybe possible that there were many files (beyond what the configurable source limit allows) modifed in that second and some files might be skipped. 
 For more details, please refer to [HUDI-1723](https://issues.apache.org/jira/browse/HUDI-1723). 
 While the workaround is to ignore the source limit and keep reading, the problem motivated us to redesign so that users can reliably ingest from S3.
+
+<!--truncate-->
 
 ## Design
 
@@ -25,7 +22,7 @@ The architecture is as shown in the figure below.
 ![Different components in the design](/assets/images/blog/s3_events_source_design.png)
 
 In this approach, users need to [enable S3 event notifications](https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html). 
-There will be two deltastreamers as detailed below. 
+There will be two types of deltastreamers as detailed below. 
 
 1. [S3EventsSource](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java): Create Hudi S3 metadata table. This source leverages AWS SNS and SQS services that subscribe to file events from the source bucket.
     - Events from SQS will be written to this table, which serves as a changelog for the subsequent incremental puller.
@@ -36,7 +33,7 @@ There will be two deltastreamers as detailed below.
 
 ## Advantages
 
-- **Decoupling**: Every step in the pipeline is decoupled. The two sources can be started independent of each other.
+- **Decoupling**: Every step in the pipeline is decoupled. The two sources can be started independent of each other. We imagine most users run a single deltastreamer to get all changes for a given bucket and can fan-out multiple tables off that.
 - **Performance and Scale**: The previous approach used to list all files, sort by modification time and then filter based on checkpoint. While it did prune partition paths, the directory listing could still become a bottleneck. By relying on change notification and native cloud APIs, the new approach avoids directory listing and scales with the number of files being ingested.
 - **Reliability**: Since there is no longer any dependency on the max modification time and the fact that S3 events are being recorded in the metadata table, users can rest assured that all the events will be processed eventually.
 - **Fault Tolerance**: There are two levels of fault toerance in this design. Firstly, if some of the messages are not committed to the S3 metadata table, then those messages will remain in the queue so that they can be reprocessed in the next round. Secondly, if the incremental puller fails, then users can query the S3 metadata table for the last commit point and resume the incremental puller from that point onwards (kinda like how Kafka consumers can reset offset).
@@ -106,12 +103,13 @@ spark-submit \
 
 ## Conclusion and Future Work
 
-This post introduced a log-based approach to ingest data from S3 into Hudi tables reliably and efficiently. 
+This post introduced a log-based approach to ingest data from S3 into Hudi tables reliably and efficiently. We are actively improving this along the following directions.
 
 - One stream of work is to add support for other cloud-based object storage like Google Cloud Storage, Azure Blob Storage, etc. with this revamped design.
 - Another stream of work is to add resource manager that allows users to setup notifications and delete resources when no longer needed.
 - Another interesting piece of work is to support **asynchronous backfills**. Notification systems are evntually consistent and typically do not guarantee perfect delivery of all files right away. The log-based approach provides enough flexibility to trigger automatic backfills at a configurable interval e.g. once a day or once a week.
 
 Please follow this [JIRA](https://issues.apache.org/jira/browse/HUDI-1896) to learn more about active development on this issue. 
-We look forward to contributions from the community. 
-Hope you enjoyed this post. Put your Hudi on and keep streaming!
+We look forward to contributions from the community. Hope you enjoyed this post. 
+
+Put your Hudi on and keep streaming!
