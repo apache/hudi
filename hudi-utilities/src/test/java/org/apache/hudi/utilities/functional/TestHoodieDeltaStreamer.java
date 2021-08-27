@@ -18,20 +18,26 @@
 
 package org.apache.hudi.utilities.functional;
 
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -40,6 +46,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
@@ -92,14 +99,17 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -970,6 +980,79 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath, dfs);
       return true;
     });
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCleanerDeleteReplacedDataWithArchive(Boolean asyncClean) throws Exception {
+    String tableBasePath = dfsBasePath + "/cleanerDeleteReplacedDataWithArchive" + asyncClean;
+
+    int totalRecords = 3000;
+
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
+    cfg.continuousMode = true;
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+
+    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "2", "", ""));
+    cfg.configs.add("hoodie.parquet.small.file.limit=0");
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamerTestRunner(ds, cfg, (r) -> {
+      TestHelpers.assertAtLeastNReplaceCommits(2, tableBasePath, dfs);
+      return true;
+    });
+
+    TestHelpers.assertAtLeastNCommits(6, tableBasePath, dfs);
+    TestHelpers.assertAtLeastNReplaceCommits(2, tableBasePath, dfs);
+
+    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(dfs.getConf()).setBasePath(tableBasePath).build();
+    HoodieTimeline replacedTimeline = meta.reloadActiveTimeline().getCompletedReplaceTimeline();
+    Option<HoodieInstant> firstReplaceHoodieInstant = replacedTimeline.nthFromLastInstant(1);
+    assertTrue(firstReplaceHoodieInstant.isPresent());
+
+    Option<byte[]> firstReplaceHoodieInstantDetails = replacedTimeline.getInstantDetails(firstReplaceHoodieInstant.get());
+    HoodieReplaceCommitMetadata firstReplaceMetadata = HoodieReplaceCommitMetadata.fromBytes(firstReplaceHoodieInstantDetails.get(), HoodieReplaceCommitMetadata.class);
+    Map<String, List<String>> partitionToReplaceFileIds = firstReplaceMetadata.getPartitionToReplaceFileIds();
+    String partitionName = null;
+    List replacedFileIDs = null;
+    ArrayList<String> replacedFilePaths = new ArrayList<>();
+    for (Map.Entry entry : partitionToReplaceFileIds.entrySet()) {
+      partitionName = String.valueOf(entry.getKey());
+      replacedFileIDs = (List) entry.getValue();
+    }
+
+    assertNotNull(partitionName);
+    assertNotNull(replacedFileIDs);
+
+    Path partitionPath = new Path(meta.getBasePath(), partitionName);
+    RemoteIterator<LocatedFileStatus> hoodieFiles = meta.getFs().listFiles(partitionPath, true);
+    while (hoodieFiles.hasNext()) {
+      LocatedFileStatus f = hoodieFiles.next();
+      String file = f.getPath().toUri().toString();
+      if (!file.contains(".hoodie_partition_metadata")) {
+        for (Object replacedFileID : replacedFileIDs) {
+          if (file.contains(String.valueOf(replacedFileID))) {
+            replacedFilePaths.add(file);
+          }
+        }
+      }
+    }
+
+    List<String> configs = getAsyncServicesConfigs(1, "true", "true", "2", "", "");
+    configs.add(String.format("%s=%s", HoodieCompactionConfig.CLEANER_POLICY.key(), "KEEP_LATEST_COMMITS"));
+    configs.add(String.format("%s=%s", HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), "1"));
+    configs.add(String.format("%s=%s", HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), "2"));
+    configs.add(String.format("%s=%s", HoodieCompactionConfig.MAX_COMMITS_TO_KEEP.key(), "3"));
+    configs.add(String.format("%s=%s", HoodieCompactionConfig.ASYNC_CLEAN, asyncClean));
+
+    cfg.configs = configs;
+    cfg.continuousMode = false;
+    ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    assertFalse(replacedFilePaths.isEmpty());
+
+    for (String replacedFilePath : replacedFilePaths) {
+      assertFalse(meta.getFs().exists(new Path(replacedFilePath)));
+    }
   }
 
   private List<String> getAsyncServicesConfigs(int totalRecords, String autoClean, String inlineCluster,
