@@ -15,8 +15,8 @@ see how asynchronous clustering can be setup using HoodieClusteringJob as well a
 ## Introduction
 
 On a high level, clustering creates a plan based on a configurable strategy, groups eligible files based on specific
-criteria and then executes the plan. Hudi's [MVCC model](/docs/concurrency_control) provides
-snapshot isolation between multiple table services, which allows writers to continue with ingestion while clustering
+criteria and then executes the plan. Hudi supports [multi-writers](https://hudi.apache.org/docs/concurrency_control#enabling-multi-writing) which provides
+snapshot isolation between multiple table services, thus allowing writers to continue with ingestion while clustering
 runs in the background. For a more detailed overview of the clustering architecture please check out the previous blog
 post.
 
