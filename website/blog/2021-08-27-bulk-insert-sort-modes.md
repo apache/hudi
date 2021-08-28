@@ -48,14 +48,12 @@ partition path will be written from atmost two spark partition and thus contain 
 This is the default sort mode with bulk_insert operation in Hudi. 
 
 ### Partition sort
-In this sort mode, records within a given spark partition is sorted. This sort mode also maximizes the number of files
-pruned using key ranges, during index lookups for subsequent upserts as records for a given partition is sorted. But 
-this may suffer from data skews depending on your data. For instance, if one partition has huge number of 
-records compared to other partitions, this may run into issues or might take a performance hit. Also, in this sort mode,
-records are brought into memory to sort using mapPartitions() transformation function in spark. Such issues may not 
-arise with Global_Sort mode if parallelism is set correctly relative to the amount of data being bulk imported. Since 
-records are sorted within every partition path, this mode also helps control memory pressure during the actual write 
-and keeps the files generated to minimum. 
+In this sort mode, records within a given spark partition will be sorted. But there are chances that a given spark partition 
+can contain records from different table partitions. And so, even though we sort within each spark partitions, this sort
+mode could result in large number of files at the end of bulk_insert, since records for a given table partition could 
+be spread across many spark partitions. During actual write by the writers, we may not have much open files 
+simultaneously, since we close out the file before moving to next file (as records are sorted within a spark partition) 
+and hence may not have much memory pressure. 
 
 ### None
 
@@ -80,7 +78,8 @@ Here is a microbenchmark to show the performance difference between different so
 Figure: Shows performance of different bulk insert variants
 
 This benchmark had 10M entries being bulk inserted to hudi using different sort modes. This was followed by an upsert 
-with 2M entries. As you could see, global sorting gives a very good upsert performance when compared to No sorting.
+with 2M entries. As you could see, global sorting gives a very good upsert performance when compared to No sorting. 
+Partition Sort also has higher upsert performance due to the metadata overhead due to large files. 
 
 ## Conclusion
 Hopefully this blog has given you good insights into different sort modes in bulk insert and when to use what. 
