@@ -48,6 +48,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -105,20 +107,23 @@ public class StreamReadMonitoringFunction
 
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
-  private final HoodieTableMetaClient metaClient;
+  private HoodieTableMetaClient metaClient;
 
   private final long maxCompactionMemoryInBytes;
+
+  // for partition pruning
+  private final Set<String> requiredPartitionPaths;
 
   public StreamReadMonitoringFunction(
       Configuration conf,
       Path path,
-      HoodieTableMetaClient metaClient,
-      long maxCompactionMemoryInBytes) {
+      long maxCompactionMemoryInBytes,
+      Set<String> requiredPartitionPaths) {
     this.conf = conf;
     this.path = path;
-    this.metaClient = metaClient;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
+    this.requiredPartitionPaths = requiredPartitionPaths;
   }
 
   @Override
@@ -180,8 +185,26 @@ public class StreamReadMonitoringFunction
     }
   }
 
+  @Nullable
+  private HoodieTableMetaClient getOrCreateMetaClient() {
+    if (this.metaClient != null) {
+      return this.metaClient;
+    }
+    if (StreamerUtil.tableExists(this.path.toString(), hadoopConf)) {
+      this.metaClient = StreamerUtil.createMetaClient(this.path.toString(), hadoopConf);
+      return this.metaClient;
+    }
+    // fallback
+    return null;
+  }
+
   @VisibleForTesting
   public void monitorDirAndForwardSplits(SourceContext<MergeOnReadInputSplit> context) {
+    HoodieTableMetaClient metaClient = getOrCreateMetaClient();
+    if (metaClient == null) {
+      // table does not exist
+      return;
+    }
     metaClient.reloadActiveTimeline();
     HoodieTimeline commitTimeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
     if (commitTimeline.empty()) {
@@ -200,8 +223,9 @@ public class StreamReadMonitoringFunction
       } else if (this.conf.getOptional(FlinkOptions.READ_STREAMING_START_COMMIT).isPresent()) {
         // first time consume and has a start commit
         final String specifiedStart = this.conf.getString(FlinkOptions.READ_STREAMING_START_COMMIT);
-        instantRange = InstantRange.getInstance(specifiedStart, instantToIssue.getTimestamp(),
-            InstantRange.RangeType.CLOSE_CLOSE);
+        instantRange = specifiedStart.equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST)
+            ? null
+            : InstantRange.getInstance(specifiedStart, instantToIssue.getTimestamp(), InstantRange.RangeType.CLOSE_CLOSE);
       } else {
         // first time consume and no start commit, consumes the latest incremental data set.
         HoodieInstant latestCommitInstant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
@@ -222,6 +246,11 @@ public class StreamReadMonitoringFunction
     List<HoodieCommitMetadata> metadataList = instants.stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
     Set<String> writePartitions = getWritePartitionPaths(metadataList);
+    // apply partition push down
+    if (this.requiredPartitionPaths.size() > 0) {
+      writePartitions = writePartitions.stream()
+          .filter(this.requiredPartitionPaths::contains).collect(Collectors.toSet());
+    }
     FileStatus[] fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList);
     if (fileStatuses.length == 0) {
       LOG.warn("No files found for reading in user provided path.");
@@ -310,7 +339,8 @@ public class StreamReadMonitoringFunction
       return commitTimeline.getInstants()
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
           .collect(Collectors.toList());
-    } else if (this.conf.getOptional(FlinkOptions.READ_STREAMING_START_COMMIT).isPresent()) {
+    } else if (this.conf.getOptional(FlinkOptions.READ_STREAMING_START_COMMIT).isPresent()
+        && !this.conf.get(FlinkOptions.READ_STREAMING_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST)) {
       String definedStartCommit = this.conf.get(FlinkOptions.READ_STREAMING_START_COMMIT);
       return commitTimeline.getInstants()
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, definedStartCommit))
