@@ -8,6 +8,13 @@
     <subtitle>Apache Hudi! Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
     <entry>
+        <title type="html"><![CDATA[Asynchronous Clustering using Hudi]]></title>
+        <id>Asynchronous Clustering using Hudi</id>
+        <link href="https://hudi.apache.org/cn/blog/2021/08/23/async-clustering"/>
+        <updated>2021-08-23T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[In one of the previous blog posts, we introduced a new]]></summary>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Reliable ingestion from AWS S3 using Hudi]]></title>
         <id>Reliable ingestion from AWS S3 using Hudi</id>
         <link href="https://hudi.apache.org/cn/blog/2021/08/23/s3-events-source"/>
