@@ -110,10 +110,32 @@ stages:
               jdkArchitectureOption: 'x64'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: functional_tests
-        condition: false
         steps:
-          - script: |
-              mvn $(MAVEN_OPTS) -Pfunctional-tests test
+          - task: AzureCLI@2
+            displayName: Pre functional tests
+            name: pre_functional_tests
+            inputs:
+              azureSubscription: apachehudici-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob download -f $(Pipeline.Workspace)/$(MAVEN_REPO_ZIPFILE) -c ci-caches -n $(MAVEN_REPO_ZIPFILE) --account-name apachehudici --no-progress
+                tar -xvf $(Pipeline.Workspace)/$(MAVEN_REPO_ZIPFILE) -C $(MAVEN_CACHE_FOLDER)/
+                ls -lta $(MAVEN_CACHE_FOLDER)/
+          - task: Maven@3
+            displayName: Run functional tests
+            name: run_functional_tests
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: -Pfunctional-tests
+              publishJUnitResults: false
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              testRunTitle: 'functional tests'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '1.8'
+              jdkArchitectureOption: 'x64'
+              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: integration_tests
         steps:
           - task: AzureCLI@2
