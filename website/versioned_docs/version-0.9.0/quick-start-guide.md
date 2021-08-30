@@ -359,8 +359,35 @@ df.write.format("hudi").
 ``` 
 
 </TabItem>
+
+<TabItem value="python">
+
+```python
+# pyspark
+inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
+df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+
+hudi_options = {
+    'hoodie.table.name': tableName,
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+    'hoodie.datasource.write.table.name': tableName,
+    'hoodie.datasource.write.operation': 'upsert',
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2
+}
+
+df.write.format("hudi").
+    options(**hudi_options).
+    mode("overwrite").
+    save(basePath)
+```
+
+</TabItem>
+
 <TabItem value="sparksql">
-    
+
 ```sql
 insert into h0 select 1, 'a1', 20;
 
@@ -388,49 +415,22 @@ insert overwrite h_p0 partition(dt = '2021-01-02') select 1, 'a1';
 1. Insert mode
 
 Hudi support three insert modes when inserting data to a table with primary key(we call it pk-table as followed):
-- upsert
-  
-  This it the default insert mode. For upsert mode, insert statement do the upsert operation for the pk-table which will update the duplicate record
-- strict
+- upsert <br/>
+  This it the default insert mode. For upsert mode, insert statement do the upsert operation for the pk-table which will 
+  update the duplicate record
+- strict <br/>
+  For strict mode, insert statement will keep the primary key uniqueness constraint for COW table which do not allow duplicate record.
+  If inserting a record which the primary key is already exists to the table, a HoodieDuplicateKeyException will throw out
+  for COW table. For MOR table, it has the same behavior with "upsert" mode.
 
-For strict mode, insert statement will keep the primary key uniqueness constraint for COW table which do not allow duplicate record.
-If inserting a record which the primary key is already exists to the table, a HoodieDuplicateKeyException will throw out
-for COW table. For MOR table, it has the same behavior with "upsert" mode.
+- non-strict <br/>
+  For non-strict mode, hudi just do the insert operation for the pk-table.
 
-- non-strict
+  We can set the insert mode by using the config: **hoodie.sql.insert.mode**
 
-For non-strict mode, hudi just do the insert operation for the pk-table.
-
-We can set the insert mode by the config: **hoodie.sql.insert.mode**
-
-2. Bulk Insert
-By default, hudi use the normal insert operation for insert statement. We can set **hoodie.sql.bulk.insert.enable** to true to enable 
-the bulk insert for insert statement.
-   
-</TabItem>
-<TabItem value="python">
-
-```python
-# pyspark
-inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
-df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-
-hudi_options = {
-    'hoodie.table.name': tableName,
-    'hoodie.datasource.write.recordkey.field': 'uuid',
-    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
-    'hoodie.datasource.write.table.name': tableName,
-    'hoodie.datasource.write.operation': 'upsert',
-    'hoodie.datasource.write.precombine.field': 'ts',
-    'hoodie.upsert.shuffle.parallelism': 2,
-    'hoodie.insert.shuffle.parallelism': 2
-}
-
-df.write.format("hudi").
-    options(**hudi_options).
-    mode("overwrite").
-    save(basePath)
-```
+2. Bulk Insert <br/>
+   By default, hudi uses the normal insert operation for insert statements. We can set **hoodie.sql.bulk.insert.enable** 
+   to true to enable the bulk insert for insert statement.
 
 </TabItem>
 </Tabs>
@@ -566,11 +566,9 @@ df.write.format("hudi").
 </TabItem>
 <TabItem value="sparksql">
 
-Spark sql support two kinds of DML to udpate hudi table: Merge-Into and Update.
+Spark sql supports two kinds of DML to update hudi table: Merge-Into and Update.
 
-###MergeInto
-
-Hudi support merge-into for both spark 2 & spark 3.
+### MergeInto
 
 **Syntax**
 
@@ -591,7 +589,7 @@ ON <merge_condition>
   INSERT *  |
   INSERT (column1 [, column2 ...]) VALUES (value1 [, value2 ...])
 ```
-**Case**
+**Example**
 ```sql
 merge into h0 as target
 using (
@@ -614,8 +612,8 @@ when not matched then insert (id,name,price) values(id, name, price)
 ```
 **Notice**
 
-1、The merge-on condition must be the primary keys currently.
-2、Merge-On-Read table has not support partial update.
+1.The merge-on condition can be only on primary keys. Support to merge based on other fields will be added in future.  
+2. Support for partial updates for Merge-On-Read table will be added in future.
 e.g.
 ```sql
  merge into h0 using s0
@@ -847,7 +845,7 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```sql
  DELETE FROM tableIdentifier [ WHERE BOOL_EXPRESSION]
 ```
-**Case**
+**Example**
 ```sql
 delete from h0 where id = 1;
 ```
@@ -907,6 +905,14 @@ Generate some new trips, overwrite the table logically at the Hudi metadata leve
 clean up the previous table snapshot's file groups. This can be faster than deleting the older table and recreating 
 in `Overwrite` mode.
 
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'SparkSQL', value: 'sparksql', },
+]}>
+<TabItem value="scala">
+
 ```scala
 // spark-shell
 spark.
@@ -935,7 +941,9 @@ spark.
   show(10, false)
 
 ``` 
+</TabItem>
 
+<TabItem value="sparksql">
 **NOTICE**
 
 The insert overwrite non-partitioned table sql statement will convert to the ***insert_overwrite_table*** operation.
@@ -943,6 +951,8 @@ e.g.
 ```sql
 insert overwrite table h0 select 1, 'a1', 20;
 ```
+</TabItem>
+</Tabs>
 
 ## Insert Overwrite 
 
@@ -950,6 +960,14 @@ Generate some new trips, overwrite the all the partitions that are present in th
 than `upsert` for batch ETL jobs, that are recomputing entire target partitions at once (as opposed to incrementally
 updating the target tables). This is because, we are able to bypass indexing, precombining and other repartitioning 
 steps in the upsert write path completely.
+
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'SparkSQL', value: 'sparksql', },
+]}>
+<TabItem value="scala">
 
 ```scala
 // spark-shell
@@ -982,6 +1000,9 @@ spark.
   sort("partitionpath","uuid").
   show(100, false)
 ```
+</TabItem>
+
+<TabItem value="sparksql">
 **NOTICE**
 
 The insert overwrite partitioned table sql statement will convert to the ***insert_overwrite*** operation.
@@ -989,6 +1010,9 @@ e.g.
 ```sql
 insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh;
 ```
+</TabItem>
+</Tabs>
+
 ## More Spark Sql Commands
 
 ### AlterTable
