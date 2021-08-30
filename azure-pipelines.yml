@@ -28,6 +28,7 @@ variables:
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
   SPARK_HOME: $(Pipeline.Workspace)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
+  SPARK_BINARY: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz
 
 stages:
   - stage: test
@@ -123,10 +124,9 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                export SPARK_BINARY=spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz
                 mkdir -p $(MAVEN_CACHE_FOLDER) /tmp/spark-events/
-                az storage blob download -f $(MAVEN_REPO_ZIPFILE) -c ci-caches -n $(MAVEN_REPO_ZIPFILE) --account-name apachehudici --no-progress
-                az storage blob download -f $(SPARK_BINARY) -c ci-caches -n $(SPARK_BINARY) --account-name apachehudici --no-progress
+                az storage blob download -f $(Pipeline.Workspace)/$(MAVEN_REPO_ZIPFILE) -c ci-caches -n $(MAVEN_REPO_ZIPFILE) --account-name apachehudici --no-progress
+                az storage blob download -f $(Pipeline.Workspace)/$(SPARK_BINARY) -c ci-caches -n $(SPARK_BINARY) --account-name apachehudici --no-progress
                 tar -xvf $(Pipeline.Workspace)/$(MAVEN_REPO_ZIPFILE) -C $(MAVEN_CACHE_FOLDER)/
                 tar -xvf $(Pipeline.Workspace)/$(SPARK_BINARY) -C $(Pipeline.Workspace)/
                 ls -lta $(MAVEN_CACHE_FOLDER)/
