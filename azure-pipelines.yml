@@ -31,7 +31,8 @@ variables:
   SPARK_BINARY: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz
 
 stages:
-  - stage: pre_test
+  - stage: test
+    displayName: "Run tests"
     jobs:
       - job: setup_m2_repo
         steps:
@@ -48,24 +49,8 @@ stages:
                 tar -xvf $(Pipeline.Workspace)/$(MAVEN_REPO_ZIPFILE) -C $(MAVEN_CACHE_FOLDER)/
                 ls -lta $(MAVEN_CACHE_FOLDER)/
                 mvn $(MAVEN_OPTS) clean install -DskipTests
-      - job: setup_integ_tests
-        steps:
-          - task: AzureCLI@2
-            displayName: Pre integration tests
-            name: pre_integration_tests
-            inputs:
-              azureSubscription: apachehudici-service-connection
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                mkdir -p /tmp/spark-events/
-                az storage blob download -f $(Pipeline.Workspace)/$(SPARK_BINARY) -c ci-caches -n $(SPARK_BINARY) --account-name apachehudici --no-progress
-                tar -xvf $(Pipeline.Workspace)/$(SPARK_BINARY) -C $(Pipeline.Workspace)/
-  - stage: test
-    displayName: "Run tests"
-    dependsOn: pre_test
-    jobs:
       - job: unit_tests_spark_client
+        dependsOn: setup_m2_repo
         steps:
           - task: Maven@3
             inputs:
@@ -77,6 +62,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: unit_tests_utilities
+        dependsOn: setup_m2_repo
         steps:
           - task: Maven@3
             inputs:
@@ -89,6 +75,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: unit_tests_other_modules
+        dependsOn: setup_m2_repo
         steps:
           - task: Maven@3
             inputs:
@@ -100,6 +87,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: functional_tests
+        dependsOn: setup_m2_repo
         steps:
           - task: Maven@3
             displayName: Run functional tests
@@ -113,7 +101,19 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: integration_tests
+        dependsOn: setup_m2_repo
         steps:
+          - task: AzureCLI@2
+            displayName: Pre integration tests
+            name: pre_integration_tests
+            inputs:
+              azureSubscription: apachehudici-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                mkdir -p /tmp/spark-events/
+                az storage blob download -f $(Pipeline.Workspace)/$(SPARK_BINARY) -c ci-caches -n $(SPARK_BINARY) --account-name apachehudici --no-progress
+                tar -xvf $(Pipeline.Workspace)/$(SPARK_BINARY) -C $(Pipeline.Workspace)/
           - task: Maven@3
             displayName: Run integration tests
             name: run_integration_tests
