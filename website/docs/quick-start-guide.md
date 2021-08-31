@@ -14,8 +14,8 @@ After each write operation we will also show how to read the data both snapshot 
 
 ## Setup
 
-Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up spark. 
-From the extracted directory run spark-shell with Hudi as:
+Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up spark.
+With 0.9.0 release, spark-sql dml support has been added and is experimental.
 
 <Tabs
 defaultValue="scala"
@@ -25,6 +25,8 @@ values={[
 { label: 'SparkSQL', value: 'sparksql', },
 ]}>
 <TabItem value="scala">
+
+From the extracted directory run spark-shell with Hudi as:
 
 ```scala
 // spark-shell for spark 3
@@ -47,6 +49,8 @@ spark-shell \
 <TabItem value="sparksql">
 
 Hudi support using spark sql to write and read data with the **HoodieSparkSessionExtension** sql extension.
+From the extracted directory run spark-sql with Hudi as:
+
 ```shell
 # spark sql for spark 3
 spark-sql --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.9.0,org.apache.spark:spark-avro_2.12:3.0.1 \
@@ -67,6 +71,8 @@ spark-sql \
 
 </TabItem>
 <TabItem value="python">
+
+From the extracted directory run pyspark with Hudi as:
 
 ```python
 # pyspark
@@ -185,9 +191,9 @@ Spark-sql needs an explicit create table command.
   In general, spark-sql supports two kinds of tables, namely managed and external. If one specifies a location using **location** statement, it is an external table, else its considered a managed table. You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
 
 - Table with primary key:
-  Users can choose to create a table with primary key if need be. Else table is considered a non-primary keyed table. 
-  If the user has specified the **primaryKey** column in options, table is considered to be a primary key table. 
-  If you are using any of the built-in key generators in Hudi, likely its a primary key table.
+  Users can choose to create a table with primary key as required. Else table is considered a non-primary keyed table.
+  One needs to set **primaryKey** column in options to create a primary key table.
+  If you are using any of the built-in key generators in Hudi, likely it is a primary key table.
 
 Let's go over some of the create table commands.
 
@@ -212,7 +218,7 @@ Here is an example of creating an MOR external table (location needs to be speci
 is used to specify the preCombine field for merge.
 
 ```sql
--- creae an external mor table
+-- create an external mor table
 create table if not exists hudi_table1 (
   id int, 
   name string, 
@@ -227,7 +233,7 @@ options (
 );
 ```
 
-Here is the example of creating a COW table without primary key.
+Here is an example of creating a COW table without primary key.
 
 ```sql
 -- create a non-primary key table
@@ -333,8 +339,6 @@ To set any custom hudi config(like index type, max parquet size, etc), see the  
 
 ## Insert data
 
-Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
-
 <Tabs
 defaultValue="scala"
 values={[
@@ -343,6 +347,8 @@ values={[
 { label: 'SparkSQL', value: 'sparksql', },
 ]}>
 <TabItem value="scala">
+
+Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
 
 ```scala
 // spark-shell
@@ -356,11 +362,21 @@ df.write.format("hudi").
   option(TABLE_NAME, tableName).
   mode(Overwrite).
   save(basePath)
-``` 
-
+```
+:::info
+`mode(Overwrite)` overwrites and recreates the table if it already exists.
+You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key
+(`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in
+[schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to
+[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
+Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+:::
 </TabItem>
 
 <TabItem value="python">
+Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
 
 ```python
 # pyspark
@@ -383,7 +399,16 @@ df.write.format("hudi").
     mode("overwrite").
     save(basePath)
 ```
-
+:::info
+`mode(Overwrite)` overwrites and recreates the table if it already exists.
+You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key
+(`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in
+[schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to
+[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
+Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+:::
 </TabItem>
 
 <TabItem value="sparksql">
@@ -406,45 +431,25 @@ insert overwrite table h0 select 1, 'a1', 20;
 -- insert overwrite table with static partition
 insert overwrite h_p0 partition(dt = '2021-01-02') select 1, 'a1';
 
-- insert overwrite table with dynamic partition
+-- insert overwrite table with dynamic partition
   insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh;
 ```
 
 **NOTICE**
 
-1. Insert mode
+- Insert mode : Hudi supports two insert modes when inserting data to a table with primary key(we call it pk-table as followed):<br/>
+  Using `strict` mode, insert statement will keep the primary key uniqueness constraint for COW table which do not allow 
+  duplicate records. If a record already exists during insert, a HoodieDuplicateKeyException will be thrown
+  for COW table. For MOR table, updates are allowed to existing record.<br/>
+  Using `non-strict` mode, hudi uses the same code path used by `insert` operation in spark data source for the pk-table. <br/>
+  One can set the insert mode by using the config: **hoodie.sql.insert.mode**
 
-Hudi support three insert modes when inserting data to a table with primary key(we call it pk-table as followed):
-- upsert <br/>
-  This it the default insert mode. For upsert mode, insert statement do the upsert operation for the pk-table which will 
-  update the duplicate record
-- strict <br/>
-  For strict mode, insert statement will keep the primary key uniqueness constraint for COW table which do not allow duplicate record.
-  If inserting a record which the primary key is already exists to the table, a HoodieDuplicateKeyException will throw out
-  for COW table. For MOR table, it has the same behavior with "upsert" mode.
-
-- non-strict <br/>
-  For non-strict mode, hudi just do the insert operation for the pk-table.
-
-  We can set the insert mode by using the config: **hoodie.sql.insert.mode**
-
-2. Bulk Insert <br/>
-   By default, hudi uses the normal insert operation for insert statements. We can set **hoodie.sql.bulk.insert.enable** 
+- Bulk Insert : By default, hudi uses the normal insert operation for insert statements. Users can set **hoodie.sql.bulk.insert.enable** 
    to true to enable the bulk insert for insert statement.
 
 </TabItem>
 </Tabs>
 
-:::info
-`mode(Overwrite)` overwrites and recreates the table if it already exists.
-You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key 
-(`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in 
-[schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to 
-[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
-and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
-Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
-`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
-:::
 
 Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for various key generator options, like Timestamp based,
 complex, custom, NonPartitioned Key gen, etc. 
@@ -477,7 +482,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 ### Time Travel Query
 
-Hudi support time travel query since 0.9.0. Currently three query time format are supported:
+Hudi support time travel query since 0.9.0. Currently three query time formats are supported as given below.
 ```scala
 spark.read.
   format("hudi").
@@ -497,7 +502,14 @@ spark.read.
 
 ```
 
-
+:::info
+Since 0.9.0 hudi has support a hudi built-in FileIndex: **HoodieFileIndex** to query hudi table,
+which supports partition pruning and metatable for query. This will help improve query performance.
+It also supports non-global query path which means users can query the table by the base path without
+specifing the "*" in the query path. This feature has enabled by default for the non-global query path.
+For the global query path, hudi uses the old query path.
+Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
+:::
 </TabItem>
 <TabItem value="sparksql">
 
@@ -522,18 +534,39 @@ spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
 ```
 
-</TabItem>
-</Tabs>
+### Time Travel Query
+
+Hudi support time travel query since 0.9.0. Currently three query time formats are supported as given below.
+```python
+#pyspark
+spark.read. \
+  format("hudi"). \
+  option("as.of.instant", "20210728141108"). \
+  load(basePath)
+
+spark.read. \
+  format("hudi"). \
+  option("as.of.instant", "2021-07-28 14: 11: 08"). \
+  load(basePath)
+
+// It is equal to "as.of.instant = 2021-07-28 00:00:00"
+spark.read. \
+  format("hudi"). \
+  option("as.of.instant", "2021-07-28"). \
+  load(basePath)
+```
 
 :::info
 Since 0.9.0 hudi has support a hudi built-in FileIndex: **HoodieFileIndex** to query hudi table,
-which has support partition prune and metatable for query. This will help improve query performance.
+which supports partition pruning and metatable for query. This will help improve query performance.
 It also supports non-global query path which means users can query the table by the base path without
-specify the "*" in the query path.
-This feature has enabled by default for the non-global query path. For the global query path, we will
-rollback to the old query way.
+specifing the "*" in the query path. This feature has enabled by default for the non-global query path.
+For the global query path, hudi uses the old query path.
 Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
 :::
+</TabItem>
+</Tabs>
+
 
 ## Update data
 
@@ -562,7 +595,11 @@ df.write.format("hudi").
   mode(Append).
   save(basePath)
 ```
-
+:::note
+Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts)
+denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit.
+:::
 </TabItem>
 <TabItem value="sparksql">
 
@@ -612,18 +649,17 @@ when not matched then insert (id,name,price) values(id, name, price)
 ```
 **Notice**
 
-1.The merge-on condition can be only on primary keys. Support to merge based on other fields will be added in future.  
-2. Support for partial updates for Merge-On-Read table will be added in future.
+- The merge-on condition can be only on primary keys. Support to merge based on other fields will be added in future.  
+- Support for partial updates is supported for cow table.
 e.g.
 ```sql
  merge into h0 using s0
  on h0.id = s0.id
  when matched then update set price = s0.price * 2
 ```
-This works well for Cow-On-Write table which support update only the **price** field. 
-For Merge-ON-READ table this will be supported in the future.
-
-3、Target table's fields cannot be the right-value of the update expression for Merge-On-Read table.
+This works well for Cow-On-Write table which supports update based on the **price** field. 
+For Merge-on-Read table this will be supported in the future.
+- Target table's fields cannot be the right-value of the update expression for Merge-On-Read table.
 e.g.
 ```sql
  merge into h0 using s0
@@ -632,7 +668,7 @@ e.g.
                    name = h0.name,
                    price = s0.price + h0.price
 ```
-This can work well for Cow-On-Write table,  for Merge-ON-READ table this will be supported in the future.
+This works well for Cow-On-Write table, but not yet supported for Merge-On-Read table.
 
 ### Update
 **Syntax**
@@ -657,15 +693,15 @@ df.write.format("hudi"). \
   mode("append"). \
   save(basePath)
 ```
+:::note
+Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts)
+denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit.
+:::
 
 </TabItem>
 </Tabs>
 
-:::note
-Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts) 
-denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
-:::
 
 ## Incremental query
 
@@ -795,7 +831,6 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hud
 </Tabs>
 
 ## Delete data {#deletes}
-Delete records for the HoodieKeys passed in.
 
 <Tabs
 defaultValue="scala"
@@ -805,6 +840,7 @@ values={[
 { label: 'SparkSQL', value: 'sparksql', },
 ]}>
 <TabItem value="scala">
+Delete records for the HoodieKeys passed in.<br/>
 
 ```scala
 // spark-shell
@@ -837,7 +873,9 @@ roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 // fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
-
+:::note
+Only `Append` mode is supported for delete operation.
+:::
 </TabItem>
 <TabItem value="sparksql">
 
@@ -852,6 +890,7 @@ delete from h0 where id = 1;
 
 </TabItem>
 <TabItem value="python">
+Delete records for the HoodieKeys passed in.<br/>
 
 ```python
 # pyspark
@@ -889,13 +928,12 @@ roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
-
-</TabItem>
-</Tabs>
-
 :::note
 Only `Append` mode is supported for delete operation.
 :::
+</TabItem>
+</Tabs>
+
 
 See the [deletion section](/docs/writing_data#deletes) of the writing data page for more details.
 
@@ -944,7 +982,6 @@ spark.
 </TabItem>
 
 <TabItem value="sparksql">
-**NOTICE**
 
 The insert overwrite non-partitioned table sql statement will convert to the ***insert_overwrite_table*** operation.
 e.g.
@@ -1003,7 +1040,6 @@ spark.
 </TabItem>
 
 <TabItem value="sparksql">
-**NOTICE**
 
 The insert overwrite partitioned table sql statement will convert to the ***insert_overwrite*** operation.
 e.g.
@@ -1036,7 +1072,6 @@ alter table h0_1 add columns(ext0 string);
 alter table h0_1 change column id id bigint;
 ```
 
-## Setting custom hudi configs
 ### Use set command
 You can use the **set** command to set any custom hudi's config, which will work for the
 whole spark session scope.
