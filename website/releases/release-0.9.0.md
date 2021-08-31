@@ -68,60 +68,65 @@ Users can choose to drop fields used to generate partition paths, using `hoodie.
 querying of Hudi snapshots using systems like BigQuery, which cannot handle this.
 
 Hudi uses different types of spillable maps, for internally handling merges (compaction, updates or even MOR snapshot queries). In 0.9.0, we have added
-support for [compression](??) for the bitcask style default option and introduced a new spillable map backed by [rocksDB](??).
+support for compression for the bitcask style default option and introduced a new spillable map backed by rocksDB, which can be more performant for large
+bulk updates or working with large base file sizes.
 
-Added a new write operation "delete_partition" operation, with support in spark. Users can leverage this to delete older partitions in bulk, in addition to
+Added a new write operation `delete_partition` operation, with support in spark. Users can leverage this to delete older partitions in bulk, in addition to
 record level deletes. Deletion of specific partitions can be done using this [config](/docs/configurations#hoodiedatasourcewritepartitionstodelete)    
 
 Support for Huawei Cloud Object Storage, BAIDU AFS storage format, Baidu BOS storage in Hudi. 
 
 A [pre commit validator framework](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SparkPreCommitValidator.java) 
-has been added to spark engine. Users can leverage this to add any validations to be executed before committing 
-the writes to Hudi. Three types of validations are supported out of the box. [SqlQueryEqualityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryEqualityPreCommitValidator.java) can be used to validate for equality of rows before and after the commit. [SqlQueryInequalityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryInequalityPreCommitValidator.java) can be used to validate for inequality of rows before and after the commit. [SqlQuerySingleResultPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQuerySingleResultPreCommitValidator.java) can be used to validate the total record count with new commit matches the config value set. Users can also provide their own implementation for pre commit validation by extending the abstract class [SparkPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SparkPreCommitValidator.java)
-for this method 
-```
-void validateRecordsBeforeAndAfter(Dataset<Row> before, Dataset<Row> after, Set<String> partitionsAffected)
+has been added for spark engine, which can used for DeltaStreamer and Spark Datasource writers. Users can leverage this to add any validations to be executed before committing writes to Hudi. 
+Three validators come out-of-box 
+ - [org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryEqualityPreCommitValidator.java) can be used to validate for equality of rows before and after the commit. 
+ - [org.apache.hudi.client.validator.SqlQueryInequalityPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQueryInequalityPreCommitValidator.java) can be used to validate for inequality of rows before and after the commit. 
+ - [org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SqlQuerySingleResultPreCommitValidator.java) can be used to validate that a query on the table results in a specific value. 
+   
+These can be configured by setting `hoodie.precommit.validators=<comma separated list of validator class names>`. Users can also provide their own implementations by extending the abstract class [SparkPreCommitValidator](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/client/validator/SparkPreCommitValidator.java)
+and overriding this method 
+
+```java
+void validateRecordsBeforeAndAfter(Dataset<Row> before, 
+                                   Dataset<Row> after, 
+                                   Set<String> partitionsAffected)
 ```
 
 
 ### Flink Integration Improvements
-- **Insert Overwrite Support**: HUDI-1788
-- **Bulk Insert Support**: HUDI-2209
-- **Non Partitioned Table Support**: HUDI-1814
-- **Streaming Read for COW Tables**: HUDI-1867
-- **Emit Deletes for MOR Streaming Read**: HUDI-1738
-- **Global Index Support**: HUDI-1908
-- Propagate CDC format for Hudi
-- Emit deletes for Flink MOR table streaming read 
-- Supports hive style partitioning for flink writer
-- Support Transformer for HoodieFlinkStreamer
--  Metadata table for flink
--  Support hive3 meta sync for flink writer
--  Support hive1 metadata sync for flink writer
--  Asynchronous Hive sync and commits cleaning for Flink writer
--  Support flink hive sync in batch mode-
--  Support Append only in Flink stream
--  Add marker files for flink writer
 
-## Utilities
+The Flink writer now supports propagation of CDC format for MOR table, by turning on the option `changelog.enabled=true`. Hudi would then persist all change flags of each record, 
+using the streaming reader of Flink, user can do stateful computation based on these change logs. Note that when the table is compacted with async compaction service, all the 
+intermediate changes are merged into one(last record), to only have UPSERT semantics.
+
+Flink writing now also has most feature parity with spark writing, with addition of write operations like `bulk_insert`, `insert_overwrite`, support for non-partitioned tables, 
+automatic cleanup of uncommitted data, global indexing support, hive style partitioning and handling of partition path updates. Writing also supports a new log append mode, where 
+no records are de-duplicated and base files are directly written for each flush. To use this mode, set `write.insert.deduplicate=false`.
+
+Flink readers now support streaming reads from COW/MOR tables. Deletions are emitted by default in streaming read mode, the downstream receives the DELETE message as a Hoodie record with empty payload.
+
+Hive sync has been greatly improved by support different Hive versions(1.x, 2.x, 3.x). Hive sync can also now be done asynchronously.
+
+Flink Streamer tool now supports transformers.
+
 ### DeltaStreamer
 
-We have enhanced Hudi's Deltastreamer with more sources and improvements.<br/>
-We have added 3 new sources to this Utility. 
-  - [JDBC source](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/JdbcSource.java) assists in reading data from RDBMS sources.
-  - [SQLSource](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/SqlSource.java) can be very useful in backfill use-cases like adding a new column and backfilling just one column for the past N months.
-  - [S3EventsHoodieIncrSource](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsHoodieIncrSource.java) and [S3EventsSource](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java) assists in reading data from S3 reliably and efficiently ingesting data to Hudi. 
-     Existing approach of using DFSSource uses last modification time of files as checkpoint to pull in new files. But if large 
-     number of files have the same modification time, this might miss some files to be read from the source. 
-     These two sources (S3EventsHoodieIncrSource and S3EventsSource) together ensures data is reliably ingested from S3 into 
-     Hudi by leveraging AWS SNS and SQS services that subscribes to file events from the source bucket. [This blog post](/blog/2021/08/23/s3-events-source) talks about 
-     both these sources in detail. 
-     
-In addition to pulling data from kafka for kafka sources using DeltaStreamer using regular offset format 
-  (topic_name,partition_num:offset,partition_num:offset,....), we also added two new formats. Timestamp based and 
-  Group consumer offset. <br/>
-Added support to pass in basic auth credentials in schema registry provider url with schema provider in deltastreamer.<br/>  
-Grafana dashboard?   
+We have enhanced Deltastreamer utility with 3 new sources. 
 
-### Raw Release Notes
+[JDBC source](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/JdbcSource.java) can take a extraction SQL statement and 
+incrementally fetch data out of sources supporting JDBC. This can be useful for e.g when reading data from RDBMS sources. Note that, this approach may need periodic re-bootstrapping to ensure data consistency, although being much simpler to operate over CDC based approaches.
+
+[SQLSource](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/SqlSource.java) takes a Spark SQL statement to fetch data out of existing tables and 
+can be very useful for easy SQL based backfills use-cases e.g: backfilling just one column for the past N months. 
+
+[S3EventsHoodieIncrSource](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsHoodieIncrSource.java) and [S3EventsSource](https://github.com/apache/hudi/blob/bf5a52e51bbeaa089995335a0a4c55884792e505/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/S3EventsSource.java) 
+assist in reading data from S3 reliably and efficiently ingesting that to Hudi. Existing approach using `*DFSSource` source classes uses last modification time of files as checkpoint to pull in new files. 
+But, if large number of files have the same modification time, this might miss some files to be read from the source.  These two sources (S3EventsHoodieIncrSource and S3EventsSource) together ensures data 
+is reliably ingested from S3 into Hudi by leveraging AWS SNS and SQS services that subscribes to file events from the source bucket. [This blog post](/blog/2021/08/23/s3-events-source) presents a model for 
+scalable, reliable incremental ingestion by using these two sources in tandem.
+
+In addition to pulling events from kafka using regular offset format, we also added support for timestamp based fetches, that can 
+help with initial backfill/bootstrap scenarios. We have also added support for passing in basic auth credentials in schema registry provider url with schema provider.
+
+## Raw Release Notes
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12350027)
