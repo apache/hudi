@@ -54,6 +54,7 @@
     <module>packaging/hudi-integ-test-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink</module>
+    <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
   </modules>
 

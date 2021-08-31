@@ -77,7 +77,9 @@ public class HiveSyncTool extends AbstractSyncTool {
     super(configuration.getAllProperties(), fs);
 
     try {
+      LOG.error("WNI VIMP 1");
       this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
+      LOG.error("WNI VIMP 2");
     } catch (RuntimeException e) {
       if (cfg.ignoreExceptions) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
@@ -93,6 +95,7 @@ public class HiveSyncTool extends AbstractSyncTool {
       cfg.partitionFields = new ArrayList<>();
     }
     if (hoodieHiveClient != null) {
+      LOG.error("WNI VIMP 3");
       switch (hoodieHiveClient.getTableType()) {
         case COPY_ON_WRITE:
           this.snapshotTableName = cfg.tableName;
@@ -107,6 +110,7 @@ public class HiveSyncTool extends AbstractSyncTool {
           LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
           throw new InvalidTableException(hoodieHiveClient.getBasePath());
       }
+      LOG.error("WNI VIMP 4");
     }
   }
 
@@ -114,6 +118,7 @@ public class HiveSyncTool extends AbstractSyncTool {
   public void syncHoodieTable() {
     try {
       if (hoodieHiveClient != null) {
+        LOG.error("WNI VIMP YES");
         doSync();
       }
     } catch (RuntimeException re) {
@@ -128,9 +133,11 @@ public class HiveSyncTool extends AbstractSyncTool {
   protected void doSync() {
     switch (hoodieHiveClient.getTableType()) {
       case COPY_ON_WRITE:
+        LOG.error("WNI VIMP COW");
         syncHoodieTable(snapshotTableName, false, false);
         break;
       case MERGE_ON_READ:
+        LOG.error("WNI VIMP MOR");
         // sync a RO table for MOR
         syncHoodieTable(roTableName.get(), false, true);
         // sync a RT table for MOR

@@ -23,16 +23,25 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
 import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
+import org.apache.hudi.fileid.FileIdPrefixProvider;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import org.apache.hadoop.fs.Path;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,9 +76,12 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abst
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     //transition bulk_insert state to inflight
-    table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,
-            table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
-        config.shouldAllowMultiWriteOnSameInstant());
+    if (!config.getInsertAvoidTransitionInflight()) {
+      table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,
+              table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
+          config.shouldAllowMultiWriteOnSameInstant());
+    }
+
     // write new files
     List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism(), false);
     //update index
@@ -102,12 +114,16 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abst
         : JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
     repartitionedRecords = (List<HoodieRecord<T>>) partitioner.repartitionRecords(dedupedRecords, parallelism);
 
-    String idPfx = FSUtils.createNewFileIdPfx();
+    FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
+        config.getFileIdPrefixProviderClassName(),
+        config.getProps());
 
     List<WriteStatus> writeStatuses = new ArrayList<>();
 
-    new JavaLazyInsertIterable<>(repartitionedRecords.iterator(), true, config, instantTime, table, idPfx,
-        table.getTaskContextSupplier(), new CreateHandleFactory<>()).forEachRemaining(writeStatuses::addAll);
+    new JavaLazyInsertIterable<>(repartitionedRecords.iterator(), true,
+        config, instantTime, table,
+        fileIdPrefixProvider.createFilePrefix(""), table.getTaskContextSupplier(),
+        new CreateHandleFactory<>()).forEachRemaining(writeStatuses::addAll);
 
     return writeStatuses;
   }

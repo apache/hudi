@@ -1,0 +1,48 @@
+<assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2
+          http://maven.apache.org/xsd/assembly-1.1.2.xsd">
+    <!-- Assembles a packaged version targeting OS installation. -->
+    <id>package</id>
+    <formats>
+        <format>dir</format>
+    </formats>
+    <includeBaseDirectory>false</includeBaseDirectory>
+    <fileSets>
+        <fileSet>
+            <directory>${project.basedir}</directory>
+            <outputDirectory>share/doc/hudi-kafka-connect/</outputDirectory>
+            <includes>
+                <include>version.txt</include>
+                <include>README*</include>
+                <include>LICENSE*</include>
+                <include>NOTICE*</include>
+                <include>licenses/</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/config</directory>
+            <outputDirectory>etc/hudi-kafka-connect/</outputDirectory>
+            <includes>
+                <include>*</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+    <dependencySets>
+        <dependencySet>
+            <outputDirectory>share/java/hudi-kafka-connect/</outputDirectory>
+            <useProjectArtifact>true</useProjectArtifact>
+            <useTransitiveFiltering>true</useTransitiveFiltering>
+            <excludes>
+                <!-- Exclude these jars during packaging. This avoids conflicts of jars
+                shipped with Confluent platform and other dependencies such as Hadoop and Avro.
+                This allows correctly setup of CLASSPATH in kafka-run-class.sh when running
+                kafka connect hdfs connector. -->
+                <exclude>org.mortbay.jetty:*</exclude>
+                <exclude>com.sun.jersey:*</exclude>
+                <exclude>org.eclipse.jetty.aggregate:jetty-all</exclude>
+                <exclude>com.sun.jersey.contribs:jersey-guice</exclude>
+            </excludes>
+        </dependencySet>
+    </dependencySets>
+</assembly>

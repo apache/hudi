@@ -23,7 +23,9 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
@@ -133,5 +135,20 @@ public class CommitUtils {
       }
     }
     return fileIdToPath;
+  }
+
+  public static Option<HoodieCommitMetadata> getCommitMetadataForLatestInstant(HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    Option<HoodieInstant> latestInstant = timeline.lastInstant();
+    if (latestInstant.isPresent()) {
+      try {
+        byte[] data = timeline.getInstantDetails(latestInstant.get()).get();
+        return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
+      } catch (Exception e) {
+        throw new HoodieException("Failed to read schema from commit metadata", e);
+      }
+    } else {
+      return Option.empty();
+    }
   }
 }

@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
+import org.apache.hudi.fileid.RandomFileIdPrefixProvider;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -412,6 +413,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
           + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
+
+  public static final ConfigProperty<String> FILEID_PREFIX_PROVIDER_CLASS = ConfigProperty
+      .key("hoodie.fileid.prefix.provider.class")
+      .defaultValue(RandomFileIdPrefixProvider.class.getName())
+      .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
+
+  public static final ConfigProperty<String> INSERT_AVOID_TRANSITION_INFLIGHT = ConfigProperty
+      .key("hoodie.insert.avoid.transition.inflight")
+      .defaultValue("false")
+      .withDocumentation("When inserting records for BULK insert, do not change timeline status to inflight.");
+
 
   private ConsistencyGuardConfig consistencyGuardConfig;
 
@@ -1748,6 +1760,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
   }
 
+  public String getFileIdPrefixProviderClassName() {
+    return getString(FILEID_PREFIX_PROVIDER_CLASS);
+  }
+
+  public boolean getInsertAvoidTransitionInflight() {
+    return getBoolean(INSERT_AVOID_TRANSITION_INFLIGHT);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -2076,6 +2096,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
       writeConfig.setValue(ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
+      return this;
+    }
+
+    public Builder withFileIdPrefixProviderClassName(String fileIdPrefixProviderClassName) {
+      writeConfig.setValue(FILEID_PREFIX_PROVIDER_CLASS, fileIdPrefixProviderClassName);
+      return this;
+    }
+
+    public Builder withEnableInsertAvoidTransitionInflight() {
+      writeConfig.setValue(INSERT_AVOID_TRANSITION_INFLIGHT, "true");
       return this;
     }
 

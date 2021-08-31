@@ -1,0 +1,21 @@
+{
+    "name": "hudi-sink",
+    "config": {
+        "connector.class": "org.apache.hudi.connect.HudiSinkConnector",
+        "tasks.max": "4",
+        "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    	"value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    	"value.converter.schemas.enable": "false",
+        "topics": "hudi-test-topic",
+	"hoodie.table.name": "hudi-test-topic",
+	"hoodie.base.path": "file:///tmp/hoodie/sample-table",
+	"hoodie.datasource.write.recordkey.field": "volume",
+	"hoodie.datasource.write.partitionpath.field": "year",
+	"hoodie.schemaprovider.class": "org.apache.hudi.utilities.schema.FilebasedSchemaProvider",
+	"hoodie.deltastreamer.schemaprovider.source.schema.file": "file:///tmp/hoodie/schema.avsc",
+	"hoodie.deltastreamer.schemaprovider.target.schema.file": "file:///tmp/hoodie/schema.avsc",
+	"hoodie.meta.sync.enable": "true",
+	"hoodie.meta.sync.classes": "org.apache.hudi.hive.HiveSyncTool",
+	"hoodie.datasource.hive_sync.table": "sample-table"
+    }
+}

@@ -59,7 +59,9 @@ public abstract class AbstractSyncHoodieClient {
 
   public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
                                   boolean verifyMetadataFileListing, boolean withOperationField, FileSystem fs) {
+    LOG.error("WNI VIMP 100");
     this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    LOG.error("WNI VIMP 101");
     this.tableType = metaClient.getTableType();
     this.basePath = basePath;
     this.assumeDatePartitioning = assumeDatePartitioning;
@@ -67,6 +69,7 @@ public abstract class AbstractSyncHoodieClient {
     this.verifyMetadataFileListing = verifyMetadataFileListing;
     this.withOperationField = withOperationField;
     this.fs = fs;
+    LOG.error("WNI VIMP 102");
   }
 
   /**
