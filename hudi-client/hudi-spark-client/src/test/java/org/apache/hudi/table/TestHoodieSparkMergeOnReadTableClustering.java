@@ -65,6 +65,7 @@ import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -215,7 +216,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends FunctionalTestHarness {
 
     List<WriteStatus> statuses = client.insert(writeRecords, commitTime).collect();
     assertNoWriteErrors(statuses);
-    assertFileSizes(statuses);
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
@@ -250,7 +251,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends FunctionalTestHarness {
     List<WriteStatus> statuses = client.upsert(jsc().parallelize(records, 1), commitTime).collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
-    assertFileSizes(statuses);
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
@@ -260,13 +261,6 @@ class TestHoodieSparkMergeOnReadTableClustering extends FunctionalTestHarness {
 
     Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
     assertFalse(commit.isPresent());
-  }
-
-  private void assertFileSizes(List<WriteStatus> statuses) throws IOException {
-    for (WriteStatus status: statuses) {
-      assertEquals(FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())),
-          status.getStat().getFileSizeInBytes());
-    }
   }
 
   private FileStatus[] listAllBaseFilesInPath(HoodieTable table) throws IOException {

@@ -21,9 +21,12 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.WriteStatus;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
@@ -37,5 +40,20 @@ public class Assertions {
   public static void assertNoWriteErrors(List<WriteStatus> statuses) {
     assertAll(statuses.stream().map(status -> () ->
         assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId())));
+  }
+
+  /**
+   * Assert each file size equal to its source of truth.
+   *
+   * @param fileSizeGetter to retrieve the source of truth of file size.
+   */
+  public static void assertFileSizesEqual(List<WriteStatus> statuses, CheckedFunction<WriteStatus, Long> fileSizeGetter) {
+    assertAll(statuses.stream().map(status -> () ->
+        assertEquals(fileSizeGetter.apply(status), status.getStat().getFileSizeInBytes())));
+  }
+
+  @FunctionalInterface
+  public interface CheckedFunction<T, R> {
+    R apply(T t) throws Exception;
   }
 }

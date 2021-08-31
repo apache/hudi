@@ -49,7 +49,6 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -102,6 +101,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1564,7 +1564,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
     List<WriteStatus> statuses = client.insert(writeRecords, commitTime).collect();
     assertNoWriteErrors(statuses);
-    assertFileSizes(statuses);
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())));
 
     metaClient = getHoodieMetaClient(hadoopConf, cfg.getBasePath());
     HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
@@ -1600,7 +1600,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     List<WriteStatus> statuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
-    assertFileSizes(statuses);
+    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
@@ -1610,13 +1610,6 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
     Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
     assertFalse(commit.isPresent());
-  }
-
-  private void assertFileSizes(List<WriteStatus> statuses) throws IOException {
-    for (WriteStatus status: statuses) {
-      assertEquals(FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())),
-          status.getStat().getFileSizeInBytes());
-    }
   }
 
   private FileStatus[] getROSnapshotFiles(String partitionPath)
