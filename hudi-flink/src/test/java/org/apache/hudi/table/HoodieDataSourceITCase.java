@@ -319,7 +319,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        .option(FlinkOptions.TABLE_TYPE, tableType.name())
         .option(FlinkOptions.READ_AS_STREAMING, "true")
         .option(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, "2")
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
@@ -332,6 +332,40 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "+I(+I[id1, Danny, 23, 1970-01-01T00:00:00.001, par1]), "
         + "+I(+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1])]";
     assertRowsEquals(result, expected, true);
+  }
+
+  @Test
+  void testStreamReadMorTableWithCompactionPlan() throws Exception {
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        .option(FlinkOptions.READ_AS_STREAMING, "true")
+        .option(FlinkOptions.READ_STREAMING_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
+        .option(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, "2")
+        // close the async compaction
+        .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, false)
+        // generate compaction plan for each commit
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, "1")
+        .withPartition(false)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    streamTableEnv.executeSql("insert into t1 select * from source");
+
+    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", 10);
+    final String expected = "["
+        + "+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1], "
+        + "+I[id3, Julian, 53, 1970-01-01T00:00:03, par2], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:04, par2], "
+        + "+I[id5, Sophia, 18, 1970-01-01T00:00:05, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]";
+    assertRowsEquals(result, expected);
   }
 
   @ParameterizedTest
