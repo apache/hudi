@@ -32,7 +32,7 @@ last_modified_at: 2021-08-26T08:40:00-07:00
 ### Spark SQL DML and DDL Support
 
 0.9.0 adds **experimental** support for DDL/DMLs using Spark SQL, taking a huge step towards making Hudi more easily accessible and 
-operable by all personas (non-engineers, analysts etc). Users can now use `CREATE TABLE....USING HUDI` and `CREAT TABLE .. AS SELECT` 
+operable by all personas (non-engineers, analysts etc). Users can now use `CREATE TABLE....USING HUDI` and `CREATE TABLE .. AS SELECT` 
 statements to directly create and manage tables in catalogs like Hive. Users can then use `INSERT`, `UPDATE`, `MERGE INTO` and `DELETE`
 sql statements to manipulate data. In addition, `INSERT OVERWRITE` statement can be used to overwrite existing data in the table or partition
 for existing batch ETL pipelines. For more information, checkout our docs [here](/docs/quick-start-guide) clicking on `SparkSQL` tab.
@@ -67,8 +67,8 @@ to assist in building and executing a clustering plan together as a standalone s
 Users can choose to drop fields used to generate partition paths, using `hoodie.datasource.write.drop.partition.columns=true`, to support 
 querying of Hudi snapshots using systems like BigQuery, which cannot handle this.
 
-Hudi uses different types of spillable maps, for internally handling merges (compaction, updates or even MOR snapshot queries). In 0.9.0, we have added
-support for compression for the bitcask style default option and introduced a new spillable map backed by rocksDB, which can be more performant for large
+Hudi uses different [types of spillable maps](http://localhost:3000/docs/configurations#hoodiecommonspillablediskmaptype), for internally handling merges (compaction, updates or even MOR snapshot queries). In 0.9.0, we have added
+support for [compression](/docs/configurations#hoodiecommondiskmapcompressionenabled) for the bitcask style default option and introduced a new spillable map backed by rocksDB, which can be more performant for large
 bulk updates or working with large base file sizes.
 
 Added a new write operation `delete_partition` operation, with support in spark. Users can leverage this to delete older partitions in bulk, in addition to
