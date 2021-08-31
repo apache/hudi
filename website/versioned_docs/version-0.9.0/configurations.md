@@ -4,7 +4,7 @@ keywords: [ configurations, default, flink options, spark, configs, parameters ]
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2021-08-26T22:04:13.167
+last_modified_at: 2021-08-30T20:08:15.950513
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -469,6 +469,39 @@ By default false (the names of partition folders are only partition values)<br><
 > Comma separated list of partitions to delete<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: PARTITIONS_TO_DELETE`<br></br>
+
+---
+
+### PreCommit Validator Configurations {#PreCommit-Validator-Configurations}
+
+The following set of configurations help validate new data before commits.
+
+`Config Class`: org.apache.hudi.config.HoodiePreCommitValidatorConfig<br></br>
+> #### hoodie.precommit.validators.single.value.sql.queries
+> Spark SQL queries to run on table before committing new data to validate state after commit.Multiple queries separated by ';' delimiter are supported.Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'Note \<TABLE_NAME\> variable is expected to be present in query.<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: SINGLE_VALUE_SQL_QUERIES`<br></br>
+
+---
+
+> #### hoodie.precommit.validators.equality.sql.queries
+> Spark SQL queries to run on table before committing new data to validate state before and after commit. Multiple queries separated by ';' delimiter are supported. Example: "select count(*) from \<TABLE_NAME\> Note \<TABLE_NAME\> is replaced by table state before and after commit.<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: EQUALITY_SQL_QUERIES`<br></br>
+
+---
+
+> #### hoodie.precommit.validators
+> Comma separated list of class names that can be invoked to validate commit<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: VALIDATOR_CLASS_NAMES`<br></br>
+
+---
+
+> #### hoodie.precommit.validators.inequality.sql.queries
+> Spark SQL queries to run on table before committing new data to validate state before and after commit.Multiple queries separated by ';' delimiter are supported.Example query: 'select count(*) from \<TABLE_NAME\> where col=null'Note \<TABLE_NAME\> variable is expected to be present in query.<br></br>
+> **Default Value**:  (Optional)<br></br>
+> `Config Param: INEQUALITY_SQL_QUERIES`<br></br>
 
 ---
 
@@ -1217,7 +1250,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 ---
 
 > #### hoodie.bulkinsert.user.defined.partitioner.class
-> If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data optimally for common query patterns.<br></br>
+> If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner which can does sorting based on specified column values set by hoodie.bulkinsert.user.defined.partitioner.sort.columns<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME`<br></br>
 
@@ -1433,6 +1466,13 @@ Configurations that control write behavior on Hudi tables. These can be directly
 > Determines the parallelism for deleting marker files, which are used to track all files (valid or invalid/partial) written during a write operation. Increase this value if delays are observed, with large batch writes.<br></br>
 > **Default Value**: 100 (Optional)<br></br>
 > `Config Param: MARKERS_DELETE_PARALLELISM_VALUE`<br></br>
+
+---
+
+> #### hoodie.bulkinsert.user.defined.partitioner.sort.columns
+> Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. For example 'column1,column2'<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS`<br></br>
 
 ---
 
@@ -2748,6 +2788,25 @@ Configurations that control the clustering table service in hudi, which optimize
 > **Default Value**: 2 (Optional)<br></br>
 > `Config Param: DAYBASED_LOOKBACK_PARTITIONS`<br></br>
 > `Since Version: 0.7.0`<br></br>
+
+---
+
+### Common Configurations {#Common-Configurations}
+
+The following set of configurations are common across Hudi.
+
+`Config Class`: org.apache.hudi.common.config.HoodieCommonConfig<br></br>
+> #### hoodie.common.diskmap.compression.enabled
+> Turn on compression for BITCASK disk map used by the External Spillable Map<br></br>
+> **Default Value**: true (Optional)<br></br>
+> `Config Param: DISK_MAP_BITCASK_COMPRESSION_ENABLED`<br></br>
+
+---
+
+> #### hoodie.common.spillable.diskmap.type
+> When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.<br></br>
+> **Default Value**: BITCASK (Optional)<br></br>
+> `Config Param: SPILLABLE_DISK_MAP_TYPE`<br></br>
 
 ---
 
