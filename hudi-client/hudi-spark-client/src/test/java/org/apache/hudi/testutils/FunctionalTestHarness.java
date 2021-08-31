@@ -43,7 +43,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -72,7 +71,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
   protected java.nio.file.Path tempDir;
 
   public String basePath() {
-    return tempDir.toAbsolutePath().toString();
+    return tempDir.toAbsolutePath().toUri().toString();
   }
 
   @Override
@@ -156,14 +155,6 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
         spark.stop();
         spark = null;
       }));
-    }
-  }
-
-  @AfterEach
-  public synchronized void tearDown() throws Exception {
-    if (spark != null) {
-      spark.stop();
-      spark = null;
     }
   }
 

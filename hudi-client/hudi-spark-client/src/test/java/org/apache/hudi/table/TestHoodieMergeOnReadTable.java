@@ -152,15 +152,6 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
   }
 
-  private static Stream<Arguments> populateMetaFieldsAndPreserveMetadataParams() {
-    return Arrays.stream(new Boolean[][] {
-        {true, true},
-        {false, true},
-        {true, false},
-        {false, false}
-    }).map(Arguments::of);
-  }
-
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testSimpleInsertAndUpdate(boolean populateMetaFields) throws Exception {
@@ -259,94 +250,6 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
       assertEquals(200, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of("000")),
           "Must contain 200 records");
-    }
-  }
-
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
-  public void testSimpleClusteringNoUpdates(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
-    clean();
-    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
-    testClustering(false, populateMetaFields, preserveCommitMetadata);
-  }
-
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsAndPreserveMetadataParams")
-  public void testSimpleClusteringWithUpdates(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
-    clean();
-    init(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue(), populateMetaFields);
-    testClustering(true, populateMetaFields, preserveCommitMetadata);
-  }
-
-  private void testClustering(boolean doUpdates, boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
-    // set low compaction small File Size to generate more file groups.
-    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withPreserveHoodieCommitMetadata(preserveCommitMetadata).build();
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true, 10L, clusteringConfig);
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    HoodieWriteConfig cfg = cfgBuilder.build();
-
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
-
-      /**
-       * Write 1 (only inserts)
-       */
-      String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
-
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
-      insertRecords(records.subList(0, 200), client, cfg, newCommitTime);
-
-      /**
-       * Write 2 (more inserts to create new files)
-       */
-      // we already set small file size to small number to force inserts to go into new file.
-      newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
-      insertRecords(records.subList(200, 400), client, cfg, newCommitTime);
-
-      if (doUpdates) {
-        /**
-         * Write 3 (updates)
-         */
-        newCommitTime = "003";
-        client.startCommitWithTime(newCommitTime);
-        records = dataGen.generateUpdates(newCommitTime, 100);
-        updateRecords(records, client, cfg, newCommitTime);
-      }
-
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-      // expect 2 base files for each partition
-      assertEquals(dataGen.getPartitionPaths().length * 2, allFiles.length);
-
-      String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
-      // verify all files are included in clustering plan.
-      assertEquals(allFiles.length, hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
-
-      // Do the clustering and validate
-      client.cluster(clusteringCommitTime, true);
-
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      final HoodieTable clusteredTable = HoodieSparkTable.create(cfg, context, metaClient);
-      Stream<HoodieBaseFile> dataFilesToRead = Arrays.stream(dataGen.getPartitionPaths())
-          .flatMap(p -> clusteredTable.getBaseFileOnlyView().getLatestBaseFiles(p));
-      // verify there should be only one base file per partition after clustering.
-      assertEquals(dataGen.getPartitionPaths().length, dataFilesToRead.count());
-
-      HoodieTimeline timeline = metaClient.getCommitTimeline().filterCompletedInstants();
-      assertEquals(1, timeline.findInstantsAfter("003", Integer.MAX_VALUE).countInstants(),
-          "Expecting a single commit.");
-      assertEquals(clusteringCommitTime, timeline.lastInstant().get().getTimestamp());
-      assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, timeline.lastInstant().get().getAction());
-      if (cfg.populateMetaFields()) {
-        assertEquals(400, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of("000")),
-            "Must contain 200 records");
-      } else {
-        assertEquals(400, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.empty()));
-      }
     }
   }
 
