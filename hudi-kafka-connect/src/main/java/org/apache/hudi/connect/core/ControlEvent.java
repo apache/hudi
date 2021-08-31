@@ -42,7 +42,7 @@ import java.util.Map;
 @SuppressWarnings("checkstyle:VisibilityModifier")
 public class ControlEvent implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(BitCaskDiskMap.class);
+  private static final Logger LOG = LogManager.getLogger(ControlEvent.class);
 
   private MsgType msgType;
   private String commitTime;
@@ -186,14 +186,14 @@ public class ControlEvent implements Serializable {
     }
   }
 
-  enum MsgType {
+  public enum MsgType {
     START_COMMIT,
     END_COMMIT,
     ACK_COMMIT,
     WRITE_STATUS,
   }
 
-  enum OutcomeType {
+  public enum OutcomeType {
     WRITE_SUCCESS,
   }
 }

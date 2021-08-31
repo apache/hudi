@@ -21,15 +21,12 @@ package org.apache.hudi.connect.core;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
+import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
 import org.apache.hudi.connect.writers.ConnectTransactionServices;
 import org.apache.hudi.connect.writers.TransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +37,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -64,6 +60,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
   private final TopicPartition partition;
   private final KafkaControlAgent kafkaControlClient;
   private final TransactionServices hudiTransactionServices;
+  private final KafkaPartitionProvider kafkaPartitionProvider;
 
   private String currentCommitTime;
   private Map<Integer, List<WriteStatus>> partitionsWriteStatusReceived;
@@ -75,18 +72,24 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
   public HudiTransactionCoordinator(HudiConnectConfigs configs,
                                     TopicPartition partition,
                                     KafkaControlAgent kafkaControlClient) throws HoodieException {
-    this(configs, partition, kafkaControlClient, new ConnectTransactionServices((configs)));
+    this(configs,
+        partition,
+        kafkaControlClient,
+        new ConnectTransactionServices(configs),
+        KafkaConnectUtils::getLatestNumPartitions);
   }
 
   public HudiTransactionCoordinator(HudiConnectConfigs configs,
                                     TopicPartition partition,
                                     KafkaControlAgent kafkaControlClient,
-                                    TransactionServices hudiTransactionServices) {
+                                    TransactionServices hudiTransactionServices,
+                                    KafkaPartitionProvider kafkaPartitionProvider) {
     super(configs, partition);
     this.configs = configs;
     this.partition = partition;
     this.kafkaControlClient = kafkaControlClient;
     this.hudiTransactionServices = hudiTransactionServices;
+    this.kafkaPartitionProvider = kafkaPartitionProvider;
 
     this.currentCommitTime = StringUtils.EMPTY_STRING;
     this.partitionsWriteStatusReceived = new HashMap<>();
@@ -171,7 +174,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
   }
 
   private void startNewCommit() {
-    numPartitions = getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
+    numPartitions = kafkaPartitionProvider.getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
     partitionsWriteStatusReceived.clear();
     try {
       currentCommitTime = hudiTransactionServices.startCommit();
@@ -319,19 +322,8 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
     ACKED_COMMIT,
   }
 
-  private static int getLatestNumPartitions(String bootstrapServers, String topicName) {
-    Properties props = new Properties();
-    props.put("bootstrap.servers", bootstrapServers);
-    try {
-      AdminClient client = AdminClient.create(props);
-      DescribeTopicsResult result = client.describeTopics(Arrays.asList(topicName));
-      Map<String, KafkaFuture<TopicDescription>> values = result.values();
-      KafkaFuture<TopicDescription> topicDescription = values.get(topicName);
-      int numPartitions = topicDescription.get().partitions().size();
-      LOG.info("Latest number of partitions for topic {} is {}", topicName, numPartitions);
-      return numPartitions;
-    } catch (Exception exception) {
-      throw new HoodieException("Fatal error fetching the latest partition of kafka topic name" + topicName, exception);
-    }
+  public interface KafkaPartitionProvider {
+
+    int getLatestNumPartitions(String bootstrapServers, String topicName);
   }
 }

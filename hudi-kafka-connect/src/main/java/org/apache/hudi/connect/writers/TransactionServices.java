@@ -1,6 +1,7 @@
 package org.apache.hudi.connect.writers;
 
 import org.apache.hudi.client.WriteStatus;
+
 import java.util.List;
 import java.util.Map;
 

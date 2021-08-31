@@ -69,7 +69,6 @@ public class HudiSinkTask extends SinkTask {
   public void start(Map<String, String> props) {
     connectorName = props.get("name");
     taskId = props.get(TASK_ID_CONFIG_NAME);
-    System.out.println(props);
     LOG.info("Starting Hudi Sink Task for {} connector {} with id {} with assignments {}", props, connectorName, taskId, context.assignment());
     try {
       connectConfigs = HudiConnectConfigs.newBuilder().withProperties(props).build();
@@ -95,9 +94,9 @@ public class HudiSinkTask extends SinkTask {
       hudiTransactionParticipants.get(tp).buffer(record);
     }
 
-    /*for (TopicPartition partition : context.assignment()) {
+    for (TopicPartition partition : context.assignment()) {
       hudiTransactionParticipants.get(partition).processRecords();
-    }*/
+    }
   }
 
   @Override
