@@ -20,9 +20,10 @@ package org.apache.hudi.connect.core;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.connect.kafka.HudiKafkaControlAgent;
+import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
-import org.apache.hudi.connect.writers.ConnectTransactionServicesProvider;
+import org.apache.hudi.connect.writers.ConnectTransactionServices;
+import org.apache.hudi.connect.writers.TransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.clients.admin.AdminClient;
@@ -55,15 +56,14 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
   private static final String KAFKA_OFFSET_KEY = "kafka.commit.offsets";
   private static final String KAFKA_OFFSET_DELIMITER = ",";
   private static final String KAFKA_OFFSET_KV_DELIMITER = "=";
-  private static final int START_COMMIT_INIT_DELAY_MS = 100;
-  private static final int RESTART_COMMIT_DELAY_MS = 1000;
-  private static final int COMMIT_INTERVAL_MINS = 1;
-  private static final int WRITE_STATUS_TIMEOUT_SECS = 60;
+  private static final Long START_COMMIT_INIT_DELAY_MS = 100L;
+  private static final Long RESTART_COMMIT_DELAY_MS = 1000L;
+  private static final Long WRITE_STATUS_TIMEOUT_SECS = 60L;
 
   private final HudiConnectConfigs configs;
   private final TopicPartition partition;
-  private final HudiKafkaControlAgent kafkaControlClient;
-  private final ConnectTransactionServicesProvider hudiTransactionServices;
+  private final KafkaControlAgent kafkaControlClient;
+  private final TransactionServices hudiTransactionServices;
 
   private String currentCommitTime;
   private Map<Integer, List<WriteStatus>> partitionsWriteStatusReceived;
@@ -74,14 +74,14 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
 
   public HudiTransactionCoordinator(HudiConnectConfigs configs,
                                     TopicPartition partition,
-                                    HudiKafkaControlAgent kafkaControlClient) throws HoodieException {
-    this(configs, partition, kafkaControlClient, new ConnectTransactionServicesProvider((configs)));
+                                    KafkaControlAgent kafkaControlClient) throws HoodieException {
+    this(configs, partition, kafkaControlClient, new ConnectTransactionServices((configs)));
   }
 
   public HudiTransactionCoordinator(HudiConnectConfigs configs,
                                     TopicPartition partition,
-                                    HudiKafkaControlAgent kafkaControlClient,
-                                    ConnectTransactionServicesProvider hudiTransactionServices) {
+                                    KafkaControlAgent kafkaControlClient,
+                                    TransactionServices hudiTransactionServices) {
     super(configs, partition);
     this.configs = configs;
     this.partition = partition;
@@ -188,7 +188,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.END_COMMIT,
               partition.topic(),
               currentCommitTime),
-          COMMIT_INTERVAL_MINS * 10, TimeUnit.SECONDS);
+          configs.getCommitIntervalSecs(), TimeUnit.SECONDS);
     } catch (Exception exception) {
       LOG.error("Failed to start a new commit {}, will retry", currentCommitTime, exception);
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,

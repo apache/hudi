@@ -36,6 +36,12 @@ public class HudiConnectConfigs extends HoodieConfig {
       .withDocumentation("Kafka topic name used by the Hudi Sink Connector for "
           + "sending and receiving control messages. Not used for data records.");
 
+  public static final ConfigProperty<String> COMMIT_INTERVAL_SECS = ConfigProperty
+      .key("hoodie.kafka.commit.interval.secs")
+      .defaultValue("60")
+      .withDocumentation("The interval at which Hudi will commit the records written "
+          + "to the files, making them consumable on the read-side.");
+
   public static final ConfigProperty<String> META_SYNC_ENABLE = ConfigProperty
       .key("hoodie.meta.sync.enable")
       .defaultValue("false")
@@ -68,6 +74,10 @@ public class HudiConnectConfigs extends HoodieConfig {
     return getString(CONTROL_TOPIC_NAME);
   }
 
+  public Long getCommitIntervalSecs() {
+    return getLong(COMMIT_INTERVAL_SECS);
+  }
+
   public String getKafkaValueConverter() {
     return getString(KAFKA_VALUE_CONVERTER);
   }
@@ -86,6 +96,11 @@ public class HudiConnectConfigs extends HoodieConfig {
 
     public Builder withControlTopicName(String controlTopicName) {
       connectConfigs.setValue(CONTROL_TOPIC_NAME, controlTopicName);
+      return this;
+    }
+
+    public Builder withCommitIntervalSecs(Long commitIntervalSecs) {
+      connectConfigs.setValue(COMMIT_INTERVAL_SECS, String.valueOf(commitIntervalSecs));
       return this;
     }
 

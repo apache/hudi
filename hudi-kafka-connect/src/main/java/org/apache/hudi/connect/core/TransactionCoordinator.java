@@ -78,7 +78,7 @@ public abstract class TransactionCoordinator {
     submitEvent(event, 0, TimeUnit.MILLISECONDS);
   }
 
-  protected void submitEvent(CoordinatorEvent event, int delay, TimeUnit unit) {
+  protected void submitEvent(CoordinatorEvent event, long delay, TimeUnit unit) {
     eventProcessor.submitEvent(event, delay, unit);
   }
 
@@ -107,7 +107,7 @@ public abstract class TransactionCoordinator {
       return eventProcessor;
     }
 
-    private void submitEvent(CoordinatorEvent event, int delay, TimeUnit unit) {
+    private void submitEvent(CoordinatorEvent event, long delay, TimeUnit unit) {
       scheduler.schedule(() -> {
         events.add(event);
       }, delay, unit);

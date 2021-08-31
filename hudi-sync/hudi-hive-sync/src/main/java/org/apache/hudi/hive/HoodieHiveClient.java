@@ -63,13 +63,11 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, cfg.withOperationField, fs);
-    LOG.error("WNI VIMP 10");
     this.syncConfig = cfg;
 
     // Support JDBC, HiveQL and metastore based implementations for backwards compatiblity. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     try {
-      LOG.error("WNI VIMP 11");
       if (!StringUtils.isNullOrEmpty(cfg.syncMode)) {
         HiveSyncMode syncMode = HiveSyncMode.of(cfg.syncMode);
         switch (syncMode) {
@@ -86,24 +84,21 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
             throw new HoodieHiveSyncException("Invalid sync mode given " + cfg.syncMode);
         }
       } else {
-        LOG.error("WNI VIMP 12");
         ddlExecutor = cfg.useJdbc ? new JDBCExecutor(cfg, fs) : new HiveQueryDDLExecutor(cfg, fs, configuration);
       }
-      LOG.error("WNI VIMP 13");
       this.client = Hive.get(configuration).getMSC();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
 
     try {
-      LOG.error("WNI VIMP 15");
       this.partitionValueExtractor =
           (PartitionValueExtractor) Class.forName(cfg.partitionValueExtractorClass).newInstance();
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
           "Failed to initialize PartitionValueExtractor class " + cfg.partitionValueExtractorClass, e);
     }
-    LOG.error("WNI VIMP 16");
+
     activeTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
   }
 

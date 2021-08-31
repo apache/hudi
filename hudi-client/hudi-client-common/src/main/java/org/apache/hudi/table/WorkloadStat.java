@@ -70,8 +70,7 @@ public class WorkloadStat implements Serializable {
   public String toString() {
     final StringBuilder sb = new StringBuilder("WorkloadStat {");
     sb.append("numInserts=").append(numInserts).append(", ");
-    sb.append("numUpdates=").append(numUpdates).append(", ");
-    sb.append("updateLocationToCount=").append(updateLocationToCount);
+    sb.append("numUpdates=").append(numUpdates);
     sb.append('}');
     return sb.toString();
   }
