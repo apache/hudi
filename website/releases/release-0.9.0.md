@@ -67,12 +67,12 @@ to assist in building and executing a clustering plan together as a standalone s
 Users can choose to drop fields used to generate partition paths, using `hoodie.datasource.write.drop.partition.columns=true`, to support 
 querying of Hudi snapshots using systems like BigQuery, which cannot handle this.
 
-Hudi uses different [types of spillable maps](http://localhost:3000/docs/configurations#hoodiecommonspillablediskmaptype), for internally handling merges (compaction, updates or even MOR snapshot queries). In 0.9.0, we have added
+Hudi uses different [types of spillable maps](/docs/configurations#hoodiecommonspillablediskmaptype), for internally handling merges (compaction, updates or even MOR snapshot queries). In 0.9.0, we have added
 support for [compression](/docs/configurations#hoodiecommondiskmapcompressionenabled) for the bitcask style default option and introduced a new spillable map backed by rocksDB, which can be more performant for large
 bulk updates or working with large base file sizes.
 
 Added a new write operation `delete_partition` operation, with support in spark. Users can leverage this to delete older partitions in bulk, in addition to
-record level deletes. Deletion of specific partitions can be done using this [config](/docs/configurations#hoodiedatasourcewritepartitionstodelete)    
+record level deletes. Deletion of specific partitions can be done using this [config](/docs/configurations#hoodiedatasourcewritepartitionstodelete).    
 
 Support for Huawei Cloud Object Storage, BAIDU AFS storage format, Baidu BOS storage in Hudi. 
 
