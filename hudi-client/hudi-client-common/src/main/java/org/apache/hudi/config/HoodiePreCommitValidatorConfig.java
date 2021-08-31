@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -32,6 +34,9 @@ import java.util.Properties;
  * Storage related config.
  */
 @Immutable
+@ConfigClassProperty(name = "PreCommit Validator Configurations",
+    groupName = ConfigGroups.Names.SPARK_DATASOURCE,
+    description = "The following set of configurations help validate new data before commits.")
 public class HoodiePreCommitValidatorConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> VALIDATOR_CLASS_NAMES = ConfigProperty
