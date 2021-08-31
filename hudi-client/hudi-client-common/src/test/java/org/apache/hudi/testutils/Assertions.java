@@ -20,10 +20,9 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.testutils.CheckedFunction;
 
-import java.io.IOException;
 import java.util.List;
-import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,8 +51,4 @@ public class Assertions {
         assertEquals(fileSizeGetter.apply(status), status.getStat().getFileSizeInBytes())));
   }
 
-  @FunctionalInterface
-  public interface CheckedFunction<T, R> {
-    R apply(T t) throws Exception;
-  }
 }
