@@ -40,7 +40,7 @@
         <id>Schema evolution with DeltaStreamer using KafkaSource</id>
         <link href="https://hudi.apache.org/cn/blog/2021/08/16/kafka-custom-deserializer"/>
         <updated>2021-08-16T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[The schema used for data exchange between services can change change rapidly with new business requirements.]]></summary>
+        <summary type="html"><![CDATA[The schema used for data exchange between services can change rapidly with new business requirements.]]></summary>
     </entry>
     <entry>
         <title type="html"><![CDATA[Apache Hudi - The Data Lake Platform]]></title>
