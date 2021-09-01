@@ -42,6 +42,13 @@ public class HudiConnectConfigs extends HoodieConfig {
       .withDocumentation("The interval at which Hudi will commit the records written "
           + "to the files, making them consumable on the read-side.");
 
+  public static final ConfigProperty<String> COORDINATOR_WRITE_TIMEOUT_SECS = ConfigProperty
+      .key("hoodie.kafka.coordinator.write.timeout.secs")
+      .defaultValue("60")
+      .withDocumentation("The timeout after sending an END_COMMIT until when "
+          + "the coordinator will wait for the write statuses from all the partitions"
+          + "to ignore the current commit and start a new commit.");
+
   public static final ConfigProperty<String> META_SYNC_ENABLE = ConfigProperty
       .key("hoodie.meta.sync.enable")
       .defaultValue("false")
@@ -78,6 +85,10 @@ public class HudiConnectConfigs extends HoodieConfig {
     return getLong(COMMIT_INTERVAL_SECS);
   }
 
+  public Long getCoordinatorWriteTimeoutSecs() {
+    return getLong(COORDINATOR_WRITE_TIMEOUT_SECS);
+  }
+
   public String getKafkaValueConverter() {
     return getString(KAFKA_VALUE_CONVERTER);
   }
@@ -101,6 +112,11 @@ public class HudiConnectConfigs extends HoodieConfig {
 
     public Builder withCommitIntervalSecs(Long commitIntervalSecs) {
       connectConfigs.setValue(COMMIT_INTERVAL_SECS, String.valueOf(commitIntervalSecs));
+      return this;
+    }
+
+    public Builder withCoordinatorWriteTimeoutSecs(Long coordinatorWriteTimeoutSecs) {
+      connectConfigs.setValue(COORDINATOR_WRITE_TIMEOUT_SECS, String.valueOf(coordinatorWriteTimeoutSecs));
       return this;
     }
 

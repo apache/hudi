@@ -53,8 +53,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
   private static final String KAFKA_OFFSET_DELIMITER = ",";
   private static final String KAFKA_OFFSET_KV_DELIMITER = "=";
   private static final Long START_COMMIT_INIT_DELAY_MS = 100L;
-  private static final Long RESTART_COMMIT_DELAY_MS = 1000L;
-  private static final Long WRITE_STATUS_TIMEOUT_SECS = 60L;
+  private static final Long RESTART_COMMIT_DELAY_MS = 500L;
 
   private final HudiConnectConfigs configs;
   private final TopicPartition partition;
@@ -211,7 +210,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
           .build();
       kafkaControlClient.publishMessage(message);
     } catch (Exception exception) {
-      LOG.warn("Could not send END_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime);
+      LOG.warn("Could not send END_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
     }
     currentConsumedKafkaOffsets.clear();
     currentState = State.ENDED_COMMIT;
@@ -220,7 +219,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
     submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.WRITE_STATUS_TIMEOUT,
             partition.topic(),
             currentCommitTime),
-        WRITE_STATUS_TIMEOUT_SECS, TimeUnit.SECONDS);
+        configs.getCoordinatorWriteTimeoutSecs(), TimeUnit.SECONDS);
   }
 
   private void onReceiveWriteStatus(ControlEvent message) {
