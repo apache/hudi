@@ -71,7 +71,7 @@ public class HoodieFileWriterFactory {
 
     HoodieAvroParquetConfig parquetConfig = new HoodieAvroParquetConfig(writeSupport, config.getParquetCompressionCodec(),
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
-        hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());
+        hoodieTable.getHadoopConf(), config.getParquetCompressionRatio(), config.enableParquetDictionary());
 
     return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, taskContextSupplier, populateMetaFields);
   }

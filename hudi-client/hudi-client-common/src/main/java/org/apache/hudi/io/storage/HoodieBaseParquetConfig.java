@@ -33,9 +33,15 @@ public class HoodieBaseParquetConfig<T> {
   private long maxFileSize;
   private Configuration hadoopConf;
   private double compressionRatio;
+  private boolean directionaryEnabled;
 
   public HoodieBaseParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
-                                 int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
+      int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
+    this(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio, false);
+  }
+
+  public HoodieBaseParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
+                                 int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio, boolean directionaryEnabled) {
     this.writeSupport = writeSupport;
     this.compressionCodecName = compressionCodecName;
     this.blockSize = blockSize;
@@ -43,6 +49,7 @@ public class HoodieBaseParquetConfig<T> {
     this.maxFileSize = maxFileSize;
     this.hadoopConf = hadoopConf;
     this.compressionRatio = compressionRatio;
+    this.directionaryEnabled = directionaryEnabled;
   }
 
   public CompressionCodecName getCompressionCodecName() {
@@ -71,5 +78,9 @@ public class HoodieBaseParquetConfig<T> {
 
   public T getWriteSupport() {
     return writeSupport;
+  }
+
+  public boolean isDirectionaryEnabled() {
+    return directionaryEnabled;
   }
 }

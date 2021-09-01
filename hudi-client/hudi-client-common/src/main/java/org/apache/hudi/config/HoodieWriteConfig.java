@@ -1415,6 +1415,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return CompressionCodecName.fromConf(getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME));
   }
 
+  public boolean enableParquetDictionary() {
+    return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
+  }
+
   public double getLogFileToParquetCompressionRatio() {
     return getDouble(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION);
   }
