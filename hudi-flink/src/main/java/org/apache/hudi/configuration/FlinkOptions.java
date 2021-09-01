@@ -112,6 +112,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false)
       .withDescription("Whether to bootstrap the index state from existing hoodie table, default false");
 
+  public static final ConfigOption<Long> INDEX_BOOTSTRAP_RATE_LIMIT = ConfigOptions
+      .key("index.bootstrap.rate.limit")
+      .longType()
+      .defaultValue(0L) // default no limit
+      .withDescription("Bootstrap record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)");
+
   public static final ConfigOption<Double> INDEX_STATE_TTL = ConfigOptions
       .key("index.state.ttl")
       .doubleType()

@@ -132,10 +132,16 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     String basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
-    for (String partitionPath : FSUtils.getAllFoldersWithPartitionMetaFile(FSUtils.getFs(basePath, hadoopConf), basePath)) {
-      if (pattern.matcher(partitionPath).matches()) {
-        loadRecords(partitionPath);
-      }
+
+    List<String> partitions = FSUtils.getAllFoldersWithPartitionMetaFile(FSUtils.getFs(basePath, hadoopConf), basePath)
+        .stream()
+        .filter(partitionPath -> pattern.matcher(partitionPath).matches())
+        .collect(toList());
+
+    int processedCount = 0;
+    for (String partitionPath : partitions) {
+      loadRecords(partitionPath);
+      LOG.info("Task [{}}:{}}] processed partition [{}/{}]", this.getClass().getSimpleName(), taskID, ++processedCount, partitions.size());
     }
 
     LOG.info("Finish sending index records, taskId = {}.", getRuntimeContext().getIndexOfThisSubtask());
@@ -181,6 +187,7 @@ public class BootstrapOperator<I, O extends HoodieRecord>
           .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp(), true)
           .collect(toList());
 
+      int processedCount = 0;
       for (FileSlice fileSlice : fileSlices) {
         if (!shouldLoadFile(fileSlice.getFileId(), maxParallelism, parallelism, taskID)) {
           continue;
@@ -203,7 +210,7 @@ public class BootstrapOperator<I, O extends HoodieRecord>
           }
 
           for (HoodieKey hoodieKey : hoodieKeys) {
-            output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
+            collectRecord(new StreamRecord(new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice))));
           }
         });
 
@@ -218,12 +225,13 @@ public class BootstrapOperator<I, O extends HoodieRecord>
 
         try {
           for (String recordKey : scanner.getRecords().keySet()) {
-            output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(new HoodieKey(recordKey, partitionPath), fileSlice))));
+            collectRecord(new StreamRecord(new IndexRecord(generateHoodieRecord(new HoodieKey(recordKey, partitionPath), fileSlice))));
           }
         } catch (Exception e) {
           throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
         } finally {
           scanner.close();
+          LOG.info("Task [{}}:{}}] processed fileSlice in partition {} [{}/{}]", this.getClass().getSimpleName(), taskID, partitionPath, ++processedCount, fileSlices.size());
         }
       }
     }
@@ -231,6 +239,10 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     long cost = System.currentTimeMillis() - start;
     LOG.info("Task [{}}:{}}] finish loading the index under partition {} and sending them to downstream, time cost: {} milliseconds.",
         this.getClass().getSimpleName(), taskID, partitionPath, cost);
+  }
+
+  public void collectRecord(StreamRecord streamRecord) {
+    output.collect(streamRecord);
   }
 
   @SuppressWarnings("unchecked")
