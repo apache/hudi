@@ -19,6 +19,7 @@
 package org.apache.hudi.connect.core;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.connect.writers.ConnectWriterProvider;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.writers.HudiConnectWriterProvider;
@@ -27,6 +28,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,21 +55,30 @@ public class HudiTransactionParticipant implements TransactionParticipant {
   private final TopicPartition partition;
   private final SinkTaskContext context;
   private final KafkaControlAgent kafkaControlAgent;
-  private final HudiConnectWriterProvider writerProvider;
+  private final ConnectWriterProvider<WriteStatus> writerProvider;
 
-  private TransactionInfo ongoingTransactionInfo;
+  private TransactionInfo<WriteStatus> ongoingTransactionInfo;
   private long committedKafkaOffset;
 
   public HudiTransactionParticipant(HudiConnectConfigs configs,
                                     TopicPartition partition,
                                     KafkaControlAgent kafkaControlAgent,
                                     SinkTaskContext context) throws HoodieException {
+    this(configs, partition, kafkaControlAgent, context,
+        new HudiConnectWriterProvider(configs, partition));
+  }
+
+  public HudiTransactionParticipant(HudiConnectConfigs configs,
+                                    TopicPartition partition,
+                                    KafkaControlAgent kafkaControlAgent,
+                                    SinkTaskContext context,
+                                    ConnectWriterProvider<WriteStatus> writerProvider) throws HoodieException {
     this.configs = configs;
     this.buffer = new LinkedList<>();
     this.controlEvents = new LinkedBlockingQueue<>();
     this.partition = partition;
     this.context = context;
-    this.writerProvider = new HudiConnectWriterProvider(configs, partition);
+    this.writerProvider = writerProvider;
     this.kafkaControlAgent = kafkaControlAgent;
     this.ongoingTransactionInfo = null;
     this.committedKafkaOffset = 0;
@@ -140,8 +151,9 @@ public class HudiTransactionParticipant implements TransactionParticipant {
     syncKafkaOffsetWithLeader(message);
     context.resume(partition);
     String currentCommitTime = message.getCommitTime();
+    LOG.info("Started a new transaction after receiving START_COMMIT for commit " + currentCommitTime);
     try {
-      ongoingTransactionInfo = new TransactionInfo(currentCommitTime, writerProvider);
+      ongoingTransactionInfo = new TransactionInfo<>(currentCommitTime, writerProvider.getWriter(currentCommitTime));
       ongoingTransactionInfo.setLastWrittenKafkaOffset(committedKafkaOffset);
     } catch (Exception exception) {
       LOG.warn("Error received while starting a new transaction", exception);
@@ -171,7 +183,7 @@ public class HudiTransactionParticipant implements TransactionParticipant {
       try {
         writeStatuses = ongoingTransactionInfo.getWriter().close();
       } catch (IOException exception) {
-        LOG.error("WNI OMG OMG SERIALIZATION ERROR", exception);
+        LOG.warn("Error closing the Hudi Writer", exception);
       }
 
       ControlEvent writeStatus = new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,

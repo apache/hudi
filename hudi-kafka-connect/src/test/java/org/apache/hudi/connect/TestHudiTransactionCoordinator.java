@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.connect;
 
 import org.apache.hudi.client.WriteStatus;
@@ -27,8 +45,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -36,6 +52,8 @@ public class TestHudiTransactionCoordinator {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
   private static final int NUM_PARTITIONS = 4;
+  private static final int MAX_COMMIT_ROUNDS = 5;
+  private static final int TEST_TIMEOUT_SECS = 60;
 
   private HudiTransactionCoordinator coordinator;
   private TopicPartition partition;
@@ -55,15 +73,10 @@ public class TestHudiTransactionCoordinator {
     latch = new CountDownLatch(1);
   }
 
-  @AfterEach
-  public void tearDown() throws Exception {
-    //cleanupResources();
-  }
-
   @ParameterizedTest
   @EnumSource(value = TestScenarios.class)
   public void testSingleCommitScenario(TestScenarios scenario) throws InterruptedException {
-    kafkaControlAgent = new TestKafkaControlAgent(latch, scenario, 5);
+    kafkaControlAgent = new TestKafkaControlAgent(latch, scenario, MAX_COMMIT_ROUNDS);
     coordinator = new HudiTransactionCoordinator(
         configs,
         partition,
@@ -74,7 +87,7 @@ public class TestHudiTransactionCoordinator {
 
     coordinator.start();
 
-    latch.await(60, TimeUnit.SECONDS);
+    latch.await(TEST_TIMEOUT_SECS, TimeUnit.SECONDS);
 
     if (latch.getCount() > 0) {
       throw new HoodieException("Test timedout resulting in failure");
@@ -143,7 +156,6 @@ public class TestHudiTransactionCoordinator {
     }
 
     private void testScenarios(ControlEvent message) {
-      System.out.println("Received Event Type: " + message.getMsgType() + " " + message.getCommitTime() + " " + numberCommitRounds);
       assertEquals(expectedMsgType, message.getMsgType());
 
       switch (message.getMsgType()) {
@@ -151,7 +163,6 @@ public class TestHudiTransactionCoordinator {
           expectedMsgType = ControlEvent.MsgType.END_COMMIT;
           break;
         case END_COMMIT:
-          System.out.println("WNI RIMP " + kafkaOffsetsCommitted + " " + message.getCoordinatorInfo().getGlobalKafkaCommitOffsets());
           assertEquals(kafkaOffsetsCommitted, message.getCoordinatorInfo().getGlobalKafkaCommitOffsets());
           int numSuccessPartitions;
           Map<Integer, Long> kafkaOffsets = new HashMap<>();

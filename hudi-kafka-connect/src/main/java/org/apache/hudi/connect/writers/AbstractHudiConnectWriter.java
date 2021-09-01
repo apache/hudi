@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 
-public abstract class AbstractHudiConnectWriter {
+public abstract class AbstractHudiConnectWriter implements ConnectWriter<WriteStatus> {
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractHudiConnectWriter.class);
 
@@ -35,6 +35,7 @@ public abstract class AbstractHudiConnectWriter {
     this.mapper = new ObjectMapper();
   }
 
+  @Override
   public void writeRecord(SinkRecord record) throws IOException {
     AvroConvertor convertor = new AvroConvertor(schemaProvider.getSourceSchema());
     Option<GenericRecord> avroRecord;
@@ -57,7 +58,8 @@ public abstract class AbstractHudiConnectWriter {
     writeHudiRecord(hudiRecord);
   }
 
-  public List<WriteStatus> close() throws IOException {
+  @Override
+  public List<WriteStatus> close() {
     return flushHudiRecords();
   }
 

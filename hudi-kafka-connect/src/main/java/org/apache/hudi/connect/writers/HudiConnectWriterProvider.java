@@ -19,6 +19,7 @@
 package org.apache.hudi.connect.writers;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -41,7 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
-public class HudiConnectWriterProvider {
+public class HudiConnectWriterProvider implements ConnectWriterProvider<WriteStatus> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HudiConnectWriterProvider.class);
 
