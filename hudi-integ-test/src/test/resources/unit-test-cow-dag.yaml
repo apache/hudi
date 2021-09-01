@@ -20,7 +20,7 @@ dag_content:
   first_insert:
     config:
       record_size: 70000
-      num_partitions_insert: 1
+      num_partitions_insert: 10
       repeat_count: 2
       num_records_insert: 100
     type: InsertNode
@@ -59,16 +59,22 @@ dag_content:
       engine: "mr"
     type: HiveSyncNode
     deps: first_upsert
-  first_hive_query:
+  #first_hive_query:
+  #  config:
+  #    hive_props:
+  #      prop2: "set spark.yarn.queue="
+  #      prop3: "set hive.strict.checks.large.query=false"
+  #      prop4: "set hive.stats.autogather=false"
+  #    hive_queries:
+  #      query1: "select count(*) from testdb1.table1"
+  #      result1: 300
+  #      query2: "select count(*) from testdb1.table1 group   by `_row_key` having count(*) > 1"
+  #      result2: 0
+  #  type: HiveQueryNode
+  #  deps: first_hive_sync
+  validate_data:
     config:
-      hive_props:
-        prop2: "set spark.yarn.queue="
-        prop3: "set hive.strict.checks.large.query=false"
-        prop4: "set hive.stats.autogather=false"
-      hive_queries:
-        query1: "select count(*) from testdb1.table1"
-        result1: 300
-        query2: "select count(*) from testdb1.table1 group   by `_row_key` having count(*) > 1"
-        result2: 0
-    type: HiveQueryNode
+      validate_hive: true
+      delete_input_data: true
+    type: ValidateDatasetNode
     deps: first_hive_sync

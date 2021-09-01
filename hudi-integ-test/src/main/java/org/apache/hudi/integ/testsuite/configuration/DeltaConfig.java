@@ -18,13 +18,13 @@
 
 package org.apache.hudi.integ.testsuite.configuration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -42,7 +42,7 @@ public class DeltaConfig implements Serializable {
   private final SerializableConfiguration configuration;
 
   public DeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
-      SerializableConfiguration configuration) {
+                     SerializableConfiguration configuration) {
     this.deltaOutputMode = deltaOutputMode;
     this.deltaInputType = deltaInputType;
     this.configuration = configuration;
@@ -95,6 +95,33 @@ public class DeltaConfig implements Serializable {
     private static String SCHEMA_VERSION = "schema_version";
     private static String NUM_ROLLBACKS = "num_rollbacks";
     private static String ENABLE_ROW_WRITING = "enable_row_writing";
+
+    // Spark SQL Create Table
+    private static String TABLE_TYPE = "table_type";
+    private static String USE_CTAS = "use_ctas";
+    private static String TABLE_LOCATION = "table_location";
+    private static String PRIMARY_KEY = "primary_key";
+    private static String PRE_COMBINE_FIELD = "pre_combine_field";
+    private static String PARTITION_FIELD = "partition_field";
+    // Spark SQL Merge
+    private static String MERGE_CONDITION = "merge_condition";
+    private static String DEFAULT_MERGE_CONDITION = "target._row_key = source._row_key";
+    private static String MERGE_MATCHED_ACTION = "matched_action";
+    private static String DEFAULT_MERGE_MATCHED_ACTION = "update set *";
+    private static String MERGE_NOT_MATCHED_ACTION = "not_matched_action";
+    private static String DEFAULT_MERGE_NOT_MATCHED_ACTION = "insert *";
+    // Spark SQL Update
+    // column to update.  The logic is fixed, i.e., to do "fare = fare * 1.6"
+    private static String UPDATE_COLUMN = "update_column";
+    private static String DEFAULT_UPDATE_COLUMN = "fare";
+    private static String WHERE_CONDITION_COLUMN = "condition_column";
+    // the where condition expression is like "begin_lon between 0.1 and 0.2"
+    // the value range is determined by the ratio of records to update or delete
+    // only support numeric type column for now
+    private static String DEFAULT_WHERE_CONDITION_COLUMN = "begin_lon";
+    // the ratio range is between 0.01 and 1.0. The ratio is approximate to the actual ratio achieved
+    private static String RATIO_RECORDS_CHANGE = "ratio_records_change";
+    private static double DEFAULT_RATIO_RECORDS_CHANGE = 0.5;
 
     private Map<String, Object> configsMap;
 
@@ -192,6 +219,59 @@ public class DeltaConfig implements Serializable {
 
     public boolean enableRowWriting() {
       return Boolean.valueOf(configsMap.getOrDefault(ENABLE_ROW_WRITING, false).toString());
+    }
+
+    public Option<String> getTableType() {
+      return !configsMap.containsKey(TABLE_TYPE) ? Option.empty()
+              : Option.of(configsMap.get(TABLE_TYPE).toString());
+    }
+
+    public boolean shouldUseCtas() {
+      return Boolean.valueOf(configsMap.getOrDefault(USE_CTAS, false).toString());
+    }
+
+    public Option<String> getTableLocation() {
+      return !configsMap.containsKey(TABLE_LOCATION) ? Option.empty()
+              : Option.of(configsMap.get(TABLE_LOCATION).toString());
+    }
+
+    public Option<String> getPrimaryKey() {
+      return !configsMap.containsKey(PRIMARY_KEY) ? Option.empty()
+              : Option.of(configsMap.get(PRIMARY_KEY).toString());
+    }
+
+    public Option<String> getPreCombineField() {
+      return !configsMap.containsKey(PRE_COMBINE_FIELD) ? Option.empty()
+              : Option.of(configsMap.get(PRE_COMBINE_FIELD).toString());
+    }
+
+    public Option<String> getPartitionField() {
+      return !configsMap.containsKey(PARTITION_FIELD) ? Option.empty()
+              : Option.of(configsMap.get(PARTITION_FIELD).toString());
+    }
+
+    public String getMergeCondition() {
+      return configsMap.getOrDefault(MERGE_CONDITION, DEFAULT_MERGE_CONDITION).toString();
+    }
+
+    public String getMatchedAction() {
+      return configsMap.getOrDefault(MERGE_MATCHED_ACTION, DEFAULT_MERGE_MATCHED_ACTION).toString();
+    }
+
+    public String getNotMatchedAction() {
+      return configsMap.getOrDefault(MERGE_NOT_MATCHED_ACTION, DEFAULT_MERGE_NOT_MATCHED_ACTION).toString();
+    }
+
+    public String getUpdateColumn() {
+      return configsMap.getOrDefault(UPDATE_COLUMN, DEFAULT_UPDATE_COLUMN).toString();
+    }
+
+    public String getWhereConditionColumn() {
+      return configsMap.getOrDefault(WHERE_CONDITION_COLUMN, DEFAULT_WHERE_CONDITION_COLUMN).toString();
+    }
+
+    public double getRatioRecordsChange() {
+      return Double.valueOf(configsMap.getOrDefault(RATIO_RECORDS_CHANGE, DEFAULT_RATIO_RECORDS_CHANGE).toString());
     }
 
     public Map<String, Object> getOtherConfigs() {

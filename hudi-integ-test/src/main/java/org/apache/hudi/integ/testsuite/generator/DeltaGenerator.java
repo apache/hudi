@@ -44,6 +44,7 @@ import org.apache.hudi.integ.testsuite.converter.UpdateConverter;
 import org.apache.hudi.integ.testsuite.reader.DFSAvroDeltaInputReader;
 import org.apache.hudi.integ.testsuite.reader.DFSHoodieDatasetInputReader;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputReader;
+import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter;
@@ -123,7 +124,11 @@ public class DeltaGenerator implements Serializable {
         .mapPartitionsWithIndex((index, p) -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
               minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions, startPartition));
-        }, true);
+        }, true)
+        .map(record -> {
+          record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
+          return record;
+        });
 
     if (deltaOutputConfig.getInputParallelism() < numPartitions) {
       inputBatch = inputBatch.coalesce(deltaOutputConfig.getInputParallelism());
@@ -158,6 +163,11 @@ public class DeltaGenerator implements Serializable {
                 .getNumRecordsUpsert());
           }
         }
+
+        adjustedRDD = adjustedRDD.map(record -> {
+          record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
+          return record;
+        });
 
         // persist this since we will make multiple passes over this
         int numPartition = Math.min(deltaOutputConfig.getInputParallelism(),
@@ -205,6 +215,12 @@ public class DeltaGenerator implements Serializable {
               .getNumRecordsDelete());
         }
       }
+
+      adjustedRDD = adjustedRDD.map(record -> {
+        record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
+        return record;
+      });
+
       log.info("Repartitioning records for delete");
       // persist this since we will make multiple passes over this
       adjustedRDD = adjustedRDD.repartition(jsc.defaultParallelism());
