@@ -39,6 +39,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -48,8 +50,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
@@ -58,6 +63,8 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 
 public class FileCreateUtils {
+
+  private static final Logger LOG = LogManager.getLogger(FileCreateUtils.class);
 
   private static final String WRITE_TOKEN = "1-0-1";
   private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
@@ -216,6 +223,10 @@ public class FileCreateUtils {
     createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
   }
 
+  public static void createInflightCompaction(String basePath, String instantTime) throws IOException {
+    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
+  }
+
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
@@ -305,6 +316,13 @@ public class FileCreateUtils {
     }
     return Files.list(parentPath).filter(p -> p.getFileName().toString()
         .endsWith(String.format("%s.%s", HoodieTableMetaClient.MARKER_EXTN, ioType))).count();
+  }
+
+  public static List<Path> getPartitionPaths(Path basePath) throws IOException {
+    if (Files.notExists(basePath)) {
+      return Collections.emptyList();
+    }
+    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)).collect(Collectors.toList());
   }
 
   /**
