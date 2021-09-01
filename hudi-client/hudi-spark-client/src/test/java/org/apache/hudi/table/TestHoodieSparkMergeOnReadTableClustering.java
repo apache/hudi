@@ -44,8 +44,8 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.testutils.FunctionalTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -72,7 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
-class TestHoodieSparkMergeOnReadTableClustering extends FunctionalTestHarness {
+class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> testClustering() {
     return Stream.of(
@@ -116,7 +116,6 @@ class TestHoodieSparkMergeOnReadTableClustering extends FunctionalTestHarness {
   @ParameterizedTest
   @MethodSource
   void testClustering(boolean doUpdates, boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
-    System.out.println(basePath());
     // set low compaction small File Size to generate more file groups.
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
@@ -175,14 +174,14 @@ class TestHoodieSparkMergeOnReadTableClustering extends FunctionalTestHarness {
         updateRecords(records, client, cfg, newCommitTime);
       }
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
       // expect 2 base files for each partition
       assertEquals(dataGen.getPartitionPaths().length * 2, allFiles.length);
 
       String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
+      hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       // verify all files are included in clustering plan.
       assertEquals(allFiles.length, hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
 
@@ -190,7 +189,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends FunctionalTestHarness {
       client.cluster(clusteringCommitTime, true);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      final HoodieTable clusteredTable = HoodieSparkTable.create(cfg, context, metaClient);
+      final HoodieTable clusteredTable = HoodieSparkTable.create(cfg, context(), metaClient);
       Stream<HoodieBaseFile> dataFilesToRead = Arrays.stream(dataGen.getPartitionPaths())
           .flatMap(p -> clusteredTable.getBaseFileOnlyView().getLatestBaseFiles(p));
       // verify there should be only one base file per partition after clustering.
@@ -219,7 +218,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends FunctionalTestHarness {
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
 
     Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
     assertTrue(deltaCommit.isPresent());
