@@ -17,24 +17,16 @@
  * under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -43,33 +35,23 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.testutils.Assertions.assertFileSizesEqual;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTestHarness {
@@ -85,32 +67,6 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         Arguments.of(false, false, true),
         Arguments.of(false, false, false)
     );
-  }
-
-  private HoodieTableMetaClient metaClient;
-  private HoodieTestDataGenerator dataGen;
-
-  @BeforeEach
-  void setUp() {
-    dataGen = new HoodieTestDataGenerator();
-  }
-
-  private Properties getPropertiesForKeyGen() {
-    Properties properties = new Properties();
-    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
-    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
-    properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
-    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
-    return properties;
-  }
-
-  private void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
-    if (!populateMetaFields) {
-      configBuilder.withProperties(getPropertiesForKeyGen())
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
-    }
   }
 
   @ParameterizedTest
@@ -142,8 +98,8 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         .withRollbackUsingMarkers(false);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
-    metaClient = HoodieTestUtils.init(jsc().hadoopConfiguration(), basePath(), HoodieTableType.MERGE_ON_READ, cfg.getProps());
-
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, cfg.getProps());
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
@@ -154,7 +110,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       client.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
-      insertRecords(records.subList(0, 200), client, cfg, newCommitTime);
+      insertRecords(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
 
       /*
        * Write 2 (more inserts to create new files)
@@ -162,7 +118,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       // we already set small file size to small number to force inserts to go into new file.
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
-      insertRecords(records.subList(200, 400), client, cfg, newCommitTime);
+      insertRecords(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
 
       if (doUpdates) {
         /*
@@ -171,7 +127,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         newCommitTime = "003";
         client.startCommitWithTime(newCommitTime);
         records = dataGen.generateUpdates(newCommitTime, 100);
-        updateRecords(records, client, cfg, newCommitTime);
+        updateRecords(metaClient, records, client, cfg, newCommitTime);
       }
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
@@ -207,63 +163,6 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         assertEquals(400, HoodieClientTestUtils.countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline, Option.empty()));
       }
     }
-  }
-
-  private void insertRecords(List<HoodieRecord> records, SparkRDDWriteClient client,
-      HoodieWriteConfig cfg, String commitTime) throws IOException {
-    JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
-
-    List<WriteStatus> statuses = client.insert(writeRecords, commitTime).collect();
-    assertNoWriteErrors(statuses);
-    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())));
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-
-    Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
-    assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(), "Delta commit should be specified value");
-
-    Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().lastInstant();
-    assertFalse(commit.isPresent());
-
-    FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
-    TableFileSystemView.BaseFileOnlyView roView =
-        getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
-    Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
-    assertTrue(!dataFilesToRead.findAny().isPresent());
-
-    roView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-    dataFilesToRead = roView.getLatestBaseFiles();
-    assertTrue(dataFilesToRead.findAny().isPresent(),
-        "should list the base files we wrote in the delta commit");
-  }
-
-  private void updateRecords(List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
-    Map<HoodieKey, HoodieRecord> recordsMap = new HashMap<>();
-    for (HoodieRecord rec : records) {
-      if (!recordsMap.containsKey(rec.getKey())) {
-        recordsMap.put(rec.getKey(), rec);
-      }
-    }
-
-    List<WriteStatus> statuses = client.upsert(jsc().parallelize(records, 1), commitTime).collect();
-    // Verify there are no errors
-    assertNoWriteErrors(statuses);
-    assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(metaClient.getFs(), new Path(metaClient.getBasePath(), status.getStat().getPath())));
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
-    assertTrue(deltaCommit.isPresent());
-    assertEquals(commitTime, deltaCommit.get().getTimestamp(),
-        "Latest Delta commit should match specified time");
-
-    Option<HoodieInstant> commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
-    assertFalse(commit.isPresent());
-  }
-
-  private FileStatus[] listAllBaseFilesInPath(HoodieTable table) throws IOException {
-    return HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles(table.getBaseFileExtension());
   }
 
 }
