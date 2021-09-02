@@ -22,7 +22,8 @@ package org.apache.hudi.utils;
  * Test sql statements.
  */
 public class TestSQL {
-  private TestSQL() {}
+  private TestSQL() {
+  }
 
   public static final String INSERT_T1 = "insert into t1 values\n"
       + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"

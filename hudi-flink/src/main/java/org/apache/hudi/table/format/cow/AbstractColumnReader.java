@@ -296,7 +296,8 @@ public abstract class AbstractColumnReader<V extends WritableColumnVector>
   /**
    * After read a page, we may need some initialization.
    */
-  protected void afterReadPage() {}
+  protected void afterReadPage() {
+  }
 
   /**
    * Support lazy dictionary ids decode. See more in {@link ParquetDictionary}.
