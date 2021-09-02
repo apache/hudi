@@ -19,27 +19,16 @@
 package org.apache.hudi.connect.core;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.sink.SinkRecord;
 
 /**
- * Interface for the Participant that
- * manages Writes for a
- * single Kafka partition, based on
- * coordination signals from the {@link TopicTransactionCoordinator}.
+ * The Base Coordinator that
+ * coordinates the write transactions
+ * across all the Kafka partitions, that
+ * are managed by the {@link TransactionParticipant}.
  */
-public interface TransactionParticipant {
-
-  void start();
-
-  void stop();
-
-  void buffer(SinkRecord record);
-
-  void processRecords();
-
+public interface TopicTransactionCoordinator {
   TopicPartition getPartition();
 
-  void publishControlEvent(ControlEvent message);
+  void processCoordinatorEvent(CoordinatorEvent event);
 
-  long getLastKafkaCommittedOffset();
 }

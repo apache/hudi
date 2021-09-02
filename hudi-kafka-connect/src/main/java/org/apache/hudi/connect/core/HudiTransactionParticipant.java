@@ -41,7 +41,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 /**
  * Implementation of the {@link TransactionParticipant} that
  * coordinates the Hudi write transactions
- * based on events from the {@link TransactionCoordinator}
+ * based on events from the {@link TopicTransactionCoordinator}
  * and manages the Hudi Writes for a specific Kafka Partition.
  */
 public class HudiTransactionParticipant implements TransactionParticipant {
@@ -186,6 +186,7 @@ public class HudiTransactionParticipant implements TransactionParticipant {
       }
 
       ControlEvent writeStatus = new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
+          ControlEvent.SenderType.PARTICIPANT,
           ongoingTransactionInfo.getCommitTime(),
           partition)
           .setParticipantInfo(new ControlEvent.ParticipantInfo(

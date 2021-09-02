@@ -18,8 +18,9 @@
 
 package org.apache.hudi.connect;
 
-import org.apache.hudi.connect.core.HudiTransactionCoordinator;
+import org.apache.hudi.connect.core.HudiTopicTransactionCoordinator;
 import org.apache.hudi.connect.core.HudiTransactionParticipant;
+import org.apache.hudi.connect.core.TransactionCoordinatorManager;
 import org.apache.hudi.connect.kafka.HudiKafkaControlAgent;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
@@ -50,7 +51,7 @@ public class HudiSinkTask extends SinkTask {
   private static final int COORDINATOR_KAFKA_PARTITION = 0;
 
   private final Map<TopicPartition, HudiTransactionParticipant> hudiTransactionParticipants;
-  private HudiTransactionCoordinator hudiTransactionCoordinator;
+  private final TransactionCoordinatorManager transactionCoordinatorManager;
   private HudiKafkaControlAgent controlKafkaClient;
   private HudiConnectConfigs connectConfigs;
 
@@ -58,6 +59,7 @@ public class HudiSinkTask extends SinkTask {
   private String connectorName;
 
   public HudiSinkTask() {
+    transactionCoordinatorManager = new TransactionCoordinatorManager();
     hudiTransactionParticipants = new HashMap<>();
   }
 
@@ -146,8 +148,8 @@ public class HudiSinkTask extends SinkTask {
     // make sure we apply the WAL, and only reuse the temp file if the starting offset is still
     // valid. For now, we prefer the simpler solution that may result in a bit of wasted effort.
     for (TopicPartition partition : partitions) {
-      if (partition.partition() == COORDINATOR_KAFKA_PARTITION && hudiTransactionCoordinator != null) {
-        hudiTransactionCoordinator.stop();
+      if (partition.partition() == COORDINATOR_KAFKA_PARTITION) {
+        transactionCoordinatorManager.removeTopicCoordinator(partition);
       }
       HudiTransactionParticipant worker = hudiTransactionParticipants.remove(partition);
       if (worker != null) {
@@ -168,8 +170,9 @@ public class HudiSinkTask extends SinkTask {
       try {
         // If the partition is 0, instantiate the Leader
         if (partition.partition() == COORDINATOR_KAFKA_PARTITION) {
-          hudiTransactionCoordinator = new HudiTransactionCoordinator(connectConfigs, partition, controlKafkaClient);
-          hudiTransactionCoordinator.start();
+          HudiTopicTransactionCoordinator hudiTransactionCoordinator =
+              new HudiTopicTransactionCoordinator(connectConfigs, partition, controlKafkaClient, transactionCoordinatorManager);
+          transactionCoordinatorManager.addTopicCoordinator(partition, hudiTransactionCoordinator);
         }
         HudiTransactionParticipant worker = new HudiTransactionParticipant(connectConfigs, partition, controlKafkaClient, context);
         hudiTransactionParticipants.put(partition, worker);
@@ -193,8 +196,6 @@ public class HudiSinkTask extends SinkTask {
       }
     }
     hudiTransactionParticipants.clear();
-    if (hudiTransactionCoordinator != null) {
-      hudiTransactionCoordinator.stop();
-    }
+    transactionCoordinatorManager.stop();
   }
 }

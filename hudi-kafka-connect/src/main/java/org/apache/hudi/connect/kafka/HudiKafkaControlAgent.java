@@ -19,7 +19,8 @@
 package org.apache.hudi.connect.kafka;
 
 import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.TransactionCoordinator;
+import org.apache.hudi.connect.core.CoordinatorManager;
+import org.apache.hudi.connect.core.TopicTransactionCoordinator;
 import org.apache.hudi.connect.core.TransactionParticipant;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,7 +29,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
@@ -48,7 +48,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Class that manages the Kafka consumer and producer for
  * the Kafka Control Topic that ensures coordination across the
- * {@link TransactionCoordinator} and {@link TransactionParticipant}s.
+ * {@link TopicTransactionCoordinator} and {@link TransactionParticipant}s.
  * Use a single instance per worker (single-threaded),
  * and register multiple tasks that can receive the control messages.
  */
@@ -63,37 +63,36 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
   private final String bootstrapServers;
   private final String controlTopicName;
   private final ExecutorService executorService;
+  private final CoordinatorManager transactionCoordinatorManager;
   // List of TransactionParticipants per Kafka Topic
   private final Map<String, ConcurrentLinkedQueue<TransactionParticipant>> partitionWorkers;
   private final KafkaControlProducer producer;
 
-  private Map<String, TransactionCoordinator> transactionCoordinators;
   private KafkaConsumer<String, ControlEvent> consumer;
 
-  public HudiKafkaControlAgent(String bootstrapServers, String controlTopicName) {
+  public HudiKafkaControlAgent(String bootstrapServers,
+                               String controlTopicName,
+                               CoordinatorManager transactionCoordinatorManager) {
     this.bootstrapServers = bootstrapServers;
     this.controlTopicName = controlTopicName;
     this.executorService = Executors.newSingleThreadExecutor();
-    this.transactionCoordinators = new HashMap<>();
+    this.transactionCoordinatorManager = transactionCoordinatorManager;
     this.partitionWorkers = new HashMap<>();
     this.producer = new KafkaControlProducer(bootstrapServers, controlTopicName);
     start();
   }
 
-  public static HudiKafkaControlAgent createKafkaControlManager(String bootstrapServers, String controlTopicName) {
+  public static HudiKafkaControlAgent createKafkaControlManager(String bootstrapServers,
+                                                                String controlTopicName,
+                                                                CoordinatorManager transactionCoordinatorManager) {
     if (kafkaCommunicationAgent == null) {
       synchronized (LOCK) {
         if (kafkaCommunicationAgent == null) {
-          kafkaCommunicationAgent = new HudiKafkaControlAgent(bootstrapServers, controlTopicName);
+          kafkaCommunicationAgent = new HudiKafkaControlAgent(bootstrapServers, controlTopicName, transactionCoordinatorManager);
         }
       }
     }
     return kafkaCommunicationAgent;
-  }
-
-  @Override
-  public void registerTransactionCoordinator(TransactionCoordinator leader) {
-    transactionCoordinators.put(leader.getPartition().topic(), leader);
   }
 
   @Override
@@ -102,11 +101,6 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
       partitionWorkers.put(worker.getPartition().topic(), new ConcurrentLinkedQueue<>());
     }
     partitionWorkers.get(worker.getPartition().topic()).add(worker);
-  }
-
-  @Override
-  public void deregisterTransactionCoordinator(TransactionCoordinator leader) {
-    transactionCoordinators.remove(leader.getPartition().topic());
   }
 
   @Override
@@ -149,20 +143,18 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
                 record.key(), record.value());
             ControlEvent message = record.value();
             String senderTopic = message.senderPartition().topic();
-            if (transactionCoordinators.containsKey(senderTopic)) {
-              transactionCoordinators.get(senderTopic).publishControlEvent(message);
-            }
-            if (partitionWorkers.containsKey(senderTopic)) {
-              for (TransactionParticipant partitionWorker : partitionWorkers.get(senderTopic)) {
-                TopicPartition partitionReceiver = partitionWorker.getPartition();
-                // Avoid sending back messages to the sender partition,
-                // except for partition 0 that will have both a leader and worker
-                if (partitionReceiver.partition() == 0
-                    || (partitionReceiver != message.senderPartition()
-                    && partitionReceiver.partition() > 0)) {
+            if (message.getSenderType().equals(ControlEvent.SenderType.COORDINATOR)) {
+              if (partitionWorkers.containsKey(senderTopic)) {
+                for (TransactionParticipant partitionWorker : partitionWorkers.get(senderTopic)) {
                   partitionWorker.publishControlEvent(message);
                 }
+              } else {
+                LOG.warn("Failed to send message for unregistered participants for topic {}", senderTopic);
               }
+            } else if (message.getSenderType().equals(ControlEvent.SenderType.PARTICIPANT)) {
+              transactionCoordinatorManager.processControlEvent(message);
+            } else {
+              LOG.warn("Sender type of Control Message unknown {}", message.getSenderType().name());
             }
           } catch (Exception e) {
             LOG.error("Fatal error while consuming a kafka record for topic = {} partition = {}", record.topic(), record.partition(), e);

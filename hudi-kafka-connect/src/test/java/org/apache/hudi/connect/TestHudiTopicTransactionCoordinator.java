@@ -22,8 +22,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.HudiTransactionCoordinator;
-import org.apache.hudi.connect.core.TransactionCoordinator;
+import org.apache.hudi.connect.core.HudiTopicTransactionCoordinator;
+import org.apache.hudi.connect.core.TopicTransactionCoordinator;
+import org.apache.hudi.connect.core.TransactionCoordinatorManager;
 import org.apache.hudi.connect.core.TransactionParticipant;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
@@ -47,14 +48,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
-public class TestHudiTransactionCoordinator {
+public class TestHudiTopicTransactionCoordinator {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
   private static final int NUM_PARTITIONS = 4;
   private static final int MAX_COMMIT_ROUNDS = 5;
   private static final int TEST_TIMEOUT_SECS = 60;
 
-  private HudiTransactionCoordinator coordinator;
+  private TransactionCoordinatorManager coordinatorManager;
   private TopicPartition partition;
   private HudiConnectConfigs configs;
   private TestKafkaControlAgent kafkaControlAgent;
@@ -63,6 +64,7 @@ public class TestHudiTransactionCoordinator {
 
   @BeforeEach
   public void setUp() throws Exception {
+    coordinatorManager = new TransactionCoordinatorManager();
     transactionServices = new TestConnectTransactionServices();
     partition = new TopicPartition(TOPIC_NAME, 0);
     configs = HudiConnectConfigs.newBuilder()
@@ -76,7 +78,14 @@ public class TestHudiTransactionCoordinator {
   @EnumSource(value = TestScenarios.class)
   public void testSingleCommitScenario(TestScenarios scenario) throws InterruptedException {
     kafkaControlAgent = new TestKafkaControlAgent(latch, scenario, MAX_COMMIT_ROUNDS);
-    coordinator = new HudiTransactionCoordinator(
+    coordinatorManager.addTopicCoordinator(
+        configs,
+        partition,
+        kafkaControlAgent,
+        transactionServices,
+        (bootstrapServers, topicName) -> NUM_PARTITIONS));
+
+    coordinatorManager = new HudiTopicTransactionCoordinator(
         configs,
         partition,
         kafkaControlAgent,
@@ -102,7 +111,7 @@ public class TestHudiTransactionCoordinator {
     private final TestScenarios testScenario;
     private final int maxNumberCommitRounds;
 
-    private TransactionCoordinator coordinator;
+    private TopicTransactionCoordinator coordinator;
     private Map<Integer, Long> kafkaOffsetsCommitted;
     private boolean hasRegistered;
     private boolean hasDeRegistered;
@@ -122,25 +131,13 @@ public class TestHudiTransactionCoordinator {
       numberCommitRounds = 0;
     }
 
-    public void setCoordinator(TransactionCoordinator coordinator) {
+    public void setCoordinator(TopicTransactionCoordinator coordinator) {
       this.coordinator = coordinator;
-    }
-
-    @Override
-    public void registerTransactionCoordinator(TransactionCoordinator leader) {
-      assertEquals(leader, coordinator);
-      hasRegistered = true;
     }
 
     @Override
     public void registerTransactionParticipant(TransactionParticipant worker) {
       // no-op
-    }
-
-    @Override
-    public void deregisterTransactionCoordinator(TransactionCoordinator leader) {
-      assertEquals(leader, coordinator);
-      hasDeRegistered = true;
     }
 
     @Override
@@ -230,6 +227,7 @@ public class TestHudiTransactionCoordinator {
       status.markSuccess(mock(HoodieRecord.class), Option.empty());
     }
     return new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
+        ControlEvent.SenderType.PARTICIPANT,
         commitTime,
         partition)
         .setParticipantInfo(new ControlEvent.ParticipantInfo(

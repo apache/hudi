@@ -1,13 +1,14 @@
 package org.apache.hudi.connect.writers;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.connect.core.TopicTransactionCoordinator;
 
 import java.util.List;
 import java.util.Map;
 
 /**
  * Transaction service APIs used by
- * {@link org.apache.hudi.connect.core.TransactionCoordinator}.
+ * {@link TopicTransactionCoordinator}.
  */
 public interface ConnectTransactionServices {
 

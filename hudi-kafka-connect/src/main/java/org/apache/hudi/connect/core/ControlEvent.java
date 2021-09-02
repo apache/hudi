@@ -44,6 +44,7 @@ public class ControlEvent implements Serializable {
   private static final Logger LOG = LogManager.getLogger(ControlEvent.class);
 
   private MsgType msgType;
+  private SenderType senderType;
   private String commitTime;
   private byte[] senderPartition;
   private CoordinatorInfo coordinatorInfo;
@@ -53,11 +54,13 @@ public class ControlEvent implements Serializable {
   }
 
   public ControlEvent(MsgType msgType,
+                      SenderType senderType,
                       String commitTime,
                       byte[] senderPartition,
                       CoordinatorInfo coordinatorInfo,
                       ParticipantInfo participantInfo) {
     this.msgType = msgType;
+    this.senderType = senderType;
     this.commitTime = commitTime;
     this.senderPartition = senderPartition;
     this.coordinatorInfo = coordinatorInfo;
@@ -70,6 +73,10 @@ public class ControlEvent implements Serializable {
 
   public MsgType getMsgType() {
     return msgType;
+  }
+
+  public SenderType getSenderType() {
+    return senderType;
   }
 
   public String getCommitTime() {
@@ -103,13 +110,15 @@ public class ControlEvent implements Serializable {
   public static class Builder {
 
     private final MsgType msgType;
+    private SenderType senderType;
     private final String commitTime;
     private final byte[] senderPartition;
     private CoordinatorInfo coordinatorInfo;
     private ParticipantInfo participantInfo;
 
-    public Builder(MsgType msgType, String commitTime, TopicPartition senderPartition) throws IOException {
+    public Builder(MsgType msgType, SenderType senderType, String commitTime, TopicPartition senderPartition) throws IOException {
       this.msgType = msgType;
+      this.senderType = senderType;
       this.commitTime = commitTime;
       this.senderPartition = SerializationUtils.serialize(senderPartition);
     }
@@ -125,12 +134,12 @@ public class ControlEvent implements Serializable {
     }
 
     public ControlEvent build() {
-      return new ControlEvent(msgType, commitTime, senderPartition, coordinatorInfo, participantInfo);
+      return new ControlEvent(msgType, senderType, commitTime, senderPartition, coordinatorInfo, participantInfo);
     }
   }
 
   /**
-   * The info sent by the {@link TransactionCoordinator} to one or more
+   * The info sent by the {@link TopicTransactionCoordinator} to one or more
    * {@link TransactionParticipant}s.
    */
   public static class CoordinatorInfo implements Serializable {
@@ -151,7 +160,7 @@ public class ControlEvent implements Serializable {
 
   /**
    * The info sent by a {@link TransactionParticipant} instances to the
-   * {@link TransactionCoordinator}.
+   * {@link TopicTransactionCoordinator}.
    */
   public static class ParticipantInfo implements Serializable {
 
@@ -193,6 +202,11 @@ public class ControlEvent implements Serializable {
     END_COMMIT,
     ACK_COMMIT,
     WRITE_STATUS,
+  }
+
+  public enum SenderType {
+    COORDINATOR,
+    PARTICIPANT
   }
 
   public enum OutcomeType {

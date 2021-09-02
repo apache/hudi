@@ -21,8 +21,9 @@ package org.apache.hudi.connect;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.core.ControlEvent;
+import org.apache.hudi.connect.core.CoordinatorEvent;
 import org.apache.hudi.connect.core.HudiTransactionParticipant;
-import org.apache.hudi.connect.core.TransactionCoordinator;
+import org.apache.hudi.connect.core.TopicTransactionCoordinator;
 import org.apache.hudi.connect.core.TransactionParticipant;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.writers.ConnectWriter;
@@ -43,6 +44,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -287,6 +289,46 @@ public class TestHudiTransactionParticipant {
     assertEquals(event.getParticipantInfo().getKafkaCommitOffset(), lastWrittenKafkaOffset);
   }
 
+  private static class MockTopicTransactionCoordinator extends TopicTransactionCoordinator {
+
+    public MockTopicTransactionCoordinator(HudiConnectConfigs configs, TopicPartition partition) {
+      super(configs, partition);
+    }
+
+    @Override
+    public void start() {
+    }
+
+    @Override
+    public void stop() {
+    }
+
+    @Override
+    public TopicPartition getPartition() {
+      return super.getPartition();
+    }
+
+    @Override
+    protected void submitEvent(CoordinatorEvent event) {
+      super.submitEvent(event);
+    }
+
+    @Override
+    protected void submitEvent(CoordinatorEvent event, long delay, TimeUnit unit) {
+      super.submitEvent(event, delay, unit);
+    }
+
+    @Override
+    public void publishControlEvent(ControlEvent message) {
+
+    }
+
+    @Override
+    public void processCoordinatorEvent(CoordinatorEvent event) {
+
+    }
+  }
+
   private static class TestKafkaControlAgent implements KafkaControlAgent {
 
     private HudiTransactionParticipant participant;
@@ -313,7 +355,7 @@ public class TestHudiTransactionParticipant {
     }
 
     @Override
-    public void registerTransactionCoordinator(TransactionCoordinator leader) {
+    public void registerTransactionCoordinator(TopicTransactionCoordinator leader) {
       // no-op
     }
 
@@ -324,7 +366,7 @@ public class TestHudiTransactionParticipant {
     }
 
     @Override
-    public void deregisterTransactionCoordinator(TransactionCoordinator leader) {
+    public void deregisterTransactionCoordinator(TopicTransactionCoordinator leader) {
       // no-op
     }
 

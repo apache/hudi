@@ -19,21 +19,17 @@
 package org.apache.hudi.connect.kafka;
 
 import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.TransactionCoordinator;
+import org.apache.hudi.connect.core.TopicTransactionCoordinator;
 import org.apache.hudi.connect.core.TransactionParticipant;
 
 /**
  * Manages the Kafka consumer and producer for
  * the Kafka Control Topic that ensures coordination across the
- * {@link TransactionCoordinator} and {@link TransactionParticipant}s.
+ * {@link TopicTransactionCoordinator} and {@link TransactionParticipant}s.
  */
 public interface KafkaControlAgent {
 
-  void registerTransactionCoordinator(TransactionCoordinator leader);
-
   void registerTransactionParticipant(TransactionParticipant worker);
-
-  void deregisterTransactionCoordinator(TransactionCoordinator leader);
 
   void deregisterTransactionParticipant(TransactionParticipant worker);
 
