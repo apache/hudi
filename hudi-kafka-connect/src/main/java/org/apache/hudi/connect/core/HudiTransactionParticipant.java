@@ -28,7 +28,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
-import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -204,7 +203,7 @@ public class HudiTransactionParticipant implements TransactionParticipant {
 
   private void handleAckCommit(ControlEvent message) {
     // Update lastKafkCommitedOffset locally.
-    if (committedKafkaOffset < ongoingTransactionInfo.getLastWrittenKafkaOffset()) {
+    if (ongoingTransactionInfo != null && committedKafkaOffset < ongoingTransactionInfo.getLastWrittenKafkaOffset()) {
       committedKafkaOffset = ongoingTransactionInfo.getLastWrittenKafkaOffset();
     }
     syncKafkaOffsetWithLeader(message);
@@ -253,7 +252,7 @@ public class HudiTransactionParticipant implements TransactionParticipant {
       Long coordinatorCommittedKafkaOffset = message.getCoordinatorInfo().getGlobalKafkaCommitOffsets().get(partition.partition());
       // Recover kafka committed offsets, treating the commit offset from the coordinator
       // as the source of truth
-      if (coordinatorCommittedKafkaOffset != null && coordinatorCommittedKafkaOffset > 0) {
+      if (coordinatorCommittedKafkaOffset != null && coordinatorCommittedKafkaOffset >= 0) {
         if (coordinatorCommittedKafkaOffset != committedKafkaOffset) {
           LOG.warn("Recovering the kafka offset for partition {} to offset {} instead of local offset {}",
               partition.partition(),
