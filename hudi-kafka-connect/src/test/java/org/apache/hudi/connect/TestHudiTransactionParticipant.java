@@ -116,6 +116,7 @@ public class TestHudiTransactionParticipant {
           testPostStartCommit();
           testPostEndCommit(false);
           testPostAckCommit(false);
+          break;
         default:
           throw new HoodieException("Unknown test scenario " + testScenario);
       }

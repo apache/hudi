@@ -21,7 +21,7 @@ import java.util.Properties;
     description = "Configurations for Kakfa Connect Sink Connector for Hudi.")
 public class HudiConnectConfigs extends HoodieConfig {
 
-  private static final String KAFKA_VALUE_CONVERTER = "value.converter";
+  public static final String KAFKA_VALUE_CONVERTER = "value.converter";
 
   public static final ConfigProperty<String> SCHEMA_PROVIDER_CLASS = ConfigProperty
       .key("hoodie.schemaprovider.schema.class")

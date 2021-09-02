@@ -31,7 +31,6 @@ import org.apache.hudi.connect.writers.TransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -227,31 +226,8 @@ public class TestHudiTransactionCoordinator {
     // send WS
     WriteStatus writeStatus = new WriteStatus();
     WriteStatus status = new WriteStatus(false, 1.0);
-    //Throwable t = new Exception("some error in writing");
     for (int i = 0; i < 1000; i++) {
       status.markSuccess(mock(HoodieRecord.class), Option.empty());
-      //status.markFailure(mock(HoodieRecord.class), t, Option.empty());
-    }
-    return new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
-        commitTime,
-        partition)
-        .setParticipantInfo(new ControlEvent.ParticipantInfo(
-            Collections.singletonList(writeStatus),
-            kafkaOffset,
-            ControlEvent.OutcomeType.WRITE_SUCCESS))
-        .build();
-  }
-
-  private static ControlEvent failedWriteStatus(String commitTime,
-                                                 TopicPartition partition,
-                                                 long kafkaOffset) throws Exception {
-    // send WS
-    WriteStatus writeStatus = new WriteStatus();
-    WriteStatus status = new WriteStatus(false, 1.0);
-    Throwable t = new Exception("Some error in writing");
-    for (int i = 0; i < 1000; i++) {
-      status.markSuccess(mock(HoodieRecord.class), Option.empty());
-      status.markFailure(mock(HoodieRecord.class), t, Option.empty());
     }
     return new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
         commitTime,
