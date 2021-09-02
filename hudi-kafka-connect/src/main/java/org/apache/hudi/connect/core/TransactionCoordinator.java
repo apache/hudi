@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Interface for the Coordinator that
+ * The Base Coordinator that
  * coordinates the write transactions
  * across all the Kafka partitions, that
  * are managed by the {@link TransactionParticipant}.

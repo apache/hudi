@@ -23,8 +23,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
+import org.apache.hudi.connect.writers.HudiConnectTransactionServices;
 import org.apache.hudi.connect.writers.ConnectTransactionServices;
-import org.apache.hudi.connect.writers.TransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.common.TopicPartition;
@@ -58,13 +58,13 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
   private final HudiConnectConfigs configs;
   private final TopicPartition partition;
   private final KafkaControlAgent kafkaControlClient;
-  private final TransactionServices hudiTransactionServices;
+  private final ConnectTransactionServices hudiConnectTransactionServices;
   private final KafkaPartitionProvider kafkaPartitionProvider;
+  private final Map<Integer, List<WriteStatus>> partitionsWriteStatusReceived;
+  private final Map<Integer, Long> currentConsumedKafkaOffsets;
 
   private String currentCommitTime;
-  private Map<Integer, List<WriteStatus>> partitionsWriteStatusReceived;
   private Map<Integer, Long> globalCommittedKafkaOffsets;
-  private Map<Integer, Long> currentConsumedKafkaOffsets;
   private State currentState;
   private int numPartitions;
 
@@ -74,20 +74,20 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
     this(configs,
         partition,
         kafkaControlClient,
-        new ConnectTransactionServices(configs),
+        new HudiConnectTransactionServices(configs),
         KafkaConnectUtils::getLatestNumPartitions);
   }
 
   public HudiTransactionCoordinator(HudiConnectConfigs configs,
                                     TopicPartition partition,
                                     KafkaControlAgent kafkaControlClient,
-                                    TransactionServices hudiTransactionServices,
+                                    ConnectTransactionServices hudiConnectTransactionServices,
                                     KafkaPartitionProvider kafkaPartitionProvider) {
     super(configs, partition);
     this.configs = configs;
     this.partition = partition;
     this.kafkaControlClient = kafkaControlClient;
-    this.hudiTransactionServices = hudiTransactionServices;
+    this.hudiConnectTransactionServices = hudiConnectTransactionServices;
     this.kafkaPartitionProvider = kafkaPartitionProvider;
 
     this.currentCommitTime = StringUtils.EMPTY_STRING;
@@ -168,7 +168,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
           throw new IllegalStateException("Partition Coordinator has received an illegal event type " + event.getEventType().name());
       }
     } catch (Exception exception) {
-      LOG.warn("Error recieved while polling the event loop in Partition Coordinator", exception);
+      LOG.warn("Error received while polling the event loop in Partition Coordinator", exception);
     }
   }
 
@@ -176,12 +176,12 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
     numPartitions = kafkaPartitionProvider.getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
     partitionsWriteStatusReceived.clear();
     try {
-      currentCommitTime = hudiTransactionServices.startCommit();
+      currentCommitTime = hudiConnectTransactionServices.startCommit();
       ControlEvent message = new ControlEvent.Builder(
           ControlEvent.MsgType.START_COMMIT,
           currentCommitTime,
           partition)
-          .setCoodinatorInfo(
+          .setCoordinatorInfo(
               new ControlEvent.CoordinatorInfo(globalCommittedKafkaOffsets))
           .build();
       kafkaControlClient.publishMessage(message);
@@ -206,7 +206,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
           ControlEvent.MsgType.END_COMMIT,
           currentCommitTime,
           partition)
-          .setCoodinatorInfo(new ControlEvent.CoordinatorInfo(globalCommittedKafkaOffsets))
+          .setCoordinatorInfo(new ControlEvent.CoordinatorInfo(globalCommittedKafkaOffsets))
           .build();
       kafkaControlClient.publishMessage(message);
     } catch (Exception exception) {
@@ -236,7 +236,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
         List<WriteStatus> allWriteStatuses = new ArrayList<>();
         partitionsWriteStatusReceived.forEach((key, value) -> allWriteStatuses.addAll(value));
         // Commit the last write in Hudi, along with the latest kafka offset
-        hudiTransactionServices.endCommit(currentCommitTime,
+        hudiConnectTransactionServices.endCommit(currentCommitTime,
             allWriteStatuses,
             transformKafkaOffsets(currentConsumedKafkaOffsets));
         currentState = State.WRITE_STATUS_RCVD;
@@ -269,7 +269,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
           ControlEvent.MsgType.ACK_COMMIT,
           currentCommitTime,
           partition)
-          .setCoodinatorInfo(
+          .setCoordinatorInfo(
               new ControlEvent.CoordinatorInfo(globalCommittedKafkaOffsets))
           .build();
       kafkaControlClient.publishMessage(message);
@@ -287,7 +287,7 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
 
   private void initializeGlobalCommittedKafkaOffsets() {
     try {
-      Map<String, String> commitMetadata = hudiTransactionServices.loadLatestCommitMetadata();
+      Map<String, String> commitMetadata = hudiConnectTransactionServices.loadLatestCommitMetadata();
       String latestKafkaOffsets = commitMetadata.get(KAFKA_OFFSET_KEY);
       if (!StringUtils.isNullOrEmpty(latestKafkaOffsets)) {
         LOG.info("Retrieved Raw Kafka offsets from Hudi Commit File " + latestKafkaOffsets);
@@ -321,6 +321,9 @@ public class HudiTransactionCoordinator extends TransactionCoordinator {
     ACKED_COMMIT,
   }
 
+  /**
+   * Provides the current partitions of a Kafka Topic dynamically.
+   */
   public interface KafkaPartitionProvider {
 
     int getLatestNumPartitions(String bootstrapServers, String topicName);

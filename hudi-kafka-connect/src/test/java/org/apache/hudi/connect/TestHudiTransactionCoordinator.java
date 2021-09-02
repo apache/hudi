@@ -27,7 +27,7 @@ import org.apache.hudi.connect.core.TransactionCoordinator;
 import org.apache.hudi.connect.core.TransactionParticipant;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
-import org.apache.hudi.connect.writers.TransactionServices;
+import org.apache.hudi.connect.writers.ConnectTransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.common.TopicPartition;
@@ -58,12 +58,12 @@ public class TestHudiTransactionCoordinator {
   private TopicPartition partition;
   private HudiConnectConfigs configs;
   private TestKafkaControlAgent kafkaControlAgent;
-  private TestTransactionServices transactionServices;
+  private TestConnectTransactionServices transactionServices;
   private CountDownLatch latch;
 
   @BeforeEach
   public void setUp() throws Exception {
-    transactionServices = new TestTransactionServices();
+    transactionServices = new TestConnectTransactionServices();
     partition = new TopicPartition(TOPIC_NAME, 0);
     configs = HudiConnectConfigs.newBuilder()
         .withCommitIntervalSecs(1L)
@@ -188,7 +188,7 @@ public class TestHudiTransactionCoordinator {
               expectedMsgType = ControlEvent.MsgType.ACK_COMMIT;
               break;
             case SUBSET_CONNECT_TASKS_FAILED:
-              numSuccessPartitions = NUM_PARTITIONS/2;
+              numSuccessPartitions = NUM_PARTITIONS / 2;
               expectedMsgType = ControlEvent.MsgType.START_COMMIT;
               break;
             default:
@@ -244,11 +244,11 @@ public class TestHudiTransactionCoordinator {
     ALL_CONNECT_TASKS_SUCCESS
   }
 
-  private static class TestTransactionServices implements TransactionServices {
+  private static class TestConnectTransactionServices implements ConnectTransactionServices {
 
     private int commitTime;
 
-    public TestTransactionServices() {
+    public TestConnectTransactionServices() {
       commitTime = 100;
     }
 

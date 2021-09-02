@@ -25,6 +25,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Specific implementation of a Hudi Writer that buffers all incoming records,
+ * and writes them to Hudi files on the end of a transaction using Bulk Insert.
+ */
 public class HudiConnectBufferedWriter extends AbstractHudiConnectWriter {
 
   private static final Logger LOG = LoggerFactory.getLogger(HudiConnectBufferedWriter.class);

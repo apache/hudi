@@ -42,6 +42,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
+/**
+ * Provides the Hudi Writer for the {@link org.apache.hudi.connect.core.TransactionParticipant}
+ * to write the incoming records to Hudi.
+ */
 public class HudiConnectWriterProvider implements ConnectWriterProvider<WriteStatus> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HudiConnectWriterProvider.class);

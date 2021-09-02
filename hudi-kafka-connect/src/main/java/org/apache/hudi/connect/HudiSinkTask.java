@@ -45,8 +45,9 @@ import java.util.Map;
  */
 public class HudiSinkTask extends SinkTask {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HudiSinkTask.class);
   public static final String TASK_ID_CONFIG_NAME = "task.id";
+  private static final Logger LOG = LoggerFactory.getLogger(HudiSinkTask.class);
+  private static final int COORDINATOR_KAFKA_PARTITION = 0;
 
   private final Map<TopicPartition, HudiTransactionParticipant> hudiTransactionParticipants;
   private HudiTransactionCoordinator hudiTransactionCoordinator;
@@ -62,7 +63,7 @@ public class HudiSinkTask extends SinkTask {
 
   @Override
   public String version() {
-    return "0.1.0";
+    return HudiSinkConnector.VERSION;
   }
 
   @Override
@@ -145,7 +146,7 @@ public class HudiSinkTask extends SinkTask {
     // make sure we apply the WAL, and only reuse the temp file if the starting offset is still
     // valid. For now, we prefer the simpler solution that may result in a bit of wasted effort.
     for (TopicPartition partition : partitions) {
-      if (partition.partition() == 0 && hudiTransactionCoordinator != null) {
+      if (partition.partition() == COORDINATOR_KAFKA_PARTITION && hudiTransactionCoordinator != null) {
         hudiTransactionCoordinator.stop();
       }
       HudiTransactionParticipant worker = hudiTransactionParticipants.remove(partition);
@@ -166,7 +167,7 @@ public class HudiSinkTask extends SinkTask {
     for (TopicPartition partition : partitions) {
       try {
         // If the partition is 0, instantiate the Leader
-        if (partition.partition() == 0) {
+        if (partition.partition() == COORDINATOR_KAFKA_PARTITION) {
           hudiTransactionCoordinator = new HudiTransactionCoordinator(connectConfigs, partition, controlKafkaClient);
           hudiTransactionCoordinator.start();
         }

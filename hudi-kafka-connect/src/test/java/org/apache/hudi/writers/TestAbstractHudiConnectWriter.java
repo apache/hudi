@@ -21,7 +21,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -32,7 +31,6 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -40,8 +38,8 @@ public class TestAbstractHudiConnectWriter {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
   private static final int PARTITION_NUMBER = 4;
-  private final static int NUM_RECORDS = 10;
-  private final static int RECORD_KEY_INDEX = 0;
+  private static final int NUM_RECORDS = 10;
+  private static final int RECORD_KEY_INDEX = 0;
 
   private HudiConnectConfigs configs;
   private TestKeyGenerator keyGenerator;
@@ -101,7 +99,7 @@ public class TestAbstractHudiConnectWriter {
 
     validateRecords(writer.getWrittenRecords(), expectedRecords);
   }
-  
+
   private static void validateRecords(List<HoodieRecord> actualRecords, List<HoodieRecord> expectedRecords) {
     assertEquals(actualRecords.size(), expectedRecords.size());
 
@@ -125,18 +123,6 @@ public class TestAbstractHudiConnectWriter {
         ("key-" + currentKafkaOffset).getBytes(),
         org.apache.kafka.connect.data.Schema.OPTIONAL_BYTES_SCHEMA,
         record, currentKafkaOffset++);
-  }
-
-  private static class TestSchemaProvider extends SchemaProvider {
-
-    @Override
-    public Schema getSourceSchema() {
-      try {
-        return SchemaTestUtil.getSimpleSchema();
-      } catch (IOException exception) {
-        throw new HoodieException("Fatal error parsing schema", exception);
-      }
-    }
   }
 
   private static class AbstractHudiConnectWriterTestWrapper extends AbstractHudiConnectWriter {
@@ -163,7 +149,17 @@ public class TestAbstractHudiConnectWriter {
     }
   }
 
-  private static class TestKeyGenerator extends KeyGenerator {
+  private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
+    return new HoodieRecord<>(new HoodieKey(key, partitionPath),
+        new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
+  }
+
+  private enum TestInputFormats {
+    AVRO,
+    JSON_STRING
+  }
+
+  static class TestKeyGenerator extends KeyGenerator {
 
     protected TestKeyGenerator(TypedProperties config) {
       super(config);
@@ -175,13 +171,15 @@ public class TestAbstractHudiConnectWriter {
     }
   }
 
-  private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
-    return new HoodieRecord<>(new HoodieKey(key, partitionPath),
-        new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
-  }
+  static class TestSchemaProvider extends SchemaProvider {
 
-  private enum TestInputFormats {
-    AVRO,
-    JSON_STRING
+    @Override
+    public Schema getSourceSchema() {
+      try {
+        return SchemaTestUtil.getSimpleSchema();
+      } catch (IOException exception) {
+        throw new HoodieException("Fatal error parsing schema", exception);
+      }
+    }
   }
 }

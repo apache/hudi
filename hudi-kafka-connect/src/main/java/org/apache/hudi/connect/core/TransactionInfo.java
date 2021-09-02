@@ -20,6 +20,11 @@ package org.apache.hudi.connect.core;
 
 import org.apache.hudi.connect.writers.ConnectWriter;
 
+/**
+ * Stores all the state for the current Transaction within a
+ * {@link TransactionParticipant}.
+ * @param <T> The type of status returned by the underlying writer.
+ */
 public class TransactionInfo<T> {
 
   private final String commitTime;

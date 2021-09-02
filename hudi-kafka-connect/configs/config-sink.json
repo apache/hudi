@@ -14,7 +14,7 @@
 	"hoodie.schemaprovider.class": "org.apache.hudi.utilities.schema.FilebasedSchemaProvider",
 	"hoodie.deltastreamer.schemaprovider.source.schema.file": "file:///tmp/hoodie/schema.avsc",
 	"hoodie.deltastreamer.schemaprovider.target.schema.file": "file:///tmp/hoodie/schema.avsc",
-	"hoodie.meta.sync.enable": "true",
+	"hoodie.meta.sync.enable": "false",
 	"hoodie.meta.sync.classes": "org.apache.hudi.hive.HiveSyncTool",
 	"hoodie.datasource.hive_sync.table": "sample-table"
     }

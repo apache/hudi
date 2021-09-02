@@ -8,19 +8,20 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
+/**
+ * Base Hudi Writer that manages reading the raw Kafka records and
+ * converting them to {@link HoodieRecord}s that can be written to Hudi by
+ * the derived implementations of this class.
+ */
 public abstract class AbstractHudiConnectWriter implements ConnectWriter<WriteStatus> {
 
   public static final String KAFKA_AVRO_CONVERTER = "io.confluent.connect.avro.AvroConverter";
@@ -31,8 +32,6 @@ public abstract class AbstractHudiConnectWriter implements ConnectWriter<WriteSt
   private final HudiConnectConfigs connectConfigs;
   private final KeyGenerator keyGenerator;
   private final SchemaProvider schemaProvider;
-  private final ObjectMapper mapper;
-  private final JsonConverter converter;
 
   public AbstractHudiConnectWriter(HudiConnectConfigs connectConfigs,
                                    KeyGenerator keyGenerator,
@@ -40,11 +39,6 @@ public abstract class AbstractHudiConnectWriter implements ConnectWriter<WriteSt
     this.connectConfigs = connectConfigs;
     this.keyGenerator = keyGenerator;
     this.schemaProvider = schemaProvider;
-    this.mapper = new ObjectMapper();
-    Map<String, Object> converterConfig = new HashMap<>();
-    converterConfig.put("schemas.enable", "false");
-    this.converter = new JsonConverter();
-    this.converter.configure(converterConfig, false);
   }
 
   @Override

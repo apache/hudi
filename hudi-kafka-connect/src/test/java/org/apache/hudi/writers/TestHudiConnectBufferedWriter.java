@@ -4,22 +4,18 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.writers.HudiConnectBufferedWriter;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.schema.SchemaProvider;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
-import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 
@@ -31,8 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHudiConnectBufferedWriter {
 
-  private final static int NUM_RECORDS = 10;
-  private final static String COMMIT_TIME = "101";
+  private static final int NUM_RECORDS = 10;
+  private static final String COMMIT_TIME = "101";
 
   private HoodieJavaWriteClient mockHoodieJavaWriteClient;
   private HoodieJavaEngineContext javaEngineContext;
@@ -46,7 +42,7 @@ public class TestHudiConnectBufferedWriter {
     Configuration hadoopConf = new Configuration();
     javaEngineContext = new HoodieJavaEngineContext(hadoopConf);
     configs = HudiConnectConfigs.newBuilder().build();
-    schemaProvider = new TestSchemaProvider();
+    schemaProvider = new TestAbstractHudiConnectWriter.TestSchemaProvider();
     writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withSchema(schemaProvider.getSourceSchema().toString())
@@ -83,17 +79,5 @@ public class TestHudiConnectBufferedWriter {
     records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
 
     assertEquals(records, actualRecords.getValue());
-  }
-
-  private static class TestSchemaProvider extends SchemaProvider {
-
-    @Override
-    public Schema getSourceSchema() {
-      try {
-        return SchemaTestUtil.getSimpleSchema();
-      } catch (IOException exception) {
-        throw new HoodieException("Fatal error parsing schema", exception);
-      }
-    }
   }
 }

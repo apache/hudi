@@ -1,6 +1,5 @@
 package org.apache.hudi.connect.utils;
 
-import org.apache.hudi.connect.core.HudiTransactionCoordinator;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.clients.admin.AdminClient;
@@ -14,6 +13,9 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 
+/**
+ * Helper methods for Kafka.
+ */
 public class KafkaConnectUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectUtils.class);

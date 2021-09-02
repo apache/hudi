@@ -66,7 +66,6 @@ public class TestHudiTransactionParticipant {
   private int currentCommitTime;
   private TopicPartition mockCoordinatorPartition;
 
-
   @BeforeEach
   public void setUp() throws Exception {
     kafkaControlAgent = new TestKafkaControlAgent();
@@ -254,7 +253,7 @@ public class TestHudiTransactionParticipant {
           type,
           commitTime,
           mockCoordinatorPartition)
-          .setCoodinatorInfo(new ControlEvent.CoordinatorInfo(
+          .setCoordinatorInfo(new ControlEvent.CoordinatorInfo(
               Collections.singletonMap(participant.getPartition().partition(), committedKafkaOffset)))
           .build());
     } catch (Exception exception) {
@@ -354,7 +353,7 @@ public class TestHudiTransactionParticipant {
     private int numberRecords;
     private boolean isClosed;
 
-    public void TestHudiWriterProvider() {
+    public TestHudiWriter() {
       this.numberRecords = 0;
       this.isClosed = false;
     }

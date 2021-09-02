@@ -78,7 +78,3 @@ Open a terminal to execute the following command:
 curl -X DELETE http://localhost:8083/connectors/hudi-sink
 curl -X POST -H "Content-Type:application/json" -d @../hudi-kafka-connect/configs/config-sink.json http://localhost:8083/connectors
 ```
-
-# License
-
-This project is licensed under the [Apache 2.0 License](./LICENSE).

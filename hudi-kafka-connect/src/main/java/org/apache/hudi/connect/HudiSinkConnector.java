@@ -29,8 +29,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * HudiSinkConnector is a Kafka Connect Connector implementation
+ * that ingest data from Kafka to Hudi.
+ */
 public class HudiSinkConnector extends SinkConnector {
 
+  public static final String VERSION = "0.1.0";
   private static final Logger LOG = LoggerFactory.getLogger(HudiSinkConnector.class);
   private Map<String, String> configProps;
 
@@ -42,13 +47,12 @@ public class HudiSinkConnector extends SinkConnector {
 
   @Override
   public String version() {
-    return "0.1.0";
+    return VERSION;
   }
 
   @Override
   public void start(Map<String, String> props) {
     configProps = new HashMap<>(props);
-    System.out.println("WNI CONN CONFIGS " + props);
   }
 
   @Override
@@ -73,6 +77,7 @@ public class HudiSinkConnector extends SinkConnector {
 
   @Override
   public ConfigDef config() {
+    // we use Hudi configs instead
     return new ConfigDef();
   }
 }

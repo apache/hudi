@@ -20,7 +20,6 @@ package org.apache.hudi.connect.core;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.SerializationUtils;
-import org.apache.hudi.common.util.collection.BitCaskDiskMap;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.log4j.LogManager;
@@ -115,7 +114,7 @@ public class ControlEvent implements Serializable {
       this.senderPartition = SerializationUtils.serialize(senderPartition);
     }
 
-    public Builder setCoodinatorInfo(CoordinatorInfo coordinatorInfo) {
+    public Builder setCoordinatorInfo(CoordinatorInfo coordinatorInfo) {
       this.coordinatorInfo = coordinatorInfo;
       return this;
     }
@@ -186,6 +185,9 @@ public class ControlEvent implements Serializable {
     }
   }
 
+  /**
+   * Type of Control Event.
+   */
   public enum MsgType {
     START_COMMIT,
     END_COMMIT,
