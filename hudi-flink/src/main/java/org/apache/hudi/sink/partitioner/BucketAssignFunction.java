@@ -109,7 +109,8 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
-    this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
+    this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED)
+        && !conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
   }
 
   @Override
