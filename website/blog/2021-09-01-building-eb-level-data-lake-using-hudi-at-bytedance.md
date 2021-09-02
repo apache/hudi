@@ -1,11 +1,11 @@
 ---
-title: "Building an EB-level Data Lake Using Apache Hudi at ByteDance"
-excerpt: "Ziyue Guan from Bytedance shares the production experience of building an EB-level data lake using Apache Hudi and how it is used in the recommendation system at Bytedance."
+title: "Building an ExaByte-level Data Lake Using Apache Hudi at ByteDance"
+excerpt: "Ziyue Guan from Bytedance shares the production experience of building an ExaByte-level data lake using Apache Hudi and how it is used in the recommendation system at Bytedance."
 author: Ziyue Guan, translated to English by yihua
 category: blog
 ---
 
-Ziyue Guan from Bytedance shares the experience of building an EB-level data lake using Apache Hudi at Bytedance.
+Ziyue Guan from Bytedance shares the experience of building an ExaByte(EB)-level data lake using Apache Hudi at Bytedance.
 
 <!--truncate-->
 
