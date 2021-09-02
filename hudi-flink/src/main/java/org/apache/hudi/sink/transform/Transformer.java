@@ -28,6 +28,7 @@ public interface Transformer {
 
   /**
    * Transform source DataStream to target DataStream.
+   *
    * @param source
    */
   DataStream<RowData> apply(DataStream<RowData> source);

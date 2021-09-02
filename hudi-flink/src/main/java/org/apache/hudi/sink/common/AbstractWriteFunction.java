@@ -16,35 +16,32 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.bulk;
+package org.apache.hudi.sink.common;
 
-import org.apache.hudi.sink.common.AbstractWriteOperator;
-import org.apache.hudi.sink.common.WriteOperatorFactory;
-
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
-import org.apache.flink.table.types.logical.RowType;
 
 /**
- * Operator for bulk insert mode sink.
+ * Base class for write function.
  *
- * @param <I> The input type
+ * @param <I> the input type
  */
-public class BulkInsertWriteOperator<I>
-    extends AbstractWriteOperator<I>
-    implements BoundedOneInput {
+public abstract class AbstractWriteFunction<I> extends ProcessFunction<I, Object> implements BoundedOneInput {
+  /**
+   * Sets up the event gateway.
+   */
+  public abstract void setOperatorEventGateway(OperatorEventGateway operatorEventGateway);
 
-  public BulkInsertWriteOperator(Configuration conf, RowType rowType) {
-    super(new BulkInsertWriteFunction<>(conf, rowType));
-  }
+  /**
+   * Invoked when bounded source ends up.
+   */
+  public abstract void endInput();
 
-  @Override
-  public void handleOperatorEvent(OperatorEvent event) {
-    // no operation
-  }
-
-  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType rowType) {
-    return WriteOperatorFactory.instance(conf, new BulkInsertWriteOperator<>(conf, rowType));
-  }
+  /**
+   * Handles the operator event sent by the coordinator.
+   * @param event The event
+   */
+  public abstract void handleOperatorEvent(OperatorEvent event);
 }

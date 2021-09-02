@@ -16,7 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink;
+package org.apache.hudi.sink.common;
+
+import org.apache.hudi.sink.StreamWriteOperator;
+import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -31,18 +34,22 @@ import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
 /**
  * Factory class for {@link StreamWriteOperator}.
  */
-public class StreamWriteOperatorFactory<I>
+public class WriteOperatorFactory<I>
     extends SimpleUdfStreamOperatorFactory<Object>
     implements CoordinatedOperatorFactory<Object>, OneInputStreamOperatorFactory<I, Object> {
   private static final long serialVersionUID = 1L;
 
-  private final StreamWriteOperator<I> operator;
+  private final AbstractWriteOperator<I> operator;
   private final Configuration conf;
 
-  public StreamWriteOperatorFactory(Configuration conf) {
-    super(new StreamWriteOperator<>(conf));
-    this.operator = (StreamWriteOperator<I>) getOperator();
+  public WriteOperatorFactory(Configuration conf, AbstractWriteOperator<I> operator) {
+    super(operator);
+    this.operator = operator;
     this.conf = conf;
+  }
+
+  public static <I> WriteOperatorFactory<I> instance(Configuration conf, AbstractWriteOperator<I> operator) {
+    return new WriteOperatorFactory<>(conf, operator);
   }
 
   @Override

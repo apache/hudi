@@ -16,31 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.transform;
+package org.apache.hudi.sink.append;
 
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.common.AbstractWriteOperator;
+import org.apache.hudi.sink.common.WriteOperatorFactory;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
 /**
- * Utilities for {@link RowDataToHoodieFunction}.
+ * Operator for {@link AppendWriteFunction}.
+ *
+ * @param <I> The input type
  */
-public abstract class RowDataToHoodieFunctions {
-  private RowDataToHoodieFunctions() {
+public class AppendWriteOperator<I> extends AbstractWriteOperator<I> {
+
+  public AppendWriteOperator(Configuration conf, RowType rowType) {
+    super(new AppendWriteFunction<>(conf, rowType));
   }
 
-  /**
-   * Creates a {@link RowDataToHoodieFunction} instance based on the given configuration.
-   */
-  @SuppressWarnings("rawtypes")
-  public static RowDataToHoodieFunction<RowData, HoodieRecord> create(RowType rowType, Configuration conf) {
-    if (conf.getLong(FlinkOptions.WRITE_RATE_LIMIT) > 0) {
-      return new RowDataToHoodieFunctionWithRateLimit<>(rowType, conf);
-    } else {
-      return new RowDataToHoodieFunction<>(rowType, conf);
-    }
+  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType rowType) {
+    return WriteOperatorFactory.instance(conf, new AppendWriteOperator<>(conf, rowType));
   }
 }

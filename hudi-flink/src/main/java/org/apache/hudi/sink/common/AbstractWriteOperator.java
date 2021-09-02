@@ -16,35 +16,40 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.bulk;
+package org.apache.hudi.sink.common;
 
-import org.apache.hudi.sink.common.AbstractWriteOperator;
-import org.apache.hudi.sink.common.WriteOperatorFactory;
-
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
+import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
-import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
 
 /**
- * Operator for bulk insert mode sink.
+ * Base class for write operator.
  *
- * @param <I> The input type
+ * @param <I> the input type
  */
-public class BulkInsertWriteOperator<I>
-    extends AbstractWriteOperator<I>
-    implements BoundedOneInput {
+public abstract class AbstractWriteOperator<I>
+    extends ProcessOperator<I, Object>
+    implements OperatorEventHandler, BoundedOneInput {
+  private final AbstractWriteFunction<I> function;
 
-  public BulkInsertWriteOperator(Configuration conf, RowType rowType) {
-    super(new BulkInsertWriteFunction<>(conf, rowType));
+  public AbstractWriteOperator(AbstractWriteFunction<I> function) {
+    super(function);
+    this.function = function;
+  }
+
+  public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
+    this.function.setOperatorEventGateway(operatorEventGateway);
   }
 
   @Override
-  public void handleOperatorEvent(OperatorEvent event) {
-    // no operation
+  public void endInput() {
+    this.function.endInput();
   }
 
-  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType rowType) {
-    return WriteOperatorFactory.instance(conf, new BulkInsertWriteOperator<>(conf, rowType));
+  @Override
+  public void handleOperatorEvent(OperatorEvent evt) {
+    this.function.handleOperatorEvent(evt);
   }
 }

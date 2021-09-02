@@ -61,7 +61,7 @@ public class DeltaWriteProfile extends WriteProfile {
       // If we can index log files, we can add more inserts to log files for fileIds including those under
       // pending compaction.
       List<FileSlice> allFileSlices = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
-              .collect(Collectors.toList());
+          .collect(Collectors.toList());
       for (FileSlice fileSlice : allFileSlices) {
         if (isSmallFile(fileSlice)) {
           allSmallFileSlices.add(fileSlice);
