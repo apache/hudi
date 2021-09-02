@@ -9,7 +9,7 @@ Ziyue Guan from Bytedance shares the experience of building an ExaByte(EB)-level
 
 <!--truncate-->
 
-This blog is a translated version of [the same blog in Chinese](https://mp.weixin.qq.com/s/oZz_2HzPCWgzxwZO0nuDUQ).  Here are the [slides in Chinese](/assets/images/blog/datalake-bytedance-hudi/bytedance-hudi-slides-chinese.pdf) and [the translated slides in English](/assets/images/blog/datalake-bytedance-hudi/bytedance-hudi-slides-english.pdf).
+This blog is a translated version of [the same blog originally in Chinese/中文](https://mp.weixin.qq.com/s/oZz_2HzPCWgzxwZO0nuDUQ).  Here are the [original slides in Chinese/中文](/assets/images/blog/datalake-bytedance-hudi/bytedance-hudi-slides-chinese.pdf) and [the translated slides in English](/assets/images/blog/datalake-bytedance-hudi/bytedance-hudi-slides-english.pdf).
 
 ![slide1 title](/assets/images/blog/datalake-bytedance-hudi/slide1.png)
 
