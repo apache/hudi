@@ -59,11 +59,11 @@ We introduce the following new marker-related write options in `0.9.0` release, 
 
 We evaluate the write performance over both direct and timeline-server-based marker mechanisms by bulk-inserting a large dataset using Amazon EMR with Spark and S3. The input data is around 100GB.  We configure the write operation to generate a large number of data files concurrently by setting the max parquet file size to be 1MB and parallelism to be 240.  Note that it is unlikely to set max parquet file size to 1MB in production and such a setup is only to evaluate the performance regarding the marker mechanisms. As we noted before, while the latency of direct marker mechanism is acceptable for incremental writes with smaller number of data files written, it increases dramatically for large bulk inserts/writes which produce much more data files.
 
-As shown below, the timeline-server-based marker mechanism generates much fewer files storing markers because of the batch processing, leading to much less time on marker-related I/O operations, thus achieving 31% lower write completion time compared to the direct marker file mechanism.
+As shown below, direct marker mechanism works really well, when a part of the table is written, e.g., 1K out of 165K data files.  However, the time of direct marker operations is non-trivial when we need to write significant number of data files. Compared to the direct marker mechanism, the timeline-server-based marker mechanism generates much fewer files storing markers because of the batch processing, leading to much less time on marker-related I/O operations, thus achieving 31% lower write completion time compared to the direct marker file mechanism.
 
 | Marker Type |   Total Files   |  Num data files written | Files created for markers | Marker deletion time | Bulk Insert Time (including marker deletion) |
 | ----------- | --------- | :---------: | :---------: | :---------: | :---------: | 
-| Direct | 1k | 1k | 1k | 5.4secs | - |
+| Direct | 165k | 1k | 1k | 5.4secs | - |
 | Direct | 165K | 165k | 165k | 15min | 55min |
 | Timeline-server-based | 165K | 165k | 20 | ~3s | 38min |
 
