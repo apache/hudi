@@ -77,10 +77,17 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
       // default parallelism
       int parallelism = dataStream.getExecutionConfig().getParallelism();
+
+      DataStream<Object> pipeline;
+      // Append mode
+      if (StreamerUtil.allowDuplicateInserts(conf)) {
+        return Pipelines.append(conf, rowType, dataStream);
+      }
+
       // bootstrap
       final DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, context.isBounded());
       // write pipeline
-      DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+      pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
       // compaction
       if (StreamerUtil.needsAsyncCompaction(conf)) {
         return Pipelines.compact(conf, pipeline);

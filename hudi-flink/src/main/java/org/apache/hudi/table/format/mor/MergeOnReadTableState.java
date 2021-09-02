@@ -106,7 +106,6 @@ public class MergeOnReadTableState implements Serializable {
    *
    * @param pkOffsets the pk offsets in required row type
    * @return pk field logical types
-   *
    * @see #getPkOffsetsInRequired()
    */
   public LogicalType[] getPkTypes(int[] pkOffsets) {

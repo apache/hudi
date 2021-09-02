@@ -303,7 +303,8 @@ public class HoodieTableSource implements
                 .collect(Collectors.toList()));
             return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
                 metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null);
-          }).collect(Collectors.toList()); })
+          }).collect(Collectors.toList());
+    })
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
   }

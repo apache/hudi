@@ -270,16 +270,16 @@ public class StreamReadMonitoringFunction
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     List<MergeOnReadInputSplit> inputSplits = writePartitions.stream()
         .map(relPartitionPath -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, commitToIssue)
-        .map(fileSlice -> {
-          Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-              .sorted(HoodieLogFile.getLogFileComparator())
-              .map(logFile -> logFile.getPath().toString())
-              .collect(Collectors.toList()));
-          String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-          return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-              basePath, logPaths, commitToIssue,
-              metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange);
-        }).collect(Collectors.toList()))
+            .map(fileSlice -> {
+              Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+                  .sorted(HoodieLogFile.getLogFileComparator())
+                  .map(logFile -> logFile.getPath().toString())
+                  .collect(Collectors.toList()));
+              String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+              return new MergeOnReadInputSplit(cnt.getAndAdd(1),
+                  basePath, logPaths, commitToIssue,
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange);
+            }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 

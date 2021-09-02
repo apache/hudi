@@ -128,18 +128,18 @@ public class TestConfigurations {
     DataType[] fieldTypes = tableSchema.getFieldDataTypes();
     for (int i = 0; i < fieldNames.length; i++) {
       builder.append("  `")
-              .append(fieldNames[i])
-              .append("` ")
-              .append(fieldTypes[i].toString());
+          .append(fieldNames[i])
+          .append("` ")
+          .append(fieldTypes[i].toString());
       if (i != fieldNames.length - 1) {
         builder.append(",");
       }
       builder.append("\n");
     }
     final String withProps = ""
-            + ") with (\n"
-            + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
-            + ")";
+        + ") with (\n"
+        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
+        + ")";
     builder.append(withProps);
     return builder.toString();
   }

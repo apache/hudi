@@ -29,7 +29,8 @@ public class CommitAckEvent implements OperatorEvent {
   private static final CommitAckEvent INSTANCE = new CommitAckEvent();
 
   // default constructor for efficient serialization
-  public CommitAckEvent() {}
+  public CommitAckEvent() {
+  }
 
   public static CommitAckEvent getInstance() {
     return INSTANCE;
