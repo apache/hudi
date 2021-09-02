@@ -7,10 +7,6 @@ last_modified_at: 2020-05-28T08:40:00-07:00
 ---
 # [Release 0.5.3](https://github.com/apache/hudi/releases/tag/release-0.5.3) ([docs](/docs/quick-start-guide))
 
-## Download Information
- * Source Release : [Apache Hudi 0.5.3 Source Release](https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.sha512))
- * Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
-
 ## Migration Guide for this release
  * This is a bug fix only release and no special migration steps needed when upgrading from 0.5.2. If you are upgrading from earlier releases “X”, please make sure you read the migration guide for each subsequent release between “X” and 0.5.3
  * 0.5.3 is the first hudi release after graduation. As a result, all hudi jars will no longer have "-incubating" in the version name. In all the places where hudi version is referred, please make sure "-incubating" is no longer present.

@@ -7,10 +7,6 @@ last_modified_at: 2020-05-28T08:40:00-07:00
 ---
 # [Release 0.7.0](https://github.com/apache/hudi/releases/tag/release-0.7.0) ([docs](/docs/quick-start-guide))
 
-## Download Information
-* Source Release : [Apache Hudi 0.7.0 Source Release](https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.sha512))
-* Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
-
 ## Migration Guide for this release
 - If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.
 - Specifically check upgrade instructions for 0.6.0. This release does not introduce any new table versions.
