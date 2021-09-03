@@ -115,4 +115,4 @@ stages:
               wget https://archive.apache.org/dist/spark/spark-$(SPARK_VERSION)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz -O $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz
               tar -xvf $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz -C $(Pipeline.Workspace)/
               mkdir /tmp/spark-events/
-              mvn -Pintegration-tests verify
+              mvn $(MAVEN_OPTS) -Pintegration-tests verify
