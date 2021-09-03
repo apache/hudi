@@ -27,8 +27,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -37,7 +35,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.util.Utf8;
-import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;
@@ -75,7 +72,7 @@ public final class SchemaTestUtil {
   }
 
   public static List<String> generateTestJsonRecords(int from, int limit) throws IOException, URISyntaxException {
-    Path dataPath= initializeSampleDataPath();
+    Path dataPath = initializeSampleDataPath();
 
     try (Stream<String> stream = Files.lines(dataPath)) {
       return stream.skip(from).limit(limit).collect(Collectors.toList());
@@ -87,7 +84,7 @@ public final class SchemaTestUtil {
   private static List<IndexedRecord> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)
       throws IOException, URISyntaxException {
     GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
-    Path dataPath= initializeSampleDataPath();
+    Path dataPath = initializeSampleDataPath();
 
     try (Stream<String> stream = Files.lines(dataPath)) {
       return stream.skip(from).limit(limit).map(s -> {

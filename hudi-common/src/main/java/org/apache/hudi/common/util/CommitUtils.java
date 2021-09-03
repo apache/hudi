@@ -137,6 +137,11 @@ public class CommitUtils {
     return fileIdToPath;
   }
 
+  /**
+   * Get the Metadata from the latest commit file.
+   * @param metaClient The {@link HoodieTableMetaClient} to get access to the meta data.
+   * @return An Optional {@link HoodieCommitMetadata} containing the meta data from the latest commit file.
+   */
   public static Option<HoodieCommitMetadata> getCommitMetadataForLatestInstant(HoodieTableMetaClient metaClient) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     Option<HoodieInstant> latestInstant = timeline.lastInstant();
