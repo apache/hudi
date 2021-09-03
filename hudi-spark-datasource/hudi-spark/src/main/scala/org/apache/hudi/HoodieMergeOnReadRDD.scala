@@ -28,7 +28,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.{HoodieAvroSerializer, HooodieAvroDeserializer}
+import org.apache.spark.sql.avro.{HoodieAvroSerializer, HoodieAvroDeserializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -119,7 +119,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         tableState.requiredStructSchema
           .map(f => tableAvroSchema.getField(f.name).pos()).toList
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
-      private val deserializer = HooodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
+      private val deserializer = HoodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
       private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
@@ -158,7 +158,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         tableState.requiredStructSchema
           .map(f => tableAvroSchema.getField(f.name).pos()).toList
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
-      private val deserializer = HooodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
+      private val deserializer = HoodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
       private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
@@ -204,7 +204,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         tableState.requiredStructSchema
           .map(f => tableAvroSchema.getField(f.name).pos()).toList
       private val serializer = HoodieAvroSerializer(tableState.tableStructSchema, tableAvroSchema, false)
-      private val requiredDeserializer = HooodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
+      private val requiredDeserializer = HoodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
       private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
