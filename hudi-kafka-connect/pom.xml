@@ -233,19 +233,6 @@
         </dependency>
         <dependency>
             <groupId>${hive.groupid}</groupId>
-            <artifactId>hive-serde</artifactId>
-            <version>${hive.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>${hive.groupid}</groupId>
-            <artifactId>hive-shims</artifactId>
-            <version>${hive.version}</version>
-            <scope>compile</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>${hive.groupid}</groupId>
             <artifactId>hive-metastore</artifactId>
             <version>${hive.version}</version>
             <scope>compile</scope>
@@ -380,10 +367,6 @@
                                 <relocation>
                                     <pattern>org.apache.avro.</pattern>
                                     <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>com.esotericsoftware.kryo.</pattern>
-                                    <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
                                 </relocation>
                             </relocations>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
