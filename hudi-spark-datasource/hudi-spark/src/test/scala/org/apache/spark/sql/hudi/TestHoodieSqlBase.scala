@@ -18,12 +18,14 @@
 package org.apache.spark.sql.hudi
 
 import java.io.File
-
 import org.apache.log4j.Level
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+
+import java.util.TimeZone
 
 class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(Level.WARN)
@@ -34,6 +36,7 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     dir
   }
 
+  TimeZone.setDefault(DateTimeUtils.getTimeZone("CTT"))
   protected lazy val spark: SparkSession = SparkSession.builder()
     .master("local[1]")
     .appName("hoodie sql test")
@@ -43,6 +46,7 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
+    .config("spark.sql.session.timeZone", "CTT")
     .getOrCreate()
 
   private var tableId = 0
@@ -91,6 +95,19 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     }
     assertResult(true)(hasException)
   }
+
+  protected def checkExceptionContain(sql: String)(errorMsg: String): Unit = {
+    var hasException = false
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        assertResult(true)(e.getMessage.contains(errorMsg))
+        hasException = true
+    }
+    assertResult(true)(hasException)
+  }
+
 
   protected def removeQuotes(value: Any): Any = {
     value match {
