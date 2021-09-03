@@ -1,7 +1,7 @@
 package org.apache.hudi.helper;
 
 import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.TopicTransactionCoordinator;
+import org.apache.hudi.connect.core.TransactionCoordinator;
 import org.apache.hudi.connect.core.TransactionParticipant;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.exception.HoodieException;
@@ -13,12 +13,12 @@ import java.util.Map;
 
 /**
  * A mock Kafka Control Agent that supports the testing
- * of a {@link TopicTransactionCoordinator} with multiple
+ * of a {@link TransactionCoordinator} with multiple
  * instances of {@link TransactionParticipant}.
  */
 public class MockKafkaControlAgent implements KafkaControlAgent {
 
-  private final Map<String, TopicTransactionCoordinator> coordinators;
+  private final Map<String, TransactionCoordinator> coordinators;
   private final Map<String, List<TransactionParticipant>> participants;
 
   public MockKafkaControlAgent() {
@@ -27,7 +27,7 @@ public class MockKafkaControlAgent implements KafkaControlAgent {
   }
 
   @Override
-  public void registerTransactionCoordinator(TopicTransactionCoordinator coordinator) {
+  public void registerTransactionCoordinator(TransactionCoordinator coordinator) {
     coordinators.put(coordinator.getPartition().topic(), coordinator);
   }
 
@@ -40,7 +40,7 @@ public class MockKafkaControlAgent implements KafkaControlAgent {
   }
 
   @Override
-  public void deregisterTransactionCoordinator(TopicTransactionCoordinator coordinator) {
+  public void deregisterTransactionCoordinator(TransactionCoordinator coordinator) {
     coordinators.remove(coordinator.getPartition().topic());
   }
 
@@ -57,10 +57,10 @@ public class MockKafkaControlAgent implements KafkaControlAgent {
       String topic = message.senderPartition().topic();
       if (message.getSenderType().equals(ControlEvent.SenderType.COORDINATOR)) {
         for (TransactionParticipant participant : participants.get(topic)) {
-          participant.publishControlEvent(message);
+          participant.processControlEvent(message);
         }
       } else {
-        coordinators.get(topic).publishControlEvent(message);
+        coordinators.get(topic).processControlEvent(message);
       }
     } catch (Exception exception) {
       throw new HoodieException("Fatal error trying to relay Kafka Control Messages for Testing.");

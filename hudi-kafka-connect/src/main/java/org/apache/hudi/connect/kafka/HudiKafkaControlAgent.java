@@ -19,8 +19,7 @@
 package org.apache.hudi.connect.kafka;
 
 import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.CoordinatorManager;
-import org.apache.hudi.connect.core.TopicTransactionCoordinator;
+import org.apache.hudi.connect.core.TransactionCoordinator;
 import org.apache.hudi.connect.core.TransactionParticipant;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,7 +47,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Class that manages the Kafka consumer and producer for
  * the Kafka Control Topic that ensures coordination across the
- * {@link TopicTransactionCoordinator} and {@link TransactionParticipant}s.
+ * {@link TransactionCoordinator} and {@link TransactionParticipant}s.
  * Use a single instance per worker (single-threaded),
  * and register multiple tasks that can receive the control messages.
  */
@@ -63,32 +62,30 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
   private final String bootstrapServers;
   private final String controlTopicName;
   private final ExecutorService executorService;
-  private final CoordinatorManager transactionCoordinatorManager;
   // List of TransactionParticipants per Kafka Topic
+  private final Map<String, TransactionCoordinator> topicCoordinators;
   private final Map<String, ConcurrentLinkedQueue<TransactionParticipant>> partitionWorkers;
   private final KafkaControlProducer producer;
 
   private KafkaConsumer<String, ControlEvent> consumer;
 
   public HudiKafkaControlAgent(String bootstrapServers,
-                               String controlTopicName,
-                               CoordinatorManager transactionCoordinatorManager) {
+                               String controlTopicName) {
     this.bootstrapServers = bootstrapServers;
     this.controlTopicName = controlTopicName;
     this.executorService = Executors.newSingleThreadExecutor();
-    this.transactionCoordinatorManager = transactionCoordinatorManager;
+    this.topicCoordinators = new HashMap<>();
     this.partitionWorkers = new HashMap<>();
     this.producer = new KafkaControlProducer(bootstrapServers, controlTopicName);
     start();
   }
 
   public static HudiKafkaControlAgent createKafkaControlManager(String bootstrapServers,
-                                                                String controlTopicName,
-                                                                CoordinatorManager transactionCoordinatorManager) {
+                                                                String controlTopicName) {
     if (kafkaCommunicationAgent == null) {
       synchronized (LOCK) {
         if (kafkaCommunicationAgent == null) {
-          kafkaCommunicationAgent = new HudiKafkaControlAgent(bootstrapServers, controlTopicName, transactionCoordinatorManager);
+          kafkaCommunicationAgent = new HudiKafkaControlAgent(bootstrapServers, controlTopicName);
         }
       }
     }
@@ -108,6 +105,17 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
     if (partitionWorkers.containsKey(worker.getPartition().topic())) {
       partitionWorkers.get(worker.getPartition().topic()).remove(worker);
     }
+  }
+
+  @Override
+  public void registerTransactionCoordinator(TransactionCoordinator coordinator) {
+    if (!topicCoordinators.containsKey(coordinator.getPartition().topic())) {
+      topicCoordinators.put(coordinator.getPartition().topic(), coordinator);
+    }
+  }
+
+  public void deregisterTransactionCoordinator(TransactionCoordinator coordinator) {
+    topicCoordinators.remove(coordinator.getPartition().topic());
   }
 
   @Override
@@ -146,13 +154,17 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
             if (message.getSenderType().equals(ControlEvent.SenderType.COORDINATOR)) {
               if (partitionWorkers.containsKey(senderTopic)) {
                 for (TransactionParticipant partitionWorker : partitionWorkers.get(senderTopic)) {
-                  partitionWorker.publishControlEvent(message);
+                  partitionWorker.processControlEvent(message);
                 }
               } else {
                 LOG.warn("Failed to send message for unregistered participants for topic {}", senderTopic);
               }
             } else if (message.getSenderType().equals(ControlEvent.SenderType.PARTICIPANT)) {
-              transactionCoordinatorManager.processControlEvent(message);
+              if (topicCoordinators.containsKey(senderTopic)) {
+                topicCoordinators.get(senderTopic).processControlEvent(message);
+              } else {
+                LOG.warn("Failed to send message for unregistered coordinator for topic {}", senderTopic);
+              }
             } else {
               LOG.warn("Sender type of Control Message unknown {}", message.getSenderType().name());
             }

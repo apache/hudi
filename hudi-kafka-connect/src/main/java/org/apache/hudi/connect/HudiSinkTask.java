@@ -18,9 +18,10 @@
 
 package org.apache.hudi.connect;
 
-import org.apache.hudi.connect.core.HudiTopicTransactionCoordinator;
+import org.apache.hudi.connect.core.HudiTransactionCoordinator;
 import org.apache.hudi.connect.core.HudiTransactionParticipant;
-import org.apache.hudi.connect.core.TransactionCoordinatorManager;
+import org.apache.hudi.connect.core.TransactionCoordinator;
+import org.apache.hudi.connect.core.TransactionParticipant;
 import org.apache.hudi.connect.kafka.HudiKafkaControlAgent;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
@@ -50,8 +51,8 @@ public class HudiSinkTask extends SinkTask {
   private static final Logger LOG = LoggerFactory.getLogger(HudiSinkTask.class);
   private static final int COORDINATOR_KAFKA_PARTITION = 0;
 
-  private final Map<TopicPartition, HudiTransactionParticipant> hudiTransactionParticipants;
-  private final TransactionCoordinatorManager transactionCoordinatorManager;
+  private final Map<TopicPartition, TransactionCoordinator> transactionCoordinators;
+  private final Map<TopicPartition, TransactionParticipant> hudiTransactionParticipants;
   private HudiKafkaControlAgent controlKafkaClient;
   private HudiConnectConfigs connectConfigs;
 
@@ -59,7 +60,7 @@ public class HudiSinkTask extends SinkTask {
   private String connectorName;
 
   public HudiSinkTask() {
-    transactionCoordinatorManager = new TransactionCoordinatorManager();
+    transactionCoordinators = new HashMap();
     hudiTransactionParticipants = new HashMap<>();
   }
 
@@ -119,7 +120,7 @@ public class HudiSinkTask extends SinkTask {
     // committed to Hudi.
     Map<TopicPartition, OffsetAndMetadata> result = new HashMap<>();
     for (TopicPartition partition : context.assignment()) {
-      HudiTransactionParticipant worker = hudiTransactionParticipants.get(partition);
+      TransactionParticipant worker = hudiTransactionParticipants.get(partition);
       if (worker != null) {
         worker.processRecords();
         if (worker.getLastKafkaCommittedOffset() >= 0) {
@@ -149,9 +150,12 @@ public class HudiSinkTask extends SinkTask {
     // valid. For now, we prefer the simpler solution that may result in a bit of wasted effort.
     for (TopicPartition partition : partitions) {
       if (partition.partition() == COORDINATOR_KAFKA_PARTITION) {
-        transactionCoordinatorManager.removeTopicCoordinator(partition);
+        if (transactionCoordinators.containsKey(partition)) {
+          transactionCoordinators.get(partition).stop();
+          transactionCoordinators.remove(partition);
+        }
       }
-      HudiTransactionParticipant worker = hudiTransactionParticipants.remove(partition);
+      TransactionParticipant worker = hudiTransactionParticipants.remove(partition);
       if (worker != null) {
         try {
           LOG.debug("Closing data writer due to task start failure.");
@@ -170,9 +174,12 @@ public class HudiSinkTask extends SinkTask {
       try {
         // If the partition is 0, instantiate the Leader
         if (partition.partition() == COORDINATOR_KAFKA_PARTITION) {
-          HudiTopicTransactionCoordinator hudiTransactionCoordinator =
-              new HudiTopicTransactionCoordinator(connectConfigs, partition, controlKafkaClient, transactionCoordinatorManager);
-          transactionCoordinatorManager.addTopicCoordinator(partition, hudiTransactionCoordinator);
+          HudiTransactionCoordinator coordinator = new HudiTransactionCoordinator(
+              connectConfigs,
+              partition,
+              controlKafkaClient);
+          coordinator.start();
+          transactionCoordinators.put(partition, coordinator);
         }
         HudiTransactionParticipant worker = new HudiTransactionParticipant(connectConfigs, partition, controlKafkaClient, context);
         hudiTransactionParticipants.put(partition, worker);
@@ -185,7 +192,7 @@ public class HudiSinkTask extends SinkTask {
 
   private void cleanup() {
     for (TopicPartition partition : context.assignment()) {
-      HudiTransactionParticipant worker = hudiTransactionParticipants.get(partition);
+      TransactionParticipant worker = hudiTransactionParticipants.get(partition);
       if (worker != null) {
         try {
           LOG.debug("Closing data writer due to task start failure.");
@@ -196,6 +203,7 @@ public class HudiSinkTask extends SinkTask {
       }
     }
     hudiTransactionParticipants.clear();
-    transactionCoordinatorManager.stop();
+    transactionCoordinators.forEach((topic, transactionCoordinator) -> transactionCoordinator.stop());
+    transactionCoordinators.clear();
   }
 }

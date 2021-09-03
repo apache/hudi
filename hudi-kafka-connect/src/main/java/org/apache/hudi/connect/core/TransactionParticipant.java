@@ -25,7 +25,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
  * Interface for the Participant that
  * manages Writes for a
  * single Kafka partition, based on
- * coordination signals from the {@link TopicTransactionCoordinator}.
+ * coordination signals from the {@link TransactionCoordinator}.
  */
 public interface TransactionParticipant {
 
@@ -39,7 +39,7 @@ public interface TransactionParticipant {
 
   TopicPartition getPartition();
 
-  void publishControlEvent(ControlEvent message);
+  void processControlEvent(ControlEvent message);
 
   long getLastKafkaCommittedOffset();
 }

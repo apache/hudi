@@ -17,7 +17,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.connect.core.TopicTransactionCoordinator;
+import org.apache.hudi.connect.core.TransactionCoordinator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -41,7 +41,7 @@ import java.util.Set;
 
 /**
  * Implementation of Transaction service APIs used by
- * {@link TopicTransactionCoordinator}
+ * {@link TransactionCoordinator}
  * using {@link HoodieJavaWriteClient}.
  */
 public class HudiConnectTransactionServices implements ConnectTransactionServices {

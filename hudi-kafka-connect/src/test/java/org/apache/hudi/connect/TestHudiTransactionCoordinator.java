@@ -22,16 +22,16 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.HudiTopicTransactionCoordinator;
-import org.apache.hudi.connect.core.TopicTransactionCoordinator;
-import org.apache.hudi.connect.core.TransactionCoordinatorManager;
+import org.apache.hudi.connect.core.HudiTransactionCoordinator;
+import org.apache.hudi.connect.core.TransactionCoordinator;
 import org.apache.hudi.connect.core.TransactionParticipant;
-import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.writers.HudiConnectConfigs;
-import org.apache.hudi.connect.writers.ConnectTransactionServices;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.helper.MockConnectTransactionServices;
+import org.apache.hudi.helper.MockKafkaControlAgent;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -45,28 +45,24 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
-public class TestHudiTopicTransactionCoordinator {
+public class TestHudiTransactionCoordinator {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
   private static final int NUM_PARTITIONS = 4;
   private static final int MAX_COMMIT_ROUNDS = 5;
   private static final int TEST_TIMEOUT_SECS = 60;
 
-  private TransactionCoordinatorManager coordinatorManager;
-  private TopicPartition partition;
   private HudiConnectConfigs configs;
-  private TestKafkaControlAgent kafkaControlAgent;
-  private TestConnectTransactionServices transactionServices;
+  private MockParticipant participant;
+  private MockKafkaControlAgent kafkaControlAgent;
+  private MockConnectTransactionServices transactionServices;
   private CountDownLatch latch;
 
   @BeforeEach
   public void setUp() throws Exception {
-    coordinatorManager = new TransactionCoordinatorManager();
-    transactionServices = new TestConnectTransactionServices();
-    partition = new TopicPartition(TOPIC_NAME, 0);
+    transactionServices = new MockConnectTransactionServices();
     configs = HudiConnectConfigs.newBuilder()
         .withCommitIntervalSecs(1L)
         .withCoordinatorWriteTimeoutSecs(1L)
@@ -75,24 +71,19 @@ public class TestHudiTopicTransactionCoordinator {
   }
 
   @ParameterizedTest
-  @EnumSource(value = TestScenarios.class)
-  public void testSingleCommitScenario(TestScenarios scenario) throws InterruptedException {
-    kafkaControlAgent = new TestKafkaControlAgent(latch, scenario, MAX_COMMIT_ROUNDS);
-    coordinatorManager.addTopicCoordinator(
-        configs,
-        partition,
-        kafkaControlAgent,
-        transactionServices,
-        (bootstrapServers, topicName) -> NUM_PARTITIONS));
+  @EnumSource(value = MockParticipant.TestScenarios.class)
+  public void testSingleCommitScenario(MockParticipant.TestScenarios scenario) throws InterruptedException {
+    kafkaControlAgent = new MockKafkaControlAgent();
+    participant = new MockParticipant(kafkaControlAgent, latch, scenario, MAX_COMMIT_ROUNDS);
+    participant.start();
 
-    coordinatorManager = new HudiTopicTransactionCoordinator(
+    // Test the coordinator using the mock participant
+    TransactionCoordinator coordinator = new HudiTransactionCoordinator(
         configs,
-        partition,
+        new TopicPartition(TOPIC_NAME, 0),
         kafkaControlAgent,
         transactionServices,
         (bootstrapServers, topicName) -> NUM_PARTITIONS);
-    kafkaControlAgent.setCoordinator(coordinator);
-
     coordinator.start();
 
     latch.await(TEST_TIMEOUT_SECS, TimeUnit.SECONDS);
@@ -100,55 +91,73 @@ public class TestHudiTopicTransactionCoordinator {
     if (latch.getCount() > 0) {
       throw new HoodieException("Test timedout resulting in failure");
     }
-
     coordinator.stop();
-    assertTrue(kafkaControlAgent.hasDeRegistered);
+    participant.stop();
   }
 
-  private static class TestKafkaControlAgent implements KafkaControlAgent {
+  /**
+   * A mock Transaction Participant, that exercises all the test scenarios
+   * for the coordinator as mentioned in {@link TestScenarios}.
+   */
+  private static class MockParticipant implements TransactionParticipant {
 
+    private final MockKafkaControlAgent kafkaControlAgent;
+    private final TopicPartition partition;
     private final CountDownLatch latch;
     private final TestScenarios testScenario;
     private final int maxNumberCommitRounds;
+    private final Map<Integer, Long> kafkaOffsetsCommitted;
 
-    private TopicTransactionCoordinator coordinator;
-    private Map<Integer, Long> kafkaOffsetsCommitted;
-    private boolean hasRegistered;
-    private boolean hasDeRegistered;
     private ControlEvent.MsgType expectedMsgType;
     private int numberCommitRounds;
 
-    public TestKafkaControlAgent(CountDownLatch latch,
-                                 TestScenarios testScenario,
-                                 int maxNumberCommitRounds) {
+    public MockParticipant(MockKafkaControlAgent kafkaControlAgent,
+                           CountDownLatch latch,
+                           TestScenarios testScenario,
+                           int maxNumberCommitRounds) {
+      this.kafkaControlAgent = kafkaControlAgent;
       this.latch = latch;
       this.testScenario = testScenario;
       this.maxNumberCommitRounds = maxNumberCommitRounds;
-      kafkaOffsetsCommitted = new HashMap<>();
-      hasRegistered = false;
-      hasDeRegistered = false;
+      this.partition = new TopicPartition(TOPIC_NAME, (NUM_PARTITIONS - 1));
+      this.kafkaOffsetsCommitted = new HashMap<>();
       expectedMsgType = ControlEvent.MsgType.START_COMMIT;
       numberCommitRounds = 0;
     }
 
-    public void setCoordinator(TopicTransactionCoordinator coordinator) {
-      this.coordinator = coordinator;
+    @Override
+    public void start() {
+      kafkaControlAgent.registerTransactionParticipant(this);
     }
 
     @Override
-    public void registerTransactionParticipant(TransactionParticipant worker) {
-      // no-op
+    public void stop() {
+      kafkaControlAgent.deregisterTransactionParticipant(this);
     }
 
     @Override
-    public void deregisterTransactionParticipant(TransactionParticipant worker) {
-      // no-op
+    public void buffer(SinkRecord record) {
     }
 
     @Override
-    public void publishMessage(ControlEvent message) {
-      assertTrue(hasRegistered);
+    public void processRecords() {
+    }
+
+    @Override
+    public TopicPartition getPartition() {
+      return partition;
+    }
+
+    @Override
+    public void processControlEvent(ControlEvent message) {
+      assertEquals(message.getSenderType(), ControlEvent.SenderType.COORDINATOR);
+      assertEquals(message.senderPartition().topic(), partition.topic());
       testScenarios(message);
+    }
+
+    @Override
+    public long getLastKafkaCommittedOffset() {
+      return 0;
     }
 
     private void testScenarios(ControlEvent message) {
@@ -194,7 +203,7 @@ public class TestHudiTopicTransactionCoordinator {
 
           // Send events based on test scenario
           for (int i = 0; i < numSuccessPartitions; i++) {
-            coordinator.publishControlEvent(controlEvents.get(i));
+            kafkaControlAgent.publishMessage(controlEvents.get(i));
           }
           break;
         case ACK_COMMIT:
@@ -215,55 +224,30 @@ public class TestHudiTopicTransactionCoordinator {
         expectedMsgType = ControlEvent.MsgType.END_COMMIT;
       }
     }
-  }
 
-  private static ControlEvent successWriteStatus(String commitTime,
-                                                 TopicPartition partition,
-                                                 long kafkaOffset) throws Exception {
-    // send WS
-    WriteStatus writeStatus = new WriteStatus();
-    WriteStatus status = new WriteStatus(false, 1.0);
-    for (int i = 0; i < 1000; i++) {
-      status.markSuccess(mock(HoodieRecord.class), Option.empty());
-    }
-    return new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
-        ControlEvent.SenderType.PARTICIPANT,
-        commitTime,
-        partition)
-        .setParticipantInfo(new ControlEvent.ParticipantInfo(
-            Collections.singletonList(writeStatus),
-            kafkaOffset,
-            ControlEvent.OutcomeType.WRITE_SUCCESS))
-        .build();
-  }
-
-  private enum TestScenarios {
-    SUBSET_CONNECT_TASKS_FAILED,
-    ALL_CONNECT_TASKS_SUCCESS
-  }
-
-  private static class TestConnectTransactionServices implements ConnectTransactionServices {
-
-    private int commitTime;
-
-    public TestConnectTransactionServices() {
-      commitTime = 100;
+    public enum TestScenarios {
+      SUBSET_CONNECT_TASKS_FAILED,
+      ALL_CONNECT_TASKS_SUCCESS
     }
 
-    @Override
-    public String startCommit() {
-      commitTime++;
-      return String.valueOf(commitTime);
-    }
-
-    @Override
-    public void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
-      assertEquals(String.valueOf(this.commitTime), commitTime);
-    }
-
-    @Override
-    public Map<String, String> loadLatestCommitMetadata() {
-      return new HashMap<>();
+    private static ControlEvent successWriteStatus(String commitTime,
+                                                   TopicPartition partition,
+                                                   long kafkaOffset) throws Exception {
+      // send WS
+      WriteStatus writeStatus = new WriteStatus();
+      WriteStatus status = new WriteStatus(false, 1.0);
+      for (int i = 0; i < 1000; i++) {
+        status.markSuccess(mock(HoodieRecord.class), Option.empty());
+      }
+      return new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
+          ControlEvent.SenderType.PARTICIPANT,
+          commitTime,
+          partition)
+          .setParticipantInfo(new ControlEvent.ParticipantInfo(
+              Collections.singletonList(writeStatus),
+              kafkaOffset,
+              ControlEvent.OutcomeType.WRITE_SUCCESS))
+          .build();
     }
   }
 }

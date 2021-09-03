@@ -26,9 +26,15 @@ import org.apache.kafka.common.TopicPartition;
  * across all the Kafka partitions, that
  * are managed by the {@link TransactionParticipant}.
  */
-public interface TopicTransactionCoordinator {
+public interface TransactionCoordinator {
+
+  void start();
+
+  void stop();
+
+  /* Kafka Topic that this Coordinator belongs to */
   TopicPartition getPartition();
 
-  void processCoordinatorEvent(CoordinatorEvent event);
-
+  /* Called when a control event is received from the Kafka control topic */
+  void processControlEvent(ControlEvent message);
 }
