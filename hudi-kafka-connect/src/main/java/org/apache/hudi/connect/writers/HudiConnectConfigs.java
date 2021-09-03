@@ -41,18 +41,23 @@ public class HudiConnectConfigs extends HoodieConfig {
 
   public static final String KAFKA_VALUE_CONVERTER = "value.converter";
 
-  public static final ConfigProperty<String> SCHEMA_PROVIDER_CLASS = ConfigProperty
-      .key("hoodie.schemaprovider.schema.class")
-      .defaultValue(FilebasedSchemaProvider.class.getName())
-      .withDocumentation("subclass of org.apache.hudi.schema.SchemaProvider "
-          + "to attach schemas to input & target table data, built in options: "
-          + "org.apache.hudi.schema.FilebasedSchemaProvider.");
+  public static final ConfigProperty<String> KAFKA_BOOTSTRAP_SERVERS = ConfigProperty
+      .key("bootstrap.servers")
+      .defaultValue("localhost:9092")
+      .withDocumentation("The bootstrap servers for the Kafka Cluster.");
 
   public static final ConfigProperty<String> CONTROL_TOPIC_NAME = ConfigProperty
       .key("hoodie.kafka.control.topic")
       .defaultValue("hudi-control-topic")
       .withDocumentation("Kafka topic name used by the Hudi Sink Connector for "
           + "sending and receiving control messages. Not used for data records.");
+
+  public static final ConfigProperty<String> SCHEMA_PROVIDER_CLASS = ConfigProperty
+      .key("hoodie.schemaprovider.schema.class")
+      .defaultValue(FilebasedSchemaProvider.class.getName())
+      .withDocumentation("subclass of org.apache.hudi.schema.SchemaProvider "
+          + "to attach schemas to input & target table data, built in options: "
+          + "org.apache.hudi.schema.FilebasedSchemaProvider.");
 
   public static final ConfigProperty<String> COMMIT_INTERVAL_SECS = ConfigProperty
       .key("hoodie.kafka.commit.interval.secs")
@@ -91,12 +96,16 @@ public class HudiConnectConfigs extends HoodieConfig {
     return new HudiConnectConfigs.Builder();
   }
 
-  public String getSchemaProviderClass() {
-    return getString(SCHEMA_PROVIDER_CLASS);
+  public String getBootstrapServers() {
+    return getString(KAFKA_BOOTSTRAP_SERVERS);
   }
 
   public String getControlTopicName() {
     return getString(CONTROL_TOPIC_NAME);
+  }
+
+  public String getSchemaProviderClass() {
+    return getString(SCHEMA_PROVIDER_CLASS);
   }
 
   public Long getCommitIntervalSecs() {
@@ -122,6 +131,11 @@ public class HudiConnectConfigs extends HoodieConfig {
   public static class Builder {
 
     protected final HudiConnectConfigs connectConfigs = new HudiConnectConfigs();
+
+    public Builder withBootstrapServers(String bootstrapServers) {
+      connectConfigs.setValue(KAFKA_BOOTSTRAP_SERVERS, bootstrapServers);
+      return this;
+    }
 
     public Builder withControlTopicName(String controlTopicName) {
       connectConfigs.setValue(CONTROL_TOPIC_NAME, controlTopicName);
@@ -156,7 +170,6 @@ public class HudiConnectConfigs extends HoodieConfig {
 
     public HudiConnectConfigs build() {
       setDefaults();
-      //validate();
       // Build HudiConnectConfigs at the end
       return new HudiConnectConfigs(connectConfigs.getProps());
     }

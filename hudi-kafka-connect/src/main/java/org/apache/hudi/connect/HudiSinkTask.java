@@ -76,7 +76,9 @@ public class HudiSinkTask extends SinkTask {
     LOG.info("Starting Hudi Sink Task for {} connector {} with id {} with assignments {}", props, connectorName, taskId, context.assignment());
     try {
       connectConfigs = HudiConnectConfigs.newBuilder().withProperties(props).build();
-      controlKafkaClient = HudiKafkaControlAgent.createKafkaControlManager("localhost:9092", connectConfigs.getControlTopicName());
+      controlKafkaClient = HudiKafkaControlAgent.createKafkaControlManager(
+          connectConfigs.getBootstrapServers(),
+          connectConfigs.getControlTopicName());
       bootstrap(context.assignment());
     } catch (ConfigException e) {
       throw new ConnectException("Couldn't start HdfsSinkConnector due to configuration error.", e);

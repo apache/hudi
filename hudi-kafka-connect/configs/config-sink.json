@@ -1,6 +1,7 @@
 {
     "name": "hudi-sink",
     "config": {
+    	"bootstrap.servers": "localhost:9092",
 		"connector.class": "org.apache.hudi.connect.HudiSinkConnector",
 		"tasks.max": "4",
 		"key.converter": "org.apache.kafka.connect.storage.StringConverter",
