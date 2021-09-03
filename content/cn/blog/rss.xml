@@ -4,9 +4,16 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi! Blog</description>
-        <lastBuildDate>Mon, 23 Aug 2021 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 01 Sep 2021 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Building an ExaByte-level Data Lake Using Apache Hudi at ByteDance]]></title>
+            <link>https://hudi.apache.org/cn/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance</link>
+            <guid>Building an ExaByte-level Data Lake Using Apache Hudi at ByteDance</guid>
+            <pubDate>Wed, 01 Sep 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[Ziyue Guan from Bytedance shares the experience of building an ExaByte(EB)-level data lake using Apache Hudi at Bytedance.]]></description>
+        </item>
         <item>
             <title><![CDATA[Asynchronous Clustering using Hudi]]></title>
             <link>https://hudi.apache.org/cn/blog/2021/08/23/async-clustering</link>
