@@ -65,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
-public class TestHoodieSparkMergeOnReadTableInsertUpdate extends SparkClientFunctionalTestHarness {
+public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> testSimpleInsertAndUpdate() {
     return Stream.of(
