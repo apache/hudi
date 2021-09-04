@@ -18,8 +18,15 @@
 
 package org.apache.hudi.connect.utils;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.CustomAvroKeyGenerator;
+import org.apache.hudi.keygen.CustomKeyGenerator;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -30,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Helper methods for Kafka.
@@ -52,5 +60,48 @@ public class KafkaConnectUtils {
     } catch (Exception exception) {
       throw new HoodieException("Fatal error fetching the latest partition of kafka topic name" + topicName, exception);
     }
+  }
+
+  /**
+   * Returns the default Hadoop Configuration.
+   * @return
+   */
+  public static Configuration getDefaultHadoopConf() {
+    Configuration hadoopConf = new Configuration();
+    hadoopConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+    return hadoopConf;
+  }
+
+  /**
+   * Extract the record fields.
+   * @param keyGenerator key generator Instance of the keygenerator.
+   * @return Returns the record key columns seprarated by comma.
+   */
+  public static String getRecordKeyColumns(KeyGenerator keyGenerator) {
+    return String.join(",", keyGenerator.getRecordKeyFieldNames());
+  }
+
+  /**
+   * Extract partition columns directly if an instance of class {@link BaseKeyGenerator},
+   * else extract partition columns from the properties.
+   *
+   * @param keyGenerator key generator Instance of the keygenerator.
+   * @param typedProperties properties from the config.
+   * @return partition columns Returns the partition columns seprarated by comma.
+   */
+  public static String getPartitionColumns(KeyGenerator keyGenerator, TypedProperties typedProperties) {
+
+    if (keyGenerator instanceof CustomKeyGenerator || keyGenerator instanceof CustomAvroKeyGenerator) {
+      return ((BaseKeyGenerator) keyGenerator).getPartitionPathFields().stream().map(
+          pathField -> Arrays.stream(pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX))
+              .findFirst().orElse("Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
+          .collect(Collectors.joining(","));
+    }
+
+    if (keyGenerator instanceof BaseKeyGenerator) {
+      return String.join(",", ((BaseKeyGenerator) keyGenerator).getPartitionPathFields());
+    }
+
+    return typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
   }
 }

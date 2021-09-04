@@ -56,6 +56,7 @@
     <module>hudi-flink</module>
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
+    <module>packaging/hudi-kafka-connect-bundle</module>
   </modules>
 
   <licenses>

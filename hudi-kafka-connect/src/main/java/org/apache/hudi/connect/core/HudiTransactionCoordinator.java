@@ -117,6 +117,9 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
       executorService.submit(this);
     }
     kafkaControlClient.registerTransactionCoordinator(this);
+    LOG.info("Start Hudi Transaction Coordinator for topic {} partition {}",
+        partition.topic(),
+        partition.partition());
 
     initializeGlobalCommittedKafkaOffsets();
     // Submit the first start commit
@@ -300,9 +303,11 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
         List<WriteStatus> allWriteStatuses = new ArrayList<>();
         partitionsWriteStatusReceived.forEach((key, value) -> allWriteStatuses.addAll(value));
         // Commit the last write in Hudi, along with the latest kafka offset
-        hudiConnectTransactionServices.endCommit(currentCommitTime,
-            allWriteStatuses,
-            transformKafkaOffsets(currentConsumedKafkaOffsets));
+        if (!allWriteStatuses.isEmpty()) {
+          hudiConnectTransactionServices.endCommit(currentCommitTime,
+              allWriteStatuses,
+              transformKafkaOffsets(currentConsumedKafkaOffsets));
+        }
         currentState = State.WRITE_STATUS_RCVD;
         globalCommittedKafkaOffsets.putAll(currentConsumedKafkaOffsets);
         submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.ACK_COMMIT,

@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.fileid.KafkaConnectFileIdPrefixProvider;
 import org.apache.hudi.index.HoodieIndex;
@@ -61,8 +62,7 @@ public class HudiConnectWriterProvider implements ConnectWriterProvider<WriteSta
       HudiConnectConfigs connectConfigs,
       TopicPartition partition) throws HoodieException {
     this.connectConfigs = connectConfigs;
-    Configuration hadoopConf = new Configuration();
-    hadoopConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+    Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf();
 
     try {
       this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null

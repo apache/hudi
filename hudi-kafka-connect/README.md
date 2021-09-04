@@ -29,7 +29,21 @@ The first thing you need to do to start using this connector is building it. In 
 After installing these dependencies, execute the following command:
 
 ```bash
+cd $HUDI_DIR
 mvn clean package
+```
+
+## Incremental Builds
+
+```bash
+mvn clean -pl hudi-kafka-connect install -DskipTests
+mvn clean -pl packaging/hudi-kafka-connect-bundle install
+```
+
+## Put hudi connector in Kafka Connet classpath
+
+```bash
+cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.10.0-SNAPSHOT.jar /usr/local/share/java/hudi-kafka-connect/
 ```
 
 ## Trying the connector
@@ -76,5 +90,5 @@ Open a terminal to execute the following command:
 
 ```bash
 curl -X DELETE http://localhost:8083/connectors/hudi-sink
-curl -X POST -H "Content-Type:application/json" -d @../hudi-kafka-connect/configs/config-sink.json http://localhost:8083/connectors
+curl -X POST -H "Content-Type:application/json" -d @$HUDI-DIR/hudi-kafka-connect/configs/config-sink.json http://localhost:8083/connectors
 ```

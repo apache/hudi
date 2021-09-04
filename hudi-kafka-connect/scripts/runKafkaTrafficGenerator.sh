@@ -17,11 +17,20 @@
 #!/bin/bash
 
 # First delete the existing topic
-/Users/rmahindra/Infinilake/kafka/bin/kafka-topics.sh --delete --topic hudi-test-topic --bootstrap-server localhost:9092
+$KAFKA_HOME/bin/kafka-topics.sh --delete --topic hudi-test-topic --bootstrap-server localhost:9092
 
 # Create the topic with 4 partitions
-/Users/rmahindra/Infinilake/kafka/bin/kafka-topics.sh --create --topic hudi-test-topic --partitions 4 --replication-factor 1 --bootstrap-server localhost:9092
+$KAFKA_HOME/bin/kafka-topics.sh --create --topic hudi-test-topic --partitions 4 --replication-factor 1 --bootstrap-server localhost:9092
 
 # Generate kafka messages
-for ((cnt=0; cnt<=$1; cnt++ )); do cat raw.json |  jq --argjson cnt $cnt -c '.volume = $cnt' | kafkacat -P -b localhost:9092 -t hudi-test-topic; if [ $(( $cnt % 1000 )) -eq 0 ]; then sleep 1; fi; done;
-
+inputFile="raw.json"
+while IFS= read line 
+do 
+	for ((cnt=0; cnt<=$1; cnt++ ))
+	do
+		echo $line |  jq --argjson cnt $cnt -c '.volume = $cnt' | kcat -P -b localhost:9092 -t hudi-test-topic
+		if [ $(( $cnt % 1000 )) -eq 0 ]
+			then sleep 1
+		fi
+	done
+done < "$inputFile"

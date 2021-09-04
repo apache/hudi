@@ -53,7 +53,7 @@ public class HudiConnectConfigs extends HoodieConfig {
           + "sending and receiving control messages. Not used for data records.");
 
   public static final ConfigProperty<String> SCHEMA_PROVIDER_CLASS = ConfigProperty
-      .key("hoodie.schemaprovider.schema.class")
+      .key("hoodie.schemaprovider.class")
       .defaultValue(FilebasedSchemaProvider.class.getName())
       .withDocumentation("subclass of org.apache.hudi.schema.SchemaProvider "
           + "to attach schemas to input & target table data, built in options: "
