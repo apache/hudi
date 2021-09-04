@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, TableAlreadyExistsException}
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hive.HiveClientUtils
+import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
@@ -208,10 +208,10 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       table, table.schema)
 
     val tableWithDataSourceProps = table.copy(properties = dataSourceProps)
-    val client = HiveClientUtils.newClientForMetadata(sparkSession.sparkContext.conf,
-      sparkSession.sessionState.newHadoopConf())
+    val metadataHive = sparkSession
+      .sharedState.externalCatalog.unwrapped.asInstanceOf[HiveExternalCatalog].client
     // create hive table.
-    client.createTable(tableWithDataSourceProps, ignoreIfExists)
+    metadataHive.createTable(tableWithDataSourceProps, ignoreIfExists)
   }
 
   private def formatName(name: String): String = {
