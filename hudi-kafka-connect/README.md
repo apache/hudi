@@ -15,7 +15,7 @@
 * See the License for the specific language governing permissions and
 -->
 
-# Kafka Connect Sink Connector PoC for Hudi
+# Quick Start guide for Kafka Connect Sink for Hudi
 
 This repo contains a sample project that can be used to start off your own source connector for Kafka Connect.
 
@@ -25,8 +25,6 @@ The first thing you need to do to start using this connector is building it. In 
 
 - [Java 1.8+](https://openjdk.java.net/)
 - [Apache Maven](https://maven.apache.org/)
-
-#Quick Start
 
 After installing these dependencies, execute the following command:
 
