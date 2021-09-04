@@ -26,6 +26,8 @@ The first thing you need to do to start using this connector is building it. In 
 - [Java 1.8+](https://openjdk.java.net/)
 - [Apache Maven](https://maven.apache.org/)
 
+#Quick Start
+
 After installing these dependencies, execute the following command:
 
 ```bash

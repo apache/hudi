@@ -91,17 +91,17 @@ public class HudiConnectBufferedWriter extends AbstractHudiConnectWriter {
   @Override
   public void writeHudiRecord(HoodieRecord<HoodieAvroPayload> record) {
     bufferedRecords.put(record.getRecordKey(), record);
-    LOG.info("Number of entries in MemoryBasedMap => "
-        + bufferedRecords.getInMemoryMapNumEntries()
-        + "Total size in bytes of MemoryBasedMap => "
-        + bufferedRecords.getCurrentInMemoryMapSize() + "Number of entries in BitCaskDiskMap => "
-        + bufferedRecords.getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
-        + bufferedRecords.getSizeOfFileOnDiskInBytes());
   }
 
   @Override
   public List<WriteStatus> flushHudiRecords() {
     try {
+      LOG.info("Number of entries in MemoryBasedMap => "
+          + bufferedRecords.getInMemoryMapNumEntries()
+          + "Total size in bytes of MemoryBasedMap => "
+          + bufferedRecords.getCurrentInMemoryMapSize() + "Number of entries in BitCaskDiskMap => "
+          + bufferedRecords.getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
+          + bufferedRecords.getSizeOfFileOnDiskInBytes());
       List<WriteStatus> writeStatuses = new ArrayList<>();
       // Write out all records if non-empty
       if (!bufferedRecords.isEmpty()) {

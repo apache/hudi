@@ -22,15 +22,17 @@ $KAFKA_HOME/bin/kafka-topics.sh --delete --topic hudi-test-topic --bootstrap-ser
 # Create the topic with 4 partitions
 $KAFKA_HOME/bin/kafka-topics.sh --create --topic hudi-test-topic --partitions 4 --replication-factor 1 --bootstrap-server localhost:9092
 
-# Generate kafka messages
+# Generate kafka messages from raw records
 inputFile="raw.json"
-while IFS= read line 
+# Generate the records with unique keys
+for ((recordKey=0; recordKey<=$1;  ))
 do 
-	for ((cnt=0; cnt<=$1; cnt++ ))
+	while IFS= read line 
 	do
-		echo $line |  jq --argjson cnt $cnt -c '.volume = $cnt' | kcat -P -b localhost:9092 -t hudi-test-topic
-		if [ $(( $cnt % 1000 )) -eq 0 ]
+		echo $line |  jq --argjson recordKey $recordKey -c '.volume = $recordKey' | kcat -P -b localhost:9092 -t hudi-test-topic
+		((recordKey++))
+		if [ $(( $recordKey % 1000 )) -eq 0 ]
 			then sleep 1
 		fi
-	done
-done < "$inputFile"
+	done < "$inputFile"
+done 
