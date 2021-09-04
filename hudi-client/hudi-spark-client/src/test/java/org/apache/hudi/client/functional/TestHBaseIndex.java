@@ -761,6 +761,9 @@ public class TestHBaseIndex extends FunctionalTestHarness {
         newWriteStatus.setStat(new HoodieWriteStat());
         return newWriteStatus;
       });
+      // if not for this caching, due to RDD chaining/lineage, first time update is called again when subsequent update is called.
+      // So caching here to break the chain and so future update does not re-trigger update of older Rdd.
+      deleteWriteStatues.cache();
       JavaRDD<WriteStatus> deleteStatus = index.updateLocation(deleteWriteStatues, context(), hoodieTable);
       assertEquals(deleteStatus.count(), deleteWriteStatues.count());
       assertNoWriteErrors(deleteStatus.collect());
