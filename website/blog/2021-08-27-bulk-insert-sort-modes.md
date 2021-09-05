@@ -10,7 +10,7 @@ There are different sort modes that one could employ while using bulk_insert. Th
 different sort modes available out of the box, and how each compares with others. 
 <!--truncate-->
 
-Apache Hudi supports “bulk_insert” to assist in initial loading to data to a hudi table. This is expected
+Apache Hudi supports “bulk_insert” to assist in initial loading of data to a hudi table. This is expected
 to be faster when compared to using “insert” or “upsert” operations. Bulk insert differs from insert in two
 aspects. Existing records are never looked up with bulk_insert, and some writer side optimizations like 
 small files are not managed with bulk_insert. 
@@ -74,12 +74,17 @@ and plug it in with bulk insert as needed.
 ## Bulk insert with different sort modes
 Here is a microbenchmark to show the performance difference between different sort modes.
 
-![Figure showing different sort modes in bulk_insert](/assets/images/blog/bulkinsert-sort-modes/sort-modes.png) <br/>
+![Figure showing different sort modes in bulk_insert](/assets/images/blog/bulkinsert-sort-modes/sort-modes_perf.png) <br/>
 Figure: Shows performance of different bulk insert variants
 
 This benchmark had 10M entries being bulk inserted to hudi using different sort modes. This was followed by an upsert 
-with 2M entries. As you could see, global sorting gives a very good upsert performance when compared to No sorting. 
-Partition Sort also has higher upsert performance due to the metadata overhead due to large files. 
+with 1M entries (10% of original dataset size). As its evident, No sorting mode has the best performance for bulk importing
+data as it does not involve any sorting. Global sorting has ~15% overhead for bulk importing data when compared to
+No sorting. Partition sort has less overhead (~4%) when compared to No sorting, since records need to be sorted 
+but only within each executor. But the interesting thing to note is on the upsert performance. As called out earlier, 
+Global sorting has lot of advantages over other two sort modes. As you could see, global sort out-performs other two sort modes 
+and has 40% better upsert performance when compared to No sort mode. And even though partition sort mode does sort records, 
+it shows only a moderate improvement of 5% over No sort mode due to the overhead caused by large number of small files.
 
 ## Conclusion
 Hopefully this blog has given you good insights into different sort modes in bulk insert and when to use what. 
