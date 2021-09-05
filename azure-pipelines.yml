@@ -31,7 +31,8 @@ variables:
 stages:
   - stage: test
     jobs:
-      - job: 'UT FT hudi-common & UT hudi-client/hudi-spark-client'
+      - job: UT_FT_1
+        displayName: UT FT hudi-common & UT hudi-client/hudi-spark-client
         steps:
           - task: Cache@2
             displayName: set cache
@@ -68,7 +69,8 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-      - job: 'FT hudi-client/hudi-spark-client'
+      - job: UT_FT_2
+        displayName: FT hudi-client/hudi-spark-client
         steps:
           - task: Cache@2
             displayName: set cache
@@ -96,7 +98,8 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-      - job: 'UT FT hudi-cli & UT FT hudi-utilities'
+      - job: UT_FT_3
+        displayName: UT FT hudi-cli & UT FT hudi-utilities
         steps:
           - task: Cache@2
             displayName: set cache
@@ -133,7 +136,8 @@ stages:
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
-      - job: 'UT FT other modules'
+      - job: UT_FT_4
+        displayName: UT FT other modules
         steps:
           - task: Cache@2
             displayName: set cache
