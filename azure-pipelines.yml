@@ -32,7 +32,7 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
-        displayName: UT FT hudi-common & UT hudi-client/hudi-spark-client
+        displayName: UT FT common & UT client/spark-client
         steps:
           - task: Cache@2
             displayName: set cache
@@ -52,7 +52,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: UT hudi-common hudi-client/hudi-spark-client
+            displayName: UT common client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -61,7 +61,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: FT hudi-common
+            displayName: FT common
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -70,7 +70,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_2
-        displayName: FT hudi-client/hudi-spark-client
+        displayName: FT client/spark-client
         steps:
           - task: Cache@2
             displayName: set cache
@@ -90,7 +90,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: FT hudi-client/hudi-spark-client
+            displayName: FT client/spark-client
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
@@ -99,7 +99,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_3
-        displayName: UT FT hudi-cli & UT FT hudi-utilities
+        displayName: UT FT cli & utilities & sync/hive-sync
         steps:
           - task: Cache@2
             displayName: set cache
@@ -119,20 +119,20 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: UT hudi-cli hudi-utilities
+            displayName: UT cli & utilities & sync/hive-sync
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-cli,hudi-utilities
+              options: -Punit-tests -pl hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
           - task: Maven@3
-            displayName: FT hudi-cli hudi-utilities
+            displayName: FT cli & utilities & sync/hive-sync
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-cli,hudi-utilities
+              options: -Pfunctional-tests -pl hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
@@ -161,7 +161,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl !hudi-common,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-utilities
+              options: -Punit-tests -pl !hudi-common,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
@@ -170,7 +170,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl !hudi-common,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-utilities
+              options: -Pfunctional-tests -pl !hudi-common,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
