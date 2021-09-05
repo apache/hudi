@@ -161,7 +161,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl -hudi-common,-hudi-client/hudi-spark-client,-hudi-cli,-hudi-utilities
+              options: -Punit-tests -pl !hudi-common,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-utilities
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
@@ -170,7 +170,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl -hudi-common,-hudi-client/hudi-spark-client,-hudi-cli,-hudi-utilities
+              options: -Pfunctional-tests -pl !hudi-common,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-utilities
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
