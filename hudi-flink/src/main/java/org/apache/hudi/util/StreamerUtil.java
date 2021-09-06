@@ -181,6 +181,9 @@ public class StreamerUtil {
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
                 .logFileMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .parquetBlockSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE) * 1024 * 1024)
+                .parquetPageSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE) * 1024 * 1024)
+                .parquetMaxFileSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
                 .build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
@@ -229,9 +232,7 @@ public class StreamerUtil {
   public static void initTableIfNotExists(Configuration conf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
     final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
-    // Hadoop FileSystem
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    if (!fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))) {
+    if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
@@ -249,6 +250,19 @@ public class StreamerUtil {
     }
     // Do not close the filesystem in order to use the CACHE,
     // some of the filesystems release the handles in #close method.
+  }
+
+  /**
+   * Returns whether the hoodie table exists under given path {@code basePath}.
+   */
+  public static boolean tableExists(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    // Hadoop FileSystem
+    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    try {
+      return fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
+    } catch (IOException e) {
+      throw new HoodieException("Error while checking whether table exists under path:" + basePath, e);
+    }
   }
 
   /**
@@ -283,10 +297,36 @@ public class StreamerUtil {
   }
 
   /**
+   * Creates the meta client for reader.
+   *
+   * <p>The streaming pipeline process is long running, so empty table path is allowed,
+   * the reader would then check and refresh the meta client.
+   *
+   * @see org.apache.hudi.source.StreamReadMonitoringFunction
+   */
+  public static HoodieTableMetaClient metaClientForReader(
+      Configuration conf,
+      org.apache.hadoop.conf.Configuration hadoopConf) {
+    final String basePath = conf.getString(FlinkOptions.PATH);
+    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && !tableExists(basePath, hadoopConf)) {
+      return null;
+    } else {
+      return createMetaClient(basePath, hadoopConf);
+    }
+  }
+
+  /**
+   * Creates the meta client.
+   */
+  public static HoodieTableMetaClient createMetaClient(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build();
+  }
+
+  /**
    * Creates the meta client.
    */
   public static HoodieTableMetaClient createMetaClient(String basePath) {
-    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(FlinkClientUtil.getHadoopConf()).build();
+    return createMetaClient(basePath, FlinkClientUtil.getHadoopConf());
   }
 
   /**

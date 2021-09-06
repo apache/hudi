@@ -316,7 +316,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   public abstract O insert(I records, final String instantTime);
 
   /**
-   * Inserts the given Error HoodieRecords, into the table. This API is intended to be used for normal writes.
+   * Insert the given Error HoodieRecords into the hudi error table
    * <p>
    * This API is intended to be used to write wrong records.
    *

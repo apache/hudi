@@ -90,7 +90,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
         try {
           preExecute();
           producer.produce(queue);
-        } catch (Exception e) {
+        } catch (Throwable e) {
           LOG.error("error producing records", e);
           queue.markAsFailed(e);
           throw e;

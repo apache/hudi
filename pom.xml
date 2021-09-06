@@ -1418,7 +1418,6 @@
     <profile>
       <id>scala-2.11</id>
     </profile>
-
     <profile>
       <id>scala-2.12</id>
       <properties>
@@ -1460,6 +1459,10 @@
       </build>
     </profile>
 
+    <!-- Exists for backwards compatibility; profile doesn't do anything -->
+    <profile>
+      <id>spark2</id>
+    </profile>
     <profile>
       <id>spark3</id>
       <properties>

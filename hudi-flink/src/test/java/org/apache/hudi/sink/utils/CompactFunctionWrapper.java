@@ -53,11 +53,17 @@ public class CompactFunctionWrapper {
   private final IOManager ioManager;
   private final StreamingRuntimeContext runtimeContext;
 
-  /** Function that generates the {@link HoodieCompactionPlan}. */
+  /**
+   * Function that generates the {@link HoodieCompactionPlan}.
+   */
   private CompactionPlanOperator compactionPlanOperator;
-  /** Function that executes the compaction task. */
+  /**
+   * Function that executes the compaction task.
+   */
   private CompactFunction compactFunction;
-  /** Stream sink to handle compaction commits. */
+  /**
+   * Stream sink to handle compaction commits.
+   */
   private CompactionCommitSink commitSink;
 
   public CompactFunctionWrapper(Configuration conf) throws Exception {
@@ -120,7 +126,7 @@ public class CompactFunctionWrapper {
     compactionPlanOperator.notifyCheckpointComplete(checkpointID);
     // collect the CompactCommitEvents
     List<CompactionCommitEvent> compactCommitEvents = new ArrayList<>();
-    for (CompactionPlanEvent event: events) {
+    for (CompactionPlanEvent event : events) {
       compactFunction.processElement(event, null, new Collector<CompactionCommitEvent>() {
         @Override
         public void collect(CompactionCommitEvent event) {

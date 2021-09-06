@@ -28,6 +28,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 
 import java.io.File;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,8 +58,6 @@ public class TestUtils {
 
   public static StreamReadMonitoringFunction getMonitorFunc(Configuration conf) {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
-    return new StreamReadMonitoringFunction(conf, new Path(basePath), metaClient, 1024 * 1024L);
+    return new StreamReadMonitoringFunction(conf, new Path(basePath), 1024 * 1024L, Collections.emptySet());
   }
 }

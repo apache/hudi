@@ -25,6 +25,7 @@ import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -60,6 +61,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
   private final String tableName = "test_table";
   private String tablePath;
   private String metaPath;
+  private String archivePath;
 
   /**
    * Init path after Mini hdfs init.
@@ -69,6 +71,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     HoodieCLI.conf = jsc.hadoopConfiguration();
     tablePath = basePath + File.separator + tableName;
     metaPath = tablePath + File.separator + METAFOLDER_NAME;
+    archivePath = metaPath + File.separator + HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue();
   }
 
   /**
@@ -115,7 +118,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
 
     // Test meta
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    assertEquals(metaPath, client.getArchivePath());
+    assertEquals(archivePath, client.getArchivePath());
     assertEquals(tablePath, client.getBasePath());
     assertEquals(metaPath, client.getMetaPath());
     assertEquals(HoodieTableType.COPY_ON_WRITE, client.getTableType());

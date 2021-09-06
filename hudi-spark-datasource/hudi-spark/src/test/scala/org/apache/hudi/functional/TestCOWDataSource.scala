@@ -782,6 +782,33 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(enableDropPartitionColumns, !resultContainPartitionColumn)
   }
 
+  @Test
+  def testHoodieIsDeletedCOW(): Unit = {
+    val numRecords = 100
+    val numRecordsToDelete = 2
+    val records0 = recordsToStrings(dataGen.generateInserts("000", numRecords)).toList
+    val df0 = spark.read.json(spark.sparkContext.parallelize(records0, 2))
+    df0.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshotDF0 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/*")
+    assertEquals(numRecords, snapshotDF0.count())
+
+    val df1 = snapshotDF0.limit(numRecordsToDelete)
+    val dropDf = df1.drop(df1.columns.filter(_.startsWith("_hoodie_")): _*)
+    val df2 = dropDf.withColumn("_hoodie_is_deleted", lit(true).cast(BooleanType))
+    df2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/*")
+    assertEquals(numRecords - numRecordsToDelete, snapshotDF2.count())
+  }
+
   def copyOnWriteTableSelect(enableDropPartitionColumns: Boolean): Boolean = {
     val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 3)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))

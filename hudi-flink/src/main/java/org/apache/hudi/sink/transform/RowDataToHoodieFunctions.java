@@ -29,7 +29,8 @@ import org.apache.flink.table.types.logical.RowType;
  * Utilities for {@link RowDataToHoodieFunction}.
  */
 public abstract class RowDataToHoodieFunctions {
-  private RowDataToHoodieFunctions() {}
+  private RowDataToHoodieFunctions() {
+  }
 
   /**
    * Creates a {@link RowDataToHoodieFunction} instance based on the given configuration.

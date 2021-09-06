@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -85,6 +86,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -151,9 +153,8 @@ public class HoodieTableSource implements
         : requiredPos;
     this.limit = limit == null ? NO_LIMIT_CONSTANT : limit;
     this.filters = filters == null ? Collections.emptyList() : filters;
-    final String basePath = this.conf.getString(FlinkOptions.PATH);
     this.hadoopConf = StreamerUtil.getHadoopConf();
-    this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
     this.maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(new JobConf(this.hadoopConf));
   }
 
@@ -173,11 +174,8 @@ public class HoodieTableSource implements
             (TypeInformation<RowData>) TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(getProducedDataType());
         if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
           StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
-              conf, FilePathUtils.toFlinkPath(path), metaClient, maxCompactionMemoryInBytes);
+              conf, FilePathUtils.toFlinkPath(path), maxCompactionMemoryInBytes, getRequiredPartitionPaths());
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
-          if (!(inputFormat instanceof MergeOnReadInputFormat)) {
-            throw new HoodieException("No successful commits under path " + path);
-          }
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, "streaming_source")
               .uid("uid_streaming_source_" + conf.getString(FlinkOptions.TABLE_NAME))
@@ -218,7 +216,8 @@ public class HoodieTableSource implements
   @Override
   public Result applyFilters(List<ResolvedExpression> filters) {
     this.filters = new ArrayList<>(filters);
-    return Result.of(new ArrayList<>(filters), new ArrayList<>(filters));
+    // refuse all the filters now
+    return Result.of(Collections.emptyList(), new ArrayList<>(filters));
   }
 
   @Override
@@ -266,7 +265,18 @@ public class HoodieTableSource implements
     return requiredPartitions;
   }
 
+  private Set<String> getRequiredPartitionPaths() {
+    if (this.requiredPartitions == null) {
+      return Collections.emptySet();
+    }
+    return FilePathUtils.toRelativePartitionPaths(this.partitionKeys, this.requiredPartitions,
+        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING));
+  }
+
   private List<MergeOnReadInputSplit> buildFileIndex(Path[] paths) {
+    if (paths.length == 0) {
+      return Collections.emptyList();
+    }
     FileStatus[] fileStatuses = Arrays.stream(paths)
         .flatMap(path ->
             Arrays.stream(FilePathUtils.getFileStatusRecursively(path, 1, hadoopConf)))
@@ -293,7 +303,8 @@ public class HoodieTableSource implements
                 .collect(Collectors.toList()));
             return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
                 metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null);
-          }).collect(Collectors.toList()); })
+          }).collect(Collectors.toList());
+    })
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
   }
@@ -304,6 +315,10 @@ public class HoodieTableSource implements
 
   @VisibleForTesting
   public InputFormat<RowData, ?> getInputFormat(boolean isStreaming) {
+    return isStreaming ? getStreamInputFormat() : getBatchInputFormat();
+  }
+
+  private InputFormat<RowData, ?> getBatchInputFormat() {
     // When this table has no partition, just return an empty source.
     if (!partitionKeys.isEmpty() && getOrFetchPartitions().isEmpty()) {
       return new CollectionInputFormat<>(Collections.emptyList(), null);
@@ -314,13 +329,7 @@ public class HoodieTableSource implements
       return new CollectionInputFormat<>(Collections.emptyList(), null);
     }
 
-    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
-    final Schema tableAvroSchema;
-    try {
-      tableAvroSchema = schemaUtil.getTableAvroSchema();
-    } catch (Exception e) {
-      throw new HoodieException("Get table avro schema error", e);
-    }
+    final Schema tableAvroSchema = getTableAvroSchema();
     final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
@@ -331,17 +340,11 @@ public class HoodieTableSource implements
         final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
         switch (tableType) {
           case MERGE_ON_READ:
-            final List<MergeOnReadInputSplit> inputSplits;
-            if (!isStreaming) {
-              inputSplits = buildFileIndex(paths);
-              if (inputSplits.size() == 0) {
-                // When there is no input splits, just return an empty source.
-                LOG.warn("No input splits generate for MERGE_ON_READ input format, returns empty collection instead");
-                return new CollectionInputFormat<>(Collections.emptyList(), null);
-              }
-            } else {
-              // streaming reader would build the splits automatically.
-              inputSplits = Collections.emptyList();
+            final List<MergeOnReadInputSplit> inputSplits = buildFileIndex(paths);
+            if (inputSplits.size() == 0) {
+              // When there is no input splits, just return an empty source.
+              LOG.warn("No input splits generate for MERGE_ON_READ input format, returns empty collection instead");
+              return new CollectionInputFormat<>(Collections.emptyList(), null);
             }
             final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
                 rowType,
@@ -359,28 +362,9 @@ public class HoodieTableSource implements
                 .fieldTypes(rowDataType.getChildren())
                 .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
                 .limit(this.limit)
-                .emitDelete(isStreaming)
+                .emitDelete(false)
                 .build();
           case COPY_ON_WRITE:
-            if (isStreaming) {
-              final MergeOnReadTableState hoodieTableState2 = new MergeOnReadTableState(
-                  rowType,
-                  requiredRowType,
-                  tableAvroSchema.toString(),
-                  AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
-                  Collections.emptyList(),
-                  conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
-              return MergeOnReadInputFormat.builder()
-                  .config(this.conf)
-                  .paths(FilePathUtils.toFlinkPaths(paths))
-                  .tableState(hoodieTableState2)
-                  // use the explicit fields data type because the AvroSchemaConverter
-                  // is not very stable.
-                  .fieldTypes(rowDataType.getChildren())
-                  .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
-                  .limit(this.limit)
-                  .build();
-            }
             FileInputFormat<RowData> format = new CopyOnWriteInputFormat(
                 FilePathUtils.toFlinkPaths(paths),
                 this.schema.getColumnNames().toArray(new String[0]),
@@ -414,6 +398,86 @@ public class HoodieTableSource implements
             FlinkOptions.QUERY_TYPE_SNAPSHOT, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
         throw new HoodieException(errMsg);
     }
+  }
+
+  private InputFormat<RowData, ?> getStreamInputFormat() {
+    // if table does not exist, use schema from the DDL
+    Schema tableAvroSchema = this.metaClient == null ? inferSchemaFromDdl() : getTableAvroSchema();
+    final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
+    final RowType rowType = (RowType) rowDataType.getLogicalType();
+    final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
+
+    final String queryType = this.conf.getString(FlinkOptions.QUERY_TYPE);
+    org.apache.flink.core.fs.Path[] paths = new org.apache.flink.core.fs.Path[0];
+    if (FlinkOptions.QUERY_TYPE_SNAPSHOT.equals(queryType)) {
+      final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
+      switch (tableType) {
+        case MERGE_ON_READ:
+          final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
+              rowType,
+              requiredRowType,
+              tableAvroSchema.toString(),
+              AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
+              Collections.emptyList(),
+              conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+          return MergeOnReadInputFormat.builder()
+              .config(this.conf)
+              .paths(paths)
+              .tableState(hoodieTableState)
+              // use the explicit fields data type because the AvroSchemaConverter
+              // is not very stable.
+              .fieldTypes(rowDataType.getChildren())
+              .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+              .limit(this.limit)
+              .emitDelete(true)
+              .build();
+        case COPY_ON_WRITE:
+          final MergeOnReadTableState hoodieTableState2 = new MergeOnReadTableState(
+              rowType,
+              requiredRowType,
+              tableAvroSchema.toString(),
+              AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
+              Collections.emptyList(),
+              conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+          return MergeOnReadInputFormat.builder()
+              .config(this.conf)
+              .paths(paths)
+              .tableState(hoodieTableState2)
+              // use the explicit fields data type because the AvroSchemaConverter
+              // is not very stable.
+              .fieldTypes(rowDataType.getChildren())
+              .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+              .limit(this.limit)
+              .build();
+        default:
+          throw new HoodieException("Unexpected table type: " + this.conf.getString(FlinkOptions.TABLE_TYPE));
+      }
+    }
+    String errMsg = String.format("Invalid query type : '%s', options ['%s'] are supported now", queryType,
+        FlinkOptions.QUERY_TYPE_SNAPSHOT);
+    throw new HoodieException(errMsg);
+  }
+
+  private Schema inferSchemaFromDdl() {
+    Schema schema = AvroSchemaConverter.convertToSchema(this.schema.toPhysicalRowDataType().getLogicalType());
+    return HoodieAvroUtils.addMetadataFields(schema, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
+  }
+
+  @VisibleForTesting
+  public Schema getTableAvroSchema() {
+    try {
+      TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient, conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED));
+      return schemaUtil.getTableAvroSchema();
+    } catch (Throwable e) {
+      // table exists but has no written data
+      LOG.warn("Get table avro schema error, use schema from the DDL instead", e);
+      return inferSchemaFromDdl();
+    }
+  }
+
+  @VisibleForTesting
+  public HoodieTableMetaClient getMetaClient() {
+    return this.metaClient;
   }
 
   @VisibleForTesting

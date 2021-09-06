@@ -400,7 +400,7 @@ public class TestData {
     String rowsString = rows.stream()
         .sorted(Comparator.comparing(o -> toIdSafely(o.getField(0))))
         .collect(Collectors.toList()).toString();
-    assertThat(rowDataToString(expected), is(rowsString));
+    assertThat(rowsString, is(rowDataToString(expected)));
   }
 
   /**

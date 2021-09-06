@@ -193,7 +193,8 @@ object InsertIntoHoodieTableCommand extends Logging {
         s"[${insertPartitions.keys.mkString(" " )}]" +
         s" not equal to the defined partition in table[${table.partitionColumnNames.mkString(",")}]")
     }
-    val parameters = withSparkConf(sparkSession, table.storage.properties)() ++ extraOptions
+    val options = table.storage.properties ++ extraOptions
+    val parameters = withSparkConf(sparkSession, options)()
 
     val tableType = parameters.getOrElse(TABLE_TYPE.key, TABLE_TYPE.defaultValue)
 
@@ -201,7 +202,7 @@ object InsertIntoHoodieTableCommand extends Logging {
     val path = getTableLocation(table, sparkSession)
 
     val tableSchema = table.schema
-    val options = table.storage.properties
+
     val primaryColumns = HoodieOptionConfig.getPrimaryColumns(options)
 
     val keyGenClass = if (primaryColumns.nonEmpty) {

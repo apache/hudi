@@ -131,6 +131,13 @@ public class HoodieTestSuiteWriter implements Serializable {
         .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
   }
 
+  public void getNextBatchForDeletes() throws Exception {
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+    lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+    JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
+    inputRDD.collect();
+  }
+
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     return this.deltaStreamerWrapper.fetchSource();
   }

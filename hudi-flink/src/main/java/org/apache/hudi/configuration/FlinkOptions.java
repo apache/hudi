@@ -196,6 +196,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(60)// default 1 minute
       .withDescription("Check interval for streaming read of SECOND, default 1 minute");
 
+  public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_STREAMING_START_COMMIT = ConfigOptions
       .key("read.streaming.start-commit")
       .stringType()
@@ -221,10 +222,10 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final ConfigOption<Boolean> INSERT_DEDUP = ConfigOptions
-          .key("write.insert.deduplicate")
-          .booleanType()
-          .defaultValue(true)
-          .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
+      .key("write.insert.deduplicate")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
@@ -368,6 +369,27 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(1024)
       .withDescription("Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_BLOCK_SIZE = ConfigOptions
+      .key("write.parquet.block.size")
+      .intType()
+      .defaultValue(120)
+      .withDescription("Parquet RowGroup size. It's recommended to make this large enough that scan costs can be"
+          + " amortized by packing enough column values into a single row group.");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_MAX_FILE_SIZE = ConfigOptions
+      .key("write.parquet.max.file.size")
+      .intType()
+      .defaultValue(120)
+      .withDescription("Target size for parquet files produced by Hudi write phases. "
+          + "For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_PAGE_SIZE = ConfigOptions
+      .key("hoodie.parquet.page.size")
+      .intType()
+      .defaultValue(1)
+      .withDescription("Parquet page size. Page is the unit of read within a parquet file. "
+          + "Within a block, pages are compressed separately.");
 
   public static final ConfigOption<Integer> WRITE_MERGE_MAX_MEMORY = ConfigOptions
       .key("write.merge.max_memory")

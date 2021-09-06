@@ -152,6 +152,9 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void start() throws Exception {
+    // setup classloader for APIs that use reflection without taking ClassLoader param
+    // reference: https://stackoverflow.com/questions/1771679/difference-between-threads-context-class-loader-and-normal-classloader
+    Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
     // initialize event buffer
     reset();
     this.gateways = new SubtaskGateway[this.parallelism];
@@ -206,6 +209,9 @@ public class StreamWriteOperatorCoordinator
   public void notifyCheckpointComplete(long checkpointId) {
     executor.execute(
         () -> {
+          // The executor thread inherits the classloader of the #notifyCheckpointComplete
+          // caller, which is a AppClassLoader.
+          Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
           // for streaming mode, commits the ever received events anyway,
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
@@ -335,6 +341,7 @@ public class StreamWriteOperatorCoordinator
     this.writeClient.startCommitWithTime(instant, tableState.commitAction);
     this.instant = instant;
     this.writeClient.transitionRequestedToInflight(tableState.commitAction, this.instant);
+    this.writeClient.upgradeDowngrade(this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
   }

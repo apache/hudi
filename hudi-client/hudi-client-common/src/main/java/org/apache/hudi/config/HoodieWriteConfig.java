@@ -159,11 +159,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("For large initial imports using bulk_insert operation, controls the parallelism to use for sort modes or custom partitioning done"
           + "before writing records to the table.");
 
+  public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS = ConfigProperty
+          .key("hoodie.bulkinsert.user.defined.partitioner.sort.columns")
+          .noDefaultValue()
+          .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
+                  + "For example 'column1,column2'");
+
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
       .noDefaultValue()
       .withDocumentation("If specified, this class will be used to re-partition records before they are bulk inserted. This can be used to sort, pack, cluster data"
-          + " optimally for common query patterns.");
+          + " optimally for common query patterns. For now we support a build-in user defined bulkinsert partitioner org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner"
+          + " which can does sorting based on specified column values set by " + BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS.key());
 
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
@@ -895,6 +902,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME);
   }
 
+  public String getUserDefinedBulkInsertPartitionerSortColumns() {
+    return getString(BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS);
+  }
+
   public int getInsertShuffleParallelism() {
     return getInt(INSERT_PARALLELISM_VALUE);
   }
@@ -1381,8 +1392,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
   }
 
-  public int getLogFileMaxSize() {
-    return getInt(HoodieStorageConfig.LOGFILE_MAX_SIZE);
+  public long getLogFileMaxSize() {
+    return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
   }
 
   public double getParquetCompressionRatio() {
@@ -1862,6 +1873,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withUserDefinedBulkInsertPartitionerClass(String className) {
       writeConfig.setValue(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withUserDefinedBulkInsertPartitionerSortColumns(String columns) {
+      writeConfig.setValue(BULKINSERT_USER_DEFINED_PARTITIONER_SORT_COLUMNS, columns);
       return this;
     }
 

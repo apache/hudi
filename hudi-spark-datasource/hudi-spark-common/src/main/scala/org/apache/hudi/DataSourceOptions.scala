@@ -730,16 +730,6 @@ object DataSourceWriteOptions {
     .key("hoodie.write.error.table.enabled")
     .defaultValue("false")
     .withDocumentation("Enable the internal Error Table which saves error record");
-
-  val HOODIE_WRITE_STATUS_CLASS_OPT_KEY: ConfigProperty[String] =  ConfigProperty
-    .key("hoodie.writestatus.class")
-    .defaultValue(classOf[WriteStatus].getName)
-    .withDocumentation("");
-
-  val WRITESTATUS_FAILURE_FRACTION_OPT_KEY:  ConfigProperty[String] = ConfigProperty
-    .key("hoodie.memory.writestatus.failure.fraction")
-    .defaultValue("")
-    .withDocumentation("");
 }
 
 object DataSourceOptionsHelper {

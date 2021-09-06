@@ -17,16 +17,9 @@
  * under the License.
  */
 
-package org.apache.hudi.client.functional;
+package org.apache.hudi.common.testutils;
 
-import org.junit.platform.runner.JUnitPlatform;
-import org.junit.platform.suite.api.IncludeTags;
-import org.junit.platform.suite.api.SelectPackages;
-import org.junit.runner.RunWith;
-
-@RunWith(JUnitPlatform.class)
-@SelectPackages("org.apache.hudi.client.functional")
-@IncludeTags("functional")
-public class SparkClientFunctionalTestSuite {
-
+@FunctionalInterface
+public interface CheckedFunction<T, R> {
+  R apply(T t) throws Exception;
 }
