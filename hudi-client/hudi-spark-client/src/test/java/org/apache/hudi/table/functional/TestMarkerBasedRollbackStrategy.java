@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.rollback;
+package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.action.rollback.SparkMarkerBasedRollbackStrategy;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -51,6 +52,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Tag("functional")
 public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with listing metadata enable={0}";
@@ -106,7 +108,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(1, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
   }
 
-  @Tag("functional")
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
   @MethodSource("configParams")
   public void testCopyOnWriteRollback(boolean useFileListingMetadata) throws Exception {
@@ -129,7 +130,6 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     }
   }
 
-  @Tag("functional")
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
   @MethodSource("configParams")
   public void testMergeOnReadRollback(boolean useFileListingMetadata) throws Exception {
