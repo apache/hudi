@@ -19,11 +19,14 @@
 package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
-import org.apache.hudi.cli.testutils.AbstractShellBaseIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
+import org.apache.hudi.cli.utils.SparkTempViewProvider;
+import org.apache.hudi.cli.utils.TempViewProvider;
 import org.apache.hudi.exception.HoodieException;
 
-import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
@@ -35,9 +38,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestTempViewCommand extends AbstractShellBaseIntegrationTest {
+@Tag("functional")
+public class TestTempViewCommand extends CLIFunctionalTestHarness {
 
-  private String tableName = "test_table";
+  private TempViewProvider tempViewProvider;
+  private final String tableName = tableName();
 
   @BeforeEach
   public void init() {
@@ -45,37 +50,38 @@ public class TestTempViewCommand extends AbstractShellBaseIntegrationTest {
     for (int i = 0; i < 3; i++) {
       rows.add(Arrays.asList(new Comparable[] {"c1", "c2", "c3"}));
     }
-    HoodieCLI.getTempViewProvider().createOrReplace(tableName, Arrays.asList("t1", "t2", "t3"), rows);
+    tempViewProvider = new SparkTempViewProvider(jsc(), sqlContext());
+    tempViewProvider.createOrReplace(tableName, Arrays.asList("t1", "t2", "t3"), rows);
+    HoodieCLI.tempViewProvider = tempViewProvider;
   }
 
-  @AfterAll
-  public static void shutdown() {
-    if (HoodieCLI.getTempViewProvider() != null) {
-      HoodieCLI.closeTempViewProvider();
-    }
+  @AfterEach
+  public void cleanUpTempView() {
+    tempViewProvider.close();
+    HoodieCLI.tempViewProvider = null;
   }
 
   @Test
   public void testQueryWithException() {
-    CommandResult cr = getShell().executeCommand(String.format("temp query --sql 'select * from %s'", "table_1"));
+    CommandResult cr = shell().executeCommand(String.format("temp query --sql 'select * from %s'", "table_non_exist"));
     assertEquals(TempViewCommand.QUERY_FAIL, cr.getResult().toString());
   }
 
   @Test
   public void testQuery() {
-    CommandResult cr = getShell().executeCommand(String.format("temp query --sql 'select * from %s'", tableName));
+    CommandResult cr = shell().executeCommand(String.format("temp query --sql 'select * from %s'", tableName));
     assertEquals(TempViewCommand.QUERY_SUCCESS, cr.getResult().toString());
   }
 
   @Test
   public void testShowAll() {
-    CommandResult cr = getShell().executeCommand("temps show");
+    CommandResult cr = shell().executeCommand("temps show");
     assertEquals(TempViewCommand.SHOW_SUCCESS, cr.getResult().toString());
   }
 
   @Test
   public void testDelete() {
-    CommandResult cr = getShell().executeCommand(String.format("temp delete --view %s", tableName));
+    CommandResult cr = shell().executeCommand(String.format("temp delete --view %s", tableName));
     assertTrue(cr.getResult().toString().endsWith("successfully!"));
 
     // after delete, we can not access table yet.
