@@ -200,7 +200,7 @@ object DataSourceWriteOptions {
     .key("hive_sync.kerberos_principal")
     .noDefaultValue()
     .withDocumentation("Hive metastore principal.")
- 
+
   /**
     * Translate spark parameters to hudi parameters
     *
