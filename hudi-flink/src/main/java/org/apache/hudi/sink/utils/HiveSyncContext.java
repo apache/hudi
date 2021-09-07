@@ -87,6 +87,8 @@ public class HiveSyncContext {
     hiveSyncConfig.skipROSuffix = conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX);
     hiveSyncConfig.assumeDatePartitioning = conf.getBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION);
     hiveSyncConfig.withOperationField = conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+    hiveSyncConfig.useKerberos = conf.getBoolean(FlinkOptions.HIVE_SYNC_USE_KERBEROS);
+    hiveSyncConfig.kerberosPrincipal = conf.getString(FlinkOptions.HIVE_SYNC_KERBEROS_PRINCIPAL)
     return hiveSyncConfig;
   }
 }
