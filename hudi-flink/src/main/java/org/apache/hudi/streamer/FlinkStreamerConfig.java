@@ -291,7 +291,12 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--hive-sync-support-timestamp"}, description = "INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
       + "Disabled by default for backward compatibility.")
   public Boolean hiveSyncSupportTimestamp = false;
+  
+  @Parameter(names = {"--hive-use-kerberos"}, description = "Whether to use Kerberos for Hive. default false")
+  public Boolean useKerberos = false;
 
+  @Parameter(names = {"--hive-kerberos-principal"}, description = "hive metastore principal")
+  public String kerberosPrincipal;
 
   /**
    * Transforms a {@code HoodieFlinkStreamer.Config} into {@code Configuration}.
@@ -369,6 +374,8 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, config.hiveSyncIgnoreExceptions);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX, config.hiveSyncSkipRoSuffix);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP, config.hiveSyncSupportTimestamp);
+    conf.setBoolean(FlinkOptions.HIVE_SYNC_USE_KERBEROS, config.useKerberos);
+    conf.setString(FlinkOptions.HIVE_SYNC_KERBEROS_PRINCIPAL, config.kerberosPrincipal);
     return conf;
   }
 }
