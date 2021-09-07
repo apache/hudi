@@ -122,6 +122,12 @@ public class HiveSyncConfig implements Serializable {
 
   @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
   public Boolean withOperationField = false;
+  
+  @Parameter(names = {"--hive-use-kerberos"}, description = "Whether to use Kerberos for Hive. default false")
+  public Boolean useKerberos = false;
+
+  @Parameter(names = {"--hive-kerberos-principal"}, description = "hive metastore principal")
+  public String kerberosPrincipal;
 
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
@@ -147,6 +153,8 @@ public class HiveSyncConfig implements Serializable {
     newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
     newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
     newConfig.withOperationField = cfg.withOperationField;
+    newConfig.useKerberos = cfg.useKerberos;
+    newConfig.kerberosPrincipal = cfg.kerberosPrincipal;
     return newConfig;
   }
 
@@ -179,6 +187,8 @@ public class HiveSyncConfig implements Serializable {
       + ", syncAsSparkDataSourceTable=" + syncAsSparkDataSourceTable
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
+      + ", useKerberos=" + useKerberos
+      + ", kerberosPrincipal=" + kerberosPrincipal
       + '}';
   }
 }
