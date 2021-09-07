@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -37,7 +36,7 @@ import org.apache.spark.sql.types.BooleanType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -73,72 +72,6 @@ class TestMORDataSource extends HoodieClientTestBase {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testMergeOnReadStorage(isMetadataEnabled: Boolean) {
-
-    val fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
-    // Bulk Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
-    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
-
-    // Read RO View
-    val hudiRODF1 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath + "/*/*/*")
-
-    assertEquals(100, hudiRODF1.count()) // still 100, since we only updated
-    val insertCommitTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val insertCommitTimes = hudiRODF1.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
-    assertEquals(List(insertCommitTime), insertCommitTimes)
-
-    // Upsert operation without Hudi metadata columns
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
-    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .mode(SaveMode.Append)
-      .save(basePath)
-
-    // Read Snapshot query
-    val updateCommitTime = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath + "/*/*/*")
-
-    val updateCommitTimes = hudiSnapshotDF2.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
-    assertEquals(List(updateCommitTime), updateCommitTimes)
-
-    // Upsert based on the written table with Hudi metadata columns
-    val verificationRowKey = hudiSnapshotDF2.limit(1).select("_row_key").first.getString(0)
-    val inputDF3 = hudiSnapshotDF2.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
-
-    inputDF3.write.format("org.apache.hudi")
-      .options(commonOpts)
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .mode(SaveMode.Append)
-      .save(basePath)
-
-    val hudiSnapshotDF3 = spark.read.format("hudi")
-      .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
-      .load(basePath + "/*/*/*")
-    assertEquals(100, hudiSnapshotDF3.count())
-    assertEquals(updatedVerificationVal, hudiSnapshotDF3.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
   }
 
   @Test def testCount() {
