@@ -56,7 +56,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
       return Option.empty();
     }
 
-    GenericRecord incomingRecord = incomingRecord(schema);
+    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -67,7 +67,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     /*
      * We reached a point where the value is disk is older than the incoming record.
      */
-    updateEventTime(incomingRecord, properties);
+    eventTime = updateEventTime(incomingRecord, properties);
 
     /*
      * Now check if the incoming record is a delete record.
@@ -80,18 +80,14 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     if (recordBytes.length == 0) {
       return Option.empty();
     }
-    GenericRecord incomingRecord = incomingRecord(schema);
-    updateEventTime(incomingRecord, properties);
+    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+    eventTime = updateEventTime(incomingRecord, properties);
 
     return isDeleteRecord(incomingRecord) ? Option.empty() : Option.of(incomingRecord);
   }
 
-  private GenericRecord incomingRecord(Schema schema) throws IOException {
-    return bytesToAvro(recordBytes, schema);
-  }
-
-  private void updateEventTime(GenericRecord record, Properties properties) {
-    eventTime = Option.ofNullable(getNestedFieldVal(record, properties.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY), true));
+  private static Option<Object> updateEventTime(GenericRecord record, Properties properties) {
+    return Option.ofNullable(getNestedFieldVal(record, properties.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY), true));
   }
 
   @Override
