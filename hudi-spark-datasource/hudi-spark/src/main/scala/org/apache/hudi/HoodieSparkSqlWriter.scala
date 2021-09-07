@@ -552,6 +552,8 @@ object HoodieSparkSqlWriter {
     hiveSyncConfig.syncMode = hoodieConfig.getString(HIVE_SYNC_MODE)
     hiveSyncConfig.serdeProperties = hoodieConfig.getString(HIVE_TABLE_SERDE_PROPERTIES)
     hiveSyncConfig.tableProperties = hoodieConfig.getString(HIVE_TABLE_PROPERTIES)
+    hiveSyncConfig.useKerberos = hoodieConfig.getBoolean(HIVE_SYNC_USE_KERBEROS)
+    hiveSyncConfig.kerberosPrincipal = hoodieConfig.getString(HIVE_SYNC_KERBEROS_PRINCIPAL)
     hiveSyncConfig
   }
 
