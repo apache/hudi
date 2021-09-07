@@ -77,6 +77,10 @@ public class HiveSyncTool extends AbstractSyncTool {
     super(configuration.getAllProperties(), fs);
 
     try {
+      if (cfg.useKerberos) {
+        configuration.set("hive.metastore.sasl.enabled", "true");
+        configuration.set("hive.metastore.kerberos.principal", cfg.kerberosPrincipal);
+      }
       this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
     } catch (RuntimeException e) {
       if (cfg.ignoreExceptions) {
