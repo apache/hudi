@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -31,11 +34,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.DirectWriteMarkers;
-
-import com.esotericsoftware.minlog.Log;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -128,15 +126,7 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
     Predicate<FileStatus> prefixFilter = fileStatus ->
         fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
     FSUtils.parallelizeSubPathProcess(context, fileSystem, new Path(markerDir), parallelism,
-        prefixFilter, pairOfSubPathAndConf -> {
-          try {
-            Path subPath = new Path(pairOfSubPathAndConf.getKey());
-            FileSystem fs = subPath.getFileSystem(pairOfSubPathAndConf.getValue().get());
-            return fs.delete(subPath, false);
-          } catch (IOException e) {
-            Log.warn("Deleting Timeline based marker files failed ", e);
-          }
-          return false;
-        });
+            prefixFilter, pairOfSubPathAndConf ->
+                    FSUtils.deleteSubPath(pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), false));
   }
 }

@@ -19,13 +19,15 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -62,5 +64,13 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
     assertEquals(msg, FileIOUtils.readAsUTFString(inputStream));
     inputStream = new ByteArrayInputStream(msg.getBytes(StandardCharsets.UTF_8));
     assertEquals(msg.length(), FileIOUtils.readAsByteArray(inputStream).length);
+  }
+
+  @Test
+  public void testReadAsUTFStringLines() {
+    String content = "a\nb\nc";
+    List<String> expectedLines = Arrays.stream(new String[]{"a", "b", "c"}).collect(Collectors.toList());
+    ByteArrayInputStream inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
+    assertEquals(expectedLines, FileIOUtils.readAsUTFStringLines(inputStream));
   }
 }

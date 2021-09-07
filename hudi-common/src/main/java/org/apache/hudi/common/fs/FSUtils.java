@@ -18,6 +18,14 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -35,15 +43,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -631,7 +630,8 @@ public class FSUtils {
     try {
       if (fs.exists(dirPath)) {
         FSUtils.parallelizeSubPathProcess(hoodieEngineContext, fs, dirPath, parallelism, e -> true,
-            pairOfSubPathAndConf -> deleteSubPath(pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue())
+            pairOfSubPathAndConf -> deleteSubPath(
+                pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
         );
         boolean result = fs.delete(dirPath, false);
         LOG.info("Removed directory at " + dirPath);
@@ -683,13 +683,14 @@ public class FSUtils {
    *
    * @param subPathStr sub-path String
    * @param conf       serializable config
+   * @param recursive  is recursive or not
    * @return {@code true} if the sub-path is deleted; {@code false} otherwise.
    */
-  public static boolean deleteSubPath(String subPathStr, SerializableConfiguration conf) {
+  public static boolean deleteSubPath(String subPathStr, SerializableConfiguration conf, boolean recursive) {
     try {
       Path subPath = new Path(subPathStr);
       FileSystem fileSystem = subPath.getFileSystem(conf.get());
-      return fileSystem.delete(subPath, true);
+      return fileSystem.delete(subPath, recursive);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }
