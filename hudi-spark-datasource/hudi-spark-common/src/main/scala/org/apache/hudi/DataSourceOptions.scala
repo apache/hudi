@@ -191,6 +191,16 @@ object DataSourceWriteOptions {
     .withAlternatives("hoodie.datasource.write.storage.type")
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
 
+   val HIVE_SYNC_USE_KERBEROS: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.use_kerberos")
+    .defaultValue(false)
+    .withDocumentation("Whether to use Kerberos authentication.")
+
+  val HIVE_SYNC_KERBEROS_PRINCIPAL: ConfigProperty[String] = ConfigProperty
+    .key("hive_sync.kerberos_principal")
+    .noDefaultValue()
+    .withDocumentation("Hive metastore principal.")
+ 
   /**
     * Translate spark parameters to hudi parameters
     *
