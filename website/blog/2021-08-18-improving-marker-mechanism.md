@@ -61,11 +61,11 @@ We evaluate the write performance over both direct and timeline-server-based mar
 
 As shown below, direct marker mechanism works really well, when a part of the table is written, e.g., 1K out of 165K data files.  However, the time of direct marker operations is non-trivial when we need to write significant number of data files. Compared to the direct marker mechanism, the timeline-server-based marker mechanism generates much fewer files storing markers because of the batch processing, leading to much less time on marker-related I/O operations, thus achieving 31% lower write completion time compared to the direct marker file mechanism.
 
-| Marker Type |   Total Files   |  Num data files written | Files created for markers | Marker deletion time | Bulk Insert Time (including marker deletion) |
+| Marker Type |   Input data size   |  Num data files written | Files created for markers | Marker deletion time | Bulk Insert Time (including marker deletion) |
 | ----------- | --------- | :---------: | :---------: | :---------: | :---------: | 
-| Direct | 165k | 1k | 1k | 5.4secs | - |
-| Direct | 165K | 165k | 165k | 15min | 55min |
-| Timeline-server-based | 165K | 165k | 20 | ~3s | 38min |
+| Direct | 600MB | 1k | 1k | 5.4secs | - |
+| Direct | 100GB | 165k | 165k | 15min | 55min |
+| Timeline-server-based | 100GB | 165k | 20 | ~3s | 38min |
 
 ## Conclusion
 
