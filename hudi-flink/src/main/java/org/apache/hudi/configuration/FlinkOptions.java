@@ -592,6 +592,18 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false)
       .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
           + "Disabled by default for backward compatibility.");
+    
+ public static final ConfigOption<Boolean> HIVE_SYNC_USE_KERBEROS = ConfigOptions
+          .key("hive_sync.use_kerberos")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to use Kerberos authentication.");
+
+  public static final ConfigOption<String> HIVE_SYNC_KERBEROS_PRINCIPAL = ConfigOptions
+          .key("hive_sync.kerberos_principal")
+          .stringType()
+          .defaultValue("")
+          .withDescription("Hive metastore principal.");
 
   // -------------------------------------------------------------------------
   //  Utilities
