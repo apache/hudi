@@ -171,7 +171,7 @@ public class HoodieTestSuiteWriter implements Serializable {
   }
 
   public JavaRDD<WriteStatus> insertOverwrite(Option<String> instantTime) throws Exception {
-    if(cfg.useDeltaStreamer){
+    if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.insertOverwrite();
     } else {
       Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
@@ -181,7 +181,7 @@ public class HoodieTestSuiteWriter implements Serializable {
   }
 
   public JavaRDD<WriteStatus> insertOverwriteTable(Option<String> instantTime) throws Exception {
-    if(cfg.useDeltaStreamer){
+    if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.insertOverwriteTable();
     } else {
       Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();

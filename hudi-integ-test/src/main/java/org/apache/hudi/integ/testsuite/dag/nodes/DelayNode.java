@@ -37,7 +37,7 @@ public class DelayNode extends DagNode<Boolean> {
 
   @Override
   public void execute(ExecutionContext context, int curItrCount) throws Exception {
-    log.warn("Waiting for "+ delayMins+" mins before going for next test run");
+    log.warn("Waiting for " + delayMins + " mins before going for next test run");
     Thread.sleep(delayMins * 60 * 1000);
   }
 }
