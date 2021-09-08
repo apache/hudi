@@ -594,16 +594,16 @@ public class FlinkOptions extends HoodieConfig {
           + "Disabled by default for backward compatibility.");
     
  public static final ConfigOption<Boolean> HIVE_SYNC_USE_KERBEROS = ConfigOptions
-          .key("hive_sync.use_kerberos")
-          .booleanType()
-          .defaultValue(false)
-          .withDescription("Whether to use Kerberos authentication.");
+      .key("hive_sync.use_kerberos")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use Kerberos authentication.");
 
   public static final ConfigOption<String> HIVE_SYNC_KERBEROS_PRINCIPAL = ConfigOptions
-          .key("hive_sync.kerberos_principal")
-          .stringType()
-          .defaultValue("")
-          .withDescription("Hive metastore principal.");
+      .key("hive_sync.kerberos_principal")
+      .stringType()
+      .defaultValue("")
+       .withDescription("Hive metastore principal.");
 
   // -------------------------------------------------------------------------
   //  Utilities
