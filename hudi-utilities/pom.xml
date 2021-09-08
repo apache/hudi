@@ -207,6 +207,14 @@
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <artifactId>parquet-hadoop</artifactId>
+          <groupId>org.apache.parquet</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>parquet-column</artifactId>
+          <groupId>org.apache.parquet</groupId>
+        </exclusion>
       </exclusions>
     </dependency>
 

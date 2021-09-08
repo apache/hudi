@@ -149,6 +149,16 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>parquet-column</artifactId>
+          <groupId>org.apache.parquet</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>parquet-hadoop</artifactId>
+          <groupId>org.apache.parquet</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Needed for running HiveServer for Tests -->
