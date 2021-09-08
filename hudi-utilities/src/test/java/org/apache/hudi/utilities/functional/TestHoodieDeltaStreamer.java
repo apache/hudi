@@ -1399,36 +1399,24 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     testNum++;
   }
 
-  private void prepareORCDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
-    prepareORCDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
-            PROPS_FILENAME_TEST_ORC, ORC_SOURCE_ROOT, false);
-  }
-
-  private void prepareORCDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
-                                       String propsFileName, String orcSourceRoot, boolean addCommonProps) throws IOException {
-    // Properties used for testing delta-streamer with orc source
+  private void testORCDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
+    // prepare ORCDFSSource
     TypedProperties orcProps = new TypedProperties();
 
-    if (addCommonProps) {
-      populateCommonProps(orcProps);
-    }
-
+    // Properties used for testing delta-streamer with orc source
     orcProps.setProperty("include", "base.properties");
     orcProps.setProperty("hoodie.embed.timeline.server","false");
     orcProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     orcProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
     if (useSchemaProvider) {
-      orcProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + sourceSchemaFile);
-      if (hasTransformer) {
-        orcProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/" + targetSchemaFile);
+      orcProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + "source.avsc");
+      if (transformerClassNames != null) {
+        orcProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/" + "target.avsc");
       }
     }
-    orcProps.setProperty("hoodie.deltastreamer.source.dfs.root", orcSourceRoot);
-    UtilitiesTestBase.Helpers.savePropsToDFS(orcProps, dfs, dfsBasePath + "/" + propsFileName);
-  }
+    orcProps.setProperty("hoodie.deltastreamer.source.dfs.root", ORC_SOURCE_ROOT);
+    UtilitiesTestBase.Helpers.savePropsToDFS(orcProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_ORC);
 
-  private void testORCDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
-    prepareORCDFSSource(useSchemaProvider, transformerClassNames != null);
     String tableBasePath = dfsBasePath + "/test_orc_source_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
             TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ORCDFSSource.class.getName(),
