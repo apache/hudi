@@ -76,7 +76,9 @@ object HoodieWriterUtils {
       ASYNC_CLUSTERING_ENABLE.key -> ASYNC_CLUSTERING_ENABLE.defaultValue,
       ENABLE_ROW_WRITER.key -> ENABLE_ROW_WRITER.defaultValue,
       RECONCILE_SCHEMA.key -> RECONCILE_SCHEMA.defaultValue.toString,
-      DROP_PARTITION_COLUMNS.key -> DROP_PARTITION_COLUMNS.defaultValue
+      DROP_PARTITION_COLUMNS.key -> DROP_PARTITION_COLUMNS.defaultValue,
+      HIVE_SYNC_USE_KERBEROS.key -> HIVE_SYNC_USE_KERBEROS.defaultValue,
+      HIVE_SYNC_KERBEROS_PRINCIPAL.key -> HIVE_SYNC_KERBEROS_PRINCIPAL.defaultValue
     ) ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
