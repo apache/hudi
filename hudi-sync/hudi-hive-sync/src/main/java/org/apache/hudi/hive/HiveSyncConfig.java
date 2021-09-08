@@ -127,7 +127,7 @@ public class HiveSyncConfig implements Serializable {
   public Boolean useKerberos = false;
 
   @Parameter(names = {"--hive-kerberos-principal"}, description = "hive metastore principal")
-  public String kerberosPrincipal = "";
+  public String kerberosPrincipal;
 
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
