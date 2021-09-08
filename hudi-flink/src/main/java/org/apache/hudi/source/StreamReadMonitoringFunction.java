@@ -352,10 +352,16 @@ public class StreamReadMonitoringFunction
       // 1. the start commit is 'earliest';
       // 2. the start instant is archived.
       HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
-      if (!metaClient.getArchivedTimeline().empty()) {
-        Stream<HoodieInstant> instantStream = archivedTimeline.getCommitsTimeline().filterCompletedInstants().getInstants();
+      HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
+      if (!archivedCompleteTimeline.empty()) {
+        final String endTs = archivedCompleteTimeline.lastInstant().get().getTimestamp();
+        Stream<HoodieInstant> instantStream = archivedCompleteTimeline.getInstants();
         if (instantRange != null) {
+          archivedTimeline.loadInstantDetailsInMemory(instantRange.getStartInstant(), endTs);
           instantStream = instantStream.filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, instantRange.getStartInstant()));
+        } else {
+          final String startTs = archivedCompleteTimeline.firstInstant().get().getTimestamp();
+          archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
         }
         return instantStream
             .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, archivedTimeline)).collect(Collectors.toList());
