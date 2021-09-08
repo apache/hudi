@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieROTablePathFilter;
+import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -116,6 +117,7 @@ public class HoodieTableSource implements
   private final List<String> partitionKeys;
   private final String defaultPartName;
   private final Configuration conf;
+  private final FileIndex fileIndex;
 
   private int[] requiredPos;
   private long limit;
@@ -147,6 +149,7 @@ public class HoodieTableSource implements
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
+    this.fileIndex = FileIndex.instance(this.path, this.conf);
     this.requiredPartitions = requiredPartitions;
     this.requiredPos = requiredPos == null
         ? IntStream.range(0, schema.getColumnCount()).toArray()
@@ -222,8 +225,8 @@ public class HoodieTableSource implements
 
   @Override
   public Optional<List<Map<String, String>>> listPartitions() {
-    List<Map<String, String>> partitions = FilePathUtils.getPartitions(path, hadoopConf,
-        partitionKeys, defaultPartName, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING));
+    List<Map<String, String>> partitions = this.fileIndex.getPartitions(
+        this.partitionKeys, defaultPartName, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING));
     return Optional.of(partitions);
   }
 
@@ -277,10 +280,7 @@ public class HoodieTableSource implements
     if (paths.length == 0) {
       return Collections.emptyList();
     }
-    FileStatus[] fileStatuses = Arrays.stream(paths)
-        .flatMap(path ->
-            Arrays.stream(FilePathUtils.getFileStatusRecursively(path, 1, hadoopConf)))
-        .toArray(FileStatus[]::new);
+    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
     if (fileStatuses.length == 0) {
       throw new HoodieException("No files found for reading in user provided path.");
     }
@@ -492,6 +492,7 @@ public class HoodieTableSource implements
   public void reset() {
     this.metaClient.reloadActiveTimeline();
     this.requiredPartitions = null;
+    this.fileIndex.reset();
   }
 
   /**
