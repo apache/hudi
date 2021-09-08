@@ -30,7 +30,9 @@ public enum HoodieTableVersion {
   // < 0.6.0 versions
   ZERO(0),
   // 0.6.0 onwards
-  ONE(1);
+  ONE(1),
+  // 0.9.0 onwards
+  TWO(2);
 
   private final int versionCode;
 
@@ -43,10 +45,10 @@ public enum HoodieTableVersion {
   }
 
   public static HoodieTableVersion current() {
-    return ONE;
+    return TWO;
   }
 
-  static HoodieTableVersion versionFromCode(int versionCode) {
+  public static HoodieTableVersion versionFromCode(int versionCode) {
     return Arrays.stream(HoodieTableVersion.values())
         .filter(v -> v.versionCode == versionCode).findAny()
         .orElseThrow(() -> new HoodieException("Unknown versionCode:" + versionCode));

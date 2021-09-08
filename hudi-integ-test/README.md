@@ -442,7 +442,7 @@ spark-submit \
 --workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
 --table-type COPY_ON_WRITE \
 --compact-scheduling-minshare 1 \
---clean-input
+--clean-input \
 --clean-output
 ```
 

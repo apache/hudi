@@ -41,7 +41,7 @@ import java.util.Objects;
 /**
  * Factory help to create {@link org.apache.hudi.keygen.KeyGenerator}.
  * <p>
- * This factory will try {@link HoodieWriteConfig#KEYGENERATOR_CLASS_PROP} firstly, this ensures the class prop
+ * This factory will try {@link HoodieWriteConfig#KEYGENERATOR_CLASS_NAME} firstly, this ensures the class prop
  * will not be overwritten by {@link KeyGeneratorType}
  */
 public class HoodieAvroKeyGeneratorFactory {
@@ -57,10 +57,10 @@ public class HoodieAvroKeyGeneratorFactory {
   private static KeyGenerator createAvroKeyGeneratorByType(TypedProperties props) throws IOException {
     // Use KeyGeneratorType.SIMPLE as default keyGeneratorType
     String keyGeneratorType =
-        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), null);
+        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), null);
 
     if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
-      LOG.info("The value of {} is empty, using SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key());
+      LOG.info("The value of {} is empty, using SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE.key());
       keyGeneratorType = KeyGeneratorType.SIMPLE.name();
     }
 

@@ -18,9 +18,10 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.table.HoodieTable;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
@@ -32,7 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test class for {@link org.apache.hudi.cli.commands.UtilsCommand}.
  */
-public class TestUtilsCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestUtilsCommand extends CLIFunctionalTestHarness {
 
   /**
    * Test case for success load class.
@@ -40,7 +42,7 @@ public class TestUtilsCommand extends AbstractShellIntegrationTest {
   @Test
   public void testLoadClass() {
     String name = HoodieTable.class.getName();
-    CommandResult cr = getShell().executeCommand(String.format("utils loadClass --class %s", name));
+    CommandResult cr = shell().executeCommand(String.format("utils loadClass --class %s", name));
     assertAll("Command runs success",
         () -> assertTrue(cr.isSuccess()),
         () -> assertNotNull(cr.getResult().toString()),
@@ -53,7 +55,7 @@ public class TestUtilsCommand extends AbstractShellIntegrationTest {
   @Test
   public void testLoadClassNotFound() {
     String name = "test.class.NotFound";
-    CommandResult cr = getShell().executeCommand(String.format("utils loadClass --class %s", name));
+    CommandResult cr = shell().executeCommand(String.format("utils loadClass --class %s", name));
 
     assertAll("Command runs success",
         () -> assertTrue(cr.isSuccess()),
@@ -67,7 +69,7 @@ public class TestUtilsCommand extends AbstractShellIntegrationTest {
   @Test
   public void testLoadClassNull() {
     String name = "";
-    CommandResult cr = getShell().executeCommand(String.format("utils loadClass --class %s", name));
+    CommandResult cr = shell().executeCommand(String.format("utils loadClass --class %s", name));
 
     assertAll("Command runs success",
         () -> assertTrue(cr.isSuccess()),

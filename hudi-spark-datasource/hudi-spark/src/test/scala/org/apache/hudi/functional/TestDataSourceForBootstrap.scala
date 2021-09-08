@@ -17,39 +17,39 @@
 
 package org.apache.hudi.functional
 
-import collection.JavaConverters._
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import java.time.Instant
 import java.util.Collections
+import scala.collection.JavaConverters._
 
 class TestDataSourceForBootstrap {
 
   var spark: SparkSession = _
   val commonOpts: Map[String, String] = Map(
-    HoodieWriteConfig.INSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.UPSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.DELETE_PARALLELISM.key -> "4",
-    HoodieWriteConfig.BULKINSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM.key -> "4",
-    HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM.key -> "4",
+    HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "4",
+    HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "4",
+    HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "4",
+    HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key -> "4",
+    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM_VALUE.key -> "4",
+    HoodieBootstrapConfig.PARALLELISM_VALUE.key -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   var basePath: String = _
   var srcPath: String = _
@@ -118,7 +118,7 @@ class TestDataSourceForBootstrap {
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -297,8 +297,8 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
-      .option(HoodieCompactionConfig.INLINE_COMPACT_PROP.key, "true")
-      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key, "1")
+      .option(HoodieCompactionConfig.INLINE_COMPACT.key, "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key, "1")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -429,10 +429,10 @@ class TestDataSourceForBootstrap {
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "datestr")
-      .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key, srcPath)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key, classOf[SimpleKeyGenerator].getName)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR.key, classOf[FullRecordBootstrapModeSelector].getName)
-      .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER.key, classOf[SparkParquetBootstrapDataProvider].getName)
+      .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
+      .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+      .option(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key, classOf[FullRecordBootstrapModeSelector].getName)
+      .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key, classOf[SparkParquetBootstrapDataProvider].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -480,8 +480,8 @@ class TestDataSourceForBootstrap {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, partitionColumns.getOrElse(""))
-      .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key, srcPath)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key, classOf[SimpleKeyGenerator].getName)
+      .option(HoodieBootstrapConfig.BASE_PATH.key, srcPath)
+      .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 

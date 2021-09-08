@@ -19,31 +19,17 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.marker.WriteMarkers;
-import org.apache.hudi.table.marker.WriteMarkersFactory;
-
-import java.util.List;
-import java.util.stream.Collectors;
+import org.apache.hudi.table.HoodieTable;
 
 /**
  * Downgrade handle to assist in downgrading hoodie table from version 1 to 0.
  */
-public  class OneToZeroDowngradeHandler implements DowngradeHandler {
+public class OneToZeroDowngradeHandler extends BaseOneToZeroDowngradeHandler {
 
   @Override
-  public void downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
-    // fetch pending commit info
-    HoodieSparkTable table = HoodieSparkTable.create(config, context);
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
-    List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
-    for (HoodieInstant commitInstant : commits) {
-      // delete existing markers
-      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, commitInstant.getTimestamp());
-      writeMarkers.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-    }
+  HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
+    return HoodieSparkTable.create(config, context);
   }
 }

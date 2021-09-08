@@ -18,10 +18,13 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -31,28 +34,31 @@ import java.util.Properties;
  * Storage related config.
  */
 @Immutable
+@ConfigClassProperty(name = "PreCommit Validator Configurations",
+    groupName = ConfigGroups.Names.SPARK_DATASOURCE,
+    description = "The following set of configurations help validate new data before commits.")
 public class HoodiePreCommitValidatorConfig extends HoodieConfig {
 
-  public static final ConfigProperty<String> PRE_COMMIT_VALIDATORS = ConfigProperty
+  public static final ConfigProperty<String> VALIDATOR_CLASS_NAMES = ConfigProperty
       .key("hoodie.precommit.validators")
       .defaultValue("")
       .withDocumentation("Comma separated list of class names that can be invoked to validate commit");
   public static final String VALIDATOR_TABLE_VARIABLE = "<TABLE_NAME>";
 
-  public static final ConfigProperty<String> PRE_COMMIT_VALIDATORS_EQUALITY_SQL_QUERIES = ConfigProperty
+  public static final ConfigProperty<String> EQUALITY_SQL_QUERIES = ConfigProperty
       .key("hoodie.precommit.validators.equality.sql.queries")
       .defaultValue("")
       .withDocumentation("Spark SQL queries to run on table before committing new data to validate state before and after commit."
-          + " Multiple queries separated by ';' delimiter are supported." 
-          + " Example: \"select count(*) from \\<TABLE_NAME\\>" 
+          + " Multiple queries separated by ';' delimiter are supported."
+          + " Example: \"select count(*) from \\<TABLE_NAME\\>"
           + " Note \\<TABLE_NAME\\> is replaced by table state before and after commit.");
-  
-  public static final ConfigProperty<String> PRE_COMMIT_VALIDATORS_SINGLE_VALUE_SQL_QUERIES = ConfigProperty
+
+  public static final ConfigProperty<String> SINGLE_VALUE_SQL_QUERIES = ConfigProperty
       .key("hoodie.precommit.validators.single.value.sql.queries")
       .defaultValue("")
-      .withDocumentation("Spark SQL queries to run on table before committing new data to validate state after commit." 
-          + "Multiple queries separated by ';' delimiter are supported." 
-          + "Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'" 
+      .withDocumentation("Spark SQL queries to run on table before committing new data to validate state after commit."
+          + "Multiple queries separated by ';' delimiter are supported."
+          + "Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'"
           + "Note \\<TABLE_NAME\\> variable is expected to be present in query.");
 
   /**
@@ -61,11 +67,11 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
    * Example query: 'select count(*) from \<TABLE_NAME\> where col=null'
    * Note \<TABLE_NAME\> variable is expected to be present in query.
    */
-  public static final ConfigProperty<String> PRE_COMMIT_VALIDATORS_INEQUALITY_SQL_QUERIES = ConfigProperty
+  public static final ConfigProperty<String> INEQUALITY_SQL_QUERIES = ConfigProperty
       .key("hoodie.precommit.validators.inequality.sql.queries")
       .defaultValue("")
-      .withDocumentation("Spark SQL queries to run on table before committing new data to validate state before and after commit." 
-          + "Multiple queries separated by ';' delimiter are supported." 
+      .withDocumentation("Spark SQL queries to run on table before committing new data to validate state before and after commit."
+          + "Multiple queries separated by ';' delimiter are supported."
           + "Example query: 'select count(*) from \\<TABLE_NAME\\> where col=null'"
           + "Note \\<TABLE_NAME\\> variable is expected to be present in query.");
 
@@ -94,22 +100,22 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
     }
 
     public Builder withPreCommitValidator(String preCommitValidators) {
-      preCommitValidatorConfig.setValue(PRE_COMMIT_VALIDATORS, preCommitValidators);
+      preCommitValidatorConfig.setValue(VALIDATOR_CLASS_NAMES, preCommitValidators);
       return this;
     }
 
     public Builder withPrecommitValidatorEqualitySqlQueries(String preCommitValidators) {
-      preCommitValidatorConfig.setValue(PRE_COMMIT_VALIDATORS_EQUALITY_SQL_QUERIES, preCommitValidators);
+      preCommitValidatorConfig.setValue(EQUALITY_SQL_QUERIES, preCommitValidators);
       return this;
     }
 
     public Builder withPrecommitValidatorSingleResultSqlQueries(String preCommitValidators) {
-      preCommitValidatorConfig.setValue(PRE_COMMIT_VALIDATORS_SINGLE_VALUE_SQL_QUERIES, preCommitValidators);
+      preCommitValidatorConfig.setValue(SINGLE_VALUE_SQL_QUERIES, preCommitValidators);
       return this;
     }
 
     public Builder withPrecommitValidatorInequalitySqlQueries(String preCommitValidators) {
-      preCommitValidatorConfig.setValue(PRE_COMMIT_VALIDATORS_INEQUALITY_SQL_QUERIES, preCommitValidators);
+      preCommitValidatorConfig.setValue(INEQUALITY_SQL_QUERIES, preCommitValidators);
       return this;
     }
 

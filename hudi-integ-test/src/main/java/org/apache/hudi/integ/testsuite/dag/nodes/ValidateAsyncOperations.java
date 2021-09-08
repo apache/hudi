@@ -77,9 +77,9 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
         }
 
         if (config.validateArchival() || config.validateClean()) {
-          Pattern ARCHIVE_FILE_PATTERN =
+          final Pattern ARCHIVE_FILE_PATTERN =
               Pattern.compile("\\.commits_\\.archive\\..*");
-          Pattern CLEAN_FILE_PATTERN =
+          final Pattern CLEAN_FILE_PATTERN =
               Pattern.compile(".*\\.clean\\..*");
 
           String metadataPath = executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/.hoodie";

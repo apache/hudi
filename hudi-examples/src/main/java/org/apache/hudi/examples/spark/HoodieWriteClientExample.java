@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -46,7 +47,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-
 
 /**
  * Simple examples of #{@link SparkRDDWriteClient}.
@@ -107,7 +107,7 @@ public class HoodieWriteClientExample {
       List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
       List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
       JavaRDD<HoodieRecord<HoodieAvroPayload>> writeRecords = jsc.parallelize(records, 1);
-      client.upsert(writeRecords, newCommitTime);
+      client.insert(writeRecords, newCommitTime);
 
       // updates
       newCommitTime = client.startCommit();
@@ -126,6 +126,16 @@ public class HoodieWriteClientExample {
       List<HoodieKey> toBeDeleted = recordsSoFar.stream().map(HoodieRecord::getKey).limit(numToDelete).collect(Collectors.toList());
       JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(toBeDeleted, 1);
       client.delete(deleteRecords, newCommitTime);
+
+      // Delete by partition
+      newCommitTime = client.startCommit();
+      client.startCommitWithTime(newCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      LOG.info("Starting commit " + newCommitTime);
+      // The partition where the data needs to be deleted
+      List<String> partitionList = toBeDeleted.stream().map(s -> s.getPartitionPath()).distinct().collect(Collectors.toList());
+      List<String> deleteList = recordsSoFar.stream().filter(f -> !partitionList.contains(f.getPartitionPath()))
+          .map(m -> m.getKey().getPartitionPath()).distinct().collect(Collectors.toList());
+      client.deletePartitions(deleteList, newCommitTime);
 
       // compaction
       if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {

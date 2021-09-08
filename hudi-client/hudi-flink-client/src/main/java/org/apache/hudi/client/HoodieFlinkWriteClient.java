@@ -400,6 +400,17 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   /**
+   * Upgrade downgrade the Hoodie table.
+   *
+   * <p>This action should only be executed once for each commit.
+   * The modification of the table properties is not thread safe.
+   */
+  public void upgradeDowngrade(String instantTime) {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    new FlinkUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
+  }
+
+  /**
    * Clean the write handles within a checkpoint interval.
    * All the handles should have been closed already.
    */
@@ -437,11 +448,6 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     final HoodieRecordLocation loc = record.getCurrentLocation();
     final String fileID = loc.getFileId();
     final String partitionPath = record.getPartitionPath();
-    // Always use FlinkCreateHandle when insert duplication turns on
-    if (config.allowDuplicateInserts()) {
-      return new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
-          fileID, table.getTaskContextSupplier());
-    }
 
     if (bucketToHandles.containsKey(fileID)) {
       MiniBatchHandle lastHandle = (MiniBatchHandle) bucketToHandles.get(fileID);

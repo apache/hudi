@@ -43,12 +43,12 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
   }
   // The origin key generator class for this table.
   private lazy val originKeyGen = {
-    val beforeKeyGenClassName = props.getString(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS, null)
+    val beforeKeyGenClassName = props.getString(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
     if (beforeKeyGenClassName != null) {
       val keyGenProps = new TypedProperties()
       keyGenProps.putAll(props)
-      keyGenProps.remove(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS)
-      keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key, beforeKeyGenClassName)
+      keyGenProps.remove(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME)
+      keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, beforeKeyGenClassName)
       Some(KeyGenUtils.createKeyGeneratorByClassName(keyGenProps))
     } else {
       None
@@ -118,7 +118,7 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
 
 object SqlKeyGenerator {
   val PARTITION_SCHEMA = "hoodie.sql.partition.schema"
-  val ORIGIN_KEYGEN_CLASS = "hoodie.sql.origin.keygen.class"
+  val ORIGIN_KEYGEN_CLASS_NAME = "hoodie.sql.origin.keygen.class"
   private val timestampTimeFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")
   private val sqlTimestampFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.S")
 }

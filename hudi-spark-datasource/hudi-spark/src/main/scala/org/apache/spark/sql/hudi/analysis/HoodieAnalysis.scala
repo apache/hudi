@@ -161,11 +161,25 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         val resolvedCondition = condition.map(resolveExpressionFrom(resolvedSource)(_))
         val resolvedAssignments = if (isInsertOrUpdateStar(assignments)) {
           // assignments is empty means insert * or update set *
-          // we fill assign all the source fields to the target fields
-          target.output
-            .filter(attr => !HoodieSqlUtils.isMetaField(attr.name))
-            .zip(resolvedSource.output.filter(attr => !HoodieSqlUtils.isMetaField(attr.name)))
-            .map { case (targetAttr, sourceAttr) => Assignment(targetAttr, sourceAttr) }
+          val resolvedSourceOutputWithoutMetaFields = resolvedSource.output.filter(attr => !HoodieSqlUtils.isMetaField(attr.name))
+          val targetOutputWithoutMetaFields = target.output.filter(attr => !HoodieSqlUtils.isMetaField(attr.name))
+          val resolvedSourceColumnNamesWithoutMetaFields = resolvedSourceOutputWithoutMetaFields.map(_.name)
+          val targetColumnNamesWithoutMetaFields = targetOutputWithoutMetaFields.map(_.name)
+
+          if(targetColumnNamesWithoutMetaFields.toSet.subsetOf(resolvedSourceColumnNamesWithoutMetaFields.toSet)){
+            //If sourceTable's columns contains all targetTable's columns,
+            //We fill assign all the source fields to the target fields by column name matching.
+            val sourceColNameAttrMap = resolvedSourceOutputWithoutMetaFields.map(attr => (attr.name, attr)).toMap
+            targetOutputWithoutMetaFields.map(targetAttr => {
+              val sourceAttr = sourceColNameAttrMap(targetAttr.name)
+              Assignment(targetAttr, sourceAttr)
+            })
+          } else {
+            // We fill assign all the source fields to the target fields by order.
+            targetOutputWithoutMetaFields
+              .zip(resolvedSourceOutputWithoutMetaFields)
+              .map { case (targetAttr, sourceAttr) => Assignment(targetAttr, sourceAttr) }
+          }
         } else {
           assignments.map(assignment => {
             val resolvedKey = resolveExpressionFrom(target)(assignment.key)
@@ -291,12 +305,14 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
     case c @ CreateTable(tableDesc, _, _)
       if isHoodieTable(tableDesc) =>
         val tablePath = getTableLocation(c.tableDesc, sparkSession)
-        if (tableExistsInPath(tablePath, sparkSession.sessionState.newHadoopConf())) {
+        val tableExistInCatalog = sparkSession.sessionState.catalog.tableExists(tableDesc.identifier)
+        // Only when the table has not exist in catalog, we need to fill the schema info for creating table.
+        if (!tableExistInCatalog && tableExistsInPath(tablePath, sparkSession.sessionState.newHadoopConf())) {
           val metaClient = HoodieTableMetaClient.builder()
             .setBasePath(tablePath)
             .setConf(sparkSession.sessionState.newHadoopConf())
             .build()
-          val tableSchema = HoodieSqlUtils.getTableSqlSchema(metaClient).map(HoodieSqlUtils.addMetaFields)
+          val tableSchema = HoodieSqlUtils.getTableSqlSchema(metaClient)
           if (tableSchema.isDefined && tableDesc.schema.isEmpty) {
             // Fill the schema with the schema from the table
             c.copy(tableDesc.copy(schema = tableSchema.get))

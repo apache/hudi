@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -149,7 +150,7 @@ public class DirectWriteMarkers extends WriteMarkers {
   }
 
   private String translateMarkerToDataPath(String markerPath) {
-    String rPath = stripMarkerFolderPrefix(markerPath);
+    String rPath = MarkerUtils.stripMarkerFolderPrefix(markerPath, basePath, instantTime);
     return stripMarkerSuffix(rPath);
   }
 
@@ -158,17 +159,30 @@ public class DirectWriteMarkers extends WriteMarkers {
     Set<String> markerFiles = new HashSet<>();
     if (doesMarkerDirExist()) {
       FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
-        markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
+        markerFiles.add(MarkerUtils.stripMarkerFolderPrefix(fileStatus.getPath().toString(), basePath, instantTime));
         return true;
       }, false);
     }
     return markerFiles;
   }
 
+  /**
+   * Creates a marker file based on the full marker name excluding the base path and instant.
+   *
+   * @param markerName the full marker name, e.g., "2021/08/13/file1.marker.CREATE"
+   * @return path of the marker file
+   */
+  public Option<Path> create(String markerName) {
+    return create(new Path(markerDirPath, markerName), true);
+  }
+
   @Override
   protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+    return create(getMarkerPath(partitionPath, dataFileName, type), checkIfExists);
+  }
+
+  private Option<Path> create(Path markerPath, boolean checkIfExists) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
     Path dirPath = markerPath.getParent();
     try {
       if (!fs.exists(dirPath)) {

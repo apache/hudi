@@ -18,10 +18,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieMetadataConfig.{METADATA_ENABLE_PROP, METADATA_VALIDATE_PROP}
+import org.apache.hudi.common.config.HoodieMetadataConfig.{ENABLE, VALIDATE_ENABLE}
 import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
@@ -46,18 +45,18 @@ object HoodieWriterUtils {
     Map(OPERATION.key -> OPERATION.defaultValue,
       TABLE_TYPE.key -> TABLE_TYPE.defaultValue,
       PRECOMBINE_FIELD.key -> PRECOMBINE_FIELD.defaultValue,
-      PAYLOAD_CLASS.key -> PAYLOAD_CLASS.defaultValue,
+      PAYLOAD_CLASS_NAME.key -> PAYLOAD_CLASS_NAME.defaultValue,
       RECORDKEY_FIELD.key -> RECORDKEY_FIELD.defaultValue,
       PARTITIONPATH_FIELD.key -> PARTITIONPATH_FIELD.defaultValue,
-      KEYGENERATOR_CLASS.key -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,
-      METADATA_ENABLE_PROP.key -> METADATA_ENABLE_PROP.defaultValue.toString,
-      METADATA_VALIDATE_PROP.key -> METADATA_VALIDATE_PROP.defaultValue.toString,
+      KEYGENERATOR_CLASS_NAME.key -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,
+      ENABLE.key -> ENABLE.defaultValue.toString,
+      VALIDATE_ENABLE.key -> VALIDATE_ENABLE.defaultValue.toString,
       COMMIT_METADATA_KEYPREFIX.key -> COMMIT_METADATA_KEYPREFIX.defaultValue,
       INSERT_DROP_DUPS.key -> INSERT_DROP_DUPS.defaultValue,
       STREAMING_RETRY_CNT.key -> STREAMING_RETRY_CNT.defaultValue,
       STREAMING_RETRY_INTERVAL_MS.key -> STREAMING_RETRY_INTERVAL_MS.defaultValue,
       STREAMING_IGNORE_FAILED_BATCH.key -> STREAMING_IGNORE_FAILED_BATCH.defaultValue,
-      META_SYNC_CLIENT_TOOL_CLASS.key -> META_SYNC_CLIENT_TOOL_CLASS.defaultValue,
+      META_SYNC_CLIENT_TOOL_CLASS_NAME.key -> META_SYNC_CLIENT_TOOL_CLASS_NAME.defaultValue,
       HIVE_SYNC_ENABLED.key -> HIVE_SYNC_ENABLED.defaultValue,
       META_SYNC_ENABLED.key -> META_SYNC_ENABLED.defaultValue,
       HIVE_DATABASE.key -> HIVE_DATABASE.defaultValue,
@@ -76,7 +75,8 @@ object HoodieWriterUtils {
       INLINE_CLUSTERING_ENABLE.key -> INLINE_CLUSTERING_ENABLE.defaultValue,
       ASYNC_CLUSTERING_ENABLE.key -> ASYNC_CLUSTERING_ENABLE.defaultValue,
       ENABLE_ROW_WRITER.key -> ENABLE_ROW_WRITER.defaultValue,
-      RECONCILE_SCHEMA.key -> RECONCILE_SCHEMA.defaultValue.toString
+      RECONCILE_SCHEMA.key -> RECONCILE_SCHEMA.defaultValue.toString,
+      DROP_PARTITION_COLUMNS.key -> DROP_PARTITION_COLUMNS.defaultValue
     ) ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
@@ -95,23 +95,7 @@ object HoodieWriterUtils {
     val props = new TypedProperties()
     props.putAll(parameters.asJava)
     val keyGen = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
-    getPartitionColumns(keyGen)
-  }
-
-  def getPartitionColumns(keyGen: KeyGenerator): String = {
-    keyGen match {
-      // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
-      // is: "field_name: field_type", we extract the field_name from the partition path field.
-      case c: BaseKeyGenerator
-        if c.isInstanceOf[CustomKeyGenerator] || c.isInstanceOf[CustomAvroKeyGenerator] =>
-          c.getPartitionPathFields.asScala.map(pathField =>
-            pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
-                .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
-            .mkString(",")
-
-      case b: BaseKeyGenerator => b.getPartitionPathFields.asScala.mkString(",")
-      case _=> null
-    }
+    HoodieSparkUtils.getPartitionColumns(keyGen, props)
   }
 
   def convertMapToHoodieConfig(parameters: Map[String, String]): HoodieConfig = {

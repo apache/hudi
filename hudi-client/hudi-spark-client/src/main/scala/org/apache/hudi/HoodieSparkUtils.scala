@@ -18,11 +18,17 @@
 
 package org.apache.hudi
 
+import java.util.Properties
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
@@ -221,9 +227,39 @@ object HoodieSparkUtils extends SparkAdapterSupport {
           val leftExp = toAttribute(attribute, tableSchema)
           val rightExp = Literal.create(s"%$value%")
           sparkAdapter.createLike(leftExp, rightExp)
-        case _=> null
+        case _ => null
       }
     )
+  }
+
+  /**
+   * @param properties config properties
+   * @return partition columns
+   */
+  def getPartitionColumns(properties: Properties): String = {
+    val props = new TypedProperties(properties)
+    val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
+    getPartitionColumns(keyGenerator, props)
+  }
+
+  /**
+   * @param keyGen key generator
+   * @return partition columns
+   */
+  def getPartitionColumns(keyGen: KeyGenerator, typedProperties: TypedProperties): String = {
+    keyGen match {
+      // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
+      // is: "field_name: field_type", we extract the field_name from the partition path field.
+      case c: BaseKeyGenerator
+        if c.isInstanceOf[CustomKeyGenerator] || c.isInstanceOf[CustomAvroKeyGenerator] =>
+        c.getPartitionPathFields.asScala.map(pathField =>
+          pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
+            .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
+          .mkString(",")
+
+      case b: BaseKeyGenerator => b.getPartitionPathFields.asScala.mkString(",")
+      case _ => typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
+    }
   }
 
   private def toAttribute(columnName: String, tableSchema: StructType): AttributeReference = {

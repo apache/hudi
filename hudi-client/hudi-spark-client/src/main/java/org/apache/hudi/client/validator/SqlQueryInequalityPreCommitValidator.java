@@ -25,6 +25,7 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -48,7 +49,7 @@ public class SqlQueryInequalityPreCommitValidator<T extends HoodieRecordPayload,
 
   @Override
   protected String getQueryConfigName() {
-    return HoodiePreCommitValidatorConfig.PRE_COMMIT_VALIDATORS_INEQUALITY_SQL_QUERIES.key();
+    return HoodiePreCommitValidatorConfig.INEQUALITY_SQL_QUERIES.key();
   }
 
   @Override

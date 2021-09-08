@@ -88,8 +88,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   }
 
   public TimestampBasedAvroKeyGenerator(TypedProperties config) throws IOException {
-    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD.key()),
-        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD.key()));
+    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
+        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {

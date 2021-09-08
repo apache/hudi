@@ -28,19 +28,14 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.bootstrap.BootstrapFunction;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
-import org.apache.hudi.sink.compact.CompactionPlanEvent;
-import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
-import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.ChainedTransformer;
-import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.sink.transform.Transformer;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
@@ -57,8 +52,8 @@ import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
-import org.apache.flink.formats.json.TimestampFormat;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -235,12 +230,13 @@ public class StreamWriteITCase extends TestLogger {
 
   @Test
   public void testMergeOnReadWriteWithCompaction() throws Exception {
+    int parallelism = 4;
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
     execEnv.getConfig().disableObjectReuse();
-    execEnv.setParallelism(4);
+    execEnv.setParallelism(parallelism);
     // set up checkpoint interval
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
@@ -249,8 +245,6 @@ public class StreamWriteITCase extends TestLogger {
     RowType rowType =
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
-    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf);
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
@@ -267,49 +261,16 @@ public class StreamWriteITCase extends TestLogger {
     TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
     format.setCharsetName("UTF-8");
 
-    DataStream<HoodieRecord> hoodieDataStream = execEnv
+    DataStream<RowData> dataStream = execEnv
         // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
         .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
-        .setParallelism(4)
-        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+        .setParallelism(parallelism);
 
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
-          TypeInformation.of(HoodieRecord.class),
-          new ProcessOperator<>(new BootstrapFunction<>(conf)));
-    }
-
-    DataStream<Object> pipeline = hoodieDataStream
-        // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
-        .keyBy(HoodieRecord::getRecordKey)
-        .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner")
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
-        .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-        .uid("uid_hoodie_stream_write");
-
-    pipeline.addSink(new CleanFunction<>(conf))
-        .setParallelism(1)
-        .name("clean_commits").uid("uid_clean_commits");
-
-    pipeline.transform("compact_plan_generate",
-        TypeInformation.of(CompactionPlanEvent.class),
-        new CompactionPlanOperator(conf))
-        .uid("uid_compact_plan_generate")
-        .setParallelism(1) // plan generate must be singleton
-        .rebalance()
-        .transform("compact_task",
-            TypeInformation.of(CompactionCommitEvent.class),
-            new ProcessOperator<>(new CompactFunction(conf)))
-        .addSink(new CompactionCommitSink(conf))
-        .name("compact_commit")
-        .setParallelism(1);
-
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, false);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+    Pipelines.clean(conf, pipeline);
+    Pipelines.compact(conf, pipeline);
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
     if (client.getJobStatus().get() != JobStatus.FAILED) {
       try {
@@ -339,8 +300,6 @@ public class StreamWriteITCase extends TestLogger {
     RowType rowType =
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
-    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf);
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
@@ -364,27 +323,9 @@ public class StreamWriteITCase extends TestLogger {
       dataStream = transformer.apply(dataStream);
     }
 
-    DataStream<HoodieRecord> hoodieDataStream = dataStream
-        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
-
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
-          TypeInformation.of(HoodieRecord.class),
-          new ProcessOperator<>(new BootstrapFunction<>(conf)));
-    }
-
-    DataStream<Object> pipeline = hoodieDataStream
-        // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
-        .keyBy(HoodieRecord::getRecordKey)
-        .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner")
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
-        .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-        .uid("uid_hoodie_stream_write");
+    int parallelism = execEnv.getParallelism();
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, false);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));

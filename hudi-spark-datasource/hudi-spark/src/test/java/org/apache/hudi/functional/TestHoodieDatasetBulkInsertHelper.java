@@ -95,7 +95,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-        "testNamespace", new NonSortPartitionerWithRows(), false);
+        "testNamespace", new NonSortPartitionerWithRows(), false, false);
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), 10);
@@ -158,7 +158,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows.addAll(updates);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-        "testNamespace", new NonSortPartitionerWithRows(), false);
+        "testNamespace", new NonSortPartitionerWithRows(), false, false);
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), enablePreCombine ? 10 : 15);
@@ -214,12 +214,12 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   private Map<String, String> getProps(boolean setAll, boolean setKeyGen, boolean setRecordKey, boolean setPartitionPath) {
     Map<String, String> props = new HashMap<>();
     if (setAll) {
-      props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
+      props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
       props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
       props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition");
     } else {
       if (setKeyGen) {
-        props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
+        props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
       }
       if (setRecordKey) {
         props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
@@ -238,7 +238,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), false);
+          "testNamespace", new NonSortPartitionerWithRows(), false, false);
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -249,7 +249,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), false);
+          "testNamespace", new NonSortPartitionerWithRows(), false, false);
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -260,7 +260,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), false);
+          "testNamespace", new NonSortPartitionerWithRows(), false, false);
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -271,7 +271,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), false);
+          "testNamespace", new NonSortPartitionerWithRows(), false, false);
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore

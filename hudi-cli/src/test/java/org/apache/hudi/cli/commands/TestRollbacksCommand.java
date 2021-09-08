@@ -23,8 +23,9 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -38,11 +39,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -60,16 +61,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test class for {@link org.apache.hudi.cli.commands.RollbacksCommand}.
  */
-public class TestRollbacksCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestRollbacksCommand extends CLIFunctionalTestHarness {
 
   @BeforeEach
   public void init() throws Exception {
-    String tableName = "test_table";
-    String tablePath = Paths.get(basePath, tableName).toString();
+    String tableName = tableName();
+    String tablePath = tablePath(tableName);
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     //Create some commits files and base files
     Map<String, String> partitionAndFileId = new HashMap<String, String>() {
       {
@@ -90,7 +92,7 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (AbstractHoodieWriteClient client = getHoodieWriteClient(config)) {
+    try (AbstractHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
       // Rollback inflight commit3 and commit2
       client.rollback("102");
       client.rollback("101");
@@ -102,7 +104,7 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testShowRollbacks() {
-    CommandResult cr = getShell().executeCommand("show rollbacks");
+    CommandResult cr = shell().executeCommand("show rollbacks");
     assertTrue(cr.isSuccess());
 
     // get rollback instants
@@ -152,7 +154,7 @@ public class TestRollbacksCommand extends AbstractShellIntegrationTest {
     HoodieInstant instant = rollback.findFirst().orElse(null);
     assertNotNull(instant, "The instant can not be null.");
 
-    CommandResult cr = getShell().executeCommand("show rollback --instant " + instant.getTimestamp());
+    CommandResult cr = shell().executeCommand("show rollback --instant " + instant.getTimestamp());
     assertTrue(cr.isSuccess());
 
     List<Comparable[]> rows = new ArrayList<>();

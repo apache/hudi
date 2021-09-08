@@ -20,6 +20,7 @@ package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 

@@ -72,7 +72,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")
       .stringType()
-      .defaultValue("__DEFAULT_PARTITION__")
+      .defaultValue("default") // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
@@ -196,6 +196,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(60)// default 1 minute
       .withDescription("Check interval for streaming read of SECOND, default 1 minute");
 
+  public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_STREAMING_START_COMMIT = ConfigOptions
       .key("read.streaming.start-commit")
       .stringType()
@@ -207,7 +208,7 @@ public class FlinkOptions extends HoodieConfig {
   //  Write Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<String> TABLE_NAME = ConfigOptions
-      .key(HoodieWriteConfig.TABLE_NAME.key())
+      .key(HoodieWriteConfig.TBL_NAME.key())
       .stringType()
       .noDefaultValue()
       .withDescription("Table name to register to Hive metastore");
@@ -221,10 +222,10 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final ConfigOption<Boolean> INSERT_DEDUP = ConfigOptions
-          .key("write.insert.deduplicate")
-          .booleanType()
-          .defaultValue(true)
-          .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
+      .key("write.insert.deduplicate")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
@@ -240,7 +241,7 @@ public class FlinkOptions extends HoodieConfig {
           + "key value, we will pick the one with the largest value for the precombine field,\n"
           + "determined by Object.compareTo(..)");
 
-  public static final ConfigOption<String> PAYLOAD_CLASS = ConfigOptions
+  public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
       .key("write.payload.class")
       .stringType()
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
@@ -280,7 +281,7 @@ public class FlinkOptions extends HoodieConfig {
           + "By default true (in favor of streaming progressing over data integrity)");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.RECORDKEY_FIELD.key())
+      .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
       .stringType()
       .defaultValue("uuid")
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
@@ -288,7 +289,7 @@ public class FlinkOptions extends HoodieConfig {
           + "the dot notation eg: `a.b.c`");
 
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD.key())
+      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
       .stringType()
       .defaultValue("")
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
@@ -301,21 +302,21 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Whether to encode the partition path url, default false");
 
   public static final ConfigOption<Boolean> HIVE_STYLE_PARTITIONING = ConfigOptions
-      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING.key())
+      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to use Hive style partitioning.\n"
           + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
           + "By default false (the names of partition folders are only partition values)");
 
-  public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key())
+  public static final ConfigOption<String> KEYGEN_CLASS_NAME = ConfigOptions
+      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key())
       .stringType()
       .defaultValue("")
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
 
   public static final ConfigOption<String> KEYGEN_TYPE = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key())
+      .key(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
@@ -368,6 +369,27 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(1024)
       .withDescription("Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_BLOCK_SIZE = ConfigOptions
+      .key("write.parquet.block.size")
+      .intType()
+      .defaultValue(120)
+      .withDescription("Parquet RowGroup size. It's recommended to make this large enough that scan costs can be"
+          + " amortized by packing enough column values into a single row group.");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_MAX_FILE_SIZE = ConfigOptions
+      .key("write.parquet.max.file.size")
+      .intType()
+      .defaultValue(120)
+      .withDescription("Target size for parquet files produced by Hudi write phases. "
+          + "For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_PAGE_SIZE = ConfigOptions
+      .key("hoodie.parquet.page.size")
+      .intType()
+      .defaultValue(1)
+      .withDescription("Parquet page size. Page is the unit of read within a parquet file. "
+          + "Within a block, pages are compressed separately.");
 
   public static final ConfigOption<Integer> WRITE_MERGE_MAX_MEMORY = ConfigOptions
       .key("write.merge.max_memory")
@@ -549,7 +571,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("")
       .withDescription("Partition fields for hive sync, default ''");
 
-  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigOptions
+  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME = ConfigOptions
       .key("hive_sync.partition_extractor_class")
       .stringType()
       .defaultValue(SlashEncodedDayPartitionValueExtractor.class.getCanonicalName())
