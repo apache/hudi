@@ -603,7 +603,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("hive_sync.kerberos_principal")
       .stringType()
       .defaultValue("")
-       .withDescription("Hive metastore principal.");
+      .withDescription("Hive metastore principal.");
 
   // -------------------------------------------------------------------------
   //  Utilities
