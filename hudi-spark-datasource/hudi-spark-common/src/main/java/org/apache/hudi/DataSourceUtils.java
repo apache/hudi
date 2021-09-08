@@ -304,6 +304,11 @@ public class DataSourceUtils {
         DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE().defaultValue()));
     hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().key(),
         DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().defaultValue()));
+    hiveSyncConfig.useKerberos = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SYNC_USE_KERBEROS().key(),
+        DataSourceWriteOptions.HIVE_SYNC_USE_KERBEROS().defaultValue()));
+    hiveSyncConfig.kerberosPrincipal =
+        props.getString(DataSourceWriteOptions.HIVE_SYNC_KERBEROS_PRINCIPAL().key(), DataSourceWriteOptions.HIVE_SYNC_KERBEROS_PRINCIPAL().defaultValue());
+    
     return hiveSyncConfig;
   }
 }
