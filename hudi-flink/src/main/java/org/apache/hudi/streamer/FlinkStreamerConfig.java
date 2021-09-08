@@ -375,7 +375,9 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX, config.hiveSyncSkipRoSuffix);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP, config.hiveSyncSupportTimestamp);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_USE_KERBEROS, config.useKerberos);
-    conf.setString(FlinkOptions.HIVE_SYNC_KERBEROS_PRINCIPAL, config.kerberosPrincipal);
+    if (config.useKerberos) {
+      conf.setString(FlinkOptions.HIVE_SYNC_KERBEROS_PRINCIPAL, config.kerberosPrincipal);
+    }
     return conf;
   }
 }
