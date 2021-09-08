@@ -182,7 +182,6 @@ object DataSourceWriteOptions {
       "Use bulkinsert to load new data into a table, and there on use upsert/insert. " +
       "bulk insert uses a disk based write path to scale to load large inputs without need to cache it.")
 
-
   val COW_TABLE_TYPE_OPT_VAL = HoodieTableType.COPY_ON_WRITE.name
   val MOR_TABLE_TYPE_OPT_VAL = HoodieTableType.MERGE_ON_READ.name
   val TABLE_TYPE: ConfigProperty[String] = ConfigProperty
@@ -190,16 +189,6 @@ object DataSourceWriteOptions {
     .defaultValue(COW_TABLE_TYPE_OPT_VAL)
     .withAlternatives("hoodie.datasource.write.storage.type")
     .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.")
-
-   val HIVE_SYNC_USE_KERBEROS: ConfigProperty[Boolean] = ConfigProperty
-    .key("hoodie.datasource.hive_sync.use_kerberos")
-    .defaultValue(false)
-    .withDocumentation("Whether to use Kerberos authentication.")
-
-  val HIVE_SYNC_KERBEROS_PRINCIPAL: ConfigProperty[String] = ConfigProperty
-    .key("hive_sync.kerberos_principal")
-    .noDefaultValue()
-    .withDocumentation("Hive metastore principal.")
 
   /**
     * Translate spark parameters to hudi parameters
@@ -472,6 +461,16 @@ object DataSourceWriteOptions {
     .key("hoodie.datasource.hive_sync.mode")
     .noDefaultValue()
     .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.")
+
+  val HIVE_SYNC_USE_KERBEROS: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.use_kerberos")
+    .defaultValue(false)
+    .withDocumentation("Whether to use Kerberos authentication.")
+
+  val HIVE_SYNC_KERBEROS_PRINCIPAL: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.kerberos_principal")
+    .noDefaultValue()
+    .withDocumentation("Hive metastore principal.")
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty
