@@ -296,7 +296,7 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean useKerberos = false;
 
   @Parameter(names = {"--hive-kerberos-principal"}, description = "hive metastore principal")
-  public String kerberosPrincipal;
+  public String kerberosPrincipal = "";
 
   /**
    * Transforms a {@code HoodieFlinkStreamer.Config} into {@code Configuration}.
@@ -375,9 +375,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX, config.hiveSyncSkipRoSuffix);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP, config.hiveSyncSupportTimestamp);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_USE_KERBEROS, config.useKerberos);
-    if (config.useKerberos) {
-      conf.setString(FlinkOptions.HIVE_SYNC_KERBEROS_PRINCIPAL, config.kerberosPrincipal);
-    }
+    conf.setString(FlinkOptions.HIVE_SYNC_KERBEROS_PRINCIPAL, config.kerberosPrincipal);
     return conf;
   }
 }
