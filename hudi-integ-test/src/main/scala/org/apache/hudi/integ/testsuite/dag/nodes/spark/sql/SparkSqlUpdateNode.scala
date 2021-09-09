@@ -29,11 +29,11 @@ import org.apache.spark.rdd.RDD
 /**
  * DAG node of update using Spark SQL.
  *
- * @param config1 DAG node configurations.
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkSqlUpdateNode(config1: Config) extends BaseSparkSqlNode(config1) {
+class SparkSqlUpdateNode(dagNodeConfig: Config) extends BaseSparkSqlNode(dagNodeConfig) {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Prepares the data for the Spark write operation.

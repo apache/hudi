@@ -38,3 +38,8 @@ dag_content:
       num_records_insert: 1000
     type: spark.sql.SparkSqlInsertNode
     deps: create_table
+  validate:
+    config:
+      delete_input_data: true
+    type: spark.sql.SparkSqlValidateDatasetNode
+    deps: insert_records

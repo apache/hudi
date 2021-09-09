@@ -74,7 +74,7 @@ dag_content:
   #  deps: first_hive_sync
   validate_data:
     config:
-      validate_hive: true
+      validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode
     deps: first_hive_sync

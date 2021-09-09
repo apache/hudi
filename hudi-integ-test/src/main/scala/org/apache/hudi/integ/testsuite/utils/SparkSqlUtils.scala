@@ -39,12 +39,6 @@ import org.slf4j.Logger
  */
 object SparkSqlUtils {
 
-  val HUDI_METADATA_FIELDS: Set[String] = Set[String](
-    HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
-    HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-    HoodieRecord.FILENAME_METADATA_FIELD
-  )
-
   /**
    * Converts Avro schema in String to the SQL schema expression
    *
@@ -152,9 +146,9 @@ object SparkSqlUtils {
    * @param query query String.
    */
   def logQuery(log: Logger, query: String): Unit = {
-    log.info("----- Running the following Spark SQL query -----")
-    log.info(query)
-    log.info("-" * 50)
+    log.warn("----- Running the following Spark SQL query -----")
+    log.warn(query)
+    log.warn("-" * 50)
   }
 
   /**
@@ -386,7 +380,7 @@ object SparkSqlUtils {
    */
   def generatePercentiles(config: Config): (Double, Double) = {
     val ratio: Double = config.getRatioRecordsChange
-    (Math.max(0.5 - ratio / 2.0, 0.0), Math.min(0.5 + ratio / 2.0, 1.0))
+    (Math.max(0.5 - (ratio / 2.0), 0.0), Math.min(0.5 + (ratio / 2.0), 1.0))
   }
 
   /**

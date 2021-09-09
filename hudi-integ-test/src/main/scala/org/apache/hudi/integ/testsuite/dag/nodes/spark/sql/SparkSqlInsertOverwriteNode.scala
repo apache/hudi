@@ -27,11 +27,11 @@ import org.apache.hudi.integ.testsuite.utils.SparkSqlUtils
 /**
  * DAG node of insert overwrite using Spark SQL.
  *
- * @param config1 DAG node configurations.
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkSqlInsertOverwriteNode(config1: Config) extends BaseSparkSqlNode(config1) {
+class SparkSqlInsertOverwriteNode(dagNodeConfig: Config) extends BaseSparkSqlNode(dagNodeConfig) {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Returns the Spark SQL query to execute for this {@link DagNode}.

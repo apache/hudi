@@ -35,10 +35,10 @@ import scala.collection.JavaConverters._
  *
  * @param config1
  */
-class SparkDeleteNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkDeleteNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
   private val log = LogManager.getLogger(getClass)
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Execute the {@link DagNode}.

@@ -111,7 +111,7 @@ public class DeltaConfig implements Serializable {
     private static String MERGE_NOT_MATCHED_ACTION = "not_matched_action";
     private static String DEFAULT_MERGE_NOT_MATCHED_ACTION = "insert *";
     // Spark SQL Update
-    // column to update.  The logic is fixed, i.e., to do "fare = fare * 1.6"
+    // column to update.  The logic is fixed, i.e., to do "fare = fare * 1.6". to be fixed.
     private static String UPDATE_COLUMN = "update_column";
     private static String DEFAULT_UPDATE_COLUMN = "fare";
     private static String WHERE_CONDITION_COLUMN = "condition_column";

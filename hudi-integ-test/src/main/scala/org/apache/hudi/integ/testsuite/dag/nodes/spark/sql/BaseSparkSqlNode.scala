@@ -32,13 +32,13 @@ import org.slf4j.{Logger, LoggerFactory}
 /**
  * Abstract class for DAG node of running Spark SQL.
  *
- * @param config1 DAG node configurations.
+ * @param dagNodeConfig DAG node configurations.
  */
-abstract class BaseSparkSqlNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+abstract class BaseSparkSqlNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
   val LOG: Logger = LoggerFactory.getLogger(this.getClass)
   val TEMP_TABLE_NAME = "_spark_sql_temp_table"
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Returns the Spark SQL query to execute for this {@link DagNode}.

@@ -32,9 +32,9 @@ import scala.collection.JavaConverters._
  * Spark datasource based insert node
  * @param config1
  */
-class SparkInsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Execute the {@link DagNode}.

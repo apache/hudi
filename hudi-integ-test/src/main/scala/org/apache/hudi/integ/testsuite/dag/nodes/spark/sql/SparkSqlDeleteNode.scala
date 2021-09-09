@@ -29,11 +29,11 @@ import org.apache.spark.rdd.RDD
 /**
  * DAG node of delete using Spark SQL.
  *
- * @param config1 DAG node configurations.
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkSqlDeleteNode(config1: Config) extends BaseSparkSqlNode(config1) {
+class SparkSqlDeleteNode(dagNodeConfig: Config) extends BaseSparkSqlNode(dagNodeConfig) {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Prepares the data for the write operation.

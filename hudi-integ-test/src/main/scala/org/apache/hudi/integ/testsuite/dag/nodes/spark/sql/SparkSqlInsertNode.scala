@@ -27,11 +27,11 @@ import org.apache.hudi.integ.testsuite.utils.SparkSqlUtils
 /**
  * DAG node of insert using Spark SQL.
  *
- * @param config1 DAG node configurations.
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkSqlInsertNode(config1: Config) extends BaseSparkSqlNode(config1) {
+class SparkSqlInsertNode(dagNodeConfig: Config) extends BaseSparkSqlNode(dagNodeConfig) {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Returns the Spark SQL query to execute for this {@link DagNode}.

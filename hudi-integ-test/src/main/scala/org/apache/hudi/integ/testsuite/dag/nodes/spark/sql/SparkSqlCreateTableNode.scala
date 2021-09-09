@@ -31,14 +31,14 @@ import org.slf4j.{Logger, LoggerFactory}
 /**
  * DAG node of create table using Spark SQL.
  *
- * @param config1 DAG node configurations.
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkSqlCreateTableNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkSqlCreateTableNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
   val LOG: Logger = LoggerFactory.getLogger(classOf[SparkSqlCreateTableNode])
   val TEMP_TABLE_NAME: String = "_spark_sql_temp_table"
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Execute the {@link DagNode}.

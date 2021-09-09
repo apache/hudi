@@ -19,6 +19,7 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes.spark.sql
 
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.dag.nodes.BaseValidateDatasetNode
@@ -30,11 +31,11 @@ import org.slf4j.{Logger, LoggerFactory}
 /**
  * This validation node uses Spark SQL to get data for comparison purposes.
  */
-class SparkSqlValidateDatasetNode(config1: Config) extends BaseValidateDatasetNode(config1) {
+class SparkSqlValidateDatasetNode(dagNodeConfig: Config) extends BaseValidateDatasetNode(dagNodeConfig) {
 
   val LOG: Logger = LoggerFactory.getLogger(classOf[SparkSqlValidateDatasetNode])
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * @return {@link Logger} instance to use.
@@ -55,7 +56,7 @@ class SparkSqlValidateDatasetNode(config1: Config) extends BaseValidateDatasetNo
       .sortBy(field => field.name)
     val tableSchema = session.table(tableName).schema
     val sortedTableFieldNames = tableSchema.fields
-      .filter(field => !SparkSqlUtils.HUDI_METADATA_FIELDS.contains(field.name))
+      .filter(field => !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name))
       .sortBy(field => field.name)
     if (!(sortedInputFieldNames sameElements sortedTableFieldNames)) {
       LOG.error("Data set validation failed.  The schema does not match:")

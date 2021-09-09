@@ -164,11 +164,6 @@ public class DeltaGenerator implements Serializable {
           }
         }
 
-        adjustedRDD = adjustedRDD.map(record -> {
-          record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
-          return record;
-        });
-
         // persist this since we will make multiple passes over this
         int numPartition = Math.min(deltaOutputConfig.getInputParallelism(),
             Math.max(1, config.getNumUpsertPartitions()));
@@ -177,7 +172,11 @@ public class DeltaGenerator implements Serializable {
         log.info("Repartitioning records done for updates");
         UpdateConverter converter = new UpdateConverter(schemaStr, config.getRecordSize(),
             partitionPathFieldNames, recordRowKeyFieldNames);
-        JavaRDD<GenericRecord> updates = converter.convert(adjustedRDD);
+        JavaRDD<GenericRecord> convertedRecords = converter.convert(adjustedRDD);
+        JavaRDD<GenericRecord> updates = convertedRecords.map(record -> {
+          record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
+          return record;
+        });
         updates.persist(StorageLevel.DISK_ONLY());
         if (inserts == null) {
           inserts = updates;
@@ -216,16 +215,15 @@ public class DeltaGenerator implements Serializable {
         }
       }
 
-      adjustedRDD = adjustedRDD.map(record -> {
-        record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
-        return record;
-      });
-
       log.info("Repartitioning records for delete");
       // persist this since we will make multiple passes over this
       adjustedRDD = adjustedRDD.repartition(jsc.defaultParallelism());
       Converter converter = new DeleteConverter(schemaStr, config.getRecordSize());
-      JavaRDD<GenericRecord> deletes = converter.convert(adjustedRDD);
+      JavaRDD<GenericRecord> convertedRecords = converter.convert(adjustedRDD);
+      JavaRDD<GenericRecord> deletes = convertedRecords.map(record -> {
+        record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
+        return record;
+      });
       deletes.persist(StorageLevel.DISK_ONLY());
       return deletes;
     } else {
