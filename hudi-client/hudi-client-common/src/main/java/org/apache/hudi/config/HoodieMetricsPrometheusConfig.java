@@ -40,7 +40,7 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
       .key(PUSHGATEWAY_PREFIX + ".host")
       .defaultValue("localhost")
       .sinceVersion("0.6.0")
-      .withDocumentation("Hostname of the prometheus push gateway");
+      .withDocumentation("Hostname of the prometheus push gateway.");
 
   public static final ConfigProperty<Integer> PUSHGATEWAY_PORT_NUM = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".port")
@@ -58,7 +58,7 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
       .key(PUSHGATEWAY_PREFIX + ".delete.on.shutdown")
       .defaultValue(true)
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Delete the pushgateway info or not when job shutdown, true by default.");
 
   public static final ConfigProperty<String> PUSHGATEWAY_JOBNAME = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".job.name")
@@ -70,7 +70,7 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
       .key(PUSHGATEWAY_PREFIX + ".random.job.name.suffix")
       .defaultValue(true)
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Whether the pushgateway name need a random suffix , default true.");
 
   // Prometheus HttpServer
   public static final String PROMETHEUS_PREFIX = METRIC_PREFIX + ".prometheus";
