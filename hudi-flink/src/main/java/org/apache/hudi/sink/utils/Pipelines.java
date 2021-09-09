@@ -19,7 +19,9 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkCompactionOptions;
+import org.apache.hudi.configuration.FlinkIndexOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
@@ -57,21 +59,21 @@ public class Pipelines {
     final String[] partitionFields = FilePathUtils.extractPartitionKeys(conf);
     if (partitionFields.length > 0) {
       RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
-      if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION)) {
+      if (conf.getBoolean(FlinkWriteOptions.WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION)) {
 
         // shuffle by partition keys
         dataStream = dataStream.keyBy(rowDataKeyGen::getPartitionPath);
       }
-      if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_BY_PARTITION)) {
+      if (conf.getBoolean(FlinkWriteOptions.WRITE_BULK_INSERT_SORT_BY_PARTITION)) {
         SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, partitionFields);
         // sort by partition keys
         dataStream = dataStream
             .transform("partition_key_sorter",
                 TypeInformation.of(RowData.class),
                 sortOperatorGen.createSortOperator())
-            .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+            .setParallelism(conf.getInteger(FlinkWriteOptions.WRITE_TASKS));
         ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
-            conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+            conf.getInteger(FlinkWriteOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
     }
     return dataStream
@@ -79,7 +81,7 @@ public class Pipelines {
             TypeInformation.of(Object.class),
             operatorFactory)
         // follow the parallelism of upstream operators to avoid shuffle
-        .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS))
+        .setParallelism(conf.getInteger(FlinkWriteOptions.WRITE_TASKS))
         .addSink(new CleanFunction<>(conf))
         .setParallelism(1)
         .name("clean_commits");
@@ -103,14 +105,14 @@ public class Pipelines {
       DataStream<RowData> dataStream) {
     DataStream<HoodieRecord> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+    if (conf.getBoolean(FlinkIndexOptions.INDEX_BOOTSTRAP_ENABLED)) {
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
               TypeInformation.of(HoodieRecord.class),
               new BootstrapOperator<>(conf))
-          .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(defaultParallelism))
-          .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
+          .setParallelism(conf.getOptional(FlinkWriteOptions.INDEX_BOOTSTRAP_TASKS).orElse(defaultParallelism))
+          .uid("uid_index_bootstrap_" + conf.getString(FlinkWriteOptions.TABLE_NAME));
     }
 
     return dataStream1;
@@ -134,8 +136,8 @@ public class Pipelines {
             "batch_index_bootstrap",
             TypeInformation.of(HoodieRecord.class),
             new BatchBootstrapOperator<>(conf))
-        .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(defaultParallelism))
-        .uid("uid_batch_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
+        .setParallelism(conf.getOptional(FlinkWriteOptions.INDEX_BOOTSTRAP_TASKS).orElse(defaultParallelism))
+        .uid("uid_batch_index_bootstrap_" + conf.getString(FlinkWriteOptions.TABLE_NAME));
   }
 
   public static DataStream<HoodieRecord> rowDataToHoodieRecord(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
@@ -151,13 +153,13 @@ public class Pipelines {
             "bucket_assigner",
             TypeInformation.of(HoodieRecord.class),
             new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
-        .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(defaultParallelism))
+        .uid("uid_bucket_assigner_" + conf.getString(FlinkWriteOptions.TABLE_NAME))
+        .setParallelism(conf.getOptional(FlinkWriteOptions.BUCKET_ASSIGN_TASKS).orElse(defaultParallelism))
         // shuffle by fileId(bucket id)
         .keyBy(record -> record.getCurrentLocation().getFileId())
         .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-        .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
-        .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+        .uid("uid_hoodie_stream_write" + conf.getString(FlinkWriteOptions.TABLE_NAME))
+        .setParallelism(conf.getInteger(FlinkWriteOptions.WRITE_TASKS));
   }
 
   public static DataStreamSink<CompactionCommitEvent> compact(Configuration conf, DataStream<Object> dataStream) {
@@ -169,7 +171,7 @@ public class Pipelines {
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
             new ProcessOperator<>(new CompactFunction(conf)))
-        .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
+        .setParallelism(conf.getInteger(FlinkCompactionOptions.COMPACTION_TASKS))
         .addSink(new CompactionCommitSink(conf))
         .name("compact_commit")
         .setParallelism(1); // compaction commit should be singleton

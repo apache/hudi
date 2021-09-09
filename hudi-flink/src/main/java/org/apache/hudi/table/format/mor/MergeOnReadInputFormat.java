@@ -24,6 +24,8 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkReadOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -165,7 +167,7 @@ public class MergeOnReadInputFormat
     this.currentReadCount = 0L;
     this.hadoopConf = StreamerUtil.getHadoopConf();
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
-      if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
+      if (conf.getBoolean(FlinkReadOptions.READ_AS_STREAMING)) {
         // base file only with commit time filtering
         this.iterator = new BaseFileOnlyFilteringIterator(
             split.getInstantRange(),
@@ -177,17 +179,17 @@ public class MergeOnReadInputFormat
       }
     } else if (!split.getBasePath().isPresent()) {
       // log files only
-      if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
+      if (conf.getBoolean(FlinkReadOptions.READ_AS_STREAMING)
           && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)) {
         this.iterator = new LogFileOnlyIterator(getUnMergedLogFileIterator(split));
       } else {
         this.iterator = new LogFileOnlyIterator(getLogFileIterator(split));
       }
-    } else if (split.getMergeType().equals(FlinkOptions.REALTIME_SKIP_MERGE)) {
+    } else if (split.getMergeType().equals(FlinkReadOptions.REALTIME_SKIP_MERGE)) {
       this.iterator = new SkipMergeIterator(
           getRequiredSchemaReader(split.getBasePath().get()),
           getLogFileIterator(split));
-    } else if (split.getMergeType().equals(FlinkOptions.REALTIME_PAYLOAD_COMBINE)) {
+    } else if (split.getMergeType().equals(FlinkReadOptions.REALTIME_PAYLOAD_COMBINE)) {
       this.iterator = new MergeIterator(
           hadoopConf,
           split,
@@ -280,7 +282,7 @@ public class MergeOnReadInputFormat
     // generate partition specs.
     LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
         new org.apache.hadoop.fs.Path(path).getParent(),
-        this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING),
+        this.conf.getBoolean(FlinkWriteOptions.HIVE_STYLE_PARTITIONING),
         FilePathUtils.extractPartitionKeys(this.conf));
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
     partSpec.forEach((k, v) -> partObjects.put(k, restorePartValueFromType(
@@ -288,7 +290,7 @@ public class MergeOnReadInputFormat
         fieldTypes.get(fieldNames.indexOf(k)))));
 
     return ParquetSplitReaderUtil.genPartColumnarRowReader(
-        this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE),
+        this.conf.getBoolean(FlinkReadOptions.UTC_TIMEZONE),
         true,
         FormatUtils.getParquetConf(this.conf, hadoopConf),
         fieldNames.toArray(new String[0]),

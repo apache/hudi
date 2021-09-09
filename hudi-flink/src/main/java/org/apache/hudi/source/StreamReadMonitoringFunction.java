@@ -28,7 +28,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkReadOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
@@ -121,7 +122,7 @@ public class StreamReadMonitoringFunction
       Set<String> requiredPartitionPaths) {
     this.conf = conf;
     this.path = path;
-    this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
+    this.interval = conf.getInteger(FlinkReadOptions.READ_STREAMING_CHECK_INTERVAL);
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.requiredPartitionPaths = requiredPartitionPaths;
   }
@@ -141,7 +142,7 @@ public class StreamReadMonitoringFunction
 
     if (context.isRestored()) {
       LOG.info("Restoring state for the class {} with table {} and base path {}.",
-          getClass().getSimpleName(), conf.getString(FlinkOptions.TABLE_NAME), path);
+          getClass().getSimpleName(), conf.getString(FlinkWriteOptions.TABLE_NAME), path);
 
       List<String> retrievedStates = new ArrayList<>();
       for (String entry : this.instantState.get()) {
@@ -162,7 +163,7 @@ public class StreamReadMonitoringFunction
         this.issuedInstant = retrievedStates.get(0);
         if (LOG.isDebugEnabled()) {
           LOG.debug("{} retrieved a issued instant of time {} for table {} with path {}.",
-              getClass().getSimpleName(), issuedInstant, conf.get(FlinkOptions.TABLE_NAME), path);
+              getClass().getSimpleName(), issuedInstant, conf.get(FlinkWriteOptions.TABLE_NAME), path);
         }
       }
     }
@@ -220,10 +221,10 @@ public class StreamReadMonitoringFunction
         // had already consumed an instant
         instantRange = InstantRange.getInstance(this.issuedInstant, instantToIssue.getTimestamp(),
             InstantRange.RangeType.OPEN_CLOSE);
-      } else if (this.conf.getOptional(FlinkOptions.READ_STREAMING_START_COMMIT).isPresent()) {
+      } else if (this.conf.getOptional(FlinkReadOptions.READ_STREAMING_START_COMMIT).isPresent()) {
         // first time consume and has a start commit
-        final String specifiedStart = this.conf.getString(FlinkOptions.READ_STREAMING_START_COMMIT);
-        instantRange = specifiedStart.equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST)
+        final String specifiedStart = this.conf.getString(FlinkReadOptions.READ_STREAMING_START_COMMIT);
+        instantRange = specifiedStart.equalsIgnoreCase(FlinkReadOptions.START_COMMIT_EARLIEST)
             ? null
             : InstantRange.getInstance(specifiedStart, instantToIssue.getTimestamp(), InstantRange.RangeType.CLOSE_CLOSE);
       } else {
@@ -242,7 +243,7 @@ public class StreamReadMonitoringFunction
     // 3. filter the full file paths
     // 4. use the file paths from #step 3 as the back-up of the filesystem view
 
-    String tableName = conf.getString(FlinkOptions.TABLE_NAME);
+    String tableName = conf.getString(FlinkWriteOptions.TABLE_NAME);
     List<HoodieCommitMetadata> metadataList = instants.stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
     Set<String> writePartitions = getWritePartitionPaths(metadataList);
@@ -260,7 +261,7 @@ public class StreamReadMonitoringFunction
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
     final String commitToIssue = instantToIssue.getTimestamp();
     final AtomicInteger cnt = new AtomicInteger(0);
-    final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
+    final String mergeType = this.conf.getString(FlinkReadOptions.MERGE_TYPE);
     List<MergeOnReadInputSplit> inputSplits = writePartitions.stream()
         .map(relPartitionPath -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, commitToIssue)
         .map(fileSlice -> {
@@ -339,9 +340,9 @@ public class StreamReadMonitoringFunction
       return commitTimeline.getInstants()
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
           .collect(Collectors.toList());
-    } else if (this.conf.getOptional(FlinkOptions.READ_STREAMING_START_COMMIT).isPresent()
-        && !this.conf.get(FlinkOptions.READ_STREAMING_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST)) {
-      String definedStartCommit = this.conf.get(FlinkOptions.READ_STREAMING_START_COMMIT);
+    } else if (this.conf.getOptional(FlinkReadOptions.READ_STREAMING_START_COMMIT).isPresent()
+        && !this.conf.get(FlinkReadOptions.READ_STREAMING_START_COMMIT).equalsIgnoreCase(FlinkReadOptions.START_COMMIT_EARLIEST)) {
+      String definedStartCommit = this.conf.get(FlinkReadOptions.READ_STREAMING_START_COMMIT);
       return commitTimeline.getInstants()
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, definedStartCommit))
           .collect(Collectors.toList());

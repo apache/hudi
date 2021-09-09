@@ -38,7 +38,8 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkIndexOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -97,7 +98,7 @@ public class BootstrapOperator<I, O extends HoodieRecord>
 
   public BootstrapOperator(Configuration conf) {
     this.conf = conf;
-    this.pattern = Pattern.compile(conf.getString(FlinkOptions.INDEX_PARTITION_REGEX));
+    this.pattern = Pattern.compile(conf.getString(FlinkIndexOptions.INDEX_PARTITION_REGEX));
   }
 
   @Override
@@ -126,8 +127,8 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     this.hoodieTable = getTable();
     this.writeClient = StreamerUtil.createWriteClient(this.conf, getRuntimeContext());
     this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)),
-        HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)));
+        WriteOperationType.fromValue(conf.getString(FlinkWriteOptions.OPERATION)),
+        HoodieTableType.valueOf(conf.getString(FlinkWriteOptions.TABLE_TYPE)));
 
     String basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();

@@ -20,7 +20,7 @@ package org.apache.hudi.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkReadOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -64,7 +64,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   }
 
   public FilebasedSchemaProvider(Configuration conf) {
-    final String sourceSchemaPath = conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH);
+    final String sourceSchemaPath = conf.getString(FlinkReadOptions.SOURCE_AVRO_SCHEMA_PATH);
     final FileSystem fs = FSUtils.getFs(sourceSchemaPath, StreamerUtil.getHadoopConf());
     try {
       this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(sourceSchemaPath)));

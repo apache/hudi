@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.hudi.configuration.FlinkCompactionOptions;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import com.beust.jcommander.Parameter;
@@ -112,19 +113,19 @@ public class FlinkCompactionConfig extends Configuration {
     org.apache.flink.configuration.Configuration conf = new Configuration();
 
     conf.setString(FlinkOptions.PATH, config.path);
-    conf.setString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);
-    conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
-    conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
-    conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
-    conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
-    conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
-    conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
-    conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
+    conf.setString(FlinkCompactionOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);
+    conf.setInteger(FlinkCompactionOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
+    conf.setInteger(FlinkCompactionOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
+    conf.setInteger(FlinkCompactionOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
+    conf.setInteger(FlinkCompactionOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
+    conf.setInteger(FlinkCompactionOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
+    conf.setInteger(FlinkCompactionOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
+    conf.setLong(FlinkCompactionOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
+    conf.setInteger(FlinkCompactionOptions.COMPACTION_TASKS, config.compactionTasks);
+    conf.setBoolean(FlinkCompactionOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
     // use synchronous compaction always
-    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
+    conf.setBoolean(FlinkCompactionOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.setBoolean(FlinkCompactionOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
 
     return conf;
   }

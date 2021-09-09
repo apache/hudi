@@ -39,7 +39,11 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkCompactionOptions;
+import org.apache.hudi.configuration.FlinkMetadataTableOptions;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkReadOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
@@ -106,15 +110,15 @@ public class StreamerUtil {
   }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
-    if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
+    if (conf.getOptional(FlinkReadOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
       return new FilebasedSchemaProvider(conf).getSourceSchema();
-    } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
-      final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
+    } else if (conf.getOptional(FlinkReadOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
+      final String schemaStr = conf.get(FlinkReadOptions.SOURCE_AVRO_SCHEMA);
       return new Schema.Parser().parse(schemaStr);
     } else {
       final String errorMsg = String.format("Either option '%s' or '%s' "
               + "should be specified for avro schema deserialization",
-          FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), FlinkOptions.SOURCE_AVRO_SCHEMA.key());
+          FlinkReadOptions.SOURCE_AVRO_SCHEMA_PATH.key(), FlinkReadOptions.SOURCE_AVRO_SCHEMA.key());
       throw new HoodieException(errorMsg);
     }
   }
@@ -153,38 +157,38 @@ public class StreamerUtil {
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
             .withPath(conf.getString(FlinkOptions.PATH))
-            .combineInput(conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS), true)
+            .combineInput(conf.getBoolean(FlinkWriteOptions.INSERT_DROP_DUPS), true)
             .withMergeAllowDuplicateOnInserts(allowDuplicateInserts(conf))
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
-                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-                    .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
+                    .withPayloadClass(conf.getString(FlinkWriteOptions.PAYLOAD_CLASS_NAME))
+                    .withTargetIOPerCompactionInMB(conf.getLong(FlinkCompactionOptions.COMPACTION_TARGET_IO))
                     .withInlineCompactionTriggerStrategy(
-                        CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
-                    .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
-                    .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
-                    .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
-                    .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
+                        CompactionTriggerStrategy.valueOf(conf.getString(FlinkCompactionOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
+                    .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkCompactionOptions.COMPACTION_DELTA_COMMITS))
+                    .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkCompactionOptions.COMPACTION_DELTA_SECONDS))
+                    .withAsyncClean(conf.getBoolean(FlinkCompactionOptions.CLEAN_ASYNC_ENABLED))
+                    .retainCommits(conf.getInteger(FlinkCompactionOptions.CLEAN_RETAIN_COMMITS))
                     // override and hardcode to 20,
                     // actually Flink cleaning is always with parallelism 1 now
                     .withCleanerParallelism(20)
-                    .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
+                    .archiveCommitsWith(conf.getInteger(FlinkCompactionOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkCompactionOptions.ARCHIVE_MAX_COMMITS))
                     .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
                     .build())
             .withMemoryConfig(
                 HoodieMemoryConfig.newBuilder()
                     .withMaxMemoryMaxSize(
-                        conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
-                        conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
+                        conf.getInteger(FlinkWriteOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
+                        conf.getInteger(FlinkCompactionOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
                     ).build())
-            .forTable(conf.getString(FlinkOptions.TABLE_NAME))
+            .forTable(conf.getString(FlinkWriteOptions.TABLE_NAME))
             .withStorageConfig(HoodieStorageConfig.newBuilder()
-                .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
-                .logFileMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .logFileDataBlockMaxSize(conf.getInteger(FlinkWriteOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
+                .logFileMaxSize(conf.getInteger(FlinkWriteOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
                 .build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-                .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
-                .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
+                .enable(conf.getBoolean(FlinkMetadataTableOptions.METADATA_ENABLED))
+                .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkMetadataTableOptions.METADATA_COMPACTION_DELTA_COMMITS))
                 .build())
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
@@ -231,19 +235,19 @@ public class StreamerUtil {
     final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
-          .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
-          .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
-          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+          .setTableType(conf.getString(FlinkWriteOptions.TABLE_TYPE))
+          .setTableName(conf.getString(FlinkWriteOptions.TABLE_NAME))
+          .setRecordKeyFields(conf.getString(FlinkWriteOptions.RECORD_KEY_FIELD, null))
+          .setPayloadClassName(conf.getString(FlinkWriteOptions.PAYLOAD_CLASS_NAME))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
-          .setPreCombineField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+          .setPartitionFields(conf.getString(FlinkWriteOptions.PARTITION_PATH_FIELD, null))
+          .setPreCombineField(conf.getString(FlinkWriteOptions.PRECOMBINE_FIELD))
           .setTimelineLayoutVersion(1)
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {
       LOG.info("Table [{}/{}] already exists, no need to initialize the table",
-          basePath, conf.getString(FlinkOptions.TABLE_NAME));
+          basePath, conf.getString(FlinkWriteOptions.TABLE_NAME));
     }
     // Do not close the filesystem in order to use the CACHE,
     // some of the filesystems release the handles in #close method.
@@ -275,10 +279,10 @@ public class StreamerUtil {
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncCompaction(Configuration conf) {
-    return conf.getString(FlinkOptions.TABLE_TYPE)
+    return conf.getString(FlinkWriteOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
-        .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
-        && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+        .equals(FlinkWriteOptions.TABLE_TYPE_MERGE_ON_READ)
+        && conf.getBoolean(FlinkCompactionOptions.COMPACTION_ASYNC_ENABLED);
   }
 
   /**
@@ -287,10 +291,10 @@ public class StreamerUtil {
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleCompaction(Configuration conf) {
-    return conf.getString(FlinkOptions.TABLE_TYPE)
+    return conf.getString(FlinkWriteOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
-        .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
-        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
+        .equals(FlinkWriteOptions.TABLE_TYPE_MERGE_ON_READ)
+        && conf.getBoolean(FlinkCompactionOptions.COMPACTION_SCHEDULE_ENABLED);
   }
 
   /**
@@ -305,7 +309,7 @@ public class StreamerUtil {
       Configuration conf,
       org.apache.hadoop.conf.Configuration hadoopConf) {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && !tableExists(basePath, hadoopConf)) {
+    if (conf.getBoolean(FlinkReadOptions.READ_AS_STREAMING) && !tableExists(basePath, hadoopConf)) {
       return null;
     } else {
       return createMetaClient(basePath, hadoopConf);
@@ -413,8 +417,8 @@ public class StreamerUtil {
   }
 
   public static boolean allowDuplicateInserts(Configuration conf) {
-    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
-    return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkOptions.INSERT_DEDUP);
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkWriteOptions.OPERATION));
+    return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkWriteOptions.INSERT_DEDUP);
   }
 
   public static boolean haveSuccessfulCommits(HoodieTableMetaClient metaClient) {

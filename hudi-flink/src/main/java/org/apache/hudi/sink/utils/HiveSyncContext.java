@@ -19,7 +19,10 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.configuration.FlinkHiveSyncOptions;
+import org.apache.hudi.configuration.FlinkMetadataTableOptions;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -57,8 +60,8 @@ public class HiveSyncContext {
     String path = conf.getString(FlinkOptions.PATH);
     FileSystem fs = FSUtils.getFs(path, hadoopConf);
     HiveConf hiveConf = new HiveConf();
-    if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
-      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
+    if (!FlinkOptions.isDefaultValueDefined(conf, FlinkHiveSyncOptions.HIVE_SYNC_METASTORE_URIS)) {
+      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_METASTORE_URIS));
     }
     hiveConf.addResource(hadoopConf);
     return new HiveSyncContext(syncConfig, hiveConf, fs);
@@ -67,25 +70,25 @@ public class HiveSyncContext {
   private static HiveSyncConfig buildSyncConfig(Configuration conf) {
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
     hiveSyncConfig.basePath = conf.getString(FlinkOptions.PATH);
-    hiveSyncConfig.baseFileFormat = conf.getString(FlinkOptions.HIVE_SYNC_FILE_FORMAT);
+    hiveSyncConfig.baseFileFormat = conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_FILE_FORMAT);
     hiveSyncConfig.usePreApacheInputFormat = false;
-    hiveSyncConfig.databaseName = conf.getString(FlinkOptions.HIVE_SYNC_DB);
-    hiveSyncConfig.tableName = conf.getString(FlinkOptions.HIVE_SYNC_TABLE);
-    hiveSyncConfig.syncMode = conf.getString(FlinkOptions.HIVE_SYNC_MODE);
-    hiveSyncConfig.hiveUser = conf.getString(FlinkOptions.HIVE_SYNC_USERNAME);
-    hiveSyncConfig.hivePass = conf.getString(FlinkOptions.HIVE_SYNC_PASSWORD);
-    hiveSyncConfig.jdbcUrl = conf.getString(FlinkOptions.HIVE_SYNC_JDBC_URL);
+    hiveSyncConfig.databaseName = conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_DB);
+    hiveSyncConfig.tableName = conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_TABLE);
+    hiveSyncConfig.syncMode = conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_MODE);
+    hiveSyncConfig.hiveUser = conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_USERNAME);
+    hiveSyncConfig.hivePass = conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_PASSWORD);
+    hiveSyncConfig.jdbcUrl = conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_JDBC_URL);
     hiveSyncConfig.partitionFields = Arrays.asList(FilePathUtils.extractPartitionKeys(conf));
-    hiveSyncConfig.partitionValueExtractorClass = conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME);
-    hiveSyncConfig.useJdbc = conf.getBoolean(FlinkOptions.HIVE_SYNC_USE_JDBC);
-    hiveSyncConfig.useFileListingFromMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
+    hiveSyncConfig.partitionValueExtractorClass = conf.getString(FlinkHiveSyncOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME);
+    hiveSyncConfig.useJdbc = conf.getBoolean(FlinkHiveSyncOptions.HIVE_SYNC_USE_JDBC);
+    hiveSyncConfig.useFileListingFromMetadata = conf.getBoolean(FlinkMetadataTableOptions.METADATA_ENABLED);
     hiveSyncConfig.verifyMetadataFileListing = false;
-    hiveSyncConfig.ignoreExceptions = conf.getBoolean(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS);
-    hiveSyncConfig.supportTimestamp = conf.getBoolean(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP);
-    hiveSyncConfig.autoCreateDatabase = conf.getBoolean(FlinkOptions.HIVE_SYNC_AUTO_CREATE_DB);
-    hiveSyncConfig.decodePartition = conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING);
-    hiveSyncConfig.skipROSuffix = conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX);
-    hiveSyncConfig.assumeDatePartitioning = conf.getBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION);
+    hiveSyncConfig.ignoreExceptions = conf.getBoolean(FlinkHiveSyncOptions.HIVE_SYNC_IGNORE_EXCEPTIONS);
+    hiveSyncConfig.supportTimestamp = conf.getBoolean(FlinkHiveSyncOptions.HIVE_SYNC_SUPPORT_TIMESTAMP);
+    hiveSyncConfig.autoCreateDatabase = conf.getBoolean(FlinkHiveSyncOptions.HIVE_SYNC_AUTO_CREATE_DB);
+    hiveSyncConfig.decodePartition = conf.getBoolean(FlinkWriteOptions.URL_ENCODE_PARTITIONING);
+    hiveSyncConfig.skipROSuffix = conf.getBoolean(FlinkHiveSyncOptions.HIVE_SYNC_SKIP_RO_SUFFIX);
+    hiveSyncConfig.assumeDatePartitioning = conf.getBoolean(FlinkHiveSyncOptions.HIVE_SYNC_ASSUME_DATE_PARTITION);
     hiveSyncConfig.withOperationField = conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
     return hiveSyncConfig;
   }

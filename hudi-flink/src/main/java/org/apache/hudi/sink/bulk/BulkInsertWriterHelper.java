@@ -21,7 +21,7 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.table.HoodieTable;
 
@@ -72,7 +72,7 @@ public class BulkInsertWriterHelper {
     this.taskId = taskId;
     this.taskEpochId = taskEpochId;
     this.rowType = addMetadataFields(rowType, writeConfig.allowOperationMetadataField()); // patch up with metadata fields
-    this.arePartitionRecordsSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_BY_PARTITION);
+    this.arePartitionRecordsSorted = conf.getBoolean(FlinkWriteOptions.WRITE_BULK_INSERT_SORT_BY_PARTITION);
     this.fileIdPrefix = UUID.randomUUID().toString();
     this.keyGen = RowDataKeyGen.instance(conf, rowType);
   }

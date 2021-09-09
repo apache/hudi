@@ -27,6 +27,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 
 import java.io.File;
 import java.io.IOException;
@@ -352,7 +353,7 @@ public class FilePathUtils {
       return new Path[] {path};
     } else {
       final String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
-      final boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING);
+      final boolean hivePartition = conf.getBoolean(FlinkWriteOptions.HIVE_STYLE_PARTITIONING);
       List<Map<String, String>> partitionPaths =
           getPartitions(path, hadoopConf, partitionKeys, defaultParName, hivePartition);
       return partitionPath2ReadPath(path, partitionKeys, partitionPaths, hivePartition);
@@ -423,9 +424,9 @@ public class FilePathUtils {
    * @return array of the partition fields
    */
   public static String[] extractPartitionKeys(org.apache.flink.configuration.Configuration conf) {
-    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkWriteOptions.PARTITION_PATH_FIELD)) {
       return new String[0];
     }
-    return conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+    return conf.getString(FlinkWriteOptions.PARTITION_PATH_FIELD).split(",");
   }
 }

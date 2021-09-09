@@ -20,7 +20,7 @@ package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.util.RowDataProjection;
 
@@ -105,8 +105,8 @@ public class RowDataKeyGen implements Serializable {
   }
 
   public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
-    return new RowDataKeyGen(conf.getString(FlinkOptions.RECORD_KEY_FIELD), conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
-        rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING));
+    return new RowDataKeyGen(conf.getString(FlinkWriteOptions.RECORD_KEY_FIELD), conf.getString(FlinkWriteOptions.PARTITION_PATH_FIELD),
+        rowType, conf.getBoolean(FlinkWriteOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkWriteOptions.URL_ENCODE_PARTITIONING));
   }
 
   public String getRecordKey(RowData rowData) {

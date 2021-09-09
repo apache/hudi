@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.event.CommitAckEvent;
@@ -72,8 +72,8 @@ import java.util.stream.Collectors;
  * <p><h2>Work Flow</h2>
  *
  * <p>The function firstly buffers the data as a batch of {@link HoodieRecord}s,
- * It flushes(write) the records batch when the batch size exceeds the configured size {@link FlinkOptions#WRITE_BATCH_SIZE}
- * or the total buffer size exceeds the configured size {@link FlinkOptions#WRITE_TASK_MAX_SIZE}
+ * It flushes(write) the records batch when the batch size exceeds the configured size {@link FlinkWriteOptions#WRITE_BATCH_SIZE}
+ * or the total buffer size exceeds the configured size {@link FlinkWriteOptions#WRITE_TASK_MAX_SIZE}
  * or a Flink checkpoint starts. After a batch has been written successfully,
  * the function notifies its operator coordinator {@link StreamWriteOperatorCoordinator} to mark a successful write.
  *
@@ -198,8 +198,8 @@ public class StreamWriteFunction<K, I, O>
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
     this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
-        HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
+        WriteOperationType.fromValue(config.getString(FlinkWriteOptions.OPERATION)),
+        HoodieTableType.valueOf(config.getString(FlinkWriteOptions.TABLE_TYPE)));
 
     this.writeStatuses = new ArrayList<>();
     this.writeMetadataState = context.getOperatorStateStore().getListState(
@@ -288,7 +288,7 @@ public class StreamWriteFunction<K, I, O>
   }
 
   private void initWriteFunction() {
-    final String writeOperation = this.config.get(FlinkOptions.OPERATION);
+    final String writeOperation = this.config.get(FlinkWriteOptions.OPERATION);
     switch (WriteOperationType.fromValue(writeOperation)) {
       case INSERT:
         this.writeFunction = (records, instantTime) -> this.writeClient.insert(records, instantTime);
@@ -481,10 +481,10 @@ public class StreamWriteFunction<K, I, O>
 
     TotalSizeTracer(Configuration conf) {
       long mergeReaderMem = 100; // constant 100MB
-      long mergeMapMaxMem = conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY);
-      this.maxBufferSize = (conf.getDouble(FlinkOptions.WRITE_TASK_MAX_SIZE) - mergeReaderMem - mergeMapMaxMem) * 1024 * 1024;
+      long mergeMapMaxMem = conf.getInteger(FlinkWriteOptions.WRITE_MERGE_MAX_MEMORY);
+      this.maxBufferSize = (conf.getDouble(FlinkWriteOptions.WRITE_TASK_MAX_SIZE) - mergeReaderMem - mergeMapMaxMem) * 1024 * 1024;
       final String errMsg = String.format("'%s' should be at least greater than '%s' plus merge reader memory(constant 100MB now)",
-          FlinkOptions.WRITE_TASK_MAX_SIZE.key(), FlinkOptions.WRITE_MERGE_MAX_MEMORY.key());
+          FlinkWriteOptions.WRITE_TASK_MAX_SIZE.key(), FlinkWriteOptions.WRITE_MERGE_MAX_MEMORY.key());
       ValidationUtils.checkState(this.maxBufferSize > 0, errMsg);
     }
 
@@ -520,10 +520,10 @@ public class StreamWriteFunction<K, I, O>
    * Buffers the given record.
    *
    * <p>Flush the data bucket first if the bucket records size is greater than
-   * the configured value {@link FlinkOptions#WRITE_BATCH_SIZE}.
+   * the configured value {@link FlinkWriteOptions#WRITE_BATCH_SIZE}.
    *
    * <p>Flush the max size data bucket if the total buffer size exceeds the configured
-   * threshold {@link FlinkOptions#WRITE_TASK_MAX_SIZE}.
+   * threshold {@link FlinkWriteOptions#WRITE_TASK_MAX_SIZE}.
    *
    * @param value HoodieRecord
    */
@@ -531,7 +531,7 @@ public class StreamWriteFunction<K, I, O>
     final String bucketID = getBucketID(value);
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
-        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
+        k -> new DataBucket(this.config.getDouble(FlinkWriteOptions.WRITE_BATCH_SIZE), value));
     final DataItem item = DataItem.fromHoodieRecord(value);
 
     boolean flushBucket = bucket.detector.detect(item);
@@ -567,7 +567,7 @@ public class StreamWriteFunction<K, I, O>
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
     TimeWait timeWait = TimeWait.builder()
-        .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
+        .timeout(config.getLong(FlinkWriteOptions.WRITE_COMMIT_ACK_TIMEOUT))
         .action("instant initialize")
         .build();
     while (confirming) {
@@ -600,7 +600,7 @@ public class StreamWriteFunction<K, I, O>
 
     List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
-    if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
+    if (config.getBoolean(FlinkWriteOptions.INSERT_DROP_DUPS)) {
       records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
     }
     bucket.preWrite(records);
@@ -635,7 +635,7 @@ public class StreamWriteFunction<K, I, O>
           .forEach(bucket -> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
-              if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
+              if (config.getBoolean(FlinkWriteOptions.INSERT_DROP_DUPS)) {
                 records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
               }
               bucket.preWrite(records);

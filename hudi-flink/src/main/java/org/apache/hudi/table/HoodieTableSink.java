@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.StreamerUtil;
@@ -65,12 +66,12 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // setup configuration
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
-      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+      conf.setLong(FlinkWriteOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
       RowType rowType = (RowType) schema.toSourceRowDataType().notNull().getLogicalType();
 
       // bulk_insert mode
-      final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
+      final String writeOperation = this.conf.get(FlinkWriteOptions.OPERATION);
       if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
         return Pipelines.bulkInsert(conf, rowType, dataStream);
       }
@@ -118,7 +119,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
   public void applyStaticPartition(Map<String, String> partitions) {
     // #applyOverwrite should have been invoked.
     if (this.overwrite && partitions.size() > 0) {
-      this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+      this.conf.setString(FlinkWriteOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
     }
   }
 
@@ -127,6 +128,6 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
     this.overwrite = overwrite;
     // set up the operation as INSERT_OVERWRITE_TABLE first,
     // if there are explicit partitions, #applyStaticPartition would overwrite the option.
-    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+    this.conf.setString(FlinkWriteOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
   }
 }

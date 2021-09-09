@@ -29,7 +29,8 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkIndexOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.sink.bootstrap.IndexRecord;
 import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.action.commit.BucketInfo;
@@ -108,8 +109,8 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
-        WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
-    this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
+        WriteOperationType.fromValue(conf.getString(FlinkWriteOptions.OPERATION)));
+    this.globalIndex = conf.getBoolean(FlinkIndexOptions.INDEX_GLOBAL_ENABLED);
   }
 
   @Override
@@ -124,14 +125,14 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         getRuntimeContext().getMaxNumberOfParallelSubtasks(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
         ignoreSmallFiles(writeConfig),
-        HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
+        HoodieTableType.valueOf(conf.getString(FlinkWriteOptions.TABLE_TYPE)),
         context,
         writeConfig);
     this.payloadCreation = PayloadCreation.instance(this.conf);
   }
 
   private boolean ignoreSmallFiles(HoodieWriteConfig writeConfig) {
-    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkWriteOptions.OPERATION));
     return WriteOperationType.isOverwrite(operationType) || writeConfig.allowDuplicateInserts();
   }
 
@@ -146,7 +147,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         new ValueStateDescriptor<>(
             "indexState",
             TypeInformation.of(HoodieRecordGlobalLocation.class));
-    double ttl = conf.getDouble(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
+    double ttl = conf.getDouble(FlinkIndexOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
     if (ttl > 0) {
       indexStateDesc.enableTimeToLive(StateTtlConfig.newBuilder(Time.milliseconds((long) ttl)).build());
     }

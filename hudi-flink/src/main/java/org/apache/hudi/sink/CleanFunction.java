@@ -19,7 +19,7 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkCompactionOptions;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -58,7 +58,7 @@ public class CleanFunction<T> extends AbstractRichFunction
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+    if (conf.getBoolean(FlinkCompactionOptions.CLEAN_ASYNC_ENABLED)) {
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
       this.executor = new NonThrownExecutor(LOG);
     }
@@ -66,7 +66,7 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   @Override
   public void notifyCheckpointComplete(long l) throws Exception {
-    if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && isCleaning) {
+    if (conf.getBoolean(FlinkCompactionOptions.CLEAN_ASYNC_ENABLED) && isCleaning) {
       executor.execute(() -> {
         try {
           this.writeClient.waitForCleaningFinish();
@@ -80,7 +80,7 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
-    if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
+    if (conf.getBoolean(FlinkCompactionOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
       this.writeClient.startAsyncCleaning();
       this.isCleaning = true;
     }

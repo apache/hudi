@@ -19,12 +19,12 @@
 package org.apache.hudi.sink.transform;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.shaded.guava18.com.google.common.util.concurrent.RateLimiter;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 
 /**
  * Function that transforms RowData to a HoodieRecord with RateLimit.
@@ -43,7 +43,7 @@ public class RowDataToHoodieFunctionWithRateLimit<I extends RowData, O extends H
 
   public RowDataToHoodieFunctionWithRateLimit(RowType rowType, Configuration config) {
     super(rowType, config);
-    this.totalLimit = config.getLong(FlinkOptions.WRITE_RATE_LIMIT);
+    this.totalLimit = config.getLong(FlinkWriteOptions.WRITE_RATE_LIMIT);
   }
 
   @Override

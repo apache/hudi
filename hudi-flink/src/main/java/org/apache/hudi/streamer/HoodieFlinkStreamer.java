@@ -20,7 +20,7 @@ package org.apache.hudi.streamer;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -74,7 +74,7 @@ public class HoodieFlinkStreamer {
     Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
     long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
     int parallelism = env.getParallelism();
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+    conf.setLong(FlinkWriteOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
     DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
         cfg.kafkaTopic,

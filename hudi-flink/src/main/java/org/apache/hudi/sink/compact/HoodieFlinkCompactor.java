@@ -25,7 +25,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkCompactionOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
@@ -61,7 +62,7 @@ public class HoodieFlinkCompactor {
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
 
     // get the table name
-    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+    conf.setString(FlinkWriteOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
 
     // set table schema
     CompactionUtil.setAvroSchema(conf, metaClient);
@@ -128,8 +129,8 @@ public class HoodieFlinkCompactor {
     }
 
     // get compactionParallelism.
-    int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
-        ? compactionPlan.getOperations().size() : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
+    int compactionParallelism = conf.getInteger(FlinkCompactionOptions.COMPACTION_TASKS) == -1
+        ? compactionPlan.getOperations().size() : conf.getInteger(FlinkCompactionOptions.COMPACTION_TASKS);
 
     // Mark instant as compaction inflight
     table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);

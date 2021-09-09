@@ -19,11 +19,11 @@
 package org.apache.hudi.sink.transform;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 
 /**
  * Utilities for {@link RowDataToHoodieFunction}.
@@ -36,7 +36,7 @@ public abstract class RowDataToHoodieFunctions {
    */
   @SuppressWarnings("rawtypes")
   public static RowDataToHoodieFunction<RowData, HoodieRecord> create(RowType rowType, Configuration conf) {
-    if (conf.getLong(FlinkOptions.WRITE_RATE_LIMIT) > 0) {
+    if (conf.getLong(FlinkWriteOptions.WRITE_RATE_LIMIT) > 0) {
       return new RowDataToHoodieFunctionWithRateLimit<>(rowType, conf);
     } else {
       return new RowDataToHoodieFunction<>(rowType, conf);

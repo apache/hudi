@@ -27,7 +27,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkHiveSyncOptions;
+import org.apache.hudi.configuration.FlinkMetadataTableOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -343,7 +345,7 @@ public class StreamWriteOperatorCoordinator
     this.writeClient.transitionRequestedToInflight(tableState.commitAction, this.instant);
     this.writeClient.upgradeDowngrade(this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
-        this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
+        this.conf.getString(FlinkWriteOptions.TABLE_NAME), conf.getString(FlinkWriteOptions.TABLE_TYPE));
   }
 
   /**
@@ -461,7 +463,7 @@ public class StreamWriteOperatorCoordinator
     long totalRecords = writeResults.stream().map(WriteStatus::getTotalRecords).reduce(Long::sum).orElse(0L);
     boolean hasErrors = totalErrorRecords > 0;
 
-    if (!hasErrors || this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+    if (!hasErrors || this.conf.getBoolean(FlinkWriteOptions.IGNORE_FAILED)) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       if (hasErrors) {
         LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total="
@@ -573,13 +575,13 @@ public class StreamWriteOperatorCoordinator
     final boolean syncMetadata;
 
     private TableState(Configuration conf) {
-      this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+      this.operationType = WriteOperationType.fromValue(conf.getString(FlinkWriteOptions.OPERATION));
       this.commitAction = CommitUtils.getCommitActionType(this.operationType,
-          HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE).toUpperCase(Locale.ROOT)));
+          HoodieTableType.valueOf(conf.getString(FlinkWriteOptions.TABLE_TYPE).toUpperCase(Locale.ROOT)));
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
       this.scheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
-      this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
-      this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
+      this.syncHive = conf.getBoolean(FlinkHiveSyncOptions.HIVE_SYNC_ENABLED);
+      this.syncMetadata = conf.getBoolean(FlinkMetadataTableOptions.METADATA_ENABLED);
     }
 
     public static TableState create(Configuration conf) {

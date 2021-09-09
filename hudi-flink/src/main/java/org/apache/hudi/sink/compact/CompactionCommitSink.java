@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkCompactionOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -121,7 +121,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     this.writeClient.commitCompaction(instant, statuses, Option.empty());
 
     // Whether to cleanup the old log file when compaction
-    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+    if (!conf.getBoolean(FlinkCompactionOptions.CLEAN_ASYNC_ENABLED)) {
       this.writeClient.clean();
     }
 

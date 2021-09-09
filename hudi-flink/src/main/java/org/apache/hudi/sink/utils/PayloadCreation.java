@@ -25,10 +25,10 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 
 import javax.annotation.Nullable;
 
@@ -55,18 +55,18 @@ public class PayloadCreation implements Serializable {
   }
 
   public static PayloadCreation instance(Configuration conf) throws Exception {
-    boolean shouldCombine = conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS)
-        || WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
+    boolean shouldCombine = conf.getBoolean(FlinkWriteOptions.INSERT_DROP_DUPS)
+        || WriteOperationType.fromValue(conf.getString(FlinkWriteOptions.OPERATION)) == WriteOperationType.UPSERT;
     String preCombineField = null;
     final Class<?>[] argTypes;
     final Constructor<?> constructor;
     if (shouldCombine) {
-      preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
+      preCombineField = conf.getString(FlinkWriteOptions.PRECOMBINE_FIELD);
       argTypes = new Class<?>[] {GenericRecord.class, Comparable.class};
     } else {
       argTypes = new Class<?>[] {Option.class};
     }
-    final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME);
+    final String clazz = conf.getString(FlinkWriteOptions.PAYLOAD_CLASS_NAME);
     constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
     return new PayloadCreation(shouldCombine, constructor, preCombineField);
   }
