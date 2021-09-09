@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -130,8 +130,8 @@ public abstract class AbstractStreamWriteFunction<I>
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
     this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
-        HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
+        WriteOperationType.fromValue(config.getString(FlinkWriteOptions.OPERATION)),
+        HoodieTableType.valueOf(config.getString(FlinkWriteOptions.TABLE_TYPE)));
 
     this.writeStatuses = new ArrayList<>();
     this.writeMetadataState = context.getOperatorStateStore().getListState(
@@ -235,7 +235,7 @@ public abstract class AbstractStreamWriteFunction<I>
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
     TimeWait timeWait = TimeWait.builder()
-        .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
+        .timeout(config.getLong(FlinkWriteOptions.WRITE_COMMIT_ACK_TIMEOUT))
         .action("instant initialize")
         .build();
     while (confirming) {

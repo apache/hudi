@@ -21,7 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.FlinkMetadataTableOptions;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -140,8 +140,8 @@ public class FileIndex {
     Properties properties = new Properties();
 
     // set up metadata.enabled=true in table DDL to enable metadata listing
-    properties.put(HoodieMetadataConfig.ENABLE, conf.getBoolean(FlinkOptions.METADATA_ENABLED));
-    properties.put(HoodieMetadataConfig.SYNC_ENABLE, conf.getBoolean(FlinkOptions.METADATA_ENABLED));
+    properties.put(HoodieMetadataConfig.ENABLE, conf.getBoolean(FlinkMetadataTableOptions.METADATA_ENABLED));
+    properties.put(HoodieMetadataConfig.SYNC_ENABLE, conf.getBoolean(FlinkMetadataTableOptions.METADATA_ENABLED));
     properties.put(HoodieMetadataConfig.VALIDATE_ENABLE, false);
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
