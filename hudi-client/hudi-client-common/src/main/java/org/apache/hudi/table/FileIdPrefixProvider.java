@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.fileid;
+package org.apache.hudi.table;
 
 import java.util.Properties;
 

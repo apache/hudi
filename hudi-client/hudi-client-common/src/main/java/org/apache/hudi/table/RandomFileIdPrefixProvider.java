@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.fileid;
+package org.apache.hudi.table;
 
 import org.apache.hudi.common.fs.FSUtils;
 

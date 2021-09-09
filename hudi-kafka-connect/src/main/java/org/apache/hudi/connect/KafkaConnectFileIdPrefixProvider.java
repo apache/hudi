@@ -16,14 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.fileid;
+package org.apache.hudi.connect;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.FileIdPrefixProvider;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import javax.xml.bind.DatatypeConverter;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -63,7 +63,7 @@ public class KafkaConnectFileIdPrefixProvider extends FileIdPrefixProvider {
     byte[] digest = Objects.requireNonNull(md).digest(rawFileIdPrefix.getBytes(StandardCharsets.UTF_8));
 
     LOG.info("CreateFileId for Kafka Partition " + kafkaPartition + " : " + partitionPath + " = " + rawFileIdPrefix
-        + " === " + DatatypeConverter.printHexBinary(digest).toUpperCase());
-    return DatatypeConverter.printHexBinary(digest).toUpperCase();
+        + " === " + StringUtils.toHexString(digest).toUpperCase());
+    return StringUtils.toHexString(digest).toUpperCase();
   }
 }

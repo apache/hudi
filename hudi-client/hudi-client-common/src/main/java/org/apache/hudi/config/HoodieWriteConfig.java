@@ -41,7 +41,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
-import org.apache.hudi.fileid.RandomFileIdPrefixProvider;
+import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -417,6 +417,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> FILEID_PREFIX_PROVIDER_CLASS = ConfigProperty
       .key("hoodie.fileid.prefix.provider.class")
       .defaultValue(RandomFileIdPrefixProvider.class.getName())
+      .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
 
   public static final ConfigProperty<String> INSERT_AVOID_TRANSITION_INFLIGHT = ConfigProperty
