@@ -430,14 +430,14 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_ENABLED = ConfigOptions
       .key("compaction.schedule.enabled")
       .booleanType()
-      .defaultValue(true) // default true for MOR write
-      .withDescription("Schedule the compaction plan, enabled by default for MOR");
+      .defaultValue(false) // default false for MOR write
+      .withDescription("Schedule the compaction plan, disabled by default for MOR");
 
   public static final ConfigOption<Boolean> COMPACTION_ASYNC_ENABLED = ConfigOptions
       .key("compaction.async.enabled")
       .booleanType()
-      .defaultValue(true) // default true for MOR write
-      .withDescription("Async Compaction, enabled by default for MOR");
+      .defaultValue(false) // default false for MOR write
+      .withDescription("Async Compaction, disabled by default for MOR");
 
   public static final ConfigOption<Integer> COMPACTION_TASKS = ConfigOptions
       .key("compaction.tasks")
@@ -486,8 +486,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")
       .booleanType()
-      .defaultValue(true)
-      .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
+      .defaultValue(false)
+      .withDescription("Whether to cleanup the old commits immediately on new commits, disabled by default");
 
   public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
       .key("clean.retain_commits")

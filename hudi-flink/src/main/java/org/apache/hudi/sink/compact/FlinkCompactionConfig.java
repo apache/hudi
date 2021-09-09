@@ -61,8 +61,8 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--compaction-delta-seconds"}, description = "Max delta seconds time needed to trigger compaction, default 1 hour", required = false)
   public Integer compactionDeltaSeconds = 3600;
 
-  @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default", required = false)
-  public Boolean cleanAsyncEnable = false;
+  @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, disabled by default", required = false)
+  public Boolean cleanAsyncEnable = true;
 
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
@@ -93,7 +93,7 @@ public class FlinkCompactionConfig extends Configuration {
       + "There is a risk of losing data when scheduling compaction outside the writer job.\n"
       + "Scheduling compaction in the writer job and only let this job do the compaction execution is recommended.\n"
       + "Default is false", required = false)
-  public Boolean schedule = false;
+  public Boolean schedule = true;
 
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
@@ -101,6 +101,12 @@ public class FlinkCompactionConfig extends Configuration {
       + "1). FIFO: execute the oldest plan first;\n"
       + "2). LIFO: execute the latest plan first, by default LIFO", required = false)
   public String compactionSeq = SEQ_LIFO;
+
+  @Parameter(names = {"--max-scheduling-wait-time"}, description = "Max wait time in ms when async scheduling is enabled. Default is 600 seconds.", required = false)
+  public Long maxWaitTime = 600000L;
+
+  @Parameter(names = {"--timeline-refresh-rate"}, description = "Reload timeline rate in ms. Default is 10 seconds.", required = false)
+  public Long refreshRate = 10000L;
 
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.

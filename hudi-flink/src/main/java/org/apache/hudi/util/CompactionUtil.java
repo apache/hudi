@@ -18,6 +18,10 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.configuration.Configuration;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -29,10 +33,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
-
-import org.apache.avro.Schema;
-import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,18 +50,15 @@ public class CompactionUtil {
    * Gets compaction Instant time.
    */
   public static String getCompactionInstantTime(HoodieTableMetaClient metaClient) {
-    Option<HoodieInstant> firstPendingInstant = metaClient.getCommitsTimeline()
+    Option<HoodieInstant> firstPendingInstant = metaClient.getActiveTimeline()
         .filterPendingExcludingCompaction().firstInstant();
-    Option<HoodieInstant> lastCompleteInstant = metaClient.getActiveTimeline().getWriteTimeline()
-        .filterCompletedAndCompactionInstants().lastInstant();
-    if (firstPendingInstant.isPresent() && lastCompleteInstant.isPresent()) {
+    if (firstPendingInstant.isPresent()) {
       String firstPendingTimestamp = firstPendingInstant.get().getTimestamp();
-      String lastCompleteTimestamp = lastCompleteInstant.get().getTimestamp();
-      // Committed and pending compaction instants should have strictly lower timestamps
-      return StreamerUtil.medianInstantTime(firstPendingTimestamp, lastCompleteTimestamp);
+      return StreamerUtil.incrementInstantTime(firstPendingTimestamp, 1);
     } else {
       return HoodieActiveTimeline.createNewInstantTime();
     }
+
   }
 
   /**

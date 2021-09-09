@@ -35,6 +35,9 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   protected void setUp(Configuration conf) {
     // trigger the compaction for every finished checkpoint
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, true);
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+
   }
 
   @Override

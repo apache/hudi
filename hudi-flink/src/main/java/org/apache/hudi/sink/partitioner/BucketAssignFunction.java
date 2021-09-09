@@ -52,7 +52,7 @@ import org.apache.flink.util.Collector;
 import java.util.Objects;
 
 /**
- * The function to build the write profile incrementally for records within a checkpoint,
+ * The function to build the write phudi-flink/src/main/java/org/apache/hudi/configuration/FlinkOptions.javarofile incrementally for records within a checkpoint,
  * it then assigns the bucket with ID using the {@link BucketAssigner}.
  *
  * <p>All the records are tagged with HoodieRecordLocation, instead of real instant time,

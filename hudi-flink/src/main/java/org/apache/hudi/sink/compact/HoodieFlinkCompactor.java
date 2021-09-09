@@ -18,9 +18,16 @@
 
 package org.apache.hudi.sink.compact;
 
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
+
+import com.beust.jcommander.JCommander;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -29,14 +36,10 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
-
-import com.beust.jcommander.JCommander;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * Flink hudi compaction program that can be executed manually.
@@ -72,7 +75,36 @@ public class HoodieFlinkCompactor {
     // judge whether have operation
     // to compute the compaction instant time and do compaction.
     if (cfg.schedule) {
-      String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
+      String compactionInstantTime;
+      Option<HoodieInstant> firstPendingInstant = table.getMetaClient().getActiveTimeline()
+          .filterPendingExcludingCompaction().firstInstant();
+      if (firstPendingInstant.isPresent()) {
+        String firstPendingTimestamp = firstPendingInstant.get().getTimestamp();
+        compactionInstantTime = StreamerUtil.incrementInstantTime(firstPendingTimestamp, 1);
+        long waitingTime = 0L;
+        long interval = cfg.refreshRate;
+        while (waitingTime < cfg.maxWaitTime) {
+          LOG.info("Refreshing timeline to get the latest view");
+          table.getMetaClient().reloadActiveTimeline();
+          Option<HoodieInstant> lastCompleted = table.getMetaClient().getActiveTimeline().filterCompletedInstants().lastInstant();
+          if (lastCompleted.isPresent() && lastCompleted.get().compareTo(firstPendingInstant.get()) >= 0) {
+            // the inflight delta commit was completed, now we can schedule the compaction.
+            LOG.info(String.format("Instant %s was completed, ready to schedule %s", firstPendingTimestamp, compactionInstantTime));
+            break;
+          } else {
+            TimeUnit.MILLISECONDS.sleep(interval);
+            waitingTime += interval;
+          }
+        }
+        if (waitingTime >= cfg.maxWaitTime) {
+          // Timeout.
+          LOG.info("Timeout waiting for compaction scheduling. Quit the job.");
+          return;
+        }
+      } else {
+        compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
+      }
+
       boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
       if (!scheduled) {
         // do nothing.

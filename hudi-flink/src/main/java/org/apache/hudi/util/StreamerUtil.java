@@ -398,6 +398,16 @@ public class StreamerUtil {
     }
   }
 
+  public static String incrementInstantTime(String instant, int incrementInSecond) {
+    try {
+      long ts = HoodieActiveTimeline.COMMIT_FORMATTER.parse(instant).getTime();
+      return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(ts + incrementInSecond * 1000L));
+    } catch (ParseException e) {
+      throw new HoodieException("Get incrementInstantTime error with instant " + instant
+          + " plus " + incrementInSecond + " second", e);
+    }
+  }
+
   public static boolean isValidFile(FileStatus fileStatus) {
     final String extension = FSUtils.getFileExtension(fileStatus.getPath().toString());
     if (PARQUET.getFileExtension().equals(extension)) {

@@ -24,6 +24,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -87,6 +88,14 @@ public class TestStreamerUtil {
         () -> StreamerUtil.medianInstantTime(lower, higher),
         "The first argument should have newer instant time");
   }
+
+  @Test
+  void testIncrementInstantTime() {
+    String ts = "20210705125959";
+    String incremented = StreamerUtil.incrementInstantTime(ts, 1);
+    assertThat(incremented, is("20210705130000"));
+  }
+
 
   @Test
   void testInstantTimeDiff() {
