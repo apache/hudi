@@ -46,10 +46,8 @@ public class HiveSyncGlobalCommitConfig extends GlobalHiveSyncConfig {
 
   public static String LOCAL_HIVE_SITE_URI = "hivesyncglobal.local_hive_site_uri";
   public static String REMOTE_HIVE_SITE_URI = "hivesyncglobal.remote_hive_site_uri";
-  public static String CONFIG_FILE_URI = "hivesyncglobal.config_file_uri";
   public static String REMOTE_BASE_PATH = "hivesyncglobal.remote_base_path";
   public static String LOCAL_BASE_PATH = "hivesyncglobal.local_base_path";
-  public static String RETRY_ATTEMPTS = "hivesyncglobal.retry_attempts";
   public static String REMOTE_HIVE_SERVER_JDBC_URLS = "hivesyncglobal.remote_hs2_jdbc_urls";
   public static String LOCAL_HIVE_SERVER_JDBC_URLS = "hivesyncglobal.local_hs2_jdbc_urls";
 
