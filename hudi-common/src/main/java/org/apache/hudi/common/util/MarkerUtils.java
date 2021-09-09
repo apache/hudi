@@ -21,9 +21,9 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -35,20 +35,15 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
 
@@ -178,43 +173,44 @@ public class MarkerUtils {
     Path dirPath = new Path(markerDir);
     try {
       if (fileSystem.exists(dirPath)) {
-        FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
         Predicate<FileStatus> prefixFilter = fileStatus ->
             fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
         Predicate<FileStatus> markerTypeFilter = fileStatus ->
             !fileStatus.getPath().getName().equals(MARKER_TYPE_FILENAME);
-        List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
-            .filter(prefixFilter.and(markerTypeFilter))
-            .map(fileStatus -> fileStatus.getPath().toString())
-            .collect(Collectors.toList());
-
-        if (markerDirSubPaths.size() > 0) {
-          SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
-          int actualParallelism = Math.min(markerDirSubPaths.size(), parallelism);
-          return context.mapToPair(markerDirSubPaths, markersFilePathStr -> {
-            Path markersFilePath = new Path(markersFilePathStr);
-            FileSystem fs = markersFilePath.getFileSystem(conf.get());
-            FSDataInputStream fsDataInputStream = null;
-            BufferedReader bufferedReader = null;
-            Set<String> markers = new HashSet<>();
-            try {
-              LOG.debug("Read marker file: " + markersFilePathStr);
-              fsDataInputStream = fs.open(markersFilePath);
-              bufferedReader = new BufferedReader(new InputStreamReader(fsDataInputStream, StandardCharsets.UTF_8));
-              markers = bufferedReader.lines().collect(Collectors.toSet());
-            } catch (IOException e) {
-              throw new HoodieIOException("Failed to read file " + markersFilePathStr, e);
-            } finally {
-              closeQuietly(bufferedReader);
-              closeQuietly(fsDataInputStream);
-            }
-            return new ImmutablePair<>(markersFilePathStr, markers);
-          }, actualParallelism);
-        }
+        return FSUtils.parallelizeSubPathProcess(
+            context, fileSystem, dirPath, parallelism, prefixFilter.and(markerTypeFilter),
+            pairOfSubPathAndConf -> {
+              String markersFilePathStr = pairOfSubPathAndConf.getKey();
+              SerializableConfiguration conf = pairOfSubPathAndConf.getValue();
+              return readMarkersFromFile(new Path(markersFilePathStr), conf);
+            });
       }
       return new HashMap<>();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
+  }
+
+  /**
+   * Reads the markers stored in the underlying file.
+   *
+   * @param markersFilePath file path for the markers
+   * @param conf            serializable config
+   * @return markers in a {@code Set} of String.
+   */
+  public static Set<String> readMarkersFromFile(Path markersFilePath, SerializableConfiguration conf) {
+    FSDataInputStream fsDataInputStream = null;
+    Set<String> markers = new HashSet<>();
+    try {
+      LOG.debug("Read marker file: " + markersFilePath);
+      FileSystem fs = markersFilePath.getFileSystem(conf.get());
+      fsDataInputStream = fs.open(markersFilePath);
+      markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(fsDataInputStream));
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read MARKERS file " + markersFilePath, e);
+    } finally {
+      closeQuietly(fsDataInputStream);
+    }
+    return markers;
   }
 }

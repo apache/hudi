@@ -32,13 +32,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.DirectWriteMarkers;
 
-import com.esotericsoftware.minlog.Log;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -108,7 +106,8 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
           // Deletes marker type file
           MarkerUtils.deleteMarkerTypeFile(fileSystem, markerDir);
           // Deletes timeline server based markers
-          deleteTimelineBasedMarkerFiles(markerDir, fileSystem);
+          deleteTimelineBasedMarkerFiles(
+              context, markerDir, fileSystem, table.getConfig().getMarkersDeleteParallelism());
           break;
         default:
           throw new HoodieException("The marker type \"" + markerTypeOption.get().name()
@@ -117,26 +116,18 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
     } else {
       // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
       // but timeline server based marker files are left.  So deletes them if any
-      deleteTimelineBasedMarkerFiles(markerDir, fileSystem);
+      deleteTimelineBasedMarkerFiles(
+          context, markerDir, fileSystem, table.getConfig().getMarkersDeleteParallelism());
     }
   }
 
-  private void deleteTimelineBasedMarkerFiles(String markerDir, FileSystem fileSystem) throws IOException {
+  private void deleteTimelineBasedMarkerFiles(HoodieEngineContext context, String markerDir,
+                                              FileSystem fileSystem, int parallelism) throws IOException {
     // Deletes timeline based marker files if any.
-    Path dirPath = new Path(markerDir);
-    FileStatus[] fileStatuses = fileSystem.listStatus(dirPath);
     Predicate<FileStatus> prefixFilter = fileStatus ->
         fileStatus.getPath().getName().startsWith(MARKERS_FILENAME_PREFIX);
-    List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
-        .filter(prefixFilter)
-        .map(fileStatus -> fileStatus.getPath().toString())
-        .collect(Collectors.toList());
-    markerDirSubPaths.forEach(fileToDelete -> {
-      try {
-        fileSystem.delete(new Path(fileToDelete), false);
-      } catch (IOException e) {
-        Log.warn("Deleting Timeline based marker files failed ", e);
-      }
-    });
+    FSUtils.parallelizeSubPathProcess(context, fileSystem, new Path(markerDir), parallelism,
+            prefixFilter, pairOfSubPathAndConf ->
+                    FSUtils.deleteSubPath(pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), false));
   }
 }
