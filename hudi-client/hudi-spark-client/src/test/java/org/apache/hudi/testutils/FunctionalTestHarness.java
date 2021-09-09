@@ -53,6 +53,9 @@ import java.util.Properties;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 
+/**
+ * @deprecated Deprecated. Use {@link SparkClientFunctionalTestHarness} instead.
+ */
 public class FunctionalTestHarness implements SparkProvider, DFSProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
   protected static transient SparkSession spark;
