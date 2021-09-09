@@ -18,12 +18,10 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.sink.common.AbstractWriteOperator;
+import org.apache.hudi.sink.common.WriteOperatorFactory;
+
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
-import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
-import org.apache.flink.streaming.api.operators.BoundedOneInput;
-import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.StreamSink;
 
 /**
@@ -31,27 +29,13 @@ import org.apache.flink.streaming.api.operators.StreamSink;
  *
  * @param <I> The input type
  */
-public class StreamWriteOperator<I>
-    extends KeyedProcessOperator<Object, I, Object>
-    implements OperatorEventHandler, BoundedOneInput {
-  private final StreamWriteFunction<Object, I, Object> sinkFunction;
+public class StreamWriteOperator<I> extends AbstractWriteOperator<I> {
 
   public StreamWriteOperator(Configuration conf) {
     super(new StreamWriteFunction<>(conf));
-    this.sinkFunction = (StreamWriteFunction<Object, I, Object>) getUserFunction();
   }
 
-  @Override
-  public void handleOperatorEvent(OperatorEvent event) {
-    this.sinkFunction.handleOperatorEvent(event);
-  }
-
-  void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
-    sinkFunction.setOperatorEventGateway(operatorEventGateway);
-  }
-
-  @Override
-  public void endInput() {
-    sinkFunction.endInput();
+  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf) {
+    return WriteOperatorFactory.instance(conf, new StreamWriteOperator<>(conf));
   }
 }

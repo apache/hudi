@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.hbase;
+package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.FunctionalTestHarness;
@@ -760,6 +761,9 @@ public class TestHBaseIndex extends FunctionalTestHarness {
         newWriteStatus.setStat(new HoodieWriteStat());
         return newWriteStatus;
       });
+      // if not for this caching, due to RDD chaining/lineage, first time update is called again when subsequent update is called.
+      // So caching here to break the chain and so future update does not re-trigger update of older Rdd.
+      deleteWriteStatues.cache();
       JavaRDD<WriteStatus> deleteStatus = index.updateLocation(deleteWriteStatues, context(), hoodieTable);
       assertEquals(deleteStatus.count(), deleteWriteStatues.count());
       assertNoWriteErrors(deleteStatus.collect());

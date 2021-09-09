@@ -19,21 +19,20 @@
 package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.configuration.FlinkWriteOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -43,7 +42,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -55,8 +53,8 @@ import java.util.stream.Collectors;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
-public class BulkInsertWriteFunction<I, O>
-    extends ProcessFunction<I, O> {
+public class BulkInsertWriteFunction<I>
+    extends AbstractWriteFunction<I> {
 
   private static final long serialVersionUID = 1L;
 
@@ -126,7 +124,7 @@ public class BulkInsertWriteFunction<I, O>
   }
 
   @Override
-  public void processElement(I value, Context ctx, Collector<O> out) throws IOException {
+  public void processElement(I value, Context ctx, Collector<Object> out) throws IOException {
     this.writerHelper.write((RowData) value);
   }
 
@@ -142,14 +140,8 @@ public class BulkInsertWriteFunction<I, O>
    * End input action for batch source.
    */
   public void endInput() {
-    final List<WriteStatus> writeStatus;
-    try {
-      this.writerHelper.close();
-      writeStatus = this.writerHelper.getWriteStatuses().stream()
-          .map(BulkInsertWriteFunction::toWriteStatus).collect(Collectors.toList());
-    } catch (IOException e) {
-      throw new HoodieException("Error collect the write status for task [" + this.taskID + "]");
-    }
+    final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
+
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .instantTime(this.writerHelper.getInstantTime())
@@ -160,17 +152,9 @@ public class BulkInsertWriteFunction<I, O>
     this.eventGateway.sendEventToCoordinator(event);
   }
 
-  /**
-   * Tool to convert {@link HoodieInternalWriteStatus} into {@link WriteStatus}.
-   */
-  private static WriteStatus toWriteStatus(HoodieInternalWriteStatus internalWriteStatus) {
-    WriteStatus writeStatus = new WriteStatus(false, 0.1);
-    writeStatus.setStat(internalWriteStatus.getStat());
-    writeStatus.setFileId(internalWriteStatus.getFileId());
-    writeStatus.setGlobalError(internalWriteStatus.getGlobalError());
-    writeStatus.setTotalRecords(internalWriteStatus.getTotalRecords());
-    writeStatus.setTotalErrorRecords(internalWriteStatus.getTotalErrorRecords());
-    return writeStatus;
+  @Override
+  public void handleOperatorEvent(OperatorEvent event) {
+    // no operation
   }
 
   // -------------------------------------------------------------------------

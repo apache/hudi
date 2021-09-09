@@ -23,12 +23,14 @@ import org.apache.hudi.configuration.FlinkCompactionOptions;
 import org.apache.hudi.configuration.FlinkIndexOptions;
 import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.sink.CleanFunction;
-import org.apache.hudi.sink.StreamWriteOperatorFactory;
+import org.apache.hudi.sink.StreamWriteOperator;
+import org.apache.hudi.sink.append.AppendWriteOperator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.bootstrap.batch.BatchBootstrapOperator;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
+import org.apache.hudi.sink.common.WriteOperatorFactory;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
@@ -43,6 +45,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
+import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
@@ -54,7 +57,7 @@ import org.apache.flink.table.types.logical.RowType;
 public class Pipelines {
 
   public static DataStreamSink<Object> bulkInsert(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
-    BulkInsertWriteOperator.OperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(conf, rowType);
+    WriteOperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(conf, rowType);
 
     final String[] partitionFields = FilePathUtils.extractPartitionKeys(conf);
     if (partitionFields.length > 0) {
@@ -82,9 +85,17 @@ public class Pipelines {
             operatorFactory)
         // follow the parallelism of upstream operators to avoid shuffle
         .setParallelism(conf.getInteger(FlinkWriteOptions.WRITE_TASKS))
-        .addSink(new CleanFunction<>(conf))
-        .setParallelism(1)
-        .name("clean_commits");
+        .addSink(DummySink.INSTANCE);
+  }
+
+  public static DataStreamSink<Object> append(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
+    WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
+
+    return dataStream
+        .transform("hoodie_append_write", TypeInformation.of(Object.class), operatorFactory)
+        .uid("uid_hoodie_stream_write" + conf.getString(FlinkWriteOptions.TABLE_NAME))
+        .setParallelism(conf.getInteger(FlinkWriteOptions.WRITE_TASKS))
+        .addSink(DummySink.INSTANCE);
   }
 
   public static DataStream<HoodieRecord> bootstrap(
@@ -145,7 +156,7 @@ public class Pipelines {
   }
 
   public static DataStream<Object> hoodieStreamWrite(Configuration conf, int defaultParallelism, DataStream<HoodieRecord> dataStream) {
-    StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
+    WriteOperatorFactory<HoodieRecord> operatorFactory = StreamWriteOperator.getFactory(conf);
     return dataStream
         // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
         .keyBy(HoodieRecord::getRecordKey)
@@ -181,5 +192,13 @@ public class Pipelines {
     return dataStream.addSink(new CleanFunction<>(conf))
         .setParallelism(1)
         .name("clean_commits");
+  }
+
+  /**
+   * Dummy sink that does nothing.
+   */
+  public static class DummySink implements SinkFunction<Object> {
+    private static final long serialVersionUID = 1L;
+    public static DummySink INSTANCE = new DummySink();
   }
 }

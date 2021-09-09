@@ -29,7 +29,8 @@ import org.apache.hudi.configuration.FlinkWriteOptions;
  * Utilities for {@link RowDataToHoodieFunction}.
  */
 public abstract class RowDataToHoodieFunctions {
-  private RowDataToHoodieFunctions() {}
+  private RowDataToHoodieFunctions() {
+  }
 
   /**
    * Creates a {@link RowDataToHoodieFunction} instance based on the given configuration.

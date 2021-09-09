@@ -18,38 +18,26 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.sink.event.CommitAckEvent;
+import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ListStateDescriptor;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
-import org.apache.flink.runtime.state.FunctionInitializationContext;
-import org.apache.flink.runtime.state.FunctionSnapshotContext;
-import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +49,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -101,9 +88,7 @@ import java.util.stream.Collectors;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
-public class StreamWriteFunction<K, I, O>
-    extends KeyedProcessFunction<K, I, O>
-    implements CheckpointedFunction {
+public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   private static final long serialVersionUID = 1L;
 
@@ -114,37 +99,7 @@ public class StreamWriteFunction<K, I, O>
    */
   private transient Map<String, DataBucket> buckets;
 
-  /**
-   * Config options.
-   */
-  private final Configuration config;
-
-  /**
-   * Id of current subtask.
-   */
-  private int taskID;
-
-  /**
-   * Write Client.
-   */
-  private transient HoodieFlinkWriteClient writeClient;
-
   private transient BiFunction<List<HoodieRecord>, String, List<WriteStatus>> writeFunction;
-
-  /**
-   * The REQUESTED instant we write the data.
-   */
-  private volatile String currentInstant;
-
-  /**
-   * Gateway to send operator events to the operator coordinator.
-   */
-  private transient OperatorEventGateway eventGateway;
-
-  /**
-   * Commit action type.
-   */
-  private transient String actionType;
 
   /**
    * Total size tracer.
@@ -152,38 +107,12 @@ public class StreamWriteFunction<K, I, O>
   private transient TotalSizeTracer tracer;
 
   /**
-   * Flag saying whether the write task is waiting for the checkpoint success notification
-   * after it finished a checkpoint.
-   *
-   * <p>The flag is needed because the write task does not block during the waiting time interval,
-   * some data buckets still flush out with old instant time. There are two cases that the flush may produce
-   * corrupted files if the old instant is committed successfully:
-   * 1) the write handle was writing data but interrupted, left a corrupted parquet file;
-   * 2) the write handle finished the write but was not closed, left an empty parquet file.
-   *
-   * <p>To solve, when this flag was set to true, we block the data flushing thus the #processElement method,
-   * the flag was reset to false if the task receives the checkpoint success event or the latest inflight instant
-   * time changed(the last instant committed successfully).
-   */
-  private volatile boolean confirming = false;
-
-  /**
-   * List state of the write metadata events.
-   */
-  private transient ListState<WriteMetadataEvent> writeMetadataState;
-
-  /**
-   * Write status list for the current checkpoint.
-   */
-  private List<WriteStatus> writeStatuses;
-
-  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
    */
   public StreamWriteFunction(Configuration config) {
-    this.config = config;
+    super(config);
   }
 
   @Override
@@ -194,42 +123,15 @@ public class StreamWriteFunction<K, I, O>
   }
 
   @Override
-  public void initializeState(FunctionInitializationContext context) throws Exception {
-    this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(config.getString(FlinkWriteOptions.OPERATION)),
-        HoodieTableType.valueOf(config.getString(FlinkWriteOptions.TABLE_TYPE)));
-
-    this.writeStatuses = new ArrayList<>();
-    this.writeMetadataState = context.getOperatorStateStore().getListState(
-        new ListStateDescriptor<>(
-            "write-metadata-state",
-            TypeInformation.of(WriteMetadataEvent.class)
-        ));
-
-    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
-    if (context.isRestored()) {
-      restoreWriteMetadata();
-    } else {
-      sendBootstrapEvent();
-    }
-    // blocks flushing until the coordinator starts a new instant
-    this.confirming = true;
-  }
-
-  @Override
-  public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
+  public void snapshotState() {
     // Based on the fact that the coordinator starts the checkpoint first,
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
     flushRemaining(false);
-    // Reload the snapshot state as the current state.
-    reloadWriteMetaState();
   }
 
   @Override
-  public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) {
+  public void processElement(I value, ProcessFunction<I, Object>.Context ctx, Collector<Object> out) throws Exception {
     bufferRecord((HoodieRecord<?>) value);
   }
 
@@ -264,21 +166,6 @@ public class StreamWriteFunction<K, I, O>
     return ret;
   }
 
-  @VisibleForTesting
-  @SuppressWarnings("rawtypes")
-  public HoodieFlinkWriteClient getWriteClient() {
-    return writeClient;
-  }
-
-  @VisibleForTesting
-  public boolean isConfirming() {
-    return this.confirming;
-  }
-
-  public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
-    this.eventGateway = operatorEventGateway;
-  }
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -305,49 +192,6 @@ public class StreamWriteFunction<K, I, O>
       default:
         throw new RuntimeException("Unsupported write operation : " + writeOperation);
     }
-  }
-
-  private void restoreWriteMetadata() throws Exception {
-    String lastInflight = this.writeClient.getLastPendingInstant(this.actionType);
-    boolean eventSent = false;
-    for (WriteMetadataEvent event : this.writeMetadataState.get()) {
-      if (Objects.equals(lastInflight, event.getInstantTime())) {
-        // The checkpoint succeed but the meta does not commit,
-        // re-commit the inflight instant
-        this.eventGateway.sendEventToCoordinator(event);
-        LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
-        eventSent = true;
-      }
-    }
-    if (!eventSent) {
-      sendBootstrapEvent();
-    }
-  }
-
-  private void sendBootstrapEvent() {
-    this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
-    LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
-  }
-
-  /**
-   * Reload the write metadata state as the current checkpoint.
-   */
-  private void reloadWriteMetaState() throws Exception {
-    this.writeMetadataState.clear();
-    WriteMetadataEvent event = WriteMetadataEvent.builder()
-        .taskID(taskID)
-        .instantTime(currentInstant)
-        .writeStatus(new ArrayList<>(writeStatuses))
-        .bootstrap(true)
-        .build();
-    this.writeMetadataState.add(event);
-    writeStatuses.clear();
-  }
-
-  public void handleOperatorEvent(OperatorEvent event) {
-    ValidationUtils.checkArgument(event instanceof CommitAckEvent,
-        "The write function can only handle CommitAckEvent");
-    this.confirming = false;
   }
 
   /**
@@ -560,32 +404,6 @@ public class StreamWriteFunction<K, I, O>
   private boolean hasData() {
     return this.buckets.size() > 0
         && this.buckets.values().stream().anyMatch(bucket -> bucket.records.size() > 0);
-  }
-
-  private String instantToWrite(boolean hasData) {
-    String instant = this.writeClient.getLastPendingInstant(this.actionType);
-    // if exactly-once semantics turns on,
-    // waits for the checkpoint notification until the checkpoint timeout threshold hits.
-    TimeWait timeWait = TimeWait.builder()
-        .timeout(config.getLong(FlinkWriteOptions.WRITE_COMMIT_ACK_TIMEOUT))
-        .action("instant initialize")
-        .build();
-    while (confirming) {
-      // wait condition:
-      // 1. there is no inflight instant
-      // 2. the inflight instant does not change and the checkpoint has buffering data
-      if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
-        // sleep for a while
-        timeWait.waitFor();
-        // refresh the inflight instant
-        instant = this.writeClient.getLastPendingInstant(this.actionType);
-      } else {
-        // the inflight instant changed, which means the last instant was committed
-        // successfully.
-        confirming = false;
-      }
-    }
-    return instant;
   }
 
   @SuppressWarnings("unchecked, rawtypes")

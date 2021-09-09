@@ -18,24 +18,12 @@
 
 package org.apache.hudi.sink.bulk;
 
-import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.common.AbstractWriteOperator;
+import org.apache.hudi.sink.common.WriteOperatorFactory;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.jobgraph.OperatorID;
-import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.apache.flink.runtime.operators.coordination.OperatorEventDispatcher;
-import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
-import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
-import org.apache.flink.streaming.api.operators.CoordinatedOperatorFactory;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
-import org.apache.flink.streaming.api.operators.SimpleUdfStreamOperatorFactory;
-import org.apache.flink.streaming.api.operators.StreamOperator;
-import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
-import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
 /**
@@ -44,13 +32,11 @@ import org.apache.flink.table.types.logical.RowType;
  * @param <I> The input type
  */
 public class BulkInsertWriteOperator<I>
-    extends ProcessOperator<I, Object>
-    implements OperatorEventHandler, BoundedOneInput {
-  private final BulkInsertWriteFunction<I, Object> sinkFunction;
+    extends AbstractWriteOperator<I>
+    implements BoundedOneInput {
 
   public BulkInsertWriteOperator(Configuration conf, RowType rowType) {
     super(new BulkInsertWriteFunction<>(conf, rowType));
-    this.sinkFunction = (BulkInsertWriteFunction<I, Object>) getUserFunction();
   }
 
   @Override
@@ -58,58 +44,7 @@ public class BulkInsertWriteOperator<I>
     // no operation
   }
 
-  void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
-    sinkFunction.setOperatorEventGateway(operatorEventGateway);
-  }
-
-  @Override
-  public void endInput() {
-    sinkFunction.endInput();
-  }
-
-  public static OperatorFactory<RowData> getFactory(Configuration conf, RowType rowType) {
-    return new OperatorFactory<>(conf, rowType);
-  }
-
-  // -------------------------------------------------------------------------
-  //  Inner Class
-  // -------------------------------------------------------------------------
-
-  public static class OperatorFactory<I>
-      extends SimpleUdfStreamOperatorFactory<Object>
-      implements CoordinatedOperatorFactory<Object>, OneInputStreamOperatorFactory<I, Object> {
-    private static final long serialVersionUID = 1L;
-
-    private final BulkInsertWriteOperator<I> operator;
-    private final Configuration conf;
-
-    public OperatorFactory(Configuration conf, RowType rowType) {
-      super(new BulkInsertWriteOperator<>(conf, rowType));
-      this.operator = (BulkInsertWriteOperator<I>) getOperator();
-      this.conf = conf;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public <T extends StreamOperator<Object>> T createStreamOperator(StreamOperatorParameters<Object> parameters) {
-      final OperatorID operatorID = parameters.getStreamConfig().getOperatorID();
-      final OperatorEventDispatcher eventDispatcher = parameters.getOperatorEventDispatcher();
-
-      this.operator.setOperatorEventGateway(eventDispatcher.getOperatorEventGateway(operatorID));
-      this.operator.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
-      this.operator.setProcessingTimeService(this.processingTimeService);
-      eventDispatcher.registerEventHandler(operatorID, operator);
-      return (T) operator;
-    }
-
-    @Override
-    public OperatorCoordinator.Provider getCoordinatorProvider(String s, OperatorID operatorID) {
-      return new StreamWriteOperatorCoordinator.Provider(operatorID, this.conf);
-    }
-
-    @Override
-    public void setProcessingTimeService(ProcessingTimeService processingTimeService) {
-      super.setProcessingTimeService(processingTimeService);
-    }
+  public static <I> WriteOperatorFactory<I> getFactory(Configuration conf, RowType rowType) {
+    return WriteOperatorFactory.instance(conf, new BulkInsertWriteOperator<>(conf, rowType));
   }
 }

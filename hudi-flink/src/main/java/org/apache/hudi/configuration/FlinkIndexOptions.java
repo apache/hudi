@@ -56,5 +56,4 @@ public class FlinkIndexOptions {
       .stringType()
       .defaultValue(".*")
       .withDescription("Whether to load partitions in state if partition path matching， default *.");
-
 }

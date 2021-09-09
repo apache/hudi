@@ -109,7 +109,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * The sanity check.
    *
-   * @param conf The table options
+   * @param conf   The table options
    * @param schema The table schema
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
@@ -221,7 +221,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   /**
    * Sets up the hive options from the table definition.
-   * */
+   */
   private static void setupHiveOptions(Configuration conf) {
     if (!conf.getBoolean(FlinkWriteOptions.HIVE_STYLE_PARTITIONING)
         && FlinkOptions.isDefaultValueDefined(conf, FlinkHiveSyncOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME)) {

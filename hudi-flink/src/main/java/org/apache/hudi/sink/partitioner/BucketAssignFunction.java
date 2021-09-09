@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkIndexOptions;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.FlinkWriteOptions;
 import org.apache.hudi.sink.bootstrap.IndexRecord;
 import org.apache.hudi.sink.utils.PayloadCreation;
@@ -110,7 +111,8 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkWriteOptions.OPERATION)));
-    this.globalIndex = conf.getBoolean(FlinkIndexOptions.INDEX_GLOBAL_ENABLED);
+    this.globalIndex = conf.getBoolean(FlinkIndexOptions.INDEX_GLOBAL_ENABLED)
+        && !conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
   }
 
   @Override

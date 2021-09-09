@@ -66,7 +66,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")
       .stringType()
-      .defaultValue("__DEFAULT_PARTITION__")
+      .defaultValue("default") // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 

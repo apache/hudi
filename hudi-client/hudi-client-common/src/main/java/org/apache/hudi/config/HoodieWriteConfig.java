@@ -1391,8 +1391,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
   }
 
-  public int getLogFileMaxSize() {
-    return getInt(HoodieStorageConfig.LOGFILE_MAX_SIZE);
+  public long getLogFileMaxSize() {
+    return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
   }
 
   public double getParquetCompressionRatio() {
