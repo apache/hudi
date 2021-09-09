@@ -39,7 +39,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.testutils.FunctionalTestHarness;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -54,18 +54,22 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -88,7 +92,7 @@ import static org.mockito.Mockito.when;
  */
 @TestMethodOrder(MethodOrderer.Alphanumeric.class)
 @Tag("functional")
-public class TestHBaseIndex extends FunctionalTestHarness {
+public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
 
   private static final String TABLE_NAME = "test_table";
   private static HBaseTestingUtility utility;
@@ -97,17 +101,8 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   private Configuration hadoopConf;
   private HoodieTestDataGenerator dataGen;
   private HoodieTableMetaClient metaClient;
-
-  @AfterAll
-  public static void clean() throws Exception {
-    if (utility != null) {
-      utility.deleteTable(TABLE_NAME);
-      utility.shutdownMiniCluster();
-    }
-    if (spark != null) {
-      spark.close();
-    }
-  }
+  private HoodieSparkEngineContext context;
+  private String basePath;
 
   @BeforeAll
   public static void init() throws Exception {
@@ -121,27 +116,31 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     utility.createTable(TableName.valueOf(TABLE_NAME), Bytes.toBytes("_s"),2);
   }
 
+  @AfterAll
+  public static void clean() throws Exception {
+    utility.shutdownMiniCluster();
+  }
+
   @BeforeEach
   public void setUp() throws Exception {
     hadoopConf = jsc().hadoopConfiguration();
     hadoopConf.addResource(utility.getConfiguration());
     // reInit the context here to keep the hadoopConf the same with that in this class
     context = new HoodieSparkEngineContext(jsc());
-    metaClient = getHoodieMetaClient(hadoopConf, basePath());
+    basePath = utility.getDataTestDirOnTestFS(TABLE_NAME).toString();
+    metaClient = getHoodieMetaClient(hadoopConf, basePath);
     dataGen = new HoodieTestDataGenerator();
   }
 
-  @Test
-  public void testSimpleTagLocationAndUpdateCOW() throws Exception {
-    testSimpleTagLocationAndUpdate(HoodieTableType.COPY_ON_WRITE);
+  @AfterEach
+  public void cleanUpTableData() throws IOException {
+    utility.cleanupDataTestDirOnTestFS(TABLE_NAME);
   }
 
-  @Test void testSimpleTagLocationAndUpdateMOR() throws Exception {
-    testSimpleTagLocationAndUpdate(HoodieTableType.MERGE_ON_READ);
-  }
-
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
   public void testSimpleTagLocationAndUpdate(HoodieTableType tableType) throws Exception {
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath(), tableType);
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
 
     final String newCommitTime = "001";
     final int numRecords = 10;
@@ -896,7 +895,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder(int hbaseIndexBatchSize, boolean updatePartitionPath, boolean rollbackSync) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(1, 1).withDeleteParallelism(1)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
             .withInlineCompaction(false).build())
