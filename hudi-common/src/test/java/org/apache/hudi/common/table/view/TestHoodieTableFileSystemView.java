@@ -107,7 +107,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setup() throws IOException {
-    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH);
+    metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, false);
     basePath = metaClient.getBasePath();
     refreshFsView();
   }
@@ -303,6 +303,11 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   protected void testViewForFileSlicesWithAsyncCompaction(boolean skipCreatingDataFile, boolean isCompactionInFlight,
       int expTotalFileSlices, int expTotalDataFiles, boolean includeInvalidAndInflight, boolean testBootstrap)
       throws Exception {
+
+    if (testBootstrap) {
+      metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH, testBootstrap);
+    }
+
     String partitionPath = "2016/05/01";
     new File(basePath + "/" + partitionPath).mkdirs();
     String fileId = UUID.randomUUID().toString();

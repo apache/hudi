@@ -136,10 +136,10 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
       .defaultValue("archived")
       .withDocumentation("path under the meta folder, to store archived timeline instants at.");
 
-  public static final ConfigProperty<String> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
       .key("hoodie.bootstrap.index.enable")
-      .noDefaultValue()
-      .withDocumentation("Whether or not, this is a bootstrapped table, with bootstrap base data and an mapping index defined.");
+      .defaultValue(true)
+      .withDocumentation("Whether or not, this is a bootstrapped table, with bootstrap base data and an mapping index defined, default true.");
 
   public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
@@ -298,8 +298,9 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
   }
 
   public static String getDefaultBootstrapIndexClass(Properties props) {
+    HoodieConfig hoodieConfig = new HoodieConfig(props);
     String defaultClass = BOOTSTRAP_INDEX_CLASS_NAME.defaultValue();
-    if ("false".equalsIgnoreCase(props.getProperty(BOOTSTRAP_INDEX_ENABLE.key()))) {
+    if (!hoodieConfig.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)) {
       defaultClass = NO_OP_BOOTSTRAP_INDEX_CLASS;
     }
     return defaultClass;
