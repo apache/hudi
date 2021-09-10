@@ -398,7 +398,7 @@ object SparkSqlUtils {
     sparkSession.sql(constructPercentileQuery(config, targetTableName, percentiles)).show(false)
     val result = sparkSession.sql(constructPercentileQuery(config, targetTableName, percentiles)).collect()(0)
     println(result)
-    (result.get(0).toString.toDouble, result.get(1).toString.toDouble)
+    (result.get(0).asInstanceOf[Double], result.get(1).asInstanceOf[Double])
   }
 
   /**

@@ -52,18 +52,16 @@ class SparkSqlValidateDatasetNode(dagNodeConfig: Config) extends BaseValidateDat
                                     inputSchema: StructType): Dataset[Row] = {
     val tableName = context.getWriterContext.getCfg.targetTableName
     LOG.info("Validate data in table " + tableName)
-    val sortedInputFieldNames = inputSchema.fields
-      .sortBy(field => field.name)
+    val sortedInputFieldNames = inputSchema.fieldNames.sorted
     val tableSchema = session.table(tableName).schema
-    val sortedTableFieldNames = tableSchema.fields
-      .filter(field => !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name))
-      .sortBy(field => field.name)
+    val sortedTableFieldNames = tableSchema.fieldNames
+      .filter(field => !HoodieRecord.HOODIE_META_COLUMNS.contains(field)).sorted
     if (!(sortedInputFieldNames sameElements sortedTableFieldNames)) {
-      LOG.error("Data set validation failed.  The schema does not match:")
       LOG.error("Input schema: ")
       inputSchema.printTreeString()
       LOG.error("Table schema: ")
       tableSchema.printTreeString()
+      throw new AssertionError("Data set validation failed.  The schema does not match.")
     }
     session.sql(SparkSqlUtils.constructSelectQuery(inputSchema, tableName))
   }

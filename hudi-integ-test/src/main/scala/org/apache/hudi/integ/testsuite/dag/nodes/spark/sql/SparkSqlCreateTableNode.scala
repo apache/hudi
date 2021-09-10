@@ -72,6 +72,7 @@ class SparkSqlCreateTableNode(dagNodeConfig: Config) extends DagNode[RDD[WriteSt
     SparkSqlUtils.logQuery(LOG, createTableQuery)
     sparkSession.sql(createTableQuery)
     val targetTableCount = sparkSession.sql("select * from " + targetTableName)
+    LOG.info("Target table count: " + targetTableCount.count())
     if (config.shouldUseCtas()) {
       assert(targetTableCount.count() == inputCount)
     } else {
