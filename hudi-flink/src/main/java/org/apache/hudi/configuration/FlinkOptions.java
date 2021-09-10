@@ -321,6 +321,16 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
 
+  public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
+  public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
+  public static final ConfigOption<String> PARTITION_FORMAT = ConfigOptions
+      .key("write.partition.format")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Partition path format, only valid when 'write.datetime.partitioning' is true, default is:\n"
+          + "1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL;\n"
+          + "2) 'yyyyMMdd' for DAY and INT.");
+
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")
       .intType()
@@ -364,10 +374,10 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(128)
       .withDescription("Max log block size in MB for log file, default 128MB");
 
-  public static final ConfigOption<Integer> WRITE_LOG_MAX_SIZE = ConfigOptions
+  public static final ConfigOption<Long> WRITE_LOG_MAX_SIZE = ConfigOptions
       .key("write.log.max.size")
-      .intType()
-      .defaultValue(1024)
+      .longType()
+      .defaultValue(1024L)
       .withDescription("Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB");
 
   public static final ConfigOption<Integer> WRITE_PARQUET_BLOCK_SIZE = ConfigOptions

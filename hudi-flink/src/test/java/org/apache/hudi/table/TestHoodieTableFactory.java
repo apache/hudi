@@ -23,6 +23,7 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
@@ -142,7 +143,7 @@ public class TestHoodieTableFactory {
     ResolvedSchema schema1 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
-        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("f2", DataTypes.BIGINT())
         .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
@@ -254,7 +255,7 @@ public class TestHoodieTableFactory {
     ResolvedSchema schema1 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
-        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("f2", DataTypes.BIGINT())
         .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
@@ -340,6 +341,31 @@ public class TestHoodieTableFactory {
     final Configuration conf2 = tableSink2.getConf();
     assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(35));
     assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
+  }
+
+  @Test
+  void testSetupTimestampBasedKeyGenForSink() {
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "dummyField");
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, "dummyKeyGenClass");
+    // definition with simple primary key and partition path
+    ResolvedSchema schema1 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "ts");
+    final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    final Configuration conf1 = tableSource1.getConf();
+    assertThat(conf1.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat(conf1.get(FlinkOptions.KEYGEN_CLASS_NAME), is(TimestampBasedAvroKeyGenerator.class.getName()));
+    assertThat(conf1.getString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP, "dummy"),
+        is("EPOCHMILLISECONDS"));
+    assertThat(conf1.getString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "dummy"),
+        is(FlinkOptions.PARTITION_FORMAT_HOUR));
+    assertThat(conf1.getString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP, "dummy"),
+        is("UTC"));
   }
 
   // -------------------------------------------------------------------------

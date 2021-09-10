@@ -20,12 +20,14 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -68,5 +70,22 @@ public class TestFileIndex {
     assertThat(fileStatuses.length, is(4));
     assertTrue(Arrays.stream(fileStatuses)
         .allMatch(fileStatus -> fileStatus.getPath().toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension())));
+  }
+
+  @Test
+  void testFileListingUsingMetadataNonPartitionedTable() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "");
+    conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
+    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), conf);
+    List<String> partitionKeys = Collections.singletonList("");
+    List<Map<String, String>> partitions = fileIndex.getPartitions(partitionKeys, "default", false);
+    assertThat(partitions.size(), is(0));
+
+    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
+    assertThat(fileStatuses.length, is(1));
+    assertTrue(fileStatuses[0].getPath().toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension()));
   }
 }

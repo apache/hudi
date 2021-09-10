@@ -58,10 +58,14 @@ public class TestConfigurations {
       .build();
 
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
-    return getCreateHoodieTableDDL(tableName, options, true);
+    return getCreateHoodieTableDDL(tableName, options, true, "partition");
   }
 
-  public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options, boolean havePartition) {
+  public static String getCreateHoodieTableDDL(
+      String tableName,
+      Map<String, String> options,
+      boolean havePartition,
+      String partitionField) {
     StringBuilder builder = new StringBuilder();
     builder.append("create table " + tableName + "(\n"
         + "  uuid varchar(20),\n"
@@ -72,7 +76,7 @@ public class TestConfigurations {
         + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
         + ")\n");
     if (havePartition) {
-      builder.append("PARTITIONED BY (`partition`)\n");
+      builder.append("PARTITIONED BY (`").append(partitionField).append("`)\n");
     }
     builder.append("with (\n"
         + "  'connector' = 'hudi'");
@@ -203,19 +207,15 @@ public class TestConfigurations {
     private final Map<String, String> options;
     private String tableName;
     private boolean withPartition = true;
+    private String partitionField = "partition";
 
     public Sql(String tableName) {
       options = new HashMap<>();
       this.tableName = tableName;
     }
 
-    public Sql option(ConfigOption<?> option, String val) {
-      this.options.put(option.key(), val);
-      return this;
-    }
-
-    public Sql option(ConfigOption<?> option, boolean val) {
-      this.options.put(option.key(), val + "");
+    public Sql option(ConfigOption<?> option, Object val) {
+      this.options.put(option.key(), val.toString());
       return this;
     }
 
@@ -224,8 +224,13 @@ public class TestConfigurations {
       return this;
     }
 
+    public Sql partitionField(String partitionField) {
+      this.partitionField = partitionField;
+      return this;
+    }
+
     public String end() {
-      return TestConfigurations.getCreateHoodieTableDDL(this.tableName, options, this.withPartition);
+      return TestConfigurations.getCreateHoodieTableDDL(this.tableName, options, this.withPartition, this.partitionField);
     }
   }
 }

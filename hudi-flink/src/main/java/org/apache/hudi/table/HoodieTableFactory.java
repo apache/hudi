@@ -19,10 +19,13 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -36,6 +39,7 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -173,19 +177,60 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     }
     // tweak the key gen class if possible
     final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
-    if (partitions.length == 1 && partitions[0].equals("")) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
-      LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
-          FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
-      return;
-    }
     final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+    if (partitions.length == 1) {
+      final String partitionField = partitions[0];
+      if (partitionField.isEmpty()) {
+        conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
+        LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
+            FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
+        return;
+      }
+      DataType partitionFieldType = table.getSchema().getFieldDataType(partitionField)
+          .orElseThrow(() -> new HoodieValidationException("Field " + partitionField + " does not exist"));
+      if (pks.length <= 1 && DataTypeUtils.isDatetimeType(partitionFieldType)) {
+        // timestamp based key gen only supports simple primary key
+        setupTimestampKeygenOptions(conf, partitionFieldType);
+        return;
+      }
+    }
     boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
     if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
+  }
+
+  /**
+   * Sets up the keygen options when the partition path is datetime type.
+   *
+   * <p>The UTC timezone is used as default.
+   */
+  public static void setupTimestampKeygenOptions(Configuration conf, DataType fieldType) {
+    conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, TimestampBasedAvroKeyGenerator.class.getName());
+    LOG.info("Table option [{}] is reset to {} because datetime partitioning turns on",
+        FlinkOptions.KEYGEN_CLASS_NAME.key(), TimestampBasedAvroKeyGenerator.class.getName());
+    if (DataTypeUtils.isTimestampType(fieldType)) {
+      int precision = DataTypeUtils.precision(fieldType.getLogicalType());
+      if (precision == 0) {
+        // seconds
+        conf.setString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP,
+            TimestampBasedAvroKeyGenerator.TimestampType.UNIX_TIMESTAMP.name());
+      } else if (precision == 3) {
+        // milliseconds
+        conf.setString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP,
+            TimestampBasedAvroKeyGenerator.TimestampType.EPOCHMILLISECONDS.name());
+      }
+      String partitionFormat = conf.getOptional(FlinkOptions.PARTITION_FORMAT).orElse(FlinkOptions.PARTITION_FORMAT_HOUR);
+      conf.setString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, partitionFormat);
+    } else {
+      conf.setString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP,
+          TimestampBasedAvroKeyGenerator.TimestampType.DATE_STRING.name());
+      String partitionFormat = conf.getOptional(FlinkOptions.PARTITION_FORMAT).orElse(FlinkOptions.PARTITION_FORMAT_DAY);
+      conf.setString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, partitionFormat);
+    }
+    conf.setString(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP, "UTC");
   }
 
   /**
