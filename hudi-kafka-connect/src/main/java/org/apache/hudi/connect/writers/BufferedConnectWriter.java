@@ -35,8 +35,8 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -47,9 +47,9 @@ import java.util.stream.Collectors;
  * Specific implementation of a Hudi Writer that buffers all incoming records,
  * and writes them to Hudi files on the end of a transaction using Bulk Insert.
  */
-public class HudiConnectBufferedWriter extends AbstractHudiConnectWriter {
+public class BufferedConnectWriter extends AbstractConnectWriter {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HudiConnectBufferedWriter.class);
+  private static final Logger LOG = LogManager.getLogger(BufferedConnectWriter.class);
 
   private final HoodieEngineContext context;
   private final HoodieJavaWriteClient writeClient;
@@ -57,13 +57,13 @@ public class HudiConnectBufferedWriter extends AbstractHudiConnectWriter {
   private final HoodieWriteConfig config;
   private ExternalSpillableMap<String, HoodieRecord<HoodieAvroPayload>> bufferedRecords;
 
-  public HudiConnectBufferedWriter(HoodieEngineContext context,
-                                   HoodieJavaWriteClient writeClient,
-                                   String instantTime,
-                                   HudiConnectConfigs connectConfigs,
-                                   HoodieWriteConfig config,
-                                   KeyGenerator keyGenerator,
-                                   SchemaProvider schemaProvider) {
+  public BufferedConnectWriter(HoodieEngineContext context,
+                               HoodieJavaWriteClient writeClient,
+                               String instantTime,
+                               KafkaConnectConfigs connectConfigs,
+                               HoodieWriteConfig config,
+                               KeyGenerator keyGenerator,
+                               SchemaProvider schemaProvider) {
     super(connectConfigs, keyGenerator, schemaProvider);
     this.context = context;
     this.writeClient = writeClient;

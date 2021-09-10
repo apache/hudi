@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.connect.core;
+package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.SerializationUtils;

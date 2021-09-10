@@ -18,9 +18,6 @@
 
 package org.apache.hudi.client;
 
-import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
-
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -42,6 +39,9 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.List;
@@ -155,7 +155,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     throw new HoodieNotSupportedException("BulkInsert is not supported in HoodieJavaClient");
   }
 
-  public void preBulkWrite(String instantTime) {
+  public void preBulkInsert(String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED, instantTime);
     table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,

@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.connect.core.TransactionCoordinator;
+import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenerator;
@@ -40,8 +40,8 @@ import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.Collections;
 import java.util.List;
@@ -52,12 +52,11 @@ import java.util.Map;
  * {@link TransactionCoordinator}
  * using {@link HoodieJavaWriteClient}.
  */
-public class HudiConnectTransactionServices implements ConnectTransactionServices {
+public class KafkaConnectTransactionServices implements ConnectTransactionServices {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HudiConnectTransactionServices.class);
+  private static final Logger LOG = LogManager.getLogger(KafkaConnectTransactionServices.class);
   private static final String TABLE_FORMAT = "PARQUET";
 
-  private final HudiConnectConfigs connectConfigs;
   private final Option<HoodieTableMetaClient> tableMetaClient;
   private final Configuration hadoopConf;
   private final FileSystem fs;
@@ -67,9 +66,8 @@ public class HudiConnectTransactionServices implements ConnectTransactionService
 
   private final HoodieJavaWriteClient<HoodieAvroPayload> hudiJavaClient;
 
-  public HudiConnectTransactionServices(
-      HudiConnectConfigs connectConfigs) throws HoodieException {
-    this.connectConfigs = connectConfigs;
+  public KafkaConnectTransactionServices(
+      KafkaConnectConfigs connectConfigs) throws HoodieException {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withProperties(connectConfigs.getProps()).build();
 
@@ -87,10 +85,10 @@ public class HudiConnectTransactionServices implements ConnectTransactionService
       String partitionColumns = KafkaConnectUtils.getPartitionColumns(keyGenerator,
           new TypedProperties(connectConfigs.getProps()));
 
-      LOG.info("Setting record key {} and partitionfields {} for table {}",
+      LOG.info(String.format("Setting record key %s and partitionfields %s for table %s",
           recordKeyFields,
           partitionColumns,
-          tableBasePath + tableName);
+          tableBasePath + tableName));
 
       tableMetaClient = Option.of(HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(HoodieTableType.COPY_ON_WRITE.name())
@@ -110,7 +108,7 @@ public class HudiConnectTransactionServices implements ConnectTransactionService
 
   public String startCommit() {
     String newCommitTime = hudiJavaClient.startCommit();
-    hudiJavaClient.preBulkWrite(newCommitTime);
+    hudiJavaClient.preBulkInsert(newCommitTime);
     LOG.info("Starting Hudi commit " + newCommitTime);
     return newCommitTime;
   }

@@ -18,9 +18,9 @@
 
 package org.apache.hudi.connect.kafka;
 
-import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.TransactionCoordinator;
-import org.apache.hudi.connect.core.TransactionParticipant;
+import org.apache.hudi.connect.transaction.ControlEvent;
+import org.apache.hudi.connect.transaction.TransactionCoordinator;
+import org.apache.hudi.connect.transaction.TransactionParticipant;
 
 /**
  * Manages the Kafka consumer and producer for

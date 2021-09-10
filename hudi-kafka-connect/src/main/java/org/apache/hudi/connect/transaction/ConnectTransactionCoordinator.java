@@ -16,20 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.connect.core;
+package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
-import org.apache.hudi.connect.writers.HudiConnectConfigs;
-import org.apache.hudi.connect.writers.HudiConnectTransactionServices;
 import org.apache.hudi.connect.writers.ConnectTransactionServices;
+import org.apache.hudi.connect.writers.KafkaConnectConfigs;
+import org.apache.hudi.connect.writers.KafkaConnectTransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,9 +51,9 @@ import java.util.stream.Collectors;
  * coordinates the Hudi write transactions
  * across all the Kafka partitions for a single Kafka Topic.
  */
-public class HudiTransactionCoordinator implements TransactionCoordinator, Runnable {
+public class ConnectTransactionCoordinator implements TransactionCoordinator, Runnable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HudiTransactionCoordinator.class);
+  private static final Logger LOG = LogManager.getLogger(ConnectTransactionCoordinator.class);
   private static final String BOOTSTRAP_SERVERS_CFG = "bootstrap.servers";
   private static final String KAFKA_OFFSET_KEY = "kafka.commit.offsets";
   private static final String KAFKA_OFFSET_DELIMITER = ",";
@@ -62,11 +62,11 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
   private static final Long RESTART_COMMIT_DELAY_MS = 500L;
   private static final int COORDINATOR_EVENT_LOOP_TIMEOUT_MS = 1000;
 
-  private final HudiConnectConfigs configs;
+  private final KafkaConnectConfigs configs;
   private final TopicPartition partition;
   private final KafkaControlAgent kafkaControlClient;
-  private final ConnectTransactionServices hudiConnectTransactionServices;
-  private final KafkaPartitionProvider kafkaPartitionProvider;
+  private final ConnectTransactionServices transactionServices;
+  private final KafkaPartitionProvider partitionProvider;
   private final Map<Integer, List<WriteStatus>> partitionsWriteStatusReceived;
   private final Map<Integer, Long> currentConsumedKafkaOffsets;
   private final AtomicBoolean hasStarted = new AtomicBoolean(false);
@@ -79,26 +79,26 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
   private State currentState;
   private int numPartitions;
 
-  public HudiTransactionCoordinator(HudiConnectConfigs configs,
-                                    TopicPartition partition,
-                                    KafkaControlAgent kafkaControlClient) throws HoodieException {
+  public ConnectTransactionCoordinator(KafkaConnectConfigs configs,
+                                       TopicPartition partition,
+                                       KafkaControlAgent kafkaControlClient) throws HoodieException {
     this(configs,
         partition,
         kafkaControlClient,
-        new HudiConnectTransactionServices(configs),
+        new KafkaConnectTransactionServices(configs),
         KafkaConnectUtils::getLatestNumPartitions);
   }
 
-  public HudiTransactionCoordinator(HudiConnectConfigs configs,
-                                    TopicPartition partition,
-                                    KafkaControlAgent kafkaControlClient,
-                                    ConnectTransactionServices hudiConnectTransactionServices,
-                                    KafkaPartitionProvider kafkaPartitionProvider) {
+  public ConnectTransactionCoordinator(KafkaConnectConfigs configs,
+                                       TopicPartition partition,
+                                       KafkaControlAgent kafkaControlClient,
+                                       ConnectTransactionServices transactionServices,
+                                       KafkaPartitionProvider partitionProvider) {
     this.configs = configs;
     this.partition = partition;
     this.kafkaControlClient = kafkaControlClient;
-    this.hudiConnectTransactionServices = hudiConnectTransactionServices;
-    this.kafkaPartitionProvider = kafkaPartitionProvider;
+    this.transactionServices = transactionServices;
+    this.partitionProvider = partitionProvider;
     this.events = new LinkedBlockingQueue<>();
     scheduler = Executors.newSingleThreadScheduledExecutor();
     executorService = Executors.newSingleThreadExecutor();
@@ -117,9 +117,8 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
       executorService.submit(this);
     }
     kafkaControlClient.registerTransactionCoordinator(this);
-    LOG.info("Start Hudi Transaction Coordinator for topic {} partition {}",
-        partition.topic(),
-        partition.partition());
+    LOG.info(String.format("Start Transaction Coordinator for topic %s partition %s",
+        partition.topic(), partition.partition()));
 
     initializeGlobalCommittedKafkaOffsets();
     // Submit the first start commit
@@ -163,7 +162,7 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
     if (message.getMsgType().equals(ControlEvent.MsgType.WRITE_STATUS)) {
       type = CoordinatorEvent.CoordinatorEventType.WRITE_STATUS;
     } else {
-      LOG.warn("The Coordinator should not be receiving messages of type {}", message.getMsgType().name());
+      LOG.warn(String.format("The Coordinator should not be receiving messages of type %s", message.getMsgType().name()));
       return;
     }
 
@@ -238,10 +237,10 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
   }
 
   private void startNewCommit() {
-    numPartitions = kafkaPartitionProvider.getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
+    numPartitions = partitionProvider.getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
     partitionsWriteStatusReceived.clear();
     try {
-      currentCommitTime = hudiConnectTransactionServices.startCommit();
+      currentCommitTime = transactionServices.startCommit();
       ControlEvent message = new ControlEvent.Builder(
           ControlEvent.MsgType.START_COMMIT,
           ControlEvent.SenderType.COORDINATOR,
@@ -258,7 +257,7 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
               currentCommitTime),
           configs.getCommitIntervalSecs(), TimeUnit.SECONDS);
     } catch (Exception exception) {
-      LOG.error("Failed to start a new commit {}, will retry", currentCommitTime, exception);
+      LOG.error(String.format("Failed to start a new commit %s, will retry", currentCommitTime), exception);
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
               partition.topic(),
               StringUtils.EMPTY_STRING),
@@ -277,7 +276,7 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
           .build();
       kafkaControlClient.publishMessage(message);
     } catch (Exception exception) {
-      LOG.warn("Could not send END_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
+      LOG.warn(String.format("Could not send END_COMMIT message for partition %s and commitTime %s", partition, currentCommitTime), exception);
     }
     currentConsumedKafkaOffsets.clear();
     currentState = State.ENDED_COMMIT;
@@ -304,7 +303,7 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
         partitionsWriteStatusReceived.forEach((key, value) -> allWriteStatuses.addAll(value));
         // Commit the last write in Hudi, along with the latest kafka offset
         if (!allWriteStatuses.isEmpty()) {
-          hudiConnectTransactionServices.endCommit(currentCommitTime,
+          transactionServices.endCommit(currentCommitTime,
               allWriteStatuses,
               transformKafkaOffsets(currentConsumedKafkaOffsets));
         }
@@ -344,7 +343,7 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
           .build();
       kafkaControlClient.publishMessage(message);
     } catch (Exception exception) {
-      LOG.warn("Could not send ACK_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime);
+      LOG.warn(String.format("Could not send ACK_COMMIT message for partition %s and commitTime %s", partition, currentCommitTime), exception);
     }
     currentState = State.ACKED_COMMIT;
 
@@ -357,7 +356,7 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
 
   private void initializeGlobalCommittedKafkaOffsets() {
     try {
-      Map<String, String> commitMetadata = hudiConnectTransactionServices.loadLatestCommitMetadata();
+      Map<String, String> commitMetadata = transactionServices.loadLatestCommitMetadata();
       String latestKafkaOffsets = commitMetadata.get(KAFKA_OFFSET_KEY);
       if (!StringUtils.isNullOrEmpty(latestKafkaOffsets)) {
         LOG.info("Retrieved Raw Kafka offsets from Hudi Commit File " + latestKafkaOffsets);
@@ -395,7 +394,6 @@ public class HudiTransactionCoordinator implements TransactionCoordinator, Runna
    * Provides the current partitions of a Kafka Topic dynamically.
    */
   public interface KafkaPartitionProvider {
-
     int getLatestNumPartitions(String bootstrapServers, String topicName);
   }
 }

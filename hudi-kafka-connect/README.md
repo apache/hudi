@@ -40,7 +40,7 @@ mvn clean -pl hudi-kafka-connect install -DskipTests
 mvn clean -pl packaging/hudi-kafka-connect-bundle install
 ```
 
-## Put hudi connector in Kafka Connet classpath
+## Put hudi connector in Kafka Connect classpath
 
 ```bash
 cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.10.0-SNAPSHOT.jar /usr/local/share/java/hudi-kafka-connect/

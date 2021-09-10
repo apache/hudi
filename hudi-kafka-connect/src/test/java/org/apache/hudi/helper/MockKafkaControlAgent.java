@@ -18,10 +18,10 @@
 
 package org.apache.hudi.helper;
 
-import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.TransactionCoordinator;
-import org.apache.hudi.connect.core.TransactionParticipant;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
+import org.apache.hudi.connect.transaction.ControlEvent;
+import org.apache.hudi.connect.transaction.TransactionCoordinator;
+import org.apache.hudi.connect.transaction.TransactionParticipant;
 import org.apache.hudi.exception.HoodieException;
 
 import java.util.ArrayList;

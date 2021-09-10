@@ -16,20 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.connect.core;
+package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.connect.writers.ConnectWriterProvider;
-import org.apache.hudi.connect.writers.HudiConnectConfigs;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
-import org.apache.hudi.connect.writers.HudiConnectWriterProvider;
+import org.apache.hudi.connect.writers.ConnectWriterProvider;
+import org.apache.hudi.connect.writers.KafkaConnectConfigs;
+import org.apache.hudi.connect.writers.KafkaConnectWriterProvider;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,16 +39,13 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * Implementation of the {@link TransactionParticipant} that
- * coordinates the Hudi write transactions
- * based on events from the {@link TransactionCoordinator}
- * and manages the Hudi Writes for a specific Kafka Partition.
+ * Implementation of the {@link TransactionParticipant} that coordinates the Hudi write transactions
+ * based on events from the {@link TransactionCoordinator} and manages the Hudi Writes for a specific Kafka Partition.
  */
-public class HudiTransactionParticipant implements TransactionParticipant {
+public class ConnectTransactionParticipant implements TransactionParticipant {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HudiTransactionParticipant.class);
+  private static final Logger LOG = LogManager.getLogger(ConnectTransactionParticipant.class);
 
-  private final HudiConnectConfigs configs;
   private final LinkedList<SinkRecord> buffer;
   private final BlockingQueue<ControlEvent> controlEvents;
   private final TopicPartition partition;
@@ -59,20 +56,17 @@ public class HudiTransactionParticipant implements TransactionParticipant {
   private TransactionInfo<WriteStatus> ongoingTransactionInfo;
   private long committedKafkaOffset;
 
-  public HudiTransactionParticipant(HudiConnectConfigs configs,
-                                    TopicPartition partition,
-                                    KafkaControlAgent kafkaControlAgent,
-                                    SinkTaskContext context) throws HoodieException {
-    this(configs, partition, kafkaControlAgent, context,
-        new HudiConnectWriterProvider(configs, partition));
+  public ConnectTransactionParticipant(KafkaConnectConfigs configs,
+                                       TopicPartition partition,
+                                       KafkaControlAgent kafkaControlAgent,
+                                       SinkTaskContext context) throws HoodieException {
+    this(partition, kafkaControlAgent, context, new KafkaConnectWriterProvider(configs, partition));
   }
 
-  public HudiTransactionParticipant(HudiConnectConfigs configs,
-                                    TopicPartition partition,
-                                    KafkaControlAgent kafkaControlAgent,
-                                    SinkTaskContext context,
-                                    ConnectWriterProvider<WriteStatus> writerProvider) throws HoodieException {
-    this.configs = configs;
+  public ConnectTransactionParticipant(TopicPartition partition,
+                                       KafkaControlAgent kafkaControlAgent,
+                                       SinkTaskContext context,
+                                       ConnectWriterProvider<WriteStatus> writerProvider) throws HoodieException {
     this.buffer = new LinkedList<>();
     this.controlEvents = new LinkedBlockingQueue<>();
     this.partition = partition;
@@ -161,11 +155,11 @@ public class HudiTransactionParticipant implements TransactionParticipant {
 
   private void handleEndCommit(ControlEvent message) {
     if (ongoingTransactionInfo == null) {
-      LOG.warn("END_COMMIT {} is received while we were NOT in active transaction", message.getCommitTime());
+      LOG.warn(String.format("END_COMMIT %s is received while we were NOT in active transaction", message.getCommitTime()));
       return;
     } else if (!ongoingTransactionInfo.getCommitTime().equals(message.getCommitTime())) {
-      LOG.error("Fatal error received END_COMMIT with commit time {} while local transaction commit time {}",
-          message.getCommitTime(), ongoingTransactionInfo.getCommitTime());
+      LOG.error(String.format("Fatal error received END_COMMIT with commit time %s while local transaction commit time %s",
+          message.getCommitTime(), ongoingTransactionInfo.getCommitTime()));
       // Recovery: A new END_COMMIT from leader caused interruption to an existing transaction,
       // explicitly reset Kafka commit offset to ensure no data loss
       cleanupOngoingTransaction();
@@ -186,9 +180,7 @@ public class HudiTransactionParticipant implements TransactionParticipant {
       }
 
       ControlEvent writeStatus = new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
-          ControlEvent.SenderType.PARTICIPANT,
-          ongoingTransactionInfo.getCommitTime(),
-          partition)
+          ControlEvent.SenderType.PARTICIPANT, ongoingTransactionInfo.getCommitTime(), partition)
           .setParticipantInfo(new ControlEvent.ParticipantInfo(
               writeStatuses,
               ongoingTransactionInfo.getLastWrittenKafkaOffset(),
@@ -196,9 +188,7 @@ public class HudiTransactionParticipant implements TransactionParticipant {
           .build();
       kafkaControlAgent.publishMessage(writeStatus);
     } catch (Exception exception) {
-      LOG.warn("Error ending commit {} for partition {}", message.getCommitTime(),
-          partition.partition(),
-          exception);
+      LOG.warn(String.format("Error ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
     }
   }
 
@@ -221,16 +211,14 @@ public class HudiTransactionParticipant implements TransactionParticipant {
             ongoingTransactionInfo.getWriter().writeRecord(record);
             ongoingTransactionInfo.setLastWrittenKafkaOffset(record.kafkaOffset() + 1);
           } else if (record != null && record.kafkaOffset() < committedKafkaOffset) {
-            LOG.warn("Received a kafka record with offset {} prior to last committed offset {} for partition {}",
-                record.kafkaOffset(),
-                ongoingTransactionInfo.getLastWrittenKafkaOffset(),
-                partition);
+            LOG.warn(String.format("Received a kafka record with offset %s prior to last committed offset %s for partition %s",
+                record.kafkaOffset(), ongoingTransactionInfo.getLastWrittenKafkaOffset(),
+                partition));
           }
           buffer.poll();
         } catch (Exception exception) {
-          LOG.warn("Error received while writing records for transaction {} in partition {}",
-              ongoingTransactionInfo.getCommitTime(),
-              partition.partition(),
+          LOG.warn(String.format("Error received while writing records for transaction %s in partition %s",
+              ongoingTransactionInfo.getCommitTime(), partition.partition()),
               exception);
         }
       }
@@ -255,10 +243,8 @@ public class HudiTransactionParticipant implements TransactionParticipant {
       // as the source of truth
       if (coordinatorCommittedKafkaOffset != null && coordinatorCommittedKafkaOffset >= 0) {
         if (coordinatorCommittedKafkaOffset != committedKafkaOffset) {
-          LOG.warn("Recovering the kafka offset for partition {} to offset {} instead of local offset {}",
-              partition.partition(),
-              coordinatorCommittedKafkaOffset,
-              committedKafkaOffset);
+          LOG.warn(String.format("Recovering the kafka offset for partition %s to offset %s instead of local offset %s",
+              partition.partition(), coordinatorCommittedKafkaOffset, committedKafkaOffset));
           context.offset(partition, coordinatorCommittedKafkaOffset);
         }
         committedKafkaOffset = coordinatorCommittedKafkaOffset;

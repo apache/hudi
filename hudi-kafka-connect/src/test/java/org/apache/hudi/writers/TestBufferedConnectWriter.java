@@ -24,8 +24,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.connect.writers.HudiConnectBufferedWriter;
-import org.apache.hudi.connect.writers.HudiConnectConfigs;
+import org.apache.hudi.connect.writers.BufferedConnectWriter;
+import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
@@ -37,20 +37,20 @@ import org.mockito.Mockito;
 import java.util.Comparator;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestHudiConnectBufferedWriter {
+public class TestBufferedConnectWriter {
 
   private static final int NUM_RECORDS = 10;
   private static final String COMMIT_TIME = "101";
 
   private HoodieJavaWriteClient mockHoodieJavaWriteClient;
   private HoodieJavaEngineContext javaEngineContext;
-  private HudiConnectConfigs configs;
+  private KafkaConnectConfigs configs;
   private HoodieWriteConfig writeConfig;
   private SchemaProvider schemaProvider;
 
@@ -59,8 +59,8 @@ public class TestHudiConnectBufferedWriter {
     mockHoodieJavaWriteClient = mock(HoodieJavaWriteClient.class);
     Configuration hadoopConf = new Configuration();
     javaEngineContext = new HoodieJavaEngineContext(hadoopConf);
-    configs = HudiConnectConfigs.newBuilder().build();
-    schemaProvider = new TestAbstractHudiConnectWriter.TestSchemaProvider();
+    configs = KafkaConnectConfigs.newBuilder().build();
+    schemaProvider = new TestAbstractConnectWriter.TestSchemaProvider();
     writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withSchema(schemaProvider.getSourceSchema().toString())
@@ -73,7 +73,7 @@ public class TestHudiConnectBufferedWriter {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
     List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
 
-    HudiConnectBufferedWriter writer = new HudiConnectBufferedWriter(
+    BufferedConnectWriter writer = new BufferedConnectWriter(
         javaEngineContext,
         mockHoodieJavaWriteClient,
         COMMIT_TIME,

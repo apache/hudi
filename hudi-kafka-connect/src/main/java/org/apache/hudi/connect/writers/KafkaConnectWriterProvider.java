@@ -28,9 +28,9 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.connect.KafkaConnectFileIdPrefixProvider;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.connect.KafkaConnectFileIdPrefixProvider;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
@@ -38,28 +38,28 @@ import org.apache.hudi.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.Collections;
 
 /**
- * Provides the Hudi Writer for the {@link org.apache.hudi.connect.core.TransactionParticipant}
+ * Provides the Hudi Writer for the {@link org.apache.hudi.connect.transaction.TransactionParticipant}
  * to write the incoming records to Hudi.
  */
-public class HudiConnectWriterProvider implements ConnectWriterProvider<WriteStatus> {
+public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteStatus> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HudiConnectWriterProvider.class);
+  private static final Logger LOG = LogManager.getLogger(KafkaConnectWriterProvider.class);
 
-  private final HudiConnectConfigs connectConfigs;
+  private final KafkaConnectConfigs connectConfigs;
   private final HoodieEngineContext context;
   private final HoodieWriteConfig writeConfig;
   private final HoodieJavaWriteClient<HoodieAvroPayload> hudiJavaClient;
   private final KeyGenerator keyGenerator;
   private final SchemaProvider schemaProvider;
 
-  public HudiConnectWriterProvider(
-      HudiConnectConfigs connectConfigs,
+  public KafkaConnectWriterProvider(
+      KafkaConnectConfigs connectConfigs,
       TopicPartition partition) throws HoodieException {
     this.connectConfigs = connectConfigs;
     Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf();
@@ -93,8 +93,8 @@ public class HudiConnectWriterProvider implements ConnectWriterProvider<WriteSta
     }
   }
 
-  public AbstractHudiConnectWriter getWriter(String commitTime) {
-    return new HudiConnectBufferedWriter(
+  public AbstractConnectWriter getWriter(String commitTime) {
+    return new BufferedConnectWriter(
         context,
         hudiJavaClient,
         commitTime,

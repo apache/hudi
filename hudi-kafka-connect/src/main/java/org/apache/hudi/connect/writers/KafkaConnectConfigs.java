@@ -37,7 +37,7 @@ import java.util.Properties;
 @ConfigClassProperty(name = "Kafka Sink Connect Configurations",
     groupName = ConfigGroups.Names.KAFKA_CONNECT,
     description = "Configurations for Kakfa Connect Sink Connector for Hudi.")
-public class HudiConnectConfigs extends HoodieConfig {
+public class KafkaConnectConfigs extends HoodieConfig {
 
   public static final String KAFKA_VALUE_CONVERTER = "value.converter";
 
@@ -82,18 +82,18 @@ public class HudiConnectConfigs extends HoodieConfig {
       .defaultValue(HiveSyncTool.class.getName())
       .withDocumentation("Meta sync client tool, using comma to separate multi tools");
 
-  protected HudiConnectConfigs() {
+  protected KafkaConnectConfigs() {
     super();
   }
 
-  protected HudiConnectConfigs(Properties props) {
+  protected KafkaConnectConfigs(Properties props) {
     super(props);
     Properties newProps = new Properties();
     newProps.putAll(props);
   }
 
-  public static HudiConnectConfigs.Builder newBuilder() {
-    return new HudiConnectConfigs.Builder();
+  public static KafkaConnectConfigs.Builder newBuilder() {
+    return new KafkaConnectConfigs.Builder();
   }
 
   public String getBootstrapServers() {
@@ -130,7 +130,7 @@ public class HudiConnectConfigs extends HoodieConfig {
 
   public static class Builder {
 
-    protected final HudiConnectConfigs connectConfigs = new HudiConnectConfigs();
+    protected final KafkaConnectConfigs connectConfigs = new KafkaConnectConfigs();
 
     public Builder withBootstrapServers(String bootstrapServers) {
       connectConfigs.setValue(KAFKA_BOOTSTRAP_SERVERS, bootstrapServers);
@@ -165,13 +165,13 @@ public class HudiConnectConfigs extends HoodieConfig {
 
     protected void setDefaults() {
       // Check for mandatory properties
-      connectConfigs.setDefaults(HudiConnectConfigs.class.getName());
+      connectConfigs.setDefaults(KafkaConnectConfigs.class.getName());
     }
 
-    public HudiConnectConfigs build() {
+    public KafkaConnectConfigs build() {
       setDefaults();
       // Build HudiConnectConfigs at the end
-      return new HudiConnectConfigs(connectConfigs.getProps());
+      return new KafkaConnectConfigs(connectConfigs.getProps());
     }
   }
 }

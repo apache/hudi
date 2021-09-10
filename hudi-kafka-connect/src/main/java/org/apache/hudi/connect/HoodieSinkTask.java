@@ -18,12 +18,12 @@
 
 package org.apache.hudi.connect;
 
-import org.apache.hudi.connect.core.HudiTransactionCoordinator;
-import org.apache.hudi.connect.core.HudiTransactionParticipant;
-import org.apache.hudi.connect.core.TransactionCoordinator;
-import org.apache.hudi.connect.core.TransactionParticipant;
-import org.apache.hudi.connect.kafka.HudiKafkaControlAgent;
-import org.apache.hudi.connect.writers.HudiConnectConfigs;
+import org.apache.hudi.connect.kafka.KafkaConnectControlAgent;
+import org.apache.hudi.connect.transaction.ConnectTransactionCoordinator;
+import org.apache.hudi.connect.transaction.ConnectTransactionParticipant;
+import org.apache.hudi.connect.transaction.TransactionCoordinator;
+import org.apache.hudi.connect.transaction.TransactionParticipant;
+import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -32,8 +32,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -45,38 +45,39 @@ import java.util.Map;
  * from the assigned partitions and commit the Kafka offsets.
  * Also, handles re-assignments of partitions.
  */
-public class HudiSinkTask extends SinkTask {
+public class HoodieSinkTask extends SinkTask {
 
   public static final String TASK_ID_CONFIG_NAME = "task.id";
-  private static final Logger LOG = LoggerFactory.getLogger(HudiSinkTask.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieSinkTask.class);
   private static final int COORDINATOR_KAFKA_PARTITION = 0;
 
   private final Map<TopicPartition, TransactionCoordinator> transactionCoordinators;
   private final Map<TopicPartition, TransactionParticipant> hudiTransactionParticipants;
-  private HudiKafkaControlAgent controlKafkaClient;
-  private HudiConnectConfigs connectConfigs;
+  private KafkaConnectControlAgent controlKafkaClient;
+  private KafkaConnectConfigs connectConfigs;
 
   private String taskId;
   private String connectorName;
 
-  public HudiSinkTask() {
+  public HoodieSinkTask() {
     transactionCoordinators = new HashMap();
     hudiTransactionParticipants = new HashMap<>();
   }
 
   @Override
   public String version() {
-    return HudiSinkConnector.VERSION;
+    return HoodieSinkConnector.VERSION;
   }
 
   @Override
   public void start(Map<String, String> props) {
     connectorName = props.get("name");
     taskId = props.get(TASK_ID_CONFIG_NAME);
-    LOG.info("Starting Hudi Sink Task for {} connector {} with id {} with assignments {}", props, connectorName, taskId, context.assignment());
+    LOG.info(String.format("Starting Hudi Sink Task for %s connector %s with id %s with assignments %s",
+        props, connectorName, taskId, context.assignment()));
     try {
-      connectConfigs = HudiConnectConfigs.newBuilder().withProperties(props).build();
-      controlKafkaClient = HudiKafkaControlAgent.createKafkaControlManager(
+      connectConfigs = KafkaConnectConfigs.newBuilder().withProperties(props).build();
+      controlKafkaClient = KafkaConnectControlAgent.createKafkaControlManager(
           connectConfigs.getBootstrapServers(),
           connectConfigs.getControlTopicName());
       bootstrap(context.assignment());
@@ -163,31 +164,31 @@ public class HudiSinkTask extends SinkTask {
           LOG.debug("Closing data writer due to task start failure.");
           worker.stop();
         } catch (Throwable t) {
-          LOG.debug("Error closing and stopping data writer: {}", t.getMessage(), t);
+          LOG.debug(String.format("Error closing and stopping data writer: %s", t.getMessage()), t);
         }
       }
     }
   }
 
   private void bootstrap(Collection<TopicPartition> partitions) {
-    LOG.info("Bootstrap task for connector {} with id {} with assignments {} part {}",
-        connectorName, taskId, context.assignment(), partitions);
+    LOG.info(String.format("Bootstrap task for connector %s with id %s with assignments %s part %s",
+        connectorName, taskId, context.assignment(), partitions));
     for (TopicPartition partition : partitions) {
       try {
         // If the partition is 0, instantiate the Leader
         if (partition.partition() == COORDINATOR_KAFKA_PARTITION) {
-          HudiTransactionCoordinator coordinator = new HudiTransactionCoordinator(
+          ConnectTransactionCoordinator coordinator = new ConnectTransactionCoordinator(
               connectConfigs,
               partition,
               controlKafkaClient);
           coordinator.start();
           transactionCoordinators.put(partition, coordinator);
         }
-        HudiTransactionParticipant worker = new HudiTransactionParticipant(connectConfigs, partition, controlKafkaClient, context);
+        ConnectTransactionParticipant worker = new ConnectTransactionParticipant(connectConfigs, partition, controlKafkaClient, context);
         hudiTransactionParticipants.put(partition, worker);
         worker.start();
       } catch (HoodieException exception) {
-        LOG.error("Fatal error initializing task {} for partition {}", taskId, partition.partition(), exception);
+        LOG.error(String.format("Fatal error initializing task %s for partition %s", taskId, partition.partition()), exception);
       }
     }
   }
@@ -200,7 +201,7 @@ public class HudiSinkTask extends SinkTask {
           LOG.debug("Closing data writer due to task start failure.");
           worker.stop();
         } catch (Throwable t) {
-          LOG.debug("Error closing and stopping data writer: {}", t.getMessage(), t);
+          LOG.debug("Error closing and stopping data writer", t);
         }
       }
     }

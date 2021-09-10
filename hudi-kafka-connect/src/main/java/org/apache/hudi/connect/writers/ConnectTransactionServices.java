@@ -19,7 +19,7 @@
 package org.apache.hudi.connect.writers;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.connect.core.TransactionCoordinator;
+import org.apache.hudi.connect.transaction.TransactionCoordinator;
 
 import java.util.List;
 import java.util.Map;

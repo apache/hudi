@@ -31,8 +31,8 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  */
 public class KafkaConnectUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectUtils.class);
+  private static final Logger LOG = LogManager.getLogger(KafkaConnectUtils.class);
 
   public static int getLatestNumPartitions(String bootstrapServers, String topicName) {
     Properties props = new Properties();
@@ -55,7 +55,7 @@ public class KafkaConnectUtils {
       Map<String, KafkaFuture<TopicDescription>> values = result.values();
       KafkaFuture<TopicDescription> topicDescription = values.get(topicName);
       int numPartitions = topicDescription.get().partitions().size();
-      LOG.info("Latest number of partitions for topic {} is {}", topicName, numPartitions);
+      LOG.info(String.format("Latest number of partitions for topic %s is %s", topicName, numPartitions));
       return numPartitions;
     } catch (Exception exception) {
       throw new HoodieException("Fatal error fetching the latest partition of kafka topic name" + topicName, exception);

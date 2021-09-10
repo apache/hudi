@@ -18,9 +18,9 @@
 
 package org.apache.hudi.connect.kafka;
 
-import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.TransactionCoordinator;
-import org.apache.hudi.connect.core.TransactionParticipant;
+import org.apache.hudi.connect.transaction.ControlEvent;
+import org.apache.hudi.connect.transaction.TransactionCoordinator;
+import org.apache.hudi.connect.transaction.TransactionParticipant;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -30,8 +30,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -51,26 +51,25 @@ import java.util.concurrent.TimeUnit;
  * Use a single instance per worker (single-threaded),
  * and register multiple tasks that can receive the control messages.
  */
-public class HudiKafkaControlAgent implements KafkaControlAgent {
+public class KafkaConnectControlAgent implements KafkaControlAgent {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HudiKafkaControlAgent.class);
+  private static final Logger LOG = LogManager.getLogger(KafkaConnectControlAgent.class);
   private static final Object LOCK = new Object();
   private static final long KAFKA_POLL_TIMEOUT_MS = 100;
   private static final int EXEC_SHUTDOWN_TIMEOUT_MS = 5000;
 
-  private static HudiKafkaControlAgent kafkaCommunicationAgent;
+  private static KafkaConnectControlAgent agent;
   private final String bootstrapServers;
   private final String controlTopicName;
   private final ExecutorService executorService;
-  // List of TransactionParticipants per Kafka Topic
   private final Map<String, TransactionCoordinator> topicCoordinators;
+  // List of TransactionParticipants per Kafka Topic
   private final Map<String, ConcurrentLinkedQueue<TransactionParticipant>> partitionWorkers;
   private final KafkaControlProducer producer;
-
   private KafkaConsumer<String, ControlEvent> consumer;
 
-  public HudiKafkaControlAgent(String bootstrapServers,
-                               String controlTopicName) {
+  public KafkaConnectControlAgent(String bootstrapServers,
+                                  String controlTopicName) {
     this.bootstrapServers = bootstrapServers;
     this.controlTopicName = controlTopicName;
     this.executorService = Executors.newSingleThreadExecutor();
@@ -80,16 +79,16 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
     start();
   }
 
-  public static HudiKafkaControlAgent createKafkaControlManager(String bootstrapServers,
-                                                                String controlTopicName) {
-    if (kafkaCommunicationAgent == null) {
+  public static KafkaConnectControlAgent createKafkaControlManager(String bootstrapServers,
+                                                                   String controlTopicName) {
+    if (agent == null) {
       synchronized (LOCK) {
-        if (kafkaCommunicationAgent == null) {
-          kafkaCommunicationAgent = new HudiKafkaControlAgent(bootstrapServers, controlTopicName);
+        if (agent == null) {
+          agent = new KafkaConnectControlAgent(bootstrapServers, controlTopicName);
         }
       }
     }
-    return kafkaCommunicationAgent;
+    return agent;
   }
 
   @Override
@@ -146,9 +145,8 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
         records = consumer.poll(Duration.ofMillis(KAFKA_POLL_TIMEOUT_MS));
         for (ConsumerRecord<String, ControlEvent> record : records) {
           try {
-            LOG.debug("Kafka consumerGroupId = {} topic = {}, partition = {}, offset = {}, customer = {}, country = {}",
-                "", record.topic(), record.partition(), record.offset(),
-                record.key(), record.value());
+            LOG.debug(String.format("Kafka consumerGroupId = %s topic = %s, partition = %s, offset = %s, customer = %s, country = %s",
+                "", record.topic(), record.partition(), record.offset(), record.key(), record.value()));
             ControlEvent message = record.value();
             String senderTopic = message.senderPartition().topic();
             if (message.getSenderType().equals(ControlEvent.SenderType.COORDINATOR)) {
@@ -157,19 +155,19 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
                   partitionWorker.processControlEvent(message);
                 }
               } else {
-                LOG.warn("Failed to send message for unregistered participants for topic {}", senderTopic);
+                LOG.warn(String.format("Failed to send message for unregistered participants for topic %s", senderTopic));
               }
             } else if (message.getSenderType().equals(ControlEvent.SenderType.PARTICIPANT)) {
               if (topicCoordinators.containsKey(senderTopic)) {
                 topicCoordinators.get(senderTopic).processControlEvent(message);
               } else {
-                LOG.warn("Failed to send message for unregistered coordinator for topic {}", senderTopic);
+                LOG.warn(String.format("Failed to send message for unregistered coordinator for topic %s", senderTopic));
               }
             } else {
-              LOG.warn("Sender type of Control Message unknown {}", message.getSenderType().name());
+              LOG.warn(String.format("Sender type of Control Message unknown %s", message.getSenderType().name()));
             }
           } catch (Exception e) {
-            LOG.error("Fatal error while consuming a kafka record for topic = {} partition = {}", record.topic(), record.partition(), e);
+            LOG.error(String.format("Fatal error while consuming a kafka record for topic = %s partition = %s", record.topic(), record.partition()), e);
           }
         }
         try {
@@ -210,7 +208,7 @@ public class HudiKafkaControlAgent implements KafkaControlAgent {
    */
   public static class KafkaJsonDeserializer<T> implements Deserializer<T> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaJsonDeserializer.class);
+    private static final Logger LOG = LogManager.getLogger(KafkaJsonDeserializer.class);
     private final Class<T> type;
 
     KafkaJsonDeserializer(Class<T> type) {

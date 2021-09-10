@@ -18,7 +18,7 @@
 
 package org.apache.hudi.helper;
 
-import org.apache.hudi.connect.core.TransactionParticipant;
+import org.apache.hudi.connect.transaction.TransactionParticipant;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;

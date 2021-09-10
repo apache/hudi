@@ -26,8 +26,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.connect.writers.AbstractHudiConnectWriter;
-import org.apache.hudi.connect.writers.HudiConnectConfigs;
+import org.apache.hudi.connect.writers.AbstractConnectWriter;
+import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
@@ -52,14 +52,14 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestAbstractHudiConnectWriter {
+public class TestAbstractConnectWriter {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
   private static final int PARTITION_NUMBER = 4;
   private static final int NUM_RECORDS = 10;
   private static final int RECORD_KEY_INDEX = 0;
 
-  private HudiConnectConfigs configs;
+  private KafkaConnectConfigs configs;
   private TestKeyGenerator keyGenerator;
   private SchemaProvider schemaProvider;
   private long currentKafkaOffset;
@@ -80,7 +80,7 @@ public class TestAbstractHudiConnectWriter {
     String formatConverter;
     switch (inputFormats) {
       case JSON_STRING:
-        formatConverter = AbstractHudiConnectWriter.KAFKA_STRING_CONVERTER;
+        formatConverter = AbstractConnectWriter.KAFKA_STRING_CONVERTER;
         GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(schema, schema);
         inputRecords = SchemaTestUtil.generateTestJsonRecords(0, NUM_RECORDS);
         expectedRecords = ((List<String>) inputRecords).stream().map(s -> {
@@ -93,7 +93,7 @@ public class TestAbstractHudiConnectWriter {
         }).map(p -> convertToHoodieRecords(p, p.get(RECORD_KEY_INDEX).toString(), "000/00/00")).collect(Collectors.toList());
         break;
       case AVRO:
-        formatConverter = AbstractHudiConnectWriter.KAFKA_AVRO_CONVERTER;
+        formatConverter = AbstractConnectWriter.KAFKA_AVRO_CONVERTER;
         inputRecords = SchemaTestUtil.generateTestRecords(0, NUM_RECORDS);
         expectedRecords = inputRecords.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
             .map(p -> convertToHoodieRecords(p, p.get(RECORD_KEY_INDEX).toString(), "000/00/00")).collect(Collectors.toList());
@@ -102,9 +102,9 @@ public class TestAbstractHudiConnectWriter {
         throw new HoodieException("Unknown test scenario " + inputFormats);
     }
 
-    configs = HudiConnectConfigs.newBuilder()
+    configs = KafkaConnectConfigs.newBuilder()
         .withProperties(
-            Collections.singletonMap(HudiConnectConfigs.KAFKA_VALUE_CONVERTER, formatConverter))
+            Collections.singletonMap(KafkaConnectConfigs.KAFKA_VALUE_CONVERTER, formatConverter))
         .build();
     AbstractHudiConnectWriterTestWrapper writer = new AbstractHudiConnectWriterTestWrapper(
         configs,
@@ -143,11 +143,11 @@ public class TestAbstractHudiConnectWriter {
         record, currentKafkaOffset++);
   }
 
-  private static class AbstractHudiConnectWriterTestWrapper extends AbstractHudiConnectWriter {
+  private static class AbstractHudiConnectWriterTestWrapper extends AbstractConnectWriter {
 
     private List<HoodieRecord> writtenRecords;
 
-    public AbstractHudiConnectWriterTestWrapper(HudiConnectConfigs connectConfigs, KeyGenerator keyGenerator, SchemaProvider schemaProvider) {
+    public AbstractHudiConnectWriterTestWrapper(KafkaConnectConfigs connectConfigs, KeyGenerator keyGenerator, SchemaProvider schemaProvider) {
       super(connectConfigs, keyGenerator, schemaProvider);
       writtenRecords = new ArrayList<>();
     }

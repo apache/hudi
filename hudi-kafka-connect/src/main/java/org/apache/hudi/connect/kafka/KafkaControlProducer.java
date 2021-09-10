@@ -18,7 +18,7 @@
 
 package org.apache.hudi.connect.kafka;
 
-import org.apache.hudi.connect.core.ControlEvent;
+import org.apache.hudi.connect.transaction.ControlEvent;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
@@ -29,8 +29,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.Properties;
 
@@ -41,7 +41,7 @@ import java.util.Properties;
  */
 public class KafkaControlProducer {
 
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaControlProducer.class);
+  private static final Logger LOG = LogManager.getLogger(KafkaControlProducer.class);
 
   private final String bootstrapServers;
   private final String controlTopicName;
@@ -59,12 +59,11 @@ public class KafkaControlProducer {
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaJsonSerializer.class);
 
-    producer =
-        new KafkaProducer<>(
-            props,
-            new StringSerializer(),
-            new KafkaJsonSerializer()
-        );
+    producer = new KafkaProducer<>(
+        props,
+        new StringSerializer(),
+        new KafkaJsonSerializer()
+    );
   }
 
   public void stop() {
@@ -79,7 +78,7 @@ public class KafkaControlProducer {
 
   public static class KafkaJsonSerializer implements Serializer<ControlEvent> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaJsonSerializer.class);
+    private static final Logger LOG = LogManager.getLogger(KafkaJsonSerializer.class);
 
     @Override
     public byte[] serialize(String topic, ControlEvent data) {

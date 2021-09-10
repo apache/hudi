@@ -21,11 +21,11 @@ package org.apache.hudi.connect;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.HudiTransactionCoordinator;
-import org.apache.hudi.connect.core.TransactionCoordinator;
-import org.apache.hudi.connect.core.TransactionParticipant;
-import org.apache.hudi.connect.writers.HudiConnectConfigs;
+import org.apache.hudi.connect.transaction.ConnectTransactionCoordinator;
+import org.apache.hudi.connect.transaction.ControlEvent;
+import org.apache.hudi.connect.transaction.TransactionCoordinator;
+import org.apache.hudi.connect.transaction.TransactionParticipant;
+import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.helper.MockConnectTransactionServices;
 import org.apache.hudi.helper.MockKafkaControlAgent;
@@ -47,14 +47,14 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 
-public class TestHudiTransactionCoordinator {
+public class TestConnectTransactionCoordinator {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
   private static final int NUM_PARTITIONS = 4;
   private static final int MAX_COMMIT_ROUNDS = 5;
   private static final int TEST_TIMEOUT_SECS = 60;
 
-  private HudiConnectConfigs configs;
+  private KafkaConnectConfigs configs;
   private MockParticipant participant;
   private MockKafkaControlAgent kafkaControlAgent;
   private MockConnectTransactionServices transactionServices;
@@ -63,7 +63,7 @@ public class TestHudiTransactionCoordinator {
   @BeforeEach
   public void setUp() throws Exception {
     transactionServices = new MockConnectTransactionServices();
-    configs = HudiConnectConfigs.newBuilder()
+    configs = KafkaConnectConfigs.newBuilder()
         .withCommitIntervalSecs(1L)
         .withCoordinatorWriteTimeoutSecs(1L)
         .build();
@@ -78,7 +78,7 @@ public class TestHudiTransactionCoordinator {
     participant.start();
 
     // Test the coordinator using the mock participant
-    TransactionCoordinator coordinator = new HudiTransactionCoordinator(
+    TransactionCoordinator coordinator = new ConnectTransactionCoordinator(
         configs,
         new TopicPartition(TOPIC_NAME, 0),
         kafkaControlAgent,

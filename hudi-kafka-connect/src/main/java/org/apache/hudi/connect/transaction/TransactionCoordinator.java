@@ -16,30 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.connect.core;
+package org.apache.hudi.connect.transaction;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.sink.SinkRecord;
 
 /**
- * Interface for the Participant that
- * manages Writes for a
- * single Kafka partition, based on
- * coordination signals from the {@link TransactionCoordinator}.
+ * The Base Coordinator that
+ * coordinates the write transactions
+ * across all the Kafka partitions, that
+ * are managed by the {@link TransactionParticipant}.
  */
-public interface TransactionParticipant {
+public interface TransactionCoordinator {
 
   void start();
 
   void stop();
 
-  void buffer(SinkRecord record);
-
-  void processRecords();
-
+  /* Kafka Topic that this Coordinator belongs to */
   TopicPartition getPartition();
 
+  /* Called when a control event is received from the Kafka control topic */
   void processControlEvent(ControlEvent message);
-
-  long getLastKafkaCommittedOffset();
 }

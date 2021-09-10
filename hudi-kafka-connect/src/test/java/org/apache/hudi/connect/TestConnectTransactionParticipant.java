@@ -19,11 +19,11 @@
 package org.apache.hudi.connect;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.connect.core.ControlEvent;
-import org.apache.hudi.connect.core.HudiTransactionParticipant;
-import org.apache.hudi.connect.core.TransactionCoordinator;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
-import org.apache.hudi.connect.writers.HudiConnectConfigs;
+import org.apache.hudi.connect.transaction.ConnectTransactionParticipant;
+import org.apache.hudi.connect.transaction.ControlEvent;
+import org.apache.hudi.connect.transaction.TransactionCoordinator;
+import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.helper.MockKafkaControlAgent;
 import org.apache.hudi.helper.TestHudiWriterProvider;
@@ -39,15 +39,15 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHudiTransactionParticipant {
+public class TestConnectTransactionParticipant {
 
   private static final String TOPIC_NAME = "kafka-connect-test-topic";
   private static final int PARTITION_NUMBER = 4;
 
-  private HudiTransactionParticipant participant;
+  private ConnectTransactionParticipant participant;
   private MockCoordinator coordinator;
   private TopicPartition partition;
-  private HudiConnectConfigs configs;
+  private KafkaConnectConfigs configs;
   private KafkaControlAgent kafkaControlAgent;
   private TestHudiWriterProvider testHudiWriterProvider;
   private TestKafkaConnect testKafkaConnect;
@@ -59,7 +59,7 @@ public class TestHudiTransactionParticipant {
     testKafkaConnect = new TestKafkaConnect(partition);
     coordinator = new MockCoordinator(kafkaControlAgent);
     coordinator.start();
-    configs = HudiConnectConfigs.newBuilder()
+    configs = KafkaConnectConfigs.newBuilder()
         .build();
     initializeParticipant();
   }
@@ -171,8 +171,7 @@ public class TestHudiTransactionParticipant {
 
   private void initializeParticipant() {
     testHudiWriterProvider = new TestHudiWriterProvider();
-    participant = new HudiTransactionParticipant(
-        configs,
+    participant = new ConnectTransactionParticipant(
         partition,
         kafkaControlAgent,
         testKafkaConnect,

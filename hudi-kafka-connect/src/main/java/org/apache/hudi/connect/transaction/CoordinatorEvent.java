@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.connect.core;
+package org.apache.hudi.connect.transaction;
 
 /**
  * The events within the Coordinator that trigger

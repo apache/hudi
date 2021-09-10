@@ -28,8 +28,8 @@ import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -40,20 +40,20 @@ import java.util.List;
  * converting them to {@link HoodieRecord}s that can be written to Hudi by
  * the derived implementations of this class.
  */
-public abstract class AbstractHudiConnectWriter implements ConnectWriter<WriteStatus> {
+public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus> {
 
   public static final String KAFKA_AVRO_CONVERTER = "io.confluent.connect.avro.AvroConverter";
   public static final String KAFKA_JSON_CONVERTER = "org.apache.kafka.connect.json.JsonConverter";
   public static final String KAFKA_STRING_CONVERTER = "org.apache.kafka.connect.storage.StringConverter";
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractHudiConnectWriter.class);
+  private static final Logger LOG = LogManager.getLogger(AbstractConnectWriter.class);
 
-  private final HudiConnectConfigs connectConfigs;
+  private final KafkaConnectConfigs connectConfigs;
   private final KeyGenerator keyGenerator;
   private final SchemaProvider schemaProvider;
 
-  public AbstractHudiConnectWriter(HudiConnectConfigs connectConfigs,
-                                   KeyGenerator keyGenerator,
-                                   SchemaProvider schemaProvider) {
+  public AbstractConnectWriter(KafkaConnectConfigs connectConfigs,
+                               KeyGenerator keyGenerator,
+                               SchemaProvider schemaProvider) {
     this.connectConfigs = connectConfigs;
     this.keyGenerator = keyGenerator;
     this.schemaProvider = schemaProvider;
@@ -76,8 +76,8 @@ public abstract class AbstractHudiConnectWriter implements ConnectWriter<WriteSt
         throw new IOException("Unsupported Kafka Format type (" + connectConfigs.getKafkaValueConverter() + ")");
     }
 
-    HoodieRecord hudiRecord = new HoodieRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord));
-    writeHudiRecord(hudiRecord);
+    HoodieRecord hoodieRecord = new HoodieRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord));
+    writeHudiRecord(hoodieRecord);
   }
 
   @Override
