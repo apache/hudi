@@ -28,9 +28,9 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
 import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
-import org.apache.hudi.table.FileIdPrefixProvider;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.FileIdPrefixProvider;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -67,10 +67,11 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abst
                                                            final Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
-    //transition bulk_insert state to inflight
-    if (!config.getInsertAvoidTransitionInflight()) {
-      table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,
-              table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
+    // It's possible the transition to inflight could have already happened.
+    if (!table.getActiveTimeline().filterInflights().containsInstant(instantTime)) {
+      table.getActiveTimeline().transitionRequestedToInflight(
+          new HoodieInstant(HoodieInstant.State.REQUESTED, table.getMetaClient().getCommitActionType(), instantTime),
+          Option.empty(),
           config.shouldAllowMultiWriteOnSameInstant());
     }
 

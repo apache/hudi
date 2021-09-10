@@ -155,12 +155,11 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
     throw new HoodieNotSupportedException("BulkInsert is not supported in HoodieJavaClient");
   }
 
-  public void preBulkInsert(String instantTime) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED, instantTime);
-    table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,
-            table.getMetaClient().getCommitActionType(), instantTime), Option.empty(),
-        config.shouldAllowMultiWriteOnSameInstant());
+  public void transitionInflight(String instantTime) {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    metaClient.getActiveTimeline().transitionRequestedToInflight(
+        new HoodieInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), instantTime),
+        Option.empty(), config.shouldAllowMultiWriteOnSameInstant());
   }
 
   @Override

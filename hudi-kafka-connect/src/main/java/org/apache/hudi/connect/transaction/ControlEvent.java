@@ -34,15 +34,17 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The events sent over the Kafka Control Topic between the 
- * coordinator and the followers, in order to ensure 
+ * The events sent over the Kafka Control Topic between the
+ * coordinator and the followers, in order to ensure
  * coordination across all the writes.
  */
 @SuppressWarnings("checkstyle:VisibilityModifier")
 public class ControlEvent implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(ControlEvent.class);
+  private static final int CURRENT_VERSION = 0;
 
+  private final int version = CURRENT_VERSION;
   private MsgType msgType;
   private SenderType senderType;
   private String commitTime;
@@ -99,9 +101,14 @@ public class ControlEvent implements Serializable {
     return participantInfo;
   }
 
+  public int getVersion() {
+    return version;
+  }
+
   @Override
   public String toString() {
-    return String.format("%s %s %s %s %s", msgType.name(), commitTime, Arrays.toString(senderPartition), coordinatorInfo.toString(), participantInfo.toString());
+    return String.format("%s %s %s %s %s %s", version, msgType.name(), commitTime,
+        Arrays.toString(senderPartition), coordinatorInfo.toString(), participantInfo.toString());
   }
 
   /**

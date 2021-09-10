@@ -34,5 +34,5 @@ public interface ConnectTransactionServices {
 
   void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata);
 
-  Map<String, String> loadLatestCommitMetadata();
+  Map<String, String> fetchLatestExtraCommitMetadata();
 }

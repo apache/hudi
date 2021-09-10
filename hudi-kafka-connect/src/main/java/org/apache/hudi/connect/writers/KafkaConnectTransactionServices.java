@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
@@ -64,7 +63,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
   private final String tableName;
   private final HoodieEngineContext context;
 
-  private final HoodieJavaWriteClient<HoodieAvroPayload> hudiJavaClient;
+  private final HoodieJavaWriteClient<HoodieAvroPayload> javaClient;
 
   public KafkaConnectTransactionServices(
       KafkaConnectConfigs connectConfigs) throws HoodieException {
@@ -100,28 +99,28 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           .setKeyGeneratorClassProp(writeConfig.getKeyGeneratorClass())
           .initTable(hadoopConf, tableBasePath));
 
-      hudiJavaClient = new HoodieJavaWriteClient<>(context, writeConfig);
+      javaClient = new HoodieJavaWriteClient<>(context, writeConfig);
     } catch (Exception exception) {
       throw new HoodieException("Fatal error instantiating Hudi Transaction Services ", exception);
     }
   }
 
   public String startCommit() {
-    String newCommitTime = hudiJavaClient.startCommit();
-    hudiJavaClient.preBulkInsert(newCommitTime);
+    String newCommitTime = javaClient.startCommit();
+    javaClient.transitionInflight(newCommitTime);
     LOG.info("Starting Hudi commit " + newCommitTime);
     return newCommitTime;
   }
 
   public void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
-    hudiJavaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata),
+    javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata),
         HoodieActiveTimeline.COMMIT_ACTION, Collections.emptyMap());
     LOG.info("Ending Hudi commit " + commitTime);
   }
 
-  public Map<String, String> loadLatestCommitMetadata() {
+  public Map<String, String> fetchLatestExtraCommitMetadata() {
     if (tableMetaClient.isPresent()) {
-      Option<HoodieCommitMetadata> metadata = CommitUtils.getCommitMetadataForLatestInstant(tableMetaClient.get());
+      Option<HoodieCommitMetadata> metadata = KafkaConnectUtils.getCommitMetadataForLatestInstant(tableMetaClient.get());
       if (metadata.isPresent()) {
         return metadata.get().getExtraMetadata();
       } else {

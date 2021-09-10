@@ -51,7 +51,7 @@ public class MockConnectTransactionServices implements ConnectTransactionService
   }
 
   @Override
-  public Map<String, String> loadLatestCommitMetadata() {
+  public Map<String, String> fetchLatestExtraCommitMetadata() {
     return new HashMap<>();
   }
 }

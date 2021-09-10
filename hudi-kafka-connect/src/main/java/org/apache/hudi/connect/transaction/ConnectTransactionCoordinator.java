@@ -356,7 +356,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   private void initializeGlobalCommittedKafkaOffsets() {
     try {
-      Map<String, String> commitMetadata = transactionServices.loadLatestCommitMetadata();
+      Map<String, String> commitMetadata = transactionServices.fetchLatestExtraCommitMetadata();
       String latestKafkaOffsets = commitMetadata.get(KAFKA_OFFSET_KEY);
       if (!StringUtils.isNullOrEmpty(latestKafkaOffsets)) {
         LOG.info("Retrieved Raw Kafka offsets from Hudi Commit File " + latestKafkaOffsets);

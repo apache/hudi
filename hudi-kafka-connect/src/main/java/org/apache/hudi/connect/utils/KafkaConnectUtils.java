@@ -19,6 +19,13 @@
 package org.apache.hudi.connect.utils;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.CustomAvroKeyGenerator;
@@ -103,5 +110,31 @@ public class KafkaConnectUtils {
     }
 
     return typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+  }
+
+
+  /**
+   * Get the Metadata from the latest commit file.
+   *
+   * @param metaClient The {@link HoodieTableMetaClient} to get access to the meta data.
+   * @return An Optional {@link HoodieCommitMetadata} containing the meta data from the latest commit file.
+   */
+  public static Option<HoodieCommitMetadata> getCommitMetadataForLatestInstant(HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .filter(instant -> (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE && instant.getAction().equals(HoodieActiveTimeline.COMMIT_ACTION))
+            || (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ && instant.getAction().equals(HoodieActiveTimeline.DELTA_COMMIT_ACTION))
+        );
+    Option<HoodieInstant> latestInstant = timeline.lastInstant();
+    if (latestInstant.isPresent()) {
+      try {
+        byte[] data = timeline.getInstantDetails(latestInstant.get()).get();
+        return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
+      } catch (Exception e) {
+        throw new HoodieException("Failed to read schema from commit metadata", e);
+      }
+    } else {
+      return Option.empty();
+    }
   }
 }

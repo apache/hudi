@@ -81,7 +81,6 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
               String.valueOf(partition)))
           .withSchema(schemaProvider.getSourceSchema().toString())
           .withAutoCommit(false)
-          .withEnableInsertAvoidTransitionInflight()
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
           .build();
 

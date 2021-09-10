@@ -41,12 +41,12 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
-import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
@@ -419,12 +419,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(RandomFileIdPrefixProvider.class.getName())
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
-
-  public static final ConfigProperty<String> INSERT_AVOID_TRANSITION_INFLIGHT = ConfigProperty
-      .key("hoodie.insert.avoid.transition.inflight")
-      .defaultValue("false")
-      .withDocumentation("When inserting records for BULK insert, do not change timeline status to inflight.");
-
 
   private ConsistencyGuardConfig consistencyGuardConfig;
 
@@ -1765,10 +1759,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(FILEID_PREFIX_PROVIDER_CLASS);
   }
 
-  public boolean getInsertAvoidTransitionInflight() {
-    return getBoolean(INSERT_AVOID_TRANSITION_INFLIGHT);
-  }
-
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -2102,11 +2092,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileIdPrefixProviderClassName(String fileIdPrefixProviderClassName) {
       writeConfig.setValue(FILEID_PREFIX_PROVIDER_CLASS, fileIdPrefixProviderClassName);
-      return this;
-    }
-
-    public Builder withEnableInsertAvoidTransitionInflight() {
-      writeConfig.setValue(INSERT_AVOID_TRANSITION_INFLIGHT, "true");
       return this;
     }
 
