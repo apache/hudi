@@ -109,10 +109,24 @@ public class FileIndex {
    * Returns all the file statuses under the table base path.
    */
   public FileStatus[] getFilesInPartitions() {
-    String[] partitions = getOrBuildPartitionPaths().stream().map(p -> new Path(path, p).toString()).toArray(String[]::new);
+    String[] partitions = getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
     return FSUtils.getFilesInPartitions(HoodieFlinkEngineContext.DEFAULT, metadataConfig, path.toString(),
             partitions, "/tmp/")
         .values().stream().flatMap(Arrays::stream).toArray(FileStatus[]::new);
+  }
+
+  /**
+   * Returns the full partition path.
+   *
+   * @param basePath      The base path.
+   * @param partitionPath The relative partition path, may be empty if the table is non-partitioned.
+   * @return The full partition path string
+   */
+  private static String fullPartitionPath(Path basePath, String partitionPath) {
+    if (partitionPath.isEmpty()) {
+      return basePath.toString();
+    }
+    return new Path(basePath, partitionPath).toString();
   }
 
   /**
