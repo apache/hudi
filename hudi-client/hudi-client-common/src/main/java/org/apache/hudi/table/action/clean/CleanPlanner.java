@@ -40,7 +40,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
-import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -52,11 +51,15 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -413,7 +416,8 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       Instant instant = Instant.now();
       ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
       String retainInstantsAfter = HoodieActiveTimeline.COMMIT_FORMATTER.format(Date.from(commitDateTime.minusHours(hoursRetained).toInstant()));
-      earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, retainInstantsAfter)).findFirst());
+      earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
+              HoodieTimeline.GREATER_THAN_OR_EQUALS, retainInstantsAfter)).findFirst());
     }
     return earliestCommitToRetain;
   }
