@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.log4j.LogManager;
@@ -81,7 +82,7 @@ public class SqlSource extends RowSource {
                 .filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
                 .toArray(String[]::new));
     }
-    return Pair.of(Option.of(source), null);
+    return Pair.of(Option.of(source), StringUtils.EMPTY_STRING);
   }
 
   /**

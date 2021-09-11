@@ -137,6 +137,23 @@ public class TestSqlSource extends UtilitiesTestBase {
 
   /**
    * Runs the test scenario of reading data from the source in row format.
+   * Source has no records.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testSqlSourceCheckpoint() throws IOException {
+    props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
+
+    InputBatch<Dataset<Row>> fetch1AsRows =
+            sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals("", fetch1AsRows.getCheckpointForNextBatch());
+  }
+
+  /**
+   * Runs the test scenario of reading data from the source in row format.
    * Source has more records than source limit.
    *
    * @throws IOException
