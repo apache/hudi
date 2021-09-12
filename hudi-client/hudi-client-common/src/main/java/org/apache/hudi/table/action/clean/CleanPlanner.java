@@ -337,6 +337,14 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     return deletePaths;
   }
 
+  /**
+   * This method finds the files to be cleaned based on the number of hours. If {@code config.getCleanerHoursRetained()} is set to 5,
+   * all the files with commit time earlier than 5 hours will be removed. Also the latest file for any file group is retained.
+   * This policy gives much more flexibility to users for retaining data for running incremental queries as compared to
+   * KEEP_LATEST_COMMITS cleaning policy. The default number of hours is 5.
+   * @param partitionPath partition path to check
+   * @return list of files to clean
+   */
   private List<CleanFileInfo> getFilesToCleanKeepingLatestHours(String partitionPath) {
     int hoursRetained = config.getCleanerHoursRetained();
     LOG.info("Cleaning " + partitionPath + ", retaining commits from latest " + hoursRetained + " hours. ");
