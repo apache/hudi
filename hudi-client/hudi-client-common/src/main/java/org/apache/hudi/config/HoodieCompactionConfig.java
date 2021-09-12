@@ -195,6 +195,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder retainNumberOfHours(int numberOfHours) {
+      props.setProperty(CLEANER_HOURS_RETAINED_PROP, String.valueOf(numberOfHours));
+      return this;
+    }
+
     public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
       props.setProperty(MIN_COMMITS_TO_KEEP_PROP, String.valueOf(minToKeep));
       props.setProperty(MAX_COMMITS_TO_KEEP_PROP, String.valueOf(maxToKeep));
