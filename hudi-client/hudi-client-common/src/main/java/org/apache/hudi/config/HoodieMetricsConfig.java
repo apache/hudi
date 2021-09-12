@@ -18,7 +18,10 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
 
 import javax.annotation.concurrent.Immutable;
@@ -32,41 +35,159 @@ import java.util.Properties;
  * Fetch the configurations used by the Metrics system.
  */
 @Immutable
-public class HoodieMetricsConfig extends DefaultHoodieConfig {
+@ConfigClassProperty(name = "Metrics Configurations",
+    groupName = ConfigGroups.Names.METRICS,
+    description = "Enables reporting on Hudi metrics. Hudi publishes metrics on "
+        + "every commit, clean, rollback etc. The following sections list the supported reporters.")
+public class HoodieMetricsConfig extends HoodieConfig {
 
   public static final String METRIC_PREFIX = "hoodie.metrics";
-  public static final String METRICS_ON = METRIC_PREFIX + ".on";
-  public static final boolean DEFAULT_METRICS_ON = false;
-  public static final String METRICS_REPORTER_TYPE = METRIC_PREFIX + ".reporter.type";
-  public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = MetricsReporterType.GRAPHITE;
+
+  public static final ConfigProperty<Boolean> TURN_METRICS_ON = ConfigProperty
+      .key(METRIC_PREFIX + ".on")
+      .defaultValue(false)
+      .sinceVersion("0.5.0")
+      .withDocumentation("Turn on/off metrics reporting. off by default.");
+
+  public static final ConfigProperty<MetricsReporterType> METRICS_REPORTER_TYPE_VALUE = ConfigProperty
+      .key(METRIC_PREFIX + ".reporter.type")
+      .defaultValue(MetricsReporterType.GRAPHITE)
+      .sinceVersion("0.5.0")
+      .withDocumentation("Type of metrics reporter.");
 
   // Graphite
   public static final String GRAPHITE_PREFIX = METRIC_PREFIX + ".graphite";
-  public static final String GRAPHITE_SERVER_HOST = GRAPHITE_PREFIX + ".host";
-  public static final String DEFAULT_GRAPHITE_SERVER_HOST = "localhost";
 
-  public static final String GRAPHITE_SERVER_PORT = GRAPHITE_PREFIX + ".port";
-  public static final int DEFAULT_GRAPHITE_SERVER_PORT = 4756;
+  public static final ConfigProperty<String> GRAPHITE_SERVER_HOST_NAME = ConfigProperty
+      .key(GRAPHITE_PREFIX + ".host")
+      .defaultValue("localhost")
+      .sinceVersion("0.5.0")
+      .withDocumentation("Graphite host to connect to");
+
+  public static final ConfigProperty<Integer> GRAPHITE_SERVER_PORT_NUM = ConfigProperty
+      .key(GRAPHITE_PREFIX + ".port")
+      .defaultValue(4756)
+      .sinceVersion("0.5.0")
+      .withDocumentation("Graphite port to connect to");
 
   // Jmx
   public static final String JMX_PREFIX = METRIC_PREFIX + ".jmx";
-  public static final String JMX_HOST = JMX_PREFIX + ".host";
-  public static final String DEFAULT_JMX_HOST = "localhost";
 
-  public static final String JMX_PORT = JMX_PREFIX + ".port";
-  public static final int DEFAULT_JMX_PORT = 9889;
+  public static final ConfigProperty<String> JMX_HOST_NAME = ConfigProperty
+      .key(JMX_PREFIX + ".host")
+      .defaultValue("localhost")
+      .sinceVersion("0.5.1")
+      .withDocumentation("Jmx host to connect to");
 
-  public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
+  public static final ConfigProperty<Integer> JMX_PORT_NUM = ConfigProperty
+      .key(JMX_PREFIX + ".port")
+      .defaultValue(9889)
+      .sinceVersion("0.5.1")
+      .withDocumentation("Jmx port to connect to");
+
+  public static final ConfigProperty<String> GRAPHITE_METRIC_PREFIX_VALUE = ConfigProperty
+      .key(GRAPHITE_PREFIX + ".metric.prefix")
+      .noDefaultValue()
+      .sinceVersion("0.5.1")
+      .withDocumentation("Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g");
 
   // User defined
-  public static final String METRICS_REPORTER_CLASS = METRIC_PREFIX + ".reporter.class";
-  public static final String DEFAULT_METRICS_REPORTER_CLASS = "";
+  public static final ConfigProperty<String> METRICS_REPORTER_CLASS_NAME = ConfigProperty
+      .key(METRIC_PREFIX + ".reporter.class")
+      .defaultValue("")
+      .sinceVersion("0.6.0")
+      .withDocumentation("");
 
   // Enable metrics collection from executors
-  public static final String ENABLE_EXECUTOR_METRICS = METRIC_PREFIX + ".executor.enable";
+  public static final ConfigProperty<String> EXECUTOR_METRICS_ENABLE = ConfigProperty
+      .key(METRIC_PREFIX + ".executor.enable")
+      .noDefaultValue()
+      .sinceVersion("0.7.0")
+      .withDocumentation("");
 
-  private HoodieMetricsConfig(Properties props) {
-    super(props);
+  /**
+   * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
+   */
+  @Deprecated
+  public static final String METRICS_ON = TURN_METRICS_ON.key();
+  /**
+   * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
+   */
+  @Deprecated
+  public static final boolean DEFAULT_METRICS_ON = TURN_METRICS_ON.defaultValue();
+  /**
+   * @deprecated Use {@link #METRICS_REPORTER_TYPE_VALUE} and its methods instead
+   */
+  @Deprecated
+  public static final String METRICS_REPORTER_TYPE = METRICS_REPORTER_TYPE_VALUE.key();
+  /**
+   * @deprecated Use {@link #METRICS_REPORTER_TYPE_VALUE} and its methods instead
+   */
+  @Deprecated
+  public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = METRICS_REPORTER_TYPE_VALUE.defaultValue();
+  /**
+   * @deprecated Use {@link #GRAPHITE_SERVER_HOST_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String GRAPHITE_SERVER_HOST = GRAPHITE_SERVER_HOST_NAME.key();
+  /**
+   * @deprecated Use {@link #GRAPHITE_SERVER_HOST_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_GRAPHITE_SERVER_HOST = GRAPHITE_SERVER_HOST_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #GRAPHITE_SERVER_PORT_NUM} and its methods instead
+   */
+  @Deprecated
+  public static final String GRAPHITE_SERVER_PORT = GRAPHITE_SERVER_PORT_NUM.key();
+  /**
+   * @deprecated Use {@link #GRAPHITE_SERVER_PORT_NUM} and its methods instead
+   */
+  @Deprecated
+  public static final int DEFAULT_GRAPHITE_SERVER_PORT = GRAPHITE_SERVER_PORT_NUM.defaultValue();
+  /**
+   * @deprecated Use {@link #JMX_HOST_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String JMX_HOST = JMX_HOST_NAME.key();
+  /**
+   * @deprecated Use {@link #JMX_HOST_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_JMX_HOST = JMX_HOST_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #JMX_PORT_NUM} and its methods instead
+   */
+  @Deprecated
+  public static final String JMX_PORT = JMX_PORT_NUM.key();
+  /**
+   * @deprecated Use {@link #JMX_PORT_NUM} and its methods instead
+   */
+  @Deprecated
+  public static final int DEFAULT_JMX_PORT = JMX_PORT_NUM.defaultValue();
+  /**
+   * @deprecated Use {@link #GRAPHITE_METRIC_PREFIX_VALUE} and its methods instead
+   */
+  @Deprecated
+  public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_METRIC_PREFIX_VALUE.key();
+  /**
+   * @deprecated Use {@link #METRICS_REPORTER_CLASS_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String METRICS_REPORTER_CLASS = METRICS_REPORTER_CLASS_NAME.key();
+  /**
+   * @deprecated Use {@link #METRICS_REPORTER_CLASS_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_METRICS_REPORTER_CLASS = METRICS_REPORTER_CLASS_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #EXECUTOR_METRICS_ENABLE} and its methods instead
+   */
+  @Deprecated
+  public static final String ENABLE_EXECUTOR_METRICS = EXECUTOR_METRICS_ENABLE.key();
+
+  private HoodieMetricsConfig() {
+    super();
   }
 
   public static HoodieMetricsConfig.Builder newBuilder() {
@@ -75,89 +196,78 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
 
   public static class Builder {
 
-    private final Properties props = new Properties();
+    private final HoodieMetricsConfig hoodieMetricsConfig = new HoodieMetricsConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
-        this.props.load(reader);
+        this.hoodieMetricsConfig.getProps().load(reader);
         return this;
       }
     }
 
     public Builder fromProperties(Properties props) {
-      this.props.putAll(props);
+      this.hoodieMetricsConfig.getProps().putAll(props);
       return this;
     }
 
     public Builder on(boolean metricsOn) {
-      props.setProperty(METRICS_ON, String.valueOf(metricsOn));
+      hoodieMetricsConfig.setValue(TURN_METRICS_ON, String.valueOf(metricsOn));
       return this;
     }
 
     public Builder withReporterType(String reporterType) {
-      props.setProperty(METRICS_REPORTER_TYPE, reporterType);
+      hoodieMetricsConfig.setValue(METRICS_REPORTER_TYPE_VALUE, reporterType);
       return this;
     }
 
     public Builder toGraphiteHost(String host) {
-      props.setProperty(GRAPHITE_SERVER_HOST, host);
+      hoodieMetricsConfig.setValue(GRAPHITE_SERVER_HOST_NAME, host);
       return this;
     }
 
     public Builder onGraphitePort(int port) {
-      props.setProperty(GRAPHITE_SERVER_PORT, String.valueOf(port));
+      hoodieMetricsConfig.setValue(GRAPHITE_SERVER_PORT_NUM, String.valueOf(port));
       return this;
     }
 
     public Builder toJmxHost(String host) {
-      props.setProperty(JMX_HOST, host);
+      hoodieMetricsConfig.setValue(JMX_HOST_NAME, host);
       return this;
     }
 
     public Builder onJmxPort(String port) {
-      props.setProperty(JMX_PORT, port);
+      hoodieMetricsConfig.setValue(JMX_PORT_NUM, port);
       return this;
     }
 
     public Builder usePrefix(String prefix) {
-      props.setProperty(GRAPHITE_METRIC_PREFIX, prefix);
+      hoodieMetricsConfig.setValue(GRAPHITE_METRIC_PREFIX_VALUE, prefix);
       return this;
     }
 
     public Builder withReporterClass(String className) {
-      props.setProperty(METRICS_REPORTER_CLASS, className);
+      hoodieMetricsConfig.setValue(METRICS_REPORTER_CLASS_NAME, className);
       return this;
     }
 
     public Builder withExecutorMetrics(boolean enable) {
-      props.setProperty(ENABLE_EXECUTOR_METRICS, String.valueOf(enable));
+      hoodieMetricsConfig.setValue(EXECUTOR_METRICS_ENABLE, String.valueOf(enable));
       return this;
     }
 
     public HoodieMetricsConfig build() {
-      HoodieMetricsConfig config = new HoodieMetricsConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(METRICS_ON), METRICS_ON, String.valueOf(DEFAULT_METRICS_ON));
-      setDefaultOnCondition(props, !props.containsKey(METRICS_REPORTER_TYPE), METRICS_REPORTER_TYPE,
-          DEFAULT_METRICS_REPORTER_TYPE.name());
-      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_HOST), GRAPHITE_SERVER_HOST,
-          DEFAULT_GRAPHITE_SERVER_HOST);
-      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT), GRAPHITE_SERVER_PORT,
-          String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
-      setDefaultOnCondition(props, !props.containsKey(JMX_HOST), JMX_HOST,
-          DEFAULT_JMX_HOST);
-      setDefaultOnCondition(props, !props.containsKey(JMX_PORT), JMX_PORT,
-          String.valueOf(DEFAULT_JMX_PORT));
-      MetricsReporterType reporterType = MetricsReporterType.valueOf(props.getProperty(METRICS_REPORTER_TYPE));
-      setDefaultOnCondition(props, reporterType == MetricsReporterType.DATADOG,
-          HoodieMetricsDatadogConfig.newBuilder().fromProperties(props).build());
-      setDefaultOnCondition(props, !props.containsKey(METRICS_REPORTER_CLASS),
-              METRICS_REPORTER_CLASS, DEFAULT_METRICS_REPORTER_CLASS);
-      setDefaultOnCondition(props, reporterType == MetricsReporterType.PROMETHEUS_PUSHGATEWAY,
-              HoodieMetricsPrometheusConfig.newBuilder().fromProperties(props).build());
-      setDefaultOnCondition(props, reporterType == MetricsReporterType.PROMETHEUS,
-              HoodieMetricsPrometheusConfig.newBuilder().fromProperties(props).build());
 
-      return config;
+      hoodieMetricsConfig.setDefaults(HoodieMetricsConfig.class.getName());
+
+      MetricsReporterType reporterType = MetricsReporterType.valueOf(hoodieMetricsConfig.getString(METRICS_REPORTER_TYPE_VALUE));
+
+      hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.DATADOG,
+          HoodieMetricsDatadogConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
+      hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.PROMETHEUS_PUSHGATEWAY,
+              HoodieMetricsPrometheusConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
+      hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.PROMETHEUS,
+              HoodieMetricsPrometheusConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
+      return hoodieMetricsConfig;
     }
   }
 

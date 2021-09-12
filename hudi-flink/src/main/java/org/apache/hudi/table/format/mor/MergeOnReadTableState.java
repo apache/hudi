@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.model.HoodieRecord;
+
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
@@ -38,6 +40,7 @@ public class MergeOnReadTableState implements Serializable {
   private final String requiredAvroSchema;
   private final List<MergeOnReadInputSplit> inputSplits;
   private final String[] pkFields;
+  private final int operationPos;
 
   public MergeOnReadTableState(
       RowType rowType,
@@ -52,6 +55,7 @@ public class MergeOnReadTableState implements Serializable {
     this.requiredAvroSchema = requiredAvroSchema;
     this.inputSplits = inputSplits;
     this.pkFields = pkFields;
+    this.operationPos = rowType.getFieldIndex(HoodieRecord.OPERATION_METADATA_FIELD);
   }
 
   public RowType getRowType() {
@@ -72,6 +76,10 @@ public class MergeOnReadTableState implements Serializable {
 
   public List<MergeOnReadInputSplit> getInputSplits() {
     return inputSplits;
+  }
+
+  public int getOperationPos() {
+    return operationPos;
   }
 
   public int[] getRequiredPositions() {
@@ -98,7 +106,6 @@ public class MergeOnReadTableState implements Serializable {
    *
    * @param pkOffsets the pk offsets in required row type
    * @return pk field logical types
-   *
    * @see #getPkOffsetsInRequired()
    */
   public LogicalType[] getPkTypes(int[] pkOffsets) {

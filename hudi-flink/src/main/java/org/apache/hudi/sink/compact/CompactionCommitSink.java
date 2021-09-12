@@ -19,14 +19,12 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -37,8 +35,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -61,19 +60,10 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private final Configuration conf;
 
   /**
-   * Write Client.
-   */
-  private transient HoodieFlinkWriteClient writeClient;
-
-  /**
    * Buffer to collect the event from each compact task {@code CompactFunction}.
+   * The key is the instant time.
    */
-  private transient List<CompactionCommitEvent> commitBuffer;
-
-  /**
-   * Current on-going compaction instant time.
-   */
-  private String compactionInstantTime;
+  private transient Map<String, List<CompactionCommitEvent>> commitBuffer;
 
   public CompactionCommitSink(Configuration conf) {
     super(conf);
@@ -83,37 +73,35 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
-    this.commitBuffer = new ArrayList<>();
+    if (writeClient == null) {
+      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    }
+    this.commitBuffer = new HashMap<>();
   }
 
   @Override
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
-    if (compactionInstantTime == null) {
-      compactionInstantTime = event.getInstant();
-    } else if (!event.getInstant().equals(compactionInstantTime)) {
-      // last compaction still not finish, rolls it back
-      HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(this.compactionInstantTime);
-      writeClient.rollbackInflightCompaction(inflightInstant);
-      this.compactionInstantTime = event.getInstant();
-    }
-    this.commitBuffer.add(event);
-    commitIfNecessary();
+    final String instant = event.getInstant();
+    commitBuffer.computeIfAbsent(instant, k -> new ArrayList<>())
+        .add(event);
+    commitIfNecessary(instant, commitBuffer.get(instant));
   }
 
   /**
    * Condition to commit: the commit buffer has equal size with the compaction plan operations
    * and all the compact commit event {@link CompactionCommitEvent} has the same compaction instant time.
+   *
+   * @param instant Compaction commit instant time
+   * @param events  Commit events ever received for the instant
    */
-  private void commitIfNecessary() throws IOException {
+  private void commitIfNecessary(String instant, List<CompactionCommitEvent> events) throws IOException {
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-        this.writeClient.getHoodieTable().getMetaClient(), compactionInstantTime);
-    boolean isReady = compactionPlan.getOperations().size() == commitBuffer.size()
-        && commitBuffer.stream().allMatch(event -> event != null && Objects.equals(event.getInstant(), compactionInstantTime));
+        this.writeClient.getHoodieTable().getMetaClient(), instant);
+    boolean isReady = compactionPlan.getOperations().size() == events.size();
     if (!isReady) {
       return;
     }
-    List<WriteStatus> statuses = this.commitBuffer.stream()
+    List<WriteStatus> statuses = events.stream()
         .map(CompactionCommitEvent::getWriteStatuses)
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
@@ -127,16 +115,21 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       }
       metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, writeClient.getConfig().getSchema());
       this.writeClient.completeCompaction(
-          metadata, statuses, this.writeClient.getHoodieTable(), compactionInstantTime);
+          metadata, statuses, this.writeClient.getHoodieTable(), instant);
     }
     // commit the compaction
-    this.writeClient.commitCompaction(compactionInstantTime, statuses, Option.empty());
+    this.writeClient.commitCompaction(instant, statuses, Option.empty());
+
+    // Whether to cleanup the old log file when compaction
+    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      this.writeClient.clean();
+    }
+
     // reset the status
-    reset();
+    reset(instant);
   }
 
-  private void reset() {
-    this.commitBuffer.clear();
-    this.compactionInstantTime = null;
+  private void reset(String instant) {
+    this.commitBuffer.remove(instant);
   }
 }

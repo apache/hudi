@@ -126,9 +126,16 @@ public class HoodieTestSuiteWriter implements Serializable {
   public RDD<GenericRecord> getNextBatch() throws Exception {
     Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
     lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-    JavaRDD <HoodieRecord> inputRDD = nextBatch.getRight().getRight();
+    JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
     return inputRDD.map(r -> (GenericRecord) r.getData()
         .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
+  }
+
+  public void getNextBatchForDeletes() throws Exception {
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+    lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+    JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
+    inputRDD.collect();
   }
 
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
@@ -160,6 +167,26 @@ public class HoodieTestSuiteWriter implements Serializable {
       Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
       lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
       return writeClient.insert(nextBatch.getRight().getRight(), instantTime.get());
+    }
+  }
+
+  public JavaRDD<WriteStatus> insertOverwrite(Option<String> instantTime) throws Exception {
+    if (cfg.useDeltaStreamer) {
+      return deltaStreamerWrapper.insertOverwrite();
+    } else {
+      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+      return writeClient.insertOverwrite(nextBatch.getRight().getRight(), instantTime.get()).getWriteStatuses();
+    }
+  }
+
+  public JavaRDD<WriteStatus> insertOverwriteTable(Option<String> instantTime) throws Exception {
+    if (cfg.useDeltaStreamer) {
+      return deltaStreamerWrapper.insertOverwriteTable();
+    } else {
+      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+      return writeClient.insertOverwriteTable(nextBatch.getRight().getRight(), instantTime.get()).getWriteStatuses();
     }
   }
 

@@ -33,9 +33,9 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
   public String overallTimerName = null;
   public String hiveSyncTimerName = null;
   public String metaSyncTimerName = null;
-  private Timer overallTimer = null;
-  public Timer hiveSyncTimer = null;
-  public Timer metaSyncTimer = null;
+  private transient Timer overallTimer = null;
+  public transient Timer hiveSyncTimer = null;
+  public transient Timer metaSyncTimer = null;
 
   public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -92,6 +92,12 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
   public void updateDeltaStreamerKafkaDelayCountMetrics(long kafkaDelayCount) {
     if (config.isMetricsOn()) {
       Metrics.registerGauge(getMetricsName("deltastreamer", "kafkaDelayCount"), kafkaDelayCount);
+    }
+  }
+
+  public void updateDeltaStreamerSyncMetrics(long syncEpochTimeInMs) {
+    if (config.isMetricsOn()) {
+      Metrics.registerGauge(getMetricsName("deltastreamer", "lastSync"), syncEpochTimeInMs);
     }
   }
 

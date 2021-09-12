@@ -18,8 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -36,11 +36,13 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
+import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
@@ -57,6 +59,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * This class deals with initializing spark context based on command entered to hudi-cli.
@@ -70,7 +73,8 @@ public class SparkMain {
    */
   enum SparkCommand {
     BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
-    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
+    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
+    CLUSTERING_RUN, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
   }
 
   public static void main(String[] args) throws Exception {
@@ -79,135 +83,157 @@ public class SparkMain {
 
     SparkCommand cmd = SparkCommand.valueOf(command);
 
-    JavaSparkContext jsc = sparkMasterContained(cmd)
-        ? SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]))
-        : SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
+    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]));
     int returnCode = 0;
-    switch (cmd) {
-      case ROLLBACK:
-        assert (args.length == 5);
-        returnCode = rollback(jsc, args[3], args[4]);
-        break;
-      case DEDUPLICATE:
-        assert (args.length == 8);
-        returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], Boolean.parseBoolean(args[6]), args[7]);
-        break;
-      case ROLLBACK_TO_SAVEPOINT:
-        assert (args.length == 5);
-        returnCode = rollbackToSavepoint(jsc, args[3], args[4]);
-        break;
-      case IMPORT:
-      case UPSERT:
-        assert (args.length >= 13);
-        String propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[12])) {
-          propsFilePath = args[12];
-        }
-        List<String> configs = new ArrayList<>();
-        if (args.length > 13) {
-          configs.addAll(Arrays.asList(args).subList(13, args.length));
-        }
-        returnCode = dataLoad(jsc, command, args[3], args[4], args[5], args[6], args[7], args[8],
-            Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
-        break;
-      case COMPACT_RUN:
-        assert (args.length >= 9);
-        propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[8])) {
-          propsFilePath = args[8];
-        }
-        configs = new ArrayList<>();
-        if (args.length > 9) {
-          configs.addAll(Arrays.asList(args).subList(9, args.length));
-        }
-        returnCode = compact(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Integer.parseInt(args[7]), false, propsFilePath, configs);
-        break;
-      case COMPACT_SCHEDULE:
-        assert (args.length >= 6);
-        propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[5])) {
-          propsFilePath = args[5];
-        }
-        configs = new ArrayList<>();
-        if (args.length > 6) {
-          configs.addAll(Arrays.asList(args).subList(6, args.length));
-        }
-        returnCode = compact(jsc, args[1], args[2], args[3], 1, "", args[4], 0, true, propsFilePath, configs);
-        break;
-      case COMPACT_VALIDATE:
-        assert (args.length == 7);
-        doCompactValidate(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]));
-        returnCode = 0;
-        break;
-      case COMPACT_REPAIR:
-        assert (args.length == 8);
-        doCompactRepair(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-            Boolean.parseBoolean(args[7]));
-        returnCode = 0;
-        break;
-      case COMPACT_UNSCHEDULE_FILE:
-        assert (args.length == 9);
-        doCompactUnscheduleFile(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-            Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
-        returnCode = 0;
-        break;
-      case COMPACT_UNSCHEDULE_PLAN:
-        assert (args.length == 9);
-        doCompactUnschedule(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-            Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
-        returnCode = 0;
-        break;
-      case CLEAN:
-        assert (args.length >= 5);
-        propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[4])) {
-          propsFilePath = args[4];
-        }
-        configs = new ArrayList<>();
-        if (args.length > 5) {
-          configs.addAll(Arrays.asList(args).subList(5, args.length));
-        }
-        clean(jsc, args[3], propsFilePath, configs);
-        break;
-      case SAVEPOINT:
-        assert (args.length == 7);
-        returnCode = createSavepoint(jsc, args[3], args[4], args[5], args[6]);
-        break;
-      case DELETE_SAVEPOINT:
-        assert (args.length == 5);
-        returnCode = deleteSavepoint(jsc, args[3], args[4]);
-        break;
-      case BOOTSTRAP:
-        assert (args.length >= 18);
-        propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[17])) {
-          propsFilePath = args[17];
-        }
-        configs = new ArrayList<>();
-        if (args.length > 18) {
-          configs.addAll(Arrays.asList(args).subList(18, args.length));
-        }
-        returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
-            args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
-        break;
-      case UPGRADE:
-      case DOWNGRADE:
-        assert (args.length == 5);
-        returnCode = upgradeOrDowngradeTable(jsc, args[3], args[4]);
-        break;
-      default:
-        break;
+    try {
+      switch (cmd) {
+        case ROLLBACK:
+          assert (args.length == 5);
+          returnCode = rollback(jsc, args[3], args[4]);
+          break;
+        case DEDUPLICATE:
+          assert (args.length == 8);
+          returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], Boolean.parseBoolean(args[6]), args[7]);
+          break;
+        case ROLLBACK_TO_SAVEPOINT:
+          assert (args.length == 5);
+          returnCode = rollbackToSavepoint(jsc, args[3], args[4]);
+          break;
+        case IMPORT:
+        case UPSERT:
+          assert (args.length >= 13);
+          String propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[12])) {
+            propsFilePath = args[12];
+          }
+          List<String> configs = new ArrayList<>();
+          if (args.length > 13) {
+            configs.addAll(Arrays.asList(args).subList(13, args.length));
+          }
+          returnCode = dataLoad(jsc, command, args[3], args[4], args[5], args[6], args[7], args[8],
+                  Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
+          break;
+        case COMPACT_RUN:
+          assert (args.length >= 10);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[9])) {
+            propsFilePath = args[9];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 10) {
+            configs.addAll(Arrays.asList(args).subList(9, args.length));
+          }
+          returnCode = compact(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[7],
+              Integer.parseInt(args[8]), false, propsFilePath, configs);
+          break;
+        case COMPACT_SCHEDULE:
+          assert (args.length >= 7);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[6])) {
+            propsFilePath = args[6];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 7) {
+            configs.addAll(Arrays.asList(args).subList(7, args.length));
+          }
+          returnCode = compact(jsc, args[3], args[4], args[5], 1, "", 0, true, propsFilePath, configs);
+          break;
+        case COMPACT_VALIDATE:
+          assert (args.length == 7);
+          doCompactValidate(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]));
+          returnCode = 0;
+          break;
+        case COMPACT_REPAIR:
+          assert (args.length == 8);
+          doCompactRepair(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
+                  Boolean.parseBoolean(args[7]));
+          returnCode = 0;
+          break;
+        case COMPACT_UNSCHEDULE_FILE:
+          assert (args.length == 10);
+          doCompactUnscheduleFile(jsc, args[3], args[4], args[5], args[6], Integer.parseInt(args[7]),
+              Boolean.parseBoolean(args[8]), Boolean.parseBoolean(args[9]));
+          returnCode = 0;
+          break;
+        case COMPACT_UNSCHEDULE_PLAN:
+          assert (args.length == 9);
+          doCompactUnschedule(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
+                  Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
+          returnCode = 0;
+          break;
+        case CLUSTERING_RUN:
+          assert (args.length >= 8);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[7])) {
+            propsFilePath = args[7];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 8) {
+            configs.addAll(Arrays.asList(args).subList(8, args.length));
+          }
+          returnCode = cluster(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5],
+              Integer.parseInt(args[6]), false, propsFilePath, configs);
+          break;
+        case CLUSTERING_SCHEDULE:
+          assert (args.length >= 6);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[5])) {
+            propsFilePath = args[5];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 6) {
+            configs.addAll(Arrays.asList(args).subList(6, args.length));
+          }
+          returnCode = cluster(jsc, args[1], args[2], args[3], 1, args[4], 0, true, propsFilePath, configs);
+          break;
+        case CLEAN:
+          assert (args.length >= 5);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[4])) {
+            propsFilePath = args[4];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 5) {
+            configs.addAll(Arrays.asList(args).subList(5, args.length));
+          }
+          clean(jsc, args[3], propsFilePath, configs);
+          break;
+        case SAVEPOINT:
+          assert (args.length == 7);
+          returnCode = createSavepoint(jsc, args[3], args[4], args[5], args[6]);
+          break;
+        case DELETE_SAVEPOINT:
+          assert (args.length == 5);
+          returnCode = deleteSavepoint(jsc, args[3], args[4]);
+          break;
+        case BOOTSTRAP:
+          assert (args.length >= 18);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[17])) {
+            propsFilePath = args[17];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 18) {
+            configs.addAll(Arrays.asList(args).subList(18, args.length));
+          }
+          returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
+                  args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
+          break;
+        case UPGRADE:
+        case DOWNGRADE:
+          assert (args.length == 5);
+          returnCode = upgradeOrDowngradeTable(jsc, args[3], args[4]);
+          break;
+        default:
+          break;
+      }
+    } catch (Throwable throwable) {
+      LOG.error("Fail to execute command", throwable);
+      returnCode = -1;
+    } finally {
+      jsc.stop();
     }
     System.exit(returnCode);
-  }
-
-  private static boolean sparkMasterContained(SparkCommand command) {
-    List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
-        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
-        SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE, SparkCommand.SAVEPOINT,
-        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT, SparkCommand.ROLLBACK, SparkCommand.BOOTSTRAP);
-    return masterContained.contains(command);
   }
 
   protected static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
@@ -273,13 +299,14 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String outputPath,
-      int parallelism, boolean skipValidation, boolean dryRun)
+  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String partitionPath,
+      String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.UNSCHEDULE_FILE;
     cfg.outputPath = outputPath;
+    cfg.partitionPath = partitionPath;
     cfg.fileId = fileId;
     cfg.parallelism = parallelism;
     cfg.dryRun = dryRun;
@@ -288,7 +315,7 @@ public class SparkMain {
   }
 
   private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-      int parallelism, String schemaFile, String sparkMemory, int retry, boolean schedule, String propsFilePath,
+      int parallelism, String schemaFile, int retry, boolean schedule, String propsFilePath,
       List<String> configs) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
@@ -301,8 +328,21 @@ public class SparkMain {
     cfg.runSchedule = schedule;
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     return new HoodieCompactor(jsc, cfg).compact(retry);
+  }
+
+  private static int cluster(JavaSparkContext jsc, String basePath, String tableName, String clusteringInstant,
+      int parallelism, String sparkMemory, int retry, boolean schedule, String propsFilePath, List<String> configs) {
+    HoodieClusteringJob.Config cfg = new HoodieClusteringJob.Config();
+    cfg.basePath = basePath;
+    cfg.tableName = tableName;
+    cfg.clusteringInstantTime = clusteringInstant;
+    cfg.parallelism = parallelism;
+    cfg.runSchedule = schedule;
+    cfg.propsFilePath = propsFilePath;
+    cfg.configs = configs;
+    jsc.getConf().set("spark.executor.memory", sparkMemory);
+    return new HoodieClusteringJob(jsc, cfg).cluster(retry);
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
@@ -315,19 +355,25 @@ public class SparkMain {
 
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
       String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
-      String bootstrapIndexClass, String selectorClass, String keyGeneratorClass, String fullBootstrapInputProvider,
+      String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
       String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? UtilHelpers.buildProperties(configs)
         : UtilHelpers.readConfig(FSUtils.getFs(propsFilePath, jsc.hadoopConfiguration()), new Path(propsFilePath), configs).getConfig();
 
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, sourcePath);
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS, keyGeneratorClass);
-    properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER, fullBootstrapInputProvider);
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM, parallelism);
-    properties.setProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR, selectorClass);
-    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), recordKeyCols);
-    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), partitionFields);
+    properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
+
+    if (!StringUtils.isNullOrEmpty(keyGenerator) && KeyGeneratorType.getNames().contains(keyGenerator.toUpperCase(Locale.ROOT))) {
+      properties.setProperty(HoodieBootstrapConfig.KEYGEN_TYPE.key(), keyGenerator.toUpperCase(Locale.ROOT));
+    } else {
+      properties.setProperty(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(), keyGenerator);
+    }
+
+    properties.setProperty(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER_CLASS_NAME.key(), fullBootstrapInputProvider);
+    properties.setProperty(HoodieBootstrapConfig.PARALLELISM_VALUE.key(), parallelism);
+    properties.setProperty(HoodieBootstrapConfig.MODE_SELECTOR_CLASS_NAME.key(), selectorClass);
+    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKeyCols);
+    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionFields);
 
     HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
     cfg.targetTableName = tableName;

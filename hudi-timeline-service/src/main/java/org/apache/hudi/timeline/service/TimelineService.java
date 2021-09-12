@@ -18,8 +18,10 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -30,7 +32,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import io.javalin.core.util.JettyServerUtil;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -51,39 +52,31 @@ public class TimelineService {
   private static final int DEFAULT_NUM_THREADS = -1;
 
   private int serverPort;
+  private Config timelineServerConf;
   private Configuration conf;
+  private transient HoodieEngineContext context;
   private transient FileSystem fs;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
-  private final int numThreads;
-  private final boolean shouldCompressOutput;
-  private final boolean useAsync;
+  private transient RequestHandler requestHandler;
 
   public int getServerPort() {
     return serverPort;
   }
 
-  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager, Configuration conf,
-      int numThreads, boolean compressOutput, boolean useAsync) throws IOException {
-    this.conf = FSUtils.prepareHadoopConf(conf);
-    this.fs = FileSystem.get(conf);
-    this.serverPort = serverPort;
+  public TimelineService(HoodieEngineContext context, Configuration hadoopConf, Config timelineServerConf,
+                         FileSystem fileSystem, FileSystemViewManager globalFileSystemViewManager) throws IOException {
+    this.conf = FSUtils.prepareHadoopConf(hadoopConf);
+    this.timelineServerConf = timelineServerConf;
+    this.serverPort = timelineServerConf.serverPort;
+    this.context = context;
+    this.fs = fileSystem;
     this.fsViewsManager = globalFileSystemViewManager;
-    this.numThreads = numThreads;
-    this.shouldCompressOutput = compressOutput;
-    this.useAsync = useAsync;
   }
 
-  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager) throws IOException {
-    this(serverPort, globalFileSystemViewManager, new Configuration(), DEFAULT_NUM_THREADS, true, false);
-  }
-
-  public TimelineService(Config config) throws IOException {
-    this(config.serverPort, buildFileSystemViewManager(config,
-        new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))), new Configuration(),
-        config.numThreads, config.compress, config.async);
-  }
-
+  /**
+   * Config for {@code TimelineService} class.
+   */
   public static class Config implements Serializable {
 
     @Parameter(names = {"--server-port", "-p"}, description = " Server Port")
@@ -104,10 +97,10 @@ public class TimelineService {
 
     @Parameter(names = {"--base-store-path", "-sp"},
         description = "Directory where spilled view entries will be stored. Used for SPILLABLE_DISK storage type")
-    public String baseStorePathForFileGroups = FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR;
+    public String baseStorePathForFileGroups = FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue();
 
     @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
-    public String rocksDBPath = FileSystemViewStorageConfig.DEFAULT_ROCKSDB_BASE_PATH;
+    public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
 
     @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests")
     public int numThreads = DEFAULT_NUM_THREADS;
@@ -118,8 +111,129 @@ public class TimelineService {
     @Parameter(names = {"--compress"}, description = "Compress output using gzip")
     public boolean compress = true;
 
+    @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
+    public boolean enableMarkerRequests = false;
+
+    @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
+    public int markerBatchNumThreads = 20;
+
+    @Parameter(names = {"--marker-batch-interval-ms", "-mbi"}, description = "The interval in milliseconds between two batch processing of marker creation requests")
+    public long markerBatchIntervalMs = 50;
+
+    @Parameter(names = {"--marker-parallelism", "-mdp"}, description = "Parallelism to use for reading and deleting marker files")
+    public int markerParallelism = 100;
+
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
+
+    public static Builder builder() {
+      return new Builder();
+    }
+
+    /**
+     * Builder of Config class.
+     */
+    public static class Builder {
+      private Integer serverPort = 26754;
+      private FileSystemViewStorageType viewStorageType = FileSystemViewStorageType.SPILLABLE_DISK;
+      private Integer maxViewMemPerTableInMB = 2048;
+      private Double memFractionForCompactionPerTable = 0.001;
+      private String baseStorePathForFileGroups = FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue();
+      private String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
+      private int numThreads = DEFAULT_NUM_THREADS;
+      private boolean async = false;
+      private boolean compress = true;
+      private boolean enableMarkerRequests = false;
+      private int markerBatchNumThreads = 20;
+      private long markerBatchIntervalMs = 50L;
+      private int markerParallelism = 100;
+
+      public Builder() {
+      }
+
+      public Builder serverPort(int serverPort) {
+        this.serverPort = serverPort;
+        return this;
+      }
+
+      public Builder viewStorageType(FileSystemViewStorageType viewStorageType) {
+        this.viewStorageType = viewStorageType;
+        return this;
+      }
+
+      public Builder maxViewMemPerTableInMB(int maxViewMemPerTableInMB) {
+        this.maxViewMemPerTableInMB = maxViewMemPerTableInMB;
+        return this;
+      }
+
+      public Builder memFractionForCompactionPerTable(double memFractionForCompactionPerTable) {
+        this.memFractionForCompactionPerTable = memFractionForCompactionPerTable;
+        return this;
+      }
+
+      public Builder baseStorePathForFileGroups(String baseStorePathForFileGroups) {
+        this.baseStorePathForFileGroups = baseStorePathForFileGroups;
+        return this;
+      }
+
+      public Builder rocksDBPath(String rocksDBPath) {
+        this.rocksDBPath = rocksDBPath;
+        return this;
+      }
+
+      public Builder numThreads(int numThreads) {
+        this.numThreads = numThreads;
+        return this;
+      }
+
+      public Builder async(boolean async) {
+        this.async = async;
+        return this;
+      }
+
+      public Builder compress(boolean compress) {
+        this.compress = compress;
+        return this;
+      }
+
+      public Builder enableMarkerRequests(boolean enableMarkerRequests) {
+        this.enableMarkerRequests = enableMarkerRequests;
+        return this;
+      }
+
+      public Builder markerBatchNumThreads(int markerBatchNumThreads) {
+        this.markerBatchNumThreads = markerBatchNumThreads;
+        return this;
+      }
+
+      public Builder markerBatchIntervalMs(long markerBatchIntervalMs) {
+        this.markerBatchIntervalMs = markerBatchIntervalMs;
+        return this;
+      }
+
+      public Builder markerParallelism(int markerParallelism) {
+        this.markerParallelism = markerParallelism;
+        return this;
+      }
+
+      public Config build() {
+        Config config = new Config();
+        config.serverPort = this.serverPort;
+        config.viewStorageType = this.viewStorageType;
+        config.maxViewMemPerTableInMB = this.maxViewMemPerTableInMB;
+        config.memFractionForCompactionPerTable = this.memFractionForCompactionPerTable;
+        config.baseStorePathForFileGroups = this.baseStorePathForFileGroups;
+        config.rocksDBPath = this.rocksDBPath;
+        config.numThreads = this.numThreads;
+        config.async = this.async;
+        config.compress = this.compress;
+        config.enableMarkerRequests = this.enableMarkerRequests;
+        config.markerBatchNumThreads = this.markerBatchNumThreads;
+        config.markerBatchIntervalMs = this.markerBatchIntervalMs;
+        config.markerParallelism = this.markerParallelism;
+        return config;
+      }
+    }
   }
 
   private int startServiceOnPort(int port) throws IOException {
@@ -150,16 +264,17 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = numThreads == DEFAULT_NUM_THREADS ? JettyServerUtil.defaultServer()
-            : new Server(new QueuedThreadPool(numThreads));
+    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? JettyServerUtil.defaultServer()
+            : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
 
     app = Javalin.create().server(() -> server);
-    if (!shouldCompressOutput) {
+    if (!timelineServerConf.compress) {
       app.disableDynamicGzip();
     }
 
-    RequestHandler requestHandler = new RequestHandler(app, conf, fsViewsManager, useAsync);
-    app.get("/", ctx -> ctx.result("Hello World"));
+    requestHandler = new RequestHandler(
+        app, conf, timelineServerConf, context, fs, fsViewsManager);
+    app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
     int realServerPort = startServiceOnPort(serverPort);
     LOG.info("Starting Timeline server on port :" + realServerPort);
@@ -175,25 +290,26 @@ public class TimelineService {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(conf.get());
     // Just use defaults for now
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().build();
 
     switch (config.viewStorageType) {
       case MEMORY:
         FileSystemViewStorageConfig.Builder inMemConfBuilder = FileSystemViewStorageConfig.newBuilder();
         inMemConfBuilder.withStorageType(FileSystemViewStorageType.MEMORY);
-        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, inMemConfBuilder.build());
+        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, inMemConfBuilder.build(), commonConfig);
       case SPILLABLE_DISK: {
         FileSystemViewStorageConfig.Builder spillableConfBuilder = FileSystemViewStorageConfig.newBuilder();
         spillableConfBuilder.withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
             .withBaseStoreDir(config.baseStorePathForFileGroups)
             .withMaxMemoryForView(config.maxViewMemPerTableInMB * 1024 * 1024L)
             .withMemFractionForPendingCompaction(config.memFractionForCompactionPerTable);
-        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, spillableConfBuilder.build());
+        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, spillableConfBuilder.build(), commonConfig);
       }
       case EMBEDDED_KV_STORE: {
         FileSystemViewStorageConfig.Builder rocksDBConfBuilder = FileSystemViewStorageConfig.newBuilder();
         rocksDBConfBuilder.withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE)
             .withRocksDBPath(config.rocksDBPath);
-        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, rocksDBConfBuilder.build());
+        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, rocksDBConfBuilder.build(), commonConfig);
       }
       default:
         throw new IllegalArgumentException("Invalid view manager storage type :" + config.viewStorageType);
@@ -202,6 +318,9 @@ public class TimelineService {
 
   public void close() {
     LOG.info("Closing Timeline Service");
+    if (requestHandler != null) {
+      this.requestHandler.stop();
+    }
     this.app.stop();
     this.app = null;
     this.fsViewsManager.close();
@@ -226,7 +345,9 @@ public class TimelineService {
 
     Configuration conf = FSUtils.prepareHadoopConf(new Configuration());
     FileSystemViewManager viewManager = buildFileSystemViewManager(cfg, new SerializableConfiguration(conf));
-    TimelineService service = new TimelineService(cfg.serverPort, viewManager);
+    TimelineService service = new TimelineService(
+        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
+        new Configuration(), cfg, FileSystem.get(new Configuration()), viewManager);
     service.run();
   }
 }

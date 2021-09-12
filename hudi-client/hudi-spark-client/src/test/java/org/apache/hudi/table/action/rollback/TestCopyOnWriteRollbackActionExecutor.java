@@ -27,7 +27,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +68,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     final String p1 = "2015/03/16";
     final String p2 = "2015/03/17";
     final String p3 = "2016/03/15";
-    // Let's create some commit files and parquet files
+    // Let's create some commit files and base files
     HoodieTestTable testTable = HoodieTestTable.of(metaClient)
         .withPartitionMetaFiles(p1, p2, p3)
         .addCommit("001")
@@ -213,6 +214,6 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
           String.format("%s:%s/%s", this.fs.getScheme(), basePath, rollbackMetadata.get(DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles().get(0)));
     }
 
-    assertFalse(new MarkerFiles(table, commitInstant.getTimestamp()).doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, commitInstant.getTimestamp()).doesMarkerDirExist());
   }
 }

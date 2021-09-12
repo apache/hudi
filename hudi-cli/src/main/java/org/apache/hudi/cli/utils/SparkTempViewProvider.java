@@ -56,6 +56,11 @@ public class SparkTempViewProvider implements TempViewProvider {
     }
   }
 
+  public SparkTempViewProvider(JavaSparkContext jsc, SQLContext sqlContext) {
+    this.jsc = jsc;
+    this.sqlContext = sqlContext;
+  }
+
   @Override
   public void createOrReplace(String tableName, List<String> headers, List<List<Comparable>> rows) {
     try {

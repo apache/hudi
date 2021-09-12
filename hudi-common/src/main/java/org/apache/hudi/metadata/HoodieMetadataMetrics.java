@@ -48,6 +48,8 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String BASEFILE_READ_STR = "basefile_read";
   public static final String INITIALIZE_STR = "initialize";
   public static final String SYNC_STR = "sync";
+  public static final String REBOOTSTRAP_STR = "rebootstrap";
+  public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";
@@ -131,11 +133,11 @@ public class HoodieMetadataMetrics implements Serializable {
       return;
     }
 
-    // Update sizes and count for metadata table's data files
-    metricsRegistry.add("basefile.size", totalBaseFileSizeInBytes);
-    metricsRegistry.add("logfile.size", totalLogFileSizeInBytes);
-    metricsRegistry.add("basefile.count", baseFileCount);
-    metricsRegistry.add("logfile.count", logFileCount);
+    // Set new size and count for metadata table's data files
+    metricsRegistry.set("basefile.size", totalBaseFileSizeInBytes);
+    metricsRegistry.set("logfile.size", totalLogFileSizeInBytes);
+    metricsRegistry.set("basefile.count", baseFileCount);
+    metricsRegistry.set("logfile.count", logFileCount);
 
     LOG.info(String.format("Updating metadata size metrics (basefile.size=%d, logfile.size=%d, basefile.count=%d, "
         + "logfile.count=%d)", totalBaseFileSizeInBytes, totalLogFileSizeInBytes, baseFileCount, logFileCount));

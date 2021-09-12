@@ -95,16 +95,13 @@ public class ParquetSplitReaderUtil {
       Path path,
       long splitStart,
       long splitLength) throws IOException {
-    List<String> nonPartNames = Arrays.stream(fullFieldNames)
+    List<String> selNonPartNames = Arrays.stream(selectedFields)
+        .mapToObj(i -> fullFieldNames[i])
         .filter(n -> !partitionSpec.containsKey(n))
         .collect(Collectors.toList());
 
-    List<String> selNonPartNames = Arrays.stream(selectedFields)
-        .mapToObj(i -> fullFieldNames[i])
-        .filter(nonPartNames::contains).collect(Collectors.toList());
-
-    int[] selParquetFields = selNonPartNames.stream()
-        .mapToInt(nonPartNames::indexOf)
+    int[] selParquetFields = Arrays.stream(selectedFields)
+        .filter(i -> !partitionSpec.containsKey(fullFieldNames[i]))
         .toArray();
 
     ParquetColumnarRowSplitReader.ColumnBatchGenerator gen = readVectors -> {

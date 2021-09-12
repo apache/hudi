@@ -61,7 +61,7 @@ class AsyncCleanerService extends HoodieAsyncService {
       asyncCleanerService = new AsyncCleanerService(writeClient, instantTime);
       asyncCleanerService.start(null);
     } else {
-      LOG.info("Auto cleaning is not enabled. Not running cleaner now");
+      LOG.info("Async auto cleaning is not enabled. Not running cleaner now");
     }
     return asyncCleanerService;
   }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import java.util.Collections;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.util.Arrays;
@@ -31,6 +32,11 @@ public class MultiPartKeysValueExtractor implements PartitionValueExtractor {
 
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
+    // If the partitionPath is empty string( which means none-partition table), the partition values
+    // should be empty list.
+    if (partitionPath.isEmpty()) {
+      return Collections.emptyList();
+    }
     String[] splits = partitionPath.split("/");
     return Arrays.stream(splits).map(s -> {
       if (s.contains("=")) {

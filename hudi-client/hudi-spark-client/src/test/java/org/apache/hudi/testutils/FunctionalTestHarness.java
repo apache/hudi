@@ -43,16 +43,19 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 
+/**
+ * @deprecated Deprecated. Use {@link SparkClientFunctionalTestHarness} instead.
+ */
 public class FunctionalTestHarness implements SparkProvider, DFSProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
   protected static transient SparkSession spark;
@@ -120,7 +123,6 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
       .setTableName(RAW_TRIPS_TEST_NAME)
       .setTableType(COPY_ON_WRITE)
       .setPayloadClass(HoodieAvroPayload.class)
-      .setBaseFileFormat(PARQUET.toString())
       .fromProperties(props)
       .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
@@ -157,6 +159,14 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
         spark.stop();
         spark = null;
       }));
+    }
+  }
+
+  @AfterEach
+  public synchronized void tearDown() throws Exception {
+    if (spark != null) {
+      spark.stop();
+      spark = null;
     }
   }
 

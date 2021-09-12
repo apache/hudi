@@ -32,6 +32,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -47,7 +48,13 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  * A flink engine implementation of HoodieEngineContext.
  */
 public class HoodieFlinkEngineContext extends HoodieEngineContext {
-  private RuntimeContext runtimeContext;
+  public static final HoodieFlinkEngineContext DEFAULT = new HoodieFlinkEngineContext();
+
+  private final RuntimeContext runtimeContext;
+
+  private HoodieFlinkEngineContext() {
+    this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
+  }
 
   public HoodieFlinkEngineContext(TaskContextSupplier taskContextSupplier) {
     this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), taskContextSupplier);
@@ -79,7 +86,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
-    return data.stream().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    return data.stream().parallel().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
   @Override
@@ -96,5 +103,35 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
     // no operation for now
+  }
+
+  /**
+   * Override the flink context supplier to return constant write token.
+   */
+  private static class DefaultTaskContextSupplier extends FlinkTaskContextSupplier {
+
+    public DefaultTaskContextSupplier() {
+      this(null);
+    }
+
+    public DefaultTaskContextSupplier(RuntimeContext flinkRuntimeContext) {
+      super(flinkRuntimeContext);
+    }
+
+    public Supplier<Integer> getPartitionIdSupplier() {
+      return () -> 0;
+    }
+
+    public Supplier<Integer> getStageIdSupplier() {
+      return () -> 1;
+    }
+
+    public Supplier<Long> getAttemptIdSupplier() {
+      return () -> 0L;
+    }
+
+    public Option<String> getProperty(EngineProperty prop) {
+      return Option.empty();
+    }
   }
 }

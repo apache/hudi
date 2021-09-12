@@ -163,7 +163,7 @@ public class TestClientRollback extends HoodieClientTestBase {
    */
   @Test
   public void testRollbackCommit() throws Exception {
-    // Let's create some commit files and parquet files
+    // Let's create some commit files and base files
     final String p1 = "2016/05/01";
     final String p2 = "2016/05/02";
     final String p3 = "2016/05/06";
@@ -251,7 +251,7 @@ public class TestClientRollback extends HoodieClientTestBase {
    */
   @Test
   public void testAutoRollbackInflightCommit() throws Exception {
-    // Let's create some commit files and parquet files
+    // Let's create some commit files and base files
     final String p1 = "2016/05/01";
     final String p2 = "2016/05/02";
     final String p3 = "2016/05/06";

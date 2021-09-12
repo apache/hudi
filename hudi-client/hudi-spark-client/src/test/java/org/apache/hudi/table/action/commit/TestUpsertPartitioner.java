@@ -18,22 +18,33 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.ClusteringTestUtils;
+import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieHBaseIndexConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
@@ -52,6 +63,7 @@ import java.util.Map;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.table.action.commit.UpsertPartitioner.averageBytesPerRecord;
@@ -71,7 +83,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(smallFileSize)
             .insertSplitSize(100).autoTuneInsertSplits(autoSplitInserts).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).orcMaxFileSize(1000 * 1024).build())
         .build();
 
     FileCreateUtils.createCommit(basePath, "001");
@@ -304,6 +316,121 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     weights = new Double[] { 0.08, 0.42, 0.42, 0.08};
     cumulativeWeights = new Double[] { 0.08, 0.5, 0.92, 1.0};
     assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
+  }
+
+  @Test
+  public void testUpsertPartitionerWithSmallFileHandlingWithInflightCompactionWithCanIndexLogFiles() throws Exception {
+    // Note this is used because it is same partition path used in CompactionTestUtils.createCompactionPlan()
+    final String testPartitionPath = DEFAULT_PARTITION_PATHS[0];
+
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024).build())
+            .withIndexConfig(HoodieIndexConfig.newBuilder()
+                    .withIndexType(HoodieIndex.IndexType.HBASE)
+                    .withHBaseIndexConfig(HoodieHBaseIndexConfig.newBuilder().build())
+                    .build())
+            .build();
+
+    // This will generate initial commits and create a compaction plan which includes file groups created as part of this
+    HoodieCompactionPlan plan = CompactionTestUtils.createCompactionPlan(metaClient, "001", "002", 1, true, false);
+    FileCreateUtils.createRequestedCompactionCommit(basePath, "002", plan);
+    // Simulate one more commit so that inflight compaction is considered when building file groups in file system view
+    //
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "2", 1);
+    FileCreateUtils.createCommit(basePath, "003");
+
+    // Partitioner will attempt to assign inserts to file groups including base file created by inflight compaction
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+    List<HoodieRecord> insertRecords = dataGenerator.generateInserts("004", 100);
+    WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
+
+    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
+    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config);
+
+    assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
+    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+            "Bucket 0 is UPDATE");
+    assertEquals("2", partitioner.getBucketInfo(0).fileIdPrefix,
+            "Should be assigned to only file id not pending compaction which is 2");
+  }
+
+  @Test
+  public void testUpsertPartitionerWithSmallFileHandlingAndClusteringPlan() throws Exception {
+    final String testPartitionPath = DEFAULT_PARTITION_PATHS[0];
+
+    // create HoodieWriteConfig and set inline and async clustering disable here.
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder().build())
+            .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(false).withAsyncClustering(false).build())
+            .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).build())
+            .build();
+
+    // create file slice with instantTime 001 and build clustering plan including this created 001 file slice.
+    HoodieClusteringPlan clusteringPlan = ClusteringTestUtils.createClusteringPlan(metaClient, "001", "1");
+    // create requested replace commit
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+            .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
+    FileCreateUtils.createRequestedReplaceCommit(basePath,"002", Option.of(requestedReplaceMetadata));
+
+    // create file slice 002
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "2", 1);
+    FileCreateUtils.createCommit(basePath, "002");
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // generate new data to be ingested
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+    List<HoodieRecord> insertRecords = dataGenerator.generateInserts("003", 100);
+    WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
+
+    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
+    // create UpsertPartitioner
+    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
+
+    // for now we have file slice1 and file slice2 and file slice1 is contained in pending clustering plan
+    // So that only file slice2 can be used for ingestion.
+    assertEquals(1, partitioner.smallFiles.size(), "Should have 1 small file to be ingested.");
+  }
+
+  @Test
+  public void testUpsertPartitionerWithSmallFileHandlingWithCanIndexLogFiles() throws Exception {
+    // Note this is used because it is same partition path used in CompactionTestUtils.createCompactionPlan()
+    final String testPartitionPath = DEFAULT_PARTITION_PATHS[0];
+
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024).build())
+            .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(1024).build())
+            .withIndexConfig(HoodieIndexConfig.newBuilder()
+                    .withIndexType(HoodieIndex.IndexType.HBASE)
+                    .withHBaseIndexConfig(HoodieHBaseIndexConfig.newBuilder().build())
+                    .build())
+            .build();
+
+    // Create file group with only one log file
+    FileCreateUtils.createLogFile(basePath, testPartitionPath, "001", "fg1", 1);
+    FileCreateUtils.createDeltaCommit(basePath, "001");
+    // Create another file group size set to max parquet file size so should not be considered during small file sizing
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "fg2", 1024);
+    FileCreateUtils.createCommit(basePath, "002");
+    FileCreateUtils.createLogFile(basePath, testPartitionPath, "003", "fg2", 1);
+    FileCreateUtils.createDeltaCommit(basePath, "003");
+
+    // Partitioner will attempt to assign inserts to file groups including base file created by inflight compaction
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+    // Default estimated record size will be 1024 based on last file group created. Only 1 record can be added to small file
+    List<HoodieRecord> insertRecords = dataGenerator.generateInserts("004", 1);
+    WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
+
+    HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
+    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config);
+
+    assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
+    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+            "Bucket 0 should be UPDATE");
+    assertEquals("fg1", partitioner.getBucketInfo(0).fileIdPrefix,
+            "Insert should be assigned to fg1");
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {

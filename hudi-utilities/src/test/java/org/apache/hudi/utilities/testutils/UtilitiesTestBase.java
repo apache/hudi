@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utilities.testutils;
 
-import java.io.FileInputStream;
-
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,7 +32,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HoodieHiveClient;
+import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.sources.TestDataSource;
@@ -70,6 +69,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.BufferedReader;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
@@ -201,10 +201,10 @@ public class UtilitiesTestBase {
       .setTableName(hiveSyncConfig.tableName)
       .initTable(dfs.getConf(), hiveSyncConfig.basePath);
 
-    HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveConf, dfs);
-    client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
-    client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
-    client.close();
+    QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig, dfs);
+    ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.databaseName);
+    ddlExecutor.runSQL("create database " + hiveSyncConfig.databaseName);
+    ddlExecutor.close();
   }
 
   public static class Helpers {
@@ -212,14 +212,11 @@ public class UtilitiesTestBase {
     // to get hold of resources bundled with jar
     private static ClassLoader classLoader = Helpers.class.getClassLoader();
 
-    public static String readFile(String testResourcePath) throws IOException {
+    public static String readFile(String testResourcePath) {
       BufferedReader reader =
           new BufferedReader(new InputStreamReader(classLoader.getResourceAsStream(testResourcePath)));
       StringBuffer sb = new StringBuffer();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line + "\n");
-      }
+      reader.lines().forEach(line -> sb.append(line).append("\n"));
       return sb.toString();
     }
 
@@ -227,10 +224,7 @@ public class UtilitiesTestBase {
       BufferedReader reader =
           new BufferedReader(new InputStreamReader(new FileInputStream(absolutePathForResource)));
       StringBuffer sb = new StringBuffer();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line + "\n");
-      }
+      reader.lines().forEach(line -> sb.append(line).append("\n"));
       return sb.toString();
     }
 
@@ -247,6 +241,12 @@ public class UtilitiesTestBase {
       os.print(readFileFromAbsolutePath(absolutePathForResource));
       os.flush();
       os.close();
+    }
+
+    public static void deleteFileFromDfs(FileSystem fs, String targetPath) throws IOException {
+      if (fs.exists(new Path(targetPath))) {
+        fs.delete(new Path(targetPath), true);
+      }
     }
 
     public static void savePropsToDFS(TypedProperties props, FileSystem fs, String targetPath) throws IOException {

@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -88,6 +89,16 @@ public class ITTestHoodieDemo extends ITTestBase {
           + " --hoodie-conf hoodie.datasource.hive_sync.partition_fields=%s "
           + " --hoodie-conf hoodie.datasource.hive_sync.database=default "
           + " --hoodie-conf hoodie.datasource.hive_sync.table=%s";
+
+  @AfterEach
+  public void clean() throws Exception {
+    String hdfsCmd = "hdfs dfs -rm -R ";
+    List<String> tablePaths = CollectionUtils.createImmutableList(
+        COW_BASE_PATH, MOR_BASE_PATH, COW_BOOTSTRAPPED_BASE_PATH, MOR_BOOTSTRAPPED_BASE_PATH);
+    for (String tablePath : tablePaths) {
+      executeCommandStringInDocker(ADHOC_1_CONTAINER, hdfsCmd + tablePath, true);
+    }
+  }
 
   @Test
   public void testParquetDemo() throws Exception {
@@ -240,6 +251,10 @@ public class ITTestHoodieDemo extends ITTestBase {
     assertStdOutContains(stdOutErrPair, "| stock_ticks_mor_bs_rt  |");
     assertStdOutContains(stdOutErrPair,
         "|   partition    |\n+----------------+\n| dt=2018-08-31  |\n+----------------+\n", 3);
+
+    // There should have 5 data source tables except stock_ticks_mor_bs_rt.
+    // After [HUDI-2071] has solved, we can inc the number 5 to 6.
+    assertStdOutContains(stdOutErrPair, "'spark.sql.sources.provider'='hudi'", 5);
 
     stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"

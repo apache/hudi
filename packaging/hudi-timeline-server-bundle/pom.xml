@@ -21,7 +21,7 @@
     <parent>
         <artifactId>hudi</artifactId>
         <groupId>org.apache.hudi</groupId>
-        <version>0.9.0-SNAPSHOT</version>
+        <version>0.10.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -203,6 +203,8 @@
                       <include>org.apache.hbase:hbase-client</include>
                       <include>org.apache.hbase:hbase-protocol</include>
                       <include>org.apache.hbase:hbase-server</include>
+                      <include>com.esotericsoftware:kryo-shaded</include>
+                      <include>com.esotericsoftware:minlog</include>
                       <include>log4j:log4j</include>
                   </includes>
                 </artifactSet>

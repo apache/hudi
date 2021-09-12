@@ -44,19 +44,22 @@ public class FileSliceMetricUtils {
     long totalIO = 0;
 
     for (FileSlice slice : fileSlices) {
-      numLogFiles +=  slice.getLogFiles().count();
+      numLogFiles += slice.getLogFiles().count();
       // Total size of all the log files
       totalLogFileSize += slice.getLogFiles().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)
           .reduce(Long::sum).orElse(0L);
 
       long baseFileSize = slice.getBaseFile().isPresent() ? slice.getBaseFile().get().getFileSize() : 0L;
-      // Total read will be the base file + all the log files
-      totalIORead = FSUtils.getSizeInMB(baseFileSize + totalLogFileSize);
+      totalIORead += baseFileSize;
       // Total write will be similar to the size of the base file
-      totalIOWrite = FSUtils.getSizeInMB(baseFileSize > 0 ? baseFileSize : defaultBaseFileSize);
-      // Total IO will the the IO for read + write
-      totalIO = totalIORead + totalIOWrite;
+      totalIOWrite += baseFileSize > 0 ? baseFileSize : defaultBaseFileSize;
     }
+    // Total read will be the base file + all the log files
+    totalIORead = FSUtils.getSizeInMB(totalIORead + totalLogFileSize);
+    totalIOWrite = FSUtils.getSizeInMB(totalIOWrite);
+
+    // Total IO will be the IO for read + write
+    totalIO = totalIORead + totalIOWrite;
 
     metrics.put(TOTAL_IO_READ_MB, (double) totalIORead);
     metrics.put(TOTAL_IO_WRITE_MB, (double) totalIOWrite);

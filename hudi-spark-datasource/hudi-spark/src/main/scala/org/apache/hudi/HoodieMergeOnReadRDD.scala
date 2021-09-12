@@ -50,6 +50,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
   private val preCombineField = tableState.preCombineField
+  private val recordKeyFieldOpt = tableState.recordKeyFieldOpt
   private val payloadProps = if (preCombineField.isDefined) {
     Some(HoodiePayloadConfig.newBuilder.withPayloadOrderingField(preCombineField.get).build.getProps)
   } else {
@@ -209,6 +210,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
       private val keyToSkip = mutable.Set.empty[String]
+      private val recordKeyPosition = if (recordKeyFieldOpt.isEmpty) HOODIE_RECORD_KEY_COL_POS else tableState.tableStructSchema.fieldIndex(recordKeyFieldOpt.get)
 
       private var recordToLoad: InternalRow = _
 
@@ -216,7 +218,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       override def hasNext: Boolean = {
         if (baseFileIterator.hasNext) {
           val curRow = baseFileIterator.next()
-          val curKey = curRow.getString(HOODIE_RECORD_KEY_COL_POS)
+          val curKey = curRow.getString(recordKeyPosition)
           if (logRecords.containsKey(curKey)) {
             // duplicate key found, merging
             keyToSkip.add(curKey)

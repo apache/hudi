@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 /**
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
@@ -39,12 +40,13 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
   // Set of all record keys that are to be read in memory
   private Set<String> mergeKeyFilter;
 
-  public HoodieMetadataMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
+  private HoodieMetadataMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
                                               Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes, int bufferSize,
-                                              String spillableMapBasePath, Set<String> mergeKeyFilter) {
+                                              String spillableMapBasePath, Set<String> mergeKeyFilter,
+                                               ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
-        spillableMapBasePath, false);
-    this.mergeKeyFilter = mergeKeyFilter != null ? mergeKeyFilter : Collections.emptySet();
+        spillableMapBasePath, Option.empty(), false, diskMapType, isBitCaskDiskMapCompressionEnabled, false);
+    this.mergeKeyFilter = mergeKeyFilter;
 
     performScan();
   }
@@ -64,6 +66,13 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
   }
 
   /**
+   * Returns the builder for {@code HoodieMetadataMergedLogRecordScanner}.
+   */
+  public static HoodieMetadataMergedLogRecordScanner.Builder newBuilder() {
+    return new HoodieMetadataMergedLogRecordScanner.Builder();
+  }
+
+  /**
    * Retrieve a record given its key.
    *
    * @param key Key of the record to retrieve
@@ -71,5 +80,82 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
    */
   public Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key) {
     return Option.ofNullable((HoodieRecord) records.get(key));
+  }
+
+  /**
+   * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
+   */
+  public static class Builder extends HoodieMergedLogRecordScanner.Builder {
+    private Set<String> mergeKeyFilter = Collections.emptySet();
+
+    public Builder withFileSystem(FileSystem fs) {
+      this.fs = fs;
+      return this;
+    }
+
+    public Builder withBasePath(String basePath) {
+      this.basePath = basePath;
+      return this;
+    }
+
+    public Builder withLogFilePaths(List<String> logFilePaths) {
+      this.logFilePaths = logFilePaths;
+      return this;
+    }
+
+    public Builder withReaderSchema(Schema schema) {
+      this.readerSchema = schema;
+      return this;
+    }
+
+    public Builder withLatestInstantTime(String latestInstantTime) {
+      this.latestInstantTime = latestInstantTime;
+      return this;
+    }
+
+    public Builder withReadBlocksLazily(boolean readBlocksLazily) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withReverseReader(boolean reverseReader) {
+      throw new UnsupportedOperationException();
+    }
+
+    public Builder withBufferSize(int bufferSize) {
+      this.bufferSize = bufferSize;
+      return this;
+    }
+
+    public Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
+      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
+      return this;
+    }
+
+    public Builder withSpillableMapBasePath(String spillableMapBasePath) {
+      this.spillableMapBasePath = spillableMapBasePath;
+      return this;
+    }
+
+    public Builder withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
+      this.diskMapType = diskMapType;
+      return this;
+    }
+
+    public Builder withBitCaskDiskMapCompressionEnabled(boolean isBitCaskDiskMapCompressionEnabled) {
+      this.isBitCaskDiskMapCompressionEnabled = isBitCaskDiskMapCompressionEnabled;
+      return this;
+    }
+
+    public Builder withMergeKeyFilter(Set<String> mergeKeyFilter) {
+      this.mergeKeyFilter = mergeKeyFilter;
+      return this;
+    }
+
+    @Override
+    public HoodieMetadataMergedLogRecordScanner build() {
+      return new HoodieMetadataMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
+          latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter,
+          diskMapType, isBitCaskDiskMapCompressionEnabled);
+    }
   }
 }
