@@ -30,8 +30,7 @@ import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
-import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.JavaConversions._
@@ -48,10 +47,10 @@ class TestStructuredStreaming extends HoodieClientTestBase {
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME -> "hoodie_test"
+    DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
   @BeforeEach override def setUp() {
@@ -138,9 +137,9 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       // we have 2 commits, try pulling the first commit (which is not the latest)
       val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").get(0)
       val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
-        .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, firstCommit)
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+        .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
         .load(destPath)
       assertEquals(100, hoodieIncViewDF1.count())
       // 100 initial inserts must be pulled
@@ -150,8 +149,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
 
       // pull the latest commit
       val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime1)
         .load(destPath)
 
       assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
@@ -183,17 +182,23 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       case te: TableNotFoundException =>
         log.info("Got table not found exception. Retrying")
     } finally {
-      Thread.sleep(sleepSecsAfterEachRun * 1000)
-      currTime = System.currentTimeMillis
+      if (!success) {
+        Thread.sleep(sleepSecsAfterEachRun * 1000)
+        currTime = System.currentTimeMillis
+      }
     }
     if (!success) throw new IllegalStateException("Timed-out waiting for " + numCommits + " commits to appear in " + tablePath)
     numInstants
   }
 
-  def getInlineClusteringOpts( isInlineClustering: String, clusteringNumCommit: String, fileMaxRecordNum: Int):Map[String, String] = {
-    commonOpts + (HoodieClusteringConfig.INLINE_CLUSTERING_PROP -> isInlineClustering,
-      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP -> clusteringNumCommit,
-      HoodieStorageConfig.PARQUET_FILE_MAX_BYTES -> dataGen.getEstimatedFileSizeInBytes(fileMaxRecordNum).toString
+  def getClusteringOpts(isInlineClustering: String, isAsyncClustering: String, isAsyncCompaction: String,
+                        clusteringNumCommit: String, fileMaxRecordNum: Int):Map[String, String] = {
+    commonOpts + (HoodieClusteringConfig.INLINE_CLUSTERING.key -> isInlineClustering,
+      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
+      DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE.key -> isAsyncClustering,
+      DataSourceWriteOptions.ASYNC_COMPACT_ENABLE.key -> isAsyncCompaction,
+      HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key -> clusteringNumCommit,
+      HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key -> dataGen.getEstimatedFileSizeInBytes(fileMaxRecordNum).toString
     )
   }
 
@@ -203,33 +208,45 @@ class TestStructuredStreaming extends HoodieClientTestBase {
 
     def checkClusteringResult(destPath: String):Unit = {
       // check have schedule clustering and clustering file group to one
-      waitTillHasCompletedReplaceInstant(destPath, 120, 5)
+      waitTillHasCompletedReplaceInstant(destPath, 120, 1)
       metaClient.reloadActiveTimeline()
       assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
     }
-    structuredStreamingForTestClusteringRunner(sourcePath, destPath, true,
+    structuredStreamingForTestClusteringRunner(sourcePath, destPath, true, false, false,
       HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, checkClusteringResult)
   }
 
   @Test
-  def testStructuredStreamingWithoutInlineClustering(): Unit = {
+  def testStructuredStreamingWithAsyncClustering(): Unit = {
     val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
 
     def checkClusteringResult(destPath: String):Unit = {
-      val msg = "Should have replace commit completed"
-      assertThrows(classOf[IllegalStateException], new Executable {
-        override def execute(): Unit = {
-          waitTillHasCompletedReplaceInstant(destPath, 120, 5)
-        }
-      }, msg)
-      println(msg)
+      // check have schedule clustering and clustering file group to one
+      waitTillHasCompletedReplaceInstant(destPath, 120, 1)
+      metaClient.reloadActiveTimeline()
+      assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
     }
-    structuredStreamingForTestClusteringRunner(sourcePath, destPath, false,
+    structuredStreamingForTestClusteringRunner(sourcePath, destPath, false, true, false,
       HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, checkClusteringResult)
   }
 
-  def structuredStreamingForTestClusteringRunner(sourcePath: String, destPath: String,
-                                           isInlineClustering: Boolean, partitionOfRecords: String, checkClusteringResult: String => Unit): Unit = {
+  @Test
+  def testStructuredStreamingWithAsyncClusteringAndCompaction(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+
+    def checkClusteringResult(destPath: String):Unit = {
+      // check have schedule clustering and clustering file group to one
+      waitTillHasCompletedReplaceInstant(destPath, 120, 1)
+      metaClient.reloadActiveTimeline()
+      assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
+    }
+    structuredStreamingForTestClusteringRunner(sourcePath, destPath, false, true, true,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, checkClusteringResult)
+  }
+
+  def structuredStreamingForTestClusteringRunner(sourcePath: String, destPath: String, isInlineClustering: Boolean,
+                                                 isAsyncClustering: Boolean, isAsyncCompaction: Boolean,
+                                                 partitionOfRecords: String, checkClusteringResult: String => Unit): Unit = {
     // First insert of data
     val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, partitionOfRecords)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -238,7 +255,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 100, partitionOfRecords)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
-    val hudiOptions = getInlineClusteringOpts(isInlineClustering.toString, "2", 100)
+    val hudiOptions = getClusteringOpts(isInlineClustering.toString, isAsyncClustering.toString,
+      isAsyncCompaction.toString, "2", 100)
     val f1 = initStreamingWriteFuture(inputDF1.schema, sourcePath, destPath, hudiOptions)
 
     val f2 = Future {
@@ -251,17 +269,17 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       // wait for spark streaming to process second microbatch
       currNumCommits = waitTillAtleastNCommits(fs, destPath, currNumCommits + 1, 120, 5)
       // for inline clustering, clustering may be complete along with 2nd commit
-      if (HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, destPath).getCompletedReplaceTimeline().countInstants() > 0) {
+      if (HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, destPath).getCompletedReplaceTimeline.countInstants() > 0) {
         assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
         // check have at least one file group
         this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(destPath)
-        .setLoadActiveTimelineOnLoad(true).build()
+          .setLoadActiveTimelineOnLoad(true).build()
         assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 0)
       } else {
         assertEquals(currNumCommits, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
         // check have more than one file group
         this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(destPath)
-        .setLoadActiveTimelineOnLoad(true).build()
+          .setLoadActiveTimelineOnLoad(true).build()
         assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 1)
       }
 

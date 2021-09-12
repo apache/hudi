@@ -23,8 +23,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.slf4j.Logger;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  * Coordinator executor that executes the tasks asynchronously, it fails the job
  * for any task exceptions.
@@ -37,21 +35,12 @@ public class CoordinatorExecutor extends NonThrownExecutor {
   private final OperatorCoordinator.Context context;
 
   public CoordinatorExecutor(OperatorCoordinator.Context context, Logger logger) {
-    super(logger);
+    super(logger, true);
     this.context = context;
   }
 
   @Override
   protected void exceptionHook(String actionString, Throwable t) {
     this.context.failJob(new HoodieException(actionString, t));
-  }
-
-  @Override
-  public void close() throws Exception {
-    // wait for the remaining tasks to finish.
-    executor.shutdown();
-    // We do not expect this to actually block for long. At this point, there should
-    // be very few task running in the executor, if any.
-    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
   }
 }

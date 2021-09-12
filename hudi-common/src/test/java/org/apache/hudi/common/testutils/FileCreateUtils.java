@@ -21,6 +21,7 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.fs.FSUtils;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -44,18 +46,21 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCompactionPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRequestedReplaceMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 
 public class FileCreateUtils {
 
   private static final String WRITE_TOKEN = "1-0-1";
-  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   public static String baseFileName(String instantTime, String fileId) {
     return baseFileName(instantTime, fileId, BASE_FILE_EXTENSION);
@@ -158,12 +163,24 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
   }
 
-  public static void createRequestedReplaceCommit(String basePath, String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, serializeRequestedReplaceMetadata(requestedReplaceMetadata).get());
+  public static void createRequestedReplaceCommit(String basePath, String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws IOException {
+    if (requestedReplaceMetadata.isPresent()) {
+      createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, serializeRequestedReplaceMetadata(requestedReplaceMetadata.get()).get());
+    } else {
+      createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
+    }
   }
 
-  public static void createInflightReplaceCommit(String basePath, String instantTime) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
+  public static void createInflightReplaceCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws IOException {
+    if (inflightReplaceMetadata.isPresent()) {
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, inflightReplaceMetadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+    } else {
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
+    }
+  }
+
+  public static void createRequestedCompactionCommit(String basePath, String instantTime, HoodieCompactionPlan requestedCompactionPlan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION, serializeCompactionPlan(requestedCompactionPlan).get());
   }
 
   public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata) throws IOException {
@@ -199,10 +216,6 @@ public class FileCreateUtils {
     createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
   }
 
-  public static void createInflightCompaction(String basePath, String instantTime) throws IOException {
-    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
-  }
-
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
@@ -219,6 +232,11 @@ public class FileCreateUtils {
 
   public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
       throws Exception {
+    createBaseFile(basePath, partitionPath, instantTime, fileId, length, Instant.now().toEpochMilli());
+  }
+
+  public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length, long lastModificationTimeMilli)
+      throws Exception {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
     Path baseFilePath = parentPath.resolve(baseFileName(instantTime, fileId));
@@ -226,6 +244,7 @@ public class FileCreateUtils {
       Files.createFile(baseFilePath);
     }
     new RandomAccessFile(baseFilePath.toFile(), "rw").setLength(length);
+    Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
   }
 
   public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version)
@@ -253,6 +272,30 @@ public class FileCreateUtils {
       Files.createFile(markerFilePath);
     }
     return markerFilePath.toAbsolutePath().toString();
+  }
+
+  private static void removeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Path metaFilePath = parentPath.resolve(instantTime + suffix);
+    if (Files.exists(metaFilePath)) {
+      Files.delete(metaFilePath);
+    }
+  }
+
+  public static void deleteCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
+  }
+
+  public static void deleteRequestedCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
+  }
+
+  public static void deleteInflightCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
+  }
+
+  public static void deleteDeltaCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
   }
 
   public static long getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime, IOType ioType) throws IOException {

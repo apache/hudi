@@ -17,12 +17,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.10.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark3_2.12</artifactId>
-  <version>0.9.0-SNAPSHOT</version>
+  <version>0.10.0-SNAPSHOT</version>
 
   <name>hudi-spark3_2.12</name>
   <packaging>jar</packaging>
@@ -47,6 +47,7 @@
             <args>
               <arg>-nobootcp</arg>
             </args>
+            <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
         </plugin>
         <plugin>
@@ -183,7 +184,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common</artifactId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -214,7 +215,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common</artifactId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
@@ -224,6 +225,11 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

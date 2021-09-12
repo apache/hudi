@@ -18,10 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -68,6 +64,13 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -111,9 +114,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
     this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
-        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
+    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.taskContextSupplier = context.getTaskContextSupplier();
@@ -123,7 +126,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     }
     return viewManager;
   }
@@ -482,7 +485,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Returns the possible invalid data file name with given marker files.
    */
-  protected Set<String> getInvalidDataPaths(MarkerFiles markers) throws IOException {
+  protected Set<String> getInvalidDataPaths(WriteMarkers markers) throws IOException {
     return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
   }
 
@@ -504,7 +507,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
-      MarkerFiles markers = new MarkerFiles(this, instantTs);
+      WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
 
       if (!markers.doesMarkerDirExist()) {
         // can happen if it was an empty write say.
@@ -656,6 +659,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public HoodieLogBlockType getLogDataBlockFormat() {
     switch (getBaseFileFormat()) {
       case PARQUET:
+      case ORC:
         return HoodieLogBlockType.AVRO_DATA_BLOCK;
       case HFILE:
         return HoodieLogBlockType.HFILE_DATA_BLOCK;

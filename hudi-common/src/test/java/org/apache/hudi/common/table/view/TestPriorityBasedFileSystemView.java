@@ -68,7 +68,7 @@ public class TestPriorityBasedFileSystemView {
     fsView = new PriorityBasedFileSystemView(primary, secondary);
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
-        "file0001" + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension()));
+        "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
   }
 
   private void resetMocks() {

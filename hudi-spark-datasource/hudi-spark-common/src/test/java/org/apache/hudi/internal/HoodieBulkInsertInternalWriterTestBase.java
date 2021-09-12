@@ -18,21 +18,30 @@
 
 package org.apache.hudi.internal;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 
+import static org.apache.hudi.testutils.SparkDatasetTestUtils.getConfigBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -60,14 +69,52 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
     cleanupResources();
   }
 
+  protected HoodieWriteConfig getWriteConfig(boolean populateMetaFields) {
+    Properties properties = new Properties();
+    if (!populateMetaFields) {
+      properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), SimpleKeyGenerator.class.getName());
+      properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key(), SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME);
+      properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME);
+      properties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    }
+    return getConfigBuilder(basePath).withProperties(properties).build();
+  }
+
   protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size,
-      Option<List<String>> fileAbsPaths, Option<List<String>> fileNames) {
-    assertEquals(batches, writeStatuses.size());
+                                     Option<List<String>> fileAbsPaths, Option<List<String>> fileNames) {
+    assertWriteStatuses(writeStatuses, batches, size, false, fileAbsPaths, fileNames);
+  }
+
+  protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size, boolean areRecordsSorted,
+                                     Option<List<String>> fileAbsPaths, Option<List<String>> fileNames) {
+    if (areRecordsSorted) {
+      assertEquals(batches, writeStatuses.size());
+    } else {
+      assertEquals(Math.min(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS.length, batches), writeStatuses.size());
+    }
+
+    Map<String, Long> sizeMap = new HashMap<>();
+    if (!areRecordsSorted) {
+      // <size> no of records are written per batch. Every 4th batch goes into same writeStatus. So, populating the size expected
+      // per write status
+      for (int i = 0; i < batches; i++) {
+        String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[i % 3];
+        if (!sizeMap.containsKey(partitionPath)) {
+          sizeMap.put(partitionPath, 0L);
+        }
+        sizeMap.put(partitionPath, sizeMap.get(partitionPath) + size);
+      }
+    }
+
     int counter = 0;
     for (HoodieInternalWriteStatus writeStatus : writeStatuses) {
       // verify write status
       assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3], writeStatus.getPartitionPath());
-      assertEquals(writeStatus.getTotalRecords(), size);
+      if (areRecordsSorted) {
+        assertEquals(writeStatus.getTotalRecords(), size);
+      } else {
+        assertEquals(writeStatus.getTotalRecords(), sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]));
+      }
       assertNull(writeStatus.getGlobalError());
       assertEquals(writeStatus.getFailedRowsSize(), 0);
       assertEquals(writeStatus.getTotalErrorRecords(), 0);
@@ -82,8 +129,13 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
             .substring(writeStatus.getStat().getPath().lastIndexOf('/') + 1));
       }
       HoodieWriteStat writeStat = writeStatus.getStat();
-      assertEquals(size, writeStat.getNumInserts());
-      assertEquals(size, writeStat.getNumWrites());
+      if (areRecordsSorted) {
+        assertEquals(size, writeStat.getNumInserts());
+        assertEquals(size, writeStat.getNumWrites());
+      } else {
+        assertEquals(sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]), writeStat.getNumInserts());
+        assertEquals(sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]), writeStat.getNumWrites());
+      }
       assertEquals(fileId, writeStat.getFileId());
       assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter++ % 3], writeStat.getPartitionPath());
       assertEquals(0, writeStat.getNumDeletes());
@@ -92,21 +144,27 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
     }
   }
 
-  protected void assertOutput(Dataset<Row> expectedRows, Dataset<Row> actualRows, String instantTime, Option<List<String>> fileNames) {
-    // verify 3 meta fields that are filled in within create handle
-    actualRows.collectAsList().forEach(entry -> {
-      assertEquals(entry.get(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).toString(), instantTime);
-      assertFalse(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD)));
-      if (fileNames.isPresent()) {
-        assertTrue(fileNames.get().contains(entry.get(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS
-            .get(HoodieRecord.FILENAME_METADATA_FIELD))));
-      }
-      assertFalse(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)));
-    });
+  protected void assertOutput(Dataset<Row> expectedRows, Dataset<Row> actualRows, String instantTime, Option<List<String>> fileNames,
+                              boolean populateMetaColumns) {
+    if (populateMetaColumns) {
+      // verify 3 meta fields that are filled in within create handle
+      actualRows.collectAsList().forEach(entry -> {
+        assertEquals(entry.get(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).toString(), instantTime);
+        assertFalse(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD)));
+        if (fileNames.isPresent()) {
+          assertTrue(fileNames.get().contains(entry.get(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS
+              .get(HoodieRecord.FILENAME_METADATA_FIELD))));
+        }
+        assertFalse(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)));
+      });
 
-    // after trimming 2 of the meta fields, rest of the fields should match
-    Dataset<Row> trimmedExpected = expectedRows.drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD);
-    Dataset<Row> trimmedActual = actualRows.drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD);
-    assertEquals(0, trimmedActual.except(trimmedExpected).count());
+      // after trimming 2 of the meta fields, rest of the fields should match
+      Dataset<Row> trimmedExpected = expectedRows.drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD);
+      Dataset<Row> trimmedActual = actualRows.drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD);
+      assertEquals(0, trimmedActual.except(trimmedExpected).count());
+    } else { // operation = BULK_INSERT_APPEND_ONLY
+      // all meta columns are untouched
+      assertEquals(0, expectedRows.except(actualRows).count());
+    }
   }
 }

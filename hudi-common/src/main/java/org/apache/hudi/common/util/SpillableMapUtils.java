@@ -20,16 +20,21 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.collection.DiskBasedMap.FileEntry;
+import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.zip.CRC32;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
 
 /**
  * A utility class supports spillable map.
@@ -109,12 +114,40 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
-    String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-    String partitionPath = rec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String preCombineField, boolean withOperationField) {
+    return convertToHoodieRecordPayload(rec, payloadClazz, preCombineField, Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD), withOperationField);
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
+  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz,
+                                                   String preCombineField, Pair<String, String> recordKeyPartitionPathPair,
+                                                   boolean withOperationField) {
+    String recKey = rec.get(recordKeyPartitionPathPair.getLeft()).toString();
+    String partitionPath = rec.get(recordKeyPartitionPathPair.getRight()).toString();
+    Object preCombineVal = getPreCombineVal(rec, preCombineField);
+    HoodieOperation operation = withOperationField
+        ? HoodieOperation.fromName(getNullableValAsString(rec, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
-        ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.of(rec)}, Option.class));
+        ReflectionUtils.loadPayload(payloadClazz, new Object[] {rec, preCombineVal}, GenericRecord.class, Comparable.class), operation);
+
     return (R) hoodieRecord;
+  }
+
+  /**
+   * Returns the preCombine value with given field name.
+   *
+   * @param rec The avro record
+   * @param preCombineField The preCombine field name
+   * @return the preCombine field value or 0 if the field does not exist in the avro schema
+   */
+  private static Object getPreCombineVal(GenericRecord rec, String preCombineField) {
+    if (preCombineField == null) {
+      return 0;
+    }
+    Schema.Field field = rec.getSchema().getField(preCombineField);
+    return field == null ? 0 : rec.get(field.pos());
   }
 
   /**

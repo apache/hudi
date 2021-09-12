@@ -51,19 +51,21 @@ public abstract class AbstractSyncHoodieClient {
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieTableType tableType;
   protected final FileSystem fs;
-  private String basePath;
-  private boolean assumeDatePartitioning;
-  private boolean useFileListingFromMetadata;
-  private boolean verifyMetadataFileListing;
+  private final String basePath;
+  private final boolean assumeDatePartitioning;
+  private final boolean useFileListingFromMetadata;
+  private final boolean verifyMetadataFileListing;
+  private final boolean withOperationField;
 
   public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
-                                  boolean verifyMetadataFileListing, FileSystem fs) {
+                                  boolean verifyMetadataFileListing, boolean withOperationField, FileSystem fs) {
     this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.tableType = metaClient.getTableType();
     this.basePath = basePath;
     this.assumeDatePartitioning = assumeDatePartitioning;
     this.useFileListingFromMetadata = useFileListingFromMetadata;
     this.verifyMetadataFileListing = verifyMetadataFileListing;
+    this.withOperationField = withOperationField;
     this.fs = fs;
   }
 
@@ -108,6 +110,10 @@ public abstract class AbstractSyncHoodieClient {
     return fs;
   }
 
+  public boolean isBootstrap() {
+    return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
+  }
+
   public void closeQuietly(ResultSet resultSet, Statement stmt) {
     try {
       if (stmt != null) {
@@ -135,7 +141,11 @@ public abstract class AbstractSyncHoodieClient {
    */
   public MessageType getDataSchema() {
     try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema();
+      if (withOperationField) {
+        return new TableSchemaResolver(metaClient, true).getTableParquetSchema();
+      } else {
+        return new TableSchemaResolver(metaClient).getTableParquetSchema();
+      }
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read data schema", e);
     }

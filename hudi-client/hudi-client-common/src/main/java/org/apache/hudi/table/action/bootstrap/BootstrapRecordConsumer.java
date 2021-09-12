@@ -39,7 +39,7 @@ public class BootstrapRecordConsumer extends BoundedInMemoryQueueConsumer<Hoodie
   @Override
   protected void consumeOneRecord(HoodieRecord record) {
     try {
-      bootstrapHandle.write(record, record.getData().getInsertValue(bootstrapHandle.getWriterSchemaWithMetafields()));
+      bootstrapHandle.write(record, record.getData().getInsertValue(bootstrapHandle.getWriterSchemaWithMetaFields()));
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }

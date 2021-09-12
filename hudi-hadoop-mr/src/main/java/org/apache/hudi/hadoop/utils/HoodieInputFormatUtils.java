@@ -48,6 +48,9 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
@@ -68,9 +71,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.VALIDATE_ENABLE;
 
 public class HoodieInputFormatUtils {
 
@@ -123,6 +125,8 @@ public class HoodieInputFormatUtils {
         } else {
           return HoodieHFileInputFormat.class.getName();
         }
+      case ORC:
+        return OrcInputFormat.class.getName();
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
@@ -134,6 +138,8 @@ public class HoodieInputFormatUtils {
         return MapredParquetOutputFormat.class.getName();
       case HFILE:
         return MapredParquetOutputFormat.class.getName();
+      case ORC:
+        return OrcOutputFormat.class.getName();
       default:
         throw new HoodieIOException("No OutputFormat for base file format " + baseFileFormat);
     }
@@ -145,6 +151,8 @@ public class HoodieInputFormatUtils {
         return ParquetHiveSerDe.class.getName();
       case HFILE:
         return ParquetHiveSerDe.class.getName();
+      case ORC:
+        return OrcSerde.class.getName();
       default:
         throw new HoodieIOException("No SerDe for base file format " + baseFileFormat);
     }
@@ -283,24 +291,17 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Extract HoodieTableMetaClient by base path.
-   * @param conf
-   * @param partitions
-   * @return
+   * Extract HoodieTableMetaClient by partition path.
+   * @param conf       The hadoop conf
+   * @param partitions The partitions
+   * @return partition path to table meta client mapping
    */
-  public static Map<Path, HoodieTableMetaClient> getTableMetaClientByBasePath(Configuration conf, Set<Path> partitions) {
-    Map<String, HoodieTableMetaClient> metaClientMap = new HashMap<>();
+  public static Map<Path, HoodieTableMetaClient> getTableMetaClientByPartitionPath(Configuration conf, Set<Path> partitions) {
+    Map<Path, HoodieTableMetaClient> metaClientMap = new HashMap<>();
     return partitions.stream().collect(Collectors.toMap(Function.identity(), p -> {
-      // Get meta client if this path is the base path.
-      Option<String> matchingBasePath = Option.fromJavaOptional(
-          metaClientMap.keySet().stream().filter(basePath -> p.toString().startsWith(basePath)).findFirst());
-      if (matchingBasePath.isPresent()) {
-        return metaClientMap.get(matchingBasePath.get());
-      }
-
       try {
         HoodieTableMetaClient metaClient = getTableMetaClientForBasePath(p.getFileSystem(conf), p);
-        metaClientMap.put(metaClient.getBasePath(), metaClient);
+        metaClientMap.put(p, metaClient);
         return metaClient;
       } catch (IOException e) {
         throw new HoodieIOException("Error creating hoodie meta client against : " + p, e);
@@ -417,8 +418,8 @@ public class HoodieInputFormatUtils {
 
   public static HoodieMetadataConfig buildMetadataConfig(Configuration conf) {
     return HoodieMetadataConfig.newBuilder()
-        .enable(conf.getBoolean(METADATA_ENABLE_PROP, DEFAULT_METADATA_ENABLE_FOR_READERS))
-        .validate(conf.getBoolean(METADATA_VALIDATE_PROP, DEFAULT_METADATA_VALIDATE))
+        .enable(conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
+        .validate(conf.getBoolean(VALIDATE_ENABLE.key(), VALIDATE_ENABLE.defaultValue()))
         .build();
   }
 
@@ -440,6 +441,7 @@ public class HoodieInputFormatUtils {
         }
 
         HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
+
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
             FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();

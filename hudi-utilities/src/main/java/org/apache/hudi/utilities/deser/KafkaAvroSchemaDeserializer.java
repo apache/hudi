@@ -18,20 +18,17 @@
 
 package org.apache.hudi.utilities.deser;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.exception.HoodieException;
+
+import org.apache.avro.Schema;
+import org.apache.hudi.utilities.sources.AvroKafkaSource;
+import org.apache.kafka.common.errors.SerializationException;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import org.apache.avro.Schema;
-
-import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 
 /**
  * Extending {@link KafkaAvroSchemaDeserializer} as we need to be able to inject reader schema during deserialization.
@@ -51,9 +48,7 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     super.configure(configs, isKey);
     try {
       TypedProperties props = getConvertToTypedProperties(configs);
-      String className = props.getString(DataSourceWriteOptions.SCHEMA_PROVIDER_CLASS_PROP());
-      SchemaProvider schemaProvider = (SchemaProvider) ReflectionUtils.loadClass(className, props);
-      sourceSchema = Objects.requireNonNull(schemaProvider).getSourceSchema();
+      sourceSchema = new Schema.Parser().parse(props.getString(AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA));
     } catch (Throwable e) {
       throw new HoodieException(e);
     }

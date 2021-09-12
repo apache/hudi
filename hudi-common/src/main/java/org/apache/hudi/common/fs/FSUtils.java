@@ -18,14 +18,6 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -37,26 +29,40 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -98,8 +104,6 @@ public class FSUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(), e);
     }
-    LOG.info(String.format("Hadoop Configuration: fs.defaultFS: [%s], Config:[%s], FileSystem: [%s]",
-        conf.getRaw("fs.defaultFS"), conf.toString(), fs.toString()));
     return fs;
   }
 
@@ -108,6 +112,16 @@ public class FSUtils {
       return getFs(addSchemeIfLocalPath(path).toString(), conf);
     }
     return getFs(path, conf);
+  }
+
+  /**
+   * Check if table already exists in the given path.
+   * @param path base path of the table.
+   * @param fs instance of {@link FileSystem}.
+   * @return {@code true} if table exists. {@code false} otherwise.
+   */
+  public static boolean isTableExists(String path, FileSystem fs) throws IOException {
+    return fs.exists(new Path(path + "/" + HoodieTableMetaClient.METAFOLDER_NAME));
   }
 
   public static Path addSchemeIfLocalPath(String path) {
@@ -132,7 +146,7 @@ public class FSUtils {
   // TODO: this should be removed
   public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
     return String.format("%s_%s_%s%s", fileId, writeToken, instantTime,
-        HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
   }
 
   public static String makeDataFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
@@ -144,7 +158,8 @@ public class FSUtils {
   }
 
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
-    return String.format("*_%s_%s%s", taskPartitionId, instantTime, HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
+    return String.format("*_%s_%s%s", taskPartitionId, instantTime, HoodieTableConfig.BASE_FILE_FORMAT
+        .defaultValue().getFileExtension());
   }
 
   public static String getCommitFromCommitFile(String commitFileName) {
@@ -261,7 +276,7 @@ public class FSUtils {
         .withAssumeDatePartitioning(assumeDatePartitioning)
         .build();
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
@@ -271,20 +286,23 @@ public class FSUtils {
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                                   String basePathStr) {
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
-        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue())) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
     }
   }
 
-  public static FileStatus[] getFilesInPartition(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                                                 String basePathStr, Path partitionPath) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext,
-        metadataConfig, basePathStr, FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
-      return tableMetadata.getAllFilesInPartition(partitionPath);
-    } catch (Exception e) {
-      throw new HoodieException("Error get files in partition: " + partitionPath, e);
+  public static Map<String, FileStatus[]> getFilesInPartitions(HoodieEngineContext engineContext,
+                                                               HoodieMetadataConfig metadataConfig,
+                                                               String basePathStr,
+                                                               String[] partitionPaths,
+                                                               String spillableMapPath) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
+        spillableMapPath, true)) {
+      return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
+    } catch (Exception ex) {
+      throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
     }
   }
 
@@ -597,5 +615,88 @@ public class FSUtils {
     return Arrays.stream(statuses)
         .filter(fileStatus -> !fileStatus.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))
         .collect(Collectors.toList());
+  }
+
+  /**
+   * Deletes a directory by deleting sub-paths in parallel on the file system.
+   *
+   * @param hoodieEngineContext {@code HoodieEngineContext} instance
+   * @param fs file system
+   * @param dirPath directory path
+   * @param parallelism parallelism to use for sub-paths
+   * @return {@code true} if the directory is delete; {@code false} otherwise.
+   */
+  public static boolean deleteDir(
+      HoodieEngineContext hoodieEngineContext, FileSystem fs, Path dirPath, int parallelism) {
+    try {
+      if (fs.exists(dirPath)) {
+        FSUtils.parallelizeSubPathProcess(hoodieEngineContext, fs, dirPath, parallelism, e -> true,
+            pairOfSubPathAndConf -> deleteSubPath(
+                pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
+        );
+        boolean result = fs.delete(dirPath, false);
+        LOG.info("Removed directory at " + dirPath);
+        return result;
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+    return false;
+  }
+
+  /**
+   * Processes sub-path in parallel.
+   *
+   * @param hoodieEngineContext {@code HoodieEngineContext} instance
+   * @param fs file system
+   * @param dirPath directory path
+   * @param parallelism parallelism to use for sub-paths
+   * @param subPathPredicate predicate to use to filter sub-paths for processing
+   * @param pairFunction actual processing logic for each sub-path
+   * @param <T> type of result to return for each sub-path
+   * @return a map of sub-path to result of the processing
+   */
+  public static <T> Map<String, T> parallelizeSubPathProcess(
+      HoodieEngineContext hoodieEngineContext, FileSystem fs, Path dirPath, int parallelism,
+      Predicate<FileStatus> subPathPredicate, SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction) {
+    Map<String, T> result = new HashMap<>();
+    try {
+      FileStatus[] fileStatuses = fs.listStatus(dirPath);
+      List<String> subPaths = Arrays.stream(fileStatuses)
+          .filter(subPathPredicate)
+          .map(fileStatus -> fileStatus.getPath().toString())
+          .collect(Collectors.toList());
+      if (subPaths.size() > 0) {
+        SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
+        int actualParallelism = Math.min(subPaths.size(), parallelism);
+        result = hoodieEngineContext.mapToPair(subPaths,
+            subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
+            actualParallelism);
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+    return result;
+  }
+
+  /**
+   * Deletes a sub-path.
+   *
+   * @param subPathStr sub-path String
+   * @param conf       serializable config
+   * @param recursive  is recursive or not
+   * @return {@code true} if the sub-path is deleted; {@code false} otherwise.
+   */
+  public static boolean deleteSubPath(String subPathStr, SerializableConfiguration conf, boolean recursive) {
+    try {
+      Path subPath = new Path(subPathStr);
+      FileSystem fileSystem = subPath.getFileSystem(conf.get());
+      return fileSystem.delete(subPath, recursive);
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
+  }
+
+  public interface SerializableFunction<T, R> extends Function<T, R>, Serializable {
   }
 }

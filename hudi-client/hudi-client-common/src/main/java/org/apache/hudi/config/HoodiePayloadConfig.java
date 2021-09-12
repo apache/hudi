@@ -18,25 +18,42 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.model.HoodiePayloadProps.DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL;
-import static org.apache.hudi.common.model.HoodiePayloadProps.DEFAULT_PAYLOAD_ORDERING_FIELD_VAL;
-import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP;
-import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP;
+import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY;
+import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY;
 
 /**
  * Hoodie payload related configs.
  */
-public class HoodiePayloadConfig extends DefaultHoodieConfig {
+@ConfigClassProperty(name = "Payload Configurations",
+    groupName = ConfigGroups.Names.RECORD_PAYLOAD,
+    description = "Payload related configs, that can be leveraged to "
+        + "control merges based on specific business fields in the data.")
+public class HoodiePayloadConfig extends HoodieConfig {
 
-  public HoodiePayloadConfig(Properties props) {
-    super(props);
+  public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
+      .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
+      .defaultValue("ts")
+      .withDocumentation("Table column/field name to order records that have the same key, before "
+          + "merging and writing to storage.");
+
+  public static final ConfigProperty<String> EVENT_TIME_FIELD = ConfigProperty
+      .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
+      .defaultValue("ts")
+      .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
+          + "be useful for e.g, determining the freshness of the table.");
+
+  private HoodiePayloadConfig() {
+    super();
   }
 
   public static HoodiePayloadConfig.Builder newBuilder() {
@@ -45,37 +62,33 @@ public class HoodiePayloadConfig extends DefaultHoodieConfig {
 
   public static class Builder {
 
-    private final Properties props = new Properties();
+    private final HoodiePayloadConfig payloadConfig = new HoodiePayloadConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
-        this.props.load(reader);
+        this.payloadConfig.getProps().load(reader);
         return this;
       }
     }
 
     public Builder fromProperties(Properties props) {
-      this.props.putAll(props);
+      this.payloadConfig.getProps().putAll(props);
       return this;
     }
 
     public Builder withPayloadOrderingField(String payloadOrderingField) {
-      props.setProperty(PAYLOAD_ORDERING_FIELD_PROP, String.valueOf(payloadOrderingField));
+      payloadConfig.setValue(ORDERING_FIELD, String.valueOf(payloadOrderingField));
       return this;
     }
 
     public Builder withPayloadEventTimeField(String payloadEventTimeField) {
-      props.setProperty(PAYLOAD_EVENT_TIME_FIELD_PROP, String.valueOf(payloadEventTimeField));
+      payloadConfig.setValue(EVENT_TIME_FIELD, String.valueOf(payloadEventTimeField));
       return this;
     }
 
     public HoodiePayloadConfig build() {
-      HoodiePayloadConfig config = new HoodiePayloadConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_ORDERING_FIELD_PROP), PAYLOAD_ORDERING_FIELD_PROP,
-          String.valueOf(DEFAULT_PAYLOAD_ORDERING_FIELD_VAL));
-      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_EVENT_TIME_FIELD_PROP), PAYLOAD_EVENT_TIME_FIELD_PROP,
-              String.valueOf(DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL));
-      return config;
+      payloadConfig.setDefaults(HoodiePayloadConfig.class.getName());
+      return payloadConfig;
     }
   }
 

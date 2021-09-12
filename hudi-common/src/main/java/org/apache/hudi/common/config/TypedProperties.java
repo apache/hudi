@@ -21,6 +21,7 @@ package org.apache.hudi.common.config;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,7 +36,11 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public TypedProperties(Properties defaults) {
-    super(defaults);
+    if (Objects.nonNull(defaults)) {
+      for (String key : defaults.stringPropertyNames()) {
+        put(key, defaults.getProperty(key));
+      }
+    }
   }
 
   private void checkKey(String property) {
@@ -46,10 +51,7 @@ public class TypedProperties extends Properties implements Serializable {
 
   private boolean keyExists(String property) {
     Set<String> keys = super.stringPropertyNames();
-    if (keys.contains(property)) {
-      return true;
-    }
-    return false;
+    return keys.contains(property);
   }
 
   public String getString(String property) {

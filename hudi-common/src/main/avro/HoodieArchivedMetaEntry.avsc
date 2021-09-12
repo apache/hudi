@@ -112,6 +112,14 @@
             "HoodieRequestedReplaceMetadata"
          ],
          "default": null
+      },
+      {
+         "name":"HoodieInflightReplaceMetadata",
+         "type":[
+            "null",
+            "HoodieCommitMetadata"
+         ],
+         "default": null
       }
    ]
 }

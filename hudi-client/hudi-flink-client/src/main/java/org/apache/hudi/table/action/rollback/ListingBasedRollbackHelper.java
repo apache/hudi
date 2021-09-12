@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -116,12 +117,22 @@ public class ListingBasedRollbackHelper implements Serializable {
                   .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case APPEND_ROLLBACK_BLOCK: {
+          String fileId = rollbackRequest.getFileId().get();
+          String latestBaseInstant = rollbackRequest.getLatestBaseInstant().get();
+
+          // collect all log files that is supposed to be deleted with this rollback
+          Map<FileStatus, Long> writtenLogFileSizeMap = FSUtils.getAllLogFiles(metaClient.getFs(),
+              FSUtils.getPartitionPath(config.getBasePath(), rollbackRequest.getPartitionPath()),
+              fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), latestBaseInstant)
+              .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen()));
+
           HoodieLogFormat.Writer writer = null;
           try {
             writer = HoodieLogFormat.newWriterBuilder()
                 .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
-                .withFileId(rollbackRequest.getFileId().get())
-                .overBaseCommit(rollbackRequest.getLatestBaseInstant().get()).withFs(metaClient.getFs())
+                .withFileId(fileId)
+                .overBaseCommit(latestBaseInstant)
+                .withFs(metaClient.getFs())
                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
             // generate metadata
@@ -151,7 +162,8 @@ public class ListingBasedRollbackHelper implements Serializable {
           );
           return new ImmutablePair<>(rollbackRequest.getPartitionPath(),
               HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                  .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
+                  .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+                  .withWrittenLogFileSizeMap(writtenLogFileSizeMap).build());
         }
         default:
           throw new IllegalStateException("Unknown Rollback action " + rollbackRequest);

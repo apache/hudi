@@ -18,13 +18,17 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -49,8 +53,8 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   public CustomKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY).split(",")).map(String::trim).collect(Collectors.toList());
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY).split(",")).map(String::trim).collect(Collectors.toList());
+    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
     customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
   }
 
@@ -74,10 +78,15 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getPartitionPath(Row row) {
-    return getPartitionPath(Option.empty(), Option.of(row));
+    return getPartitionPath(Option.empty(), Option.of(row), Option.empty());
   }
 
-  private String getPartitionPath(Option<GenericRecord> record, Option<Row> row) {
+  @Override
+  public String getPartitionPath(InternalRow row, StructType structType) {
+    return getPartitionPath(Option.empty(), Option.empty(), Option.of(Pair.of(row, structType)));
+  }
+
+  private String getPartitionPath(Option<GenericRecord> record, Option<Row> row, Option<Pair<InternalRow, StructType>> internalRowStructTypePair) {
     if (getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for partition path in cfg");
     }
@@ -101,16 +110,22 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
         case SIMPLE:
           if (record.isPresent()) {
             partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
-          } else {
+          } else if (row.isPresent()) {
             partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
+          } else {
+            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(internalRowStructTypePair.get().getKey(),
+                internalRowStructTypePair.get().getValue()));
           }
           break;
         case TIMESTAMP:
           try {
             if (record.isPresent()) {
               partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
-            } else {
+            } else if (row.isPresent()) {
               partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
+            } else {
+              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(internalRowStructTypePair.get().getKey(),
+                  internalRowStructTypePair.get().getValue()));
             }
           } catch (IOException ioe) {
             throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", ioe);

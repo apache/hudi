@@ -19,7 +19,10 @@
 package org.apache.hudi.avro;
 
 import org.apache.avro.specific.SpecificRecordBase;
+
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -151,7 +154,8 @@ public class HoodieAvroUtils {
         || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.RECORD_KEY_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.PARTITION_PATH_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName);
+        || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName)
+        || HoodieRecord.OPERATION_METADATA_FIELD.equals(fieldName);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -164,8 +168,20 @@ public class HoodieAvroUtils {
 
   /**
    * Adds the Hoodie metadata fields to the given schema.
+   *
+   * @param schema The schema
    */
   public static Schema addMetadataFields(Schema schema) {
+    return addMetadataFields(schema, false);
+  }
+
+  /**
+   * Adds the Hoodie metadata fields to the given schema.
+   *
+   * @param schema The schema
+   * @param withOperationField Whether to include the '_hoodie_operation' field
+   */
+  public static Schema addMetadataFields(Schema schema, boolean withOperationField) {
     List<Schema.Field> parentFields = new ArrayList<>();
 
     Schema.Field commitTimeField =
@@ -184,6 +200,13 @@ public class HoodieAvroUtils {
     parentFields.add(recordKeyField);
     parentFields.add(partitionPathField);
     parentFields.add(fileNameField);
+
+    if (withOperationField) {
+      final Schema.Field operationField =
+          new Schema.Field(HoodieRecord.OPERATION_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+      parentFields.add(operationField);
+    }
+
     for (Schema.Field field : schema.getFields()) {
       if (!isMetadataField(field.name())) {
         Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
@@ -200,9 +223,13 @@ public class HoodieAvroUtils {
   }
 
   public static Schema removeMetadataFields(Schema schema) {
+    return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
+  }
+
+  public static Schema removeFields(Schema schema, List<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
                                               .stream()
-                                              .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
+                                              .filter(field -> !fieldsToRemove.contains(field.name()))
                                               .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
                                               .collect(Collectors.toList());
     Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
@@ -244,11 +271,32 @@ public class HoodieAvroUtils {
     return recordSchema;
   }
 
+  /**
+   * Fetch schema for record key and partition path.
+   */
+  public static Schema getSchemaForFields(Schema fileSchema, List<String> fields) {
+    List<Schema.Field> toBeAddedFields = new ArrayList<>();
+    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
+
+    for (Schema.Field schemaField: fileSchema.getFields()) {
+      if (fields.contains(schemaField.name())) {
+        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultValue()));
+      }
+    }
+    recordSchema.setFields(toBeAddedFields);
+    return recordSchema;
+  }
+
   public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
       String fileName) {
     record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
     record.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
     record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
+    return record;
+  }
+
+  public static GenericRecord addOperationToRecord(GenericRecord record, HoodieOperation operation) {
+    record.put(HoodieRecord.OPERATION_METADATA_FIELD, operation.getName());
     return record;
   }
 
@@ -435,6 +483,22 @@ public class HoodieAvroUtils {
     } else {
       throw new HoodieException("The value of " + parts[i] + " can not be null");
     }
+  }
+
+  /**
+   * Returns the string value of the given record {@code rec} and field {@code fieldName}.
+   * The field and value both could be missing.
+   *
+   * @param rec The record
+   * @param fieldName The field name
+   *
+   * @return the string form of the field
+   * or empty if the schema does not contain the field name or the value is null
+   */
+  public static Option<String> getNullableValAsString(GenericRecord rec, String fieldName) {
+    Schema.Field field = rec.getSchema().getField(fieldName);
+    String fieldVal = field == null ? null : StringUtils.objToString(rec.get(field.pos()));
+    return Option.ofNullable(fieldVal);
   }
 
   /**

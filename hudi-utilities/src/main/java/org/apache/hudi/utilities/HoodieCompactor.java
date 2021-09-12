@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 
 import com.beust.jcommander.JCommander;
@@ -131,9 +132,9 @@ public class HoodieCompactor {
   private int doCompact(JavaSparkContext jsc) throws Exception {
     // Get schema.
     String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
-    SparkRDDWriteClient client =
+    SparkRDDWriteClient<HoodieRecordPayload> client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
-    JavaRDD<WriteStatus> writeResponse = (JavaRDD<WriteStatus>) client.compact(cfg.compactionInstantTime);
+    JavaRDD<WriteStatus> writeResponse = client.compact(cfg.compactionInstantTime);
     return UtilHelpers.handleErrors(jsc, cfg.compactionInstantTime, writeResponse);
   }
 

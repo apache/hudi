@@ -34,6 +34,7 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,17 +69,27 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
 
   public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
       Option<Integer> writes, Option<Integer> updates) throws Exception {
+    createCommitFileWithMetadata(basePath, commitTime, configuration, writes, updates, Collections.emptyMap());
+  }
+
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+      Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetdata) throws Exception {
     createCommitFileWithMetadata(basePath, commitTime, configuration, UUID.randomUUID().toString(),
-        UUID.randomUUID().toString(), writes, updates);
+        UUID.randomUUID().toString(), writes, updates, extraMetdata);
   }
 
   public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
       String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates) throws Exception {
+    createCommitFileWithMetadata(basePath, commitTime, configuration, fileId1, fileId2, writes, updates, Collections.emptyMap());
+  }
+
+  public static void createCommitFileWithMetadata(String basePath, String commitTime, Configuration configuration,
+      String fileId1, String fileId2, Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
     List<String> commitFileNames = Arrays.asList(HoodieTimeline.makeCommitFileName(commitTime), HoodieTimeline.makeInflightCommitFileName(commitTime),
         HoodieTimeline.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
       HoodieCommitMetadata commitMetadata =
-              generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates);
+              generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, extraMetadata);
       String content = commitMetadata.toJsonString();
       createFileWithMetadata(basePath, configuration, name, content);
     }
@@ -106,6 +117,11 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
 
   public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime, String fileId1,
       String fileId2, Option<Integer> writes, Option<Integer> updates) throws Exception {
+    return generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates, Collections.emptyMap());
+  }
+
+  public static HoodieCommitMetadata generateCommitMetadata(String basePath, String commitTime, String fileId1,
+      String fileId2, Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) throws Exception {
     FileCreateUtils.createBaseFile(basePath, DEFAULT_FIRST_PARTITION_PATH, commitTime, fileId1);
     FileCreateUtils.createBaseFile(basePath, DEFAULT_SECOND_PARTITION_PATH, commitTime, fileId2);
     return generateCommitMetadata(new HashMap<String, List<String>>() {
@@ -113,15 +129,23 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
         put(DEFAULT_FIRST_PARTITION_PATH, createImmutableList(baseFileName(DEFAULT_FIRST_PARTITION_PATH, fileId1)));
         put(DEFAULT_SECOND_PARTITION_PATH, createImmutableList(baseFileName(DEFAULT_SECOND_PARTITION_PATH, fileId2)));
       }
-    }, writes, updates);
+    }, writes, updates, extraMetadata);
+  }
+
+  private static HoodieCommitMetadata generateCommitMetadata(Map<String, List<String>> partitionToFilePaths,
+      Option<Integer> writes, Option<Integer> updates) {
+    return generateCommitMetadata(partitionToFilePaths, writes, updates, Collections.emptyMap());
   }
 
   /**
    * Method to generate commit metadata.
    */
   private static HoodieCommitMetadata generateCommitMetadata(Map<String, List<String>> partitionToFilePaths,
-      Option<Integer> writes, Option<Integer> updates) {
+      Option<Integer> writes, Option<Integer> updates, Map<String, String> extraMetadata) {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    for (Map.Entry<String, String> entry: extraMetadata.entrySet()) {
+      metadata.addMetadata(entry.getKey(), entry.getValue());
+    }
     partitionToFilePaths.forEach((key, value) -> value.forEach(f -> {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setPartitionPath(key);

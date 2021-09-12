@@ -17,13 +17,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
@@ -32,6 +25,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -40,8 +34,19 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.WorkloadStat;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -50,14 +55,16 @@ import org.apache.spark.sql.SQLContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import scala.Tuple2;
 
 /**
  * The test harness for resource initialization and cleanup.
@@ -65,7 +72,7 @@ import java.util.concurrent.Executors;
 public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestHarness.class);
-  
+
   private String testMethodName;
   protected transient JavaSparkContext jsc = null;
   protected transient HoodieSparkEngineContext context = null;
@@ -225,6 +232,24 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
   }
 
+  protected Properties getPropertiesForKeyGen() {
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    properties.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    properties.put("hoodie.datasource.write.partitionpath.field", "partition_path");
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
+    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
+    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
+    return properties;
+  }
+
+  protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
+    if (!populateMetaFields) {
+      configBuilder.withProperties(getPropertiesForKeyGen())
+          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
+    }
+  }
+
   /**
    * Cleanups hoodie clients.
    */
@@ -360,7 +385,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     return tableView;
   }
 
-  protected Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(JavaRDD<HoodieRecord> inputRecordsRDD) {
+  public static Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(JavaRDD<HoodieRecord> inputRecordsRDD) {
     HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
     WorkloadStat globalStat = new WorkloadStat();
 

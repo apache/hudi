@@ -18,43 +18,142 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 
 import java.util.Properties;
 
 import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
 
-public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
+@ConfigClassProperty(name = "Metrics Configurations for Prometheus",
+    groupName = ConfigGroups.Names.METRICS,
+    description = "Enables reporting on Hudi metrics using Prometheus. "
+        + " Hudi publishes metrics on every commit, clean, rollback etc.")
+public class HoodieMetricsPrometheusConfig extends HoodieConfig {
 
   // Prometheus PushGateWay
   public static final String PUSHGATEWAY_PREFIX = METRIC_PREFIX + ".pushgateway";
 
-  public static final String PUSHGATEWAY_HOST = PUSHGATEWAY_PREFIX + ".host";
-  public static final String DEFAULT_PUSHGATEWAY_HOST = "localhost";
+  public static final ConfigProperty<String> PUSHGATEWAY_HOST_NAME = ConfigProperty
+      .key(PUSHGATEWAY_PREFIX + ".host")
+      .defaultValue("localhost")
+      .sinceVersion("0.6.0")
+      .withDocumentation("Hostname of the prometheus push gateway.");
 
-  public static final String PUSHGATEWAY_PORT = PUSHGATEWAY_PREFIX + ".port";
-  public static final int DEFAULT_PUSHGATEWAY_PORT = 9091;
+  public static final ConfigProperty<Integer> PUSHGATEWAY_PORT_NUM = ConfigProperty
+      .key(PUSHGATEWAY_PREFIX + ".port")
+      .defaultValue(9091)
+      .sinceVersion("0.6.0")
+      .withDocumentation("Port for the push gateway.");
 
-  public static final String PUSHGATEWAY_REPORT_PERIOD_SECONDS = PUSHGATEWAY_PREFIX + ".report.period.seconds";
-  public static final int DEFAULT_PUSHGATEWAY_REPORT_PERIOD_SECONDS = 30;
+  public static final ConfigProperty<Integer> PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS = ConfigProperty
+      .key(PUSHGATEWAY_PREFIX + ".report.period.seconds")
+      .defaultValue(30)
+      .sinceVersion("0.6.0")
+      .withDocumentation("Reporting interval in seconds.");
 
-  public static final String PUSHGATEWAY_DELETE_ON_SHUTDOWN = PUSHGATEWAY_PREFIX + ".delete.on.shutdown";
-  public static final boolean DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN = true;
+  public static final ConfigProperty<Boolean> PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE = ConfigProperty
+      .key(PUSHGATEWAY_PREFIX + ".delete.on.shutdown")
+      .defaultValue(true)
+      .sinceVersion("0.6.0")
+      .withDocumentation("Delete the pushgateway info or not when job shutdown, true by default.");
 
-  public static final String PUSHGATEWAY_JOB_NAME = PUSHGATEWAY_PREFIX + ".job.name";
-  public static final String DEFAULT_PUSHGATEWAY_JOB_NAME = "";
+  public static final ConfigProperty<String> PUSHGATEWAY_JOBNAME = ConfigProperty
+      .key(PUSHGATEWAY_PREFIX + ".job.name")
+      .defaultValue("")
+      .sinceVersion("0.6.0")
+      .withDocumentation("Name of the push gateway job.");
 
-  public static final String PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = PUSHGATEWAY_PREFIX + ".random.job.name.suffix";
-  public static final boolean DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = true;
-
+  public static final ConfigProperty<Boolean> PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX = ConfigProperty
+      .key(PUSHGATEWAY_PREFIX + ".random.job.name.suffix")
+      .defaultValue(true)
+      .sinceVersion("0.6.0")
+      .withDocumentation("Whether the pushgateway name need a random suffix , default true.");
 
   // Prometheus HttpServer
   public static final String PROMETHEUS_PREFIX = METRIC_PREFIX + ".prometheus";
-  public static final String PROMETHEUS_PORT = PROMETHEUS_PREFIX + ".port";
-  public static final int DEFAULT_PROMETHEUS_PORT = 9090;
 
-  public HoodieMetricsPrometheusConfig(Properties props) {
-    super(props);
+  public static final ConfigProperty<Integer> PROMETHEUS_PORT_NUM = ConfigProperty
+      .key(PROMETHEUS_PREFIX + ".port")
+      .defaultValue(9090)
+      .sinceVersion("0.6.0")
+      .withDocumentation("Port for prometheus server.");
+
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_HOST_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String PUSHGATEWAY_HOST = PUSHGATEWAY_HOST_NAME.key();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_HOST_NAME} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_PUSHGATEWAY_HOST = PUSHGATEWAY_HOST_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_PORT_NUM} and its methods instead
+   */
+  @Deprecated
+  public static final String PUSHGATEWAY_PORT = PUSHGATEWAY_PORT_NUM.key();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_PORT_NUM} and its methods instead
+   */
+  @Deprecated
+  public static final int DEFAULT_PUSHGATEWAY_PORT = PUSHGATEWAY_PORT_NUM.defaultValue();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS} and its methods instead
+   */
+  @Deprecated
+  public static final String PUSHGATEWAY_REPORT_PERIOD_SECONDS = PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS.key();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS} and its methods instead
+   */
+  @Deprecated
+  public static final int DEFAULT_PUSHGATEWAY_REPORT_PERIOD_SECONDS = PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS.defaultValue();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE} and its methods instead
+   */
+  @Deprecated
+  public static final String PUSHGATEWAY_DELETE_ON_SHUTDOWN = PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE.key();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE} and its methods instead
+   */
+  @Deprecated
+  public static final boolean DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN = PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE.defaultValue();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_JOBNAME} and its methods instead
+   */
+  @Deprecated
+  public static final String PUSHGATEWAY_JOB_NAME = PUSHGATEWAY_JOBNAME.key();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_JOBNAME} and its methods instead
+   */
+  @Deprecated
+  public static final String DEFAULT_PUSHGATEWAY_JOB_NAME = PUSHGATEWAY_JOBNAME.defaultValue();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX} and its methods instead
+   */
+  @Deprecated
+  public static final String PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX.key();
+  /**
+   * @deprecated Use {@link #PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX} and its methods instead
+   */
+  @Deprecated
+  public static final boolean DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX.defaultValue();
+  /**
+   * @deprecated Use {@link #PROMETHEUS_PORT_NUM} and its methods instead
+   */
+  @Deprecated
+  public static final String PROMETHEUS_PORT = PROMETHEUS_PORT_NUM.key();
+  /**
+   * @deprecated Use {@link #PROMETHEUS_PORT_NUM} and its methods instead
+   */
+  @Deprecated
+  public static final int DEFAULT_PROMETHEUS_PORT = PROMETHEUS_PORT_NUM.defaultValue();
+
+  private HoodieMetricsPrometheusConfig() {
+    super();
   }
 
   public static HoodieMetricsPrometheusConfig.Builder newBuilder() {
@@ -68,35 +167,16 @@ public class HoodieMetricsPrometheusConfig extends DefaultHoodieConfig {
 
   public static class Builder {
 
-    private Properties props = new Properties();
+    private HoodieMetricsPrometheusConfig hoodieMetricsPrometheusConfig = new HoodieMetricsPrometheusConfig();
 
     public Builder fromProperties(Properties props) {
-      this.props.putAll(props);
+      this.hoodieMetricsPrometheusConfig.getProps().putAll(props);
       return this;
     }
 
     public HoodieMetricsPrometheusConfig build() {
-      HoodieMetricsPrometheusConfig config = new HoodieMetricsPrometheusConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(PROMETHEUS_PORT), PROMETHEUS_PORT,
-              String.valueOf(DEFAULT_PROMETHEUS_PORT));
-      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_HOST),
-              PUSHGATEWAY_HOST,
-              DEFAULT_PUSHGATEWAY_HOST);
-      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_PORT),
-              PUSHGATEWAY_PORT,
-              String.valueOf(DEFAULT_PUSHGATEWAY_PORT));
-      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_REPORT_PERIOD_SECONDS),
-              PUSHGATEWAY_REPORT_PERIOD_SECONDS,
-              String.valueOf(DEFAULT_PUSHGATEWAY_REPORT_PERIOD_SECONDS));
-      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_DELETE_ON_SHUTDOWN),
-              PUSHGATEWAY_DELETE_ON_SHUTDOWN,
-              String.valueOf(DEFAULT_PUSHGATEWAY_DELETE_ON_SHUTDOWN));
-      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_JOB_NAME),
-              PUSHGATEWAY_JOB_NAME, DEFAULT_PUSHGATEWAY_JOB_NAME);
-      setDefaultOnCondition(props, !props.containsKey(PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX),
-              PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX,
-              String.valueOf(DEFAULT_PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
-      return config;
+      hoodieMetricsPrometheusConfig.setDefaults(HoodieMetricsPrometheusConfig.class.getName());
+      return hoodieMetricsPrometheusConfig;
     }
   }
 }

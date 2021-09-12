@@ -18,15 +18,16 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.streamer.FlinkStreamerConfig;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
@@ -45,7 +46,11 @@ import java.util.Set;
  *
  * <p>It has the options for Hoodie table read and write. It also defines some utilities.
  */
-public class FlinkOptions {
+@ConfigClassProperty(name = "Flink Options",
+    groupName = ConfigGroups.Names.FLINK_SQL,
+    description = "Flink jobs using the SQL can be configured through the options in WITH clause."
+        + " The actual datasource level configs are listed below.")
+public class FlinkOptions extends HoodieConfig {
   private FlinkOptions() {
   }
 
@@ -67,9 +72,36 @@ public class FlinkOptions {
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")
       .stringType()
-      .defaultValue("__DEFAULT_PARTITION__")
+      .defaultValue("default") // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
+
+  public static final ConfigOption<Boolean> CHANGELOG_ENABLED = ConfigOptions
+      .key("changelog.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to keep all the intermediate changes, "
+          + "we try to keep all the changes of a record when enabled:\n"
+          + "1). The sink accept the UPDATE_BEFORE message;\n"
+          + "2). The source try to emit every changes of a record.\n"
+          + "The semantics is best effort because the compaction job would finally merge all changes of a record into one.\n"
+          + " default false to have UPSERT semantics");
+
+  // ------------------------------------------------------------------------
+  //  Metadata table Options
+  // ------------------------------------------------------------------------
+
+  public static final ConfigOption<Boolean> METADATA_ENABLED = ConfigOptions
+      .key("metadata.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default false");
+
+  public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
+      .key("metadata.compaction.delta_commits")
+      .intType()
+      .defaultValue(24)
+      .withDescription("Max delta commits for metadata table to trigger compaction, default 24");
 
   // ------------------------------------------------------------------------
   //  Index Options
@@ -91,7 +123,13 @@ public class FlinkOptions {
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to update index for the old partition path\n"
-          + "if same key record with different partition path came in, default true");
+          + "if same key record with different partition path came in, default false");
+
+  public static final ConfigOption<String> INDEX_PARTITION_REGEX = ConfigOptions
+      .key("index.partition.regex")
+      .stringType()
+      .defaultValue(".*")
+      .withDescription("Whether to load partitions in state if partition path matching， default *");
 
   // ------------------------------------------------------------------------
   //  Read Options
@@ -102,17 +140,17 @@ public class FlinkOptions {
       .defaultValue(4)
       .withDescription("Parallelism of tasks that do actual read, default is 4");
 
-  public static final ConfigOption<String> READ_AVRO_SCHEMA_PATH = ConfigOptions
-      .key("read.avro-schema.path")
+  public static final ConfigOption<String> SOURCE_AVRO_SCHEMA_PATH = ConfigOptions
+      .key("source.avro-schema.path")
       .stringType()
       .noDefaultValue()
-      .withDescription("Avro schema file path, the parsed schema is used for deserialization");
+      .withDescription("Source avro schema file path, the parsed schema is used for deserialization");
 
-  public static final ConfigOption<String> READ_AVRO_SCHEMA = ConfigOptions
-      .key("read.avro-schema")
+  public static final ConfigOption<String> SOURCE_AVRO_SCHEMA = ConfigOptions
+      .key("source.avro-schema")
       .stringType()
       .noDefaultValue()
-      .withDescription("Avro schema string, the parsed schema is used for deserialization");
+      .withDescription("Source avro schema string, the parsed schema is used for deserialization");
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
@@ -138,12 +176,6 @@ public class FlinkOptions {
           + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
           + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
 
-  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITION = ConfigOptions
-      .key("hoodie.datasource.hive_style_partition")
-      .booleanType()
-      .defaultValue(false)
-      .withDescription("Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false");
-
   public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")
       .booleanType()
@@ -164,6 +196,7 @@ public class FlinkOptions {
       .defaultValue(60)// default 1 minute
       .withDescription("Check interval for streaming read of SECOND, default 1 minute");
 
+  public static final String START_COMMIT_EARLIEST = "earliest";
   public static final ConfigOption<String> READ_STREAMING_START_COMMIT = ConfigOptions
       .key("read.streaming.start-commit")
       .stringType()
@@ -175,7 +208,7 @@ public class FlinkOptions {
   //  Write Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<String> TABLE_NAME = ConfigOptions
-      .key(HoodieWriteConfig.TABLE_NAME)
+      .key(HoodieWriteConfig.TBL_NAME.key())
       .stringType()
       .noDefaultValue()
       .withDescription("Table name to register to Hive metastore");
@@ -187,6 +220,12 @@ public class FlinkOptions {
       .stringType()
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
+
+  public static final ConfigOption<Boolean> INSERT_DEDUP = ConfigOptions
+      .key("write.insert.deduplicate")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
@@ -202,7 +241,7 @@ public class FlinkOptions {
           + "key value, we will pick the one with the largest value for the precombine field,\n"
           + "determined by Object.compareTo(..)");
 
-  public static final ConfigOption<String> PAYLOAD_CLASS = ConfigOptions
+  public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
       .key("write.payload.class")
       .stringType()
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
@@ -242,7 +281,7 @@ public class FlinkOptions {
           + "By default true (in favor of streaming progressing over data integrity)");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY)
+      .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
       .stringType()
       .defaultValue("uuid")
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
@@ -250,29 +289,65 @@ public class FlinkOptions {
           + "the dot notation eg: `a.b.c`");
 
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY)
+      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
       .stringType()
       .defaultValue("")
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
           + "Actual value obtained by invoking .toString(), default ''");
 
-  public static final ConfigOption<Boolean> PARTITION_PATH_URL_ENCODE = ConfigOptions
-      .key("write.partition.url_encode")
+  public static final ConfigOption<Boolean> URL_ENCODE_PARTITIONING = ConfigOptions
+      .key(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key())
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to encode the partition path url, default false");
 
-  public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP)
+  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITIONING = ConfigOptions
+      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use Hive style partitioning.\n"
+          + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
+          + "By default false (the names of partition folders are only partition values)");
+
+  public static final ConfigOption<String> KEYGEN_CLASS_NAME = ConfigOptions
+      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key())
       .stringType()
-      .defaultValue(SimpleAvroKeyGenerator.class.getName())
+      .defaultValue("")
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
+
+  public static final ConfigOption<String> KEYGEN_TYPE = ConfigOptions
+      .key(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
+      .stringType()
+      .defaultValue(KeyGeneratorType.SIMPLE.name())
+      .withDescription("Key generator type, that implements will extract the key out of incoming record");
+
+  public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
+  public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
+  public static final ConfigOption<String> PARTITION_FORMAT = ConfigOptions
+      .key("write.partition.format")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Partition path format, only valid when 'write.datetime.partitioning' is true, default is:\n"
+          + "1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL;\n"
+          + "2) 'yyyyMMdd' for DAY and INT.");
+
+  public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
+      .key("write.index_bootstrap.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do index bootstrap, default is the parallelism of the environment");
+
+  public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
+      .key("write.bucket_assign.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do bucket assign, default is the parallelism of the environment");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
       .intType()
-      .defaultValue(4)
-      .withDescription("Parallelism of tasks that do actual write, default is 4");
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do actual write, default is the parallelism of the environment");
 
   public static final ConfigOption<Double> WRITE_TASK_MAX_SIZE = ConfigOptions
       .key("write.task.max.size")
@@ -280,6 +355,12 @@ public class FlinkOptions {
       .defaultValue(1024D) // 1GB
       .withDescription("Maximum memory in MB for a write task, when the threshold hits,\n"
           + "it flushes the max size data bucket to avoid OOM, default 1GB");
+
+  public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
+      .key("write.rate.limit")
+      .longType()
+      .defaultValue(0L) // default no limit
+      .withDescription("Write record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)");
 
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size")
@@ -293,11 +374,32 @@ public class FlinkOptions {
       .defaultValue(128)
       .withDescription("Max log block size in MB for log file, default 128MB");
 
-  public static final ConfigOption<Integer> WRITE_LOG_MAX_SIZE = ConfigOptions
+  public static final ConfigOption<Long> WRITE_LOG_MAX_SIZE = ConfigOptions
       .key("write.log.max.size")
-      .intType()
-      .defaultValue(1024)
+      .longType()
+      .defaultValue(1024L)
       .withDescription("Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_BLOCK_SIZE = ConfigOptions
+      .key("write.parquet.block.size")
+      .intType()
+      .defaultValue(120)
+      .withDescription("Parquet RowGroup size. It's recommended to make this large enough that scan costs can be"
+          + " amortized by packing enough column values into a single row group.");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_MAX_FILE_SIZE = ConfigOptions
+      .key("write.parquet.max.file.size")
+      .intType()
+      .defaultValue(120)
+      .withDescription("Target size for parquet files produced by Hudi write phases. "
+          + "For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_PAGE_SIZE = ConfigOptions
+      .key("hoodie.parquet.page.size")
+      .intType()
+      .defaultValue(1)
+      .withDescription("Parquet page size. Page is the unit of read within a parquet file. "
+          + "Within a block, pages are compressed separately.");
 
   public static final ConfigOption<Integer> WRITE_MERGE_MAX_MEMORY = ConfigOptions
       .key("write.merge.max_memory")
@@ -305,9 +407,41 @@ public class FlinkOptions {
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for merge, default 100MB");
 
+  // this is only for internal use
+  public static final ConfigOption<Long> WRITE_COMMIT_ACK_TIMEOUT = ConfigOptions
+      .key("write.commit.ack.timeout")
+      .longType()
+      .defaultValue(-1L) // default at least once
+      .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
+          + "waits for the instant commit success, only for internal use");
+
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION = ConfigOptions
+      .key("write.bulk_insert.shuffle_by_partition")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to shuffle the inputs by partition path for bulk insert tasks, default true");
+
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_BY_PARTITION = ConfigOptions
+      .key("write.bulk_insert.sort_by_partition")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to sort the inputs by partition path for bulk insert tasks, default true");
+
+  public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
+      .key("write.sort.memory")
+      .intType()
+      .defaultValue(128)
+      .withDescription("Sort memory in MB, default 128MB");
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
+
+  public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_ENABLED = ConfigOptions
+      .key("compaction.schedule.enabled")
+      .booleanType()
+      .defaultValue(true) // default true for MOR write
+      .withDescription("Schedule the compaction plan, enabled by default for MOR");
 
   public static final ConfigOption<Boolean> COMPACTION_ASYNC_ENABLED = ConfigOptions
       .key("compaction.async.enabled")
@@ -352,6 +486,12 @@ public class FlinkOptions {
       .intType()
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for compaction spillable map, default 100MB");
+
+  public static final ConfigOption<Long> COMPACTION_TARGET_IO = ConfigOptions
+      .key("compaction.target_io")
+      .longType()
+      .defaultValue(5120L) // default 5 GB
+      .withDescription("Target IO per compaction (both read and write), default 5 GB");
 
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")
@@ -405,6 +545,12 @@ public class FlinkOptions {
       .defaultValue("PARQUET")
       .withDescription("File format for hive sync, default 'PARQUET'");
 
+  public static final ConfigOption<String> HIVE_SYNC_MODE = ConfigOptions
+      .key("hive_sync.mode")
+      .stringType()
+      .defaultValue("jdbc")
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'");
+
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
       .key("hive_sync.username")
       .stringType()
@@ -423,13 +569,19 @@ public class FlinkOptions {
       .defaultValue("jdbc:hive2://localhost:10000")
       .withDescription("Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'");
 
+  public static final ConfigOption<String> HIVE_SYNC_METASTORE_URIS = ConfigOptions
+      .key("hive_sync.metastore.uris")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Metastore uris for hive sync, default ''");
+
   public static final ConfigOption<String> HIVE_SYNC_PARTITION_FIELDS = ConfigOptions
       .key("hive_sync.partition_fields")
       .stringType()
       .defaultValue("")
       .withDescription("Partition fields for hive sync, default ''");
 
-  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigOptions
+  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME = ConfigOptions
       .key("hive_sync.partition_extractor_class")
       .stringType()
       .defaultValue(SlashEncodedDayPartitionValueExtractor.class.getCanonicalName())
@@ -481,37 +633,6 @@ public class FlinkOptions {
   private static final String PROPERTIES_PREFIX = "properties.";
 
   /**
-   * Transforms a {@code HoodieFlinkStreamer.Config} into {@code Configuration}.
-   * The latter is more suitable for the table APIs. It reads all the properties
-   * in the properties file (set by `--props` option) and cmd line options
-   * (set by `--hoodie-conf` option).
-   */
-  @SuppressWarnings("unchecked, rawtypes")
-  public static org.apache.flink.configuration.Configuration fromStreamerConfig(FlinkStreamerConfig config) {
-    Map<String, String> propsMap = new HashMap<String, String>((Map) StreamerUtil.getProps(config));
-    org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
-
-    conf.setString(FlinkOptions.PATH, config.targetBasePath);
-    conf.setString(READ_AVRO_SCHEMA_PATH, config.readSchemaFilePath);
-    conf.setString(FlinkOptions.TABLE_NAME, config.targetTableName);
-    // copy_on_write works same as COPY_ON_WRITE
-    conf.setString(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());
-    conf.setString(FlinkOptions.OPERATION, config.operation.value());
-    conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
-    conf.setString(FlinkOptions.PAYLOAD_CLASS, config.payloadClassName);
-    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, config.filterDupes);
-    conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
-    conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));
-    conf.setBoolean(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
-    conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
-    conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
-
-    return conf;
-  }
-
-  /**
    * Collects the config options that start with 'properties.' into a 'key'='value' list.
    */
   public static Map<String, String> getHoodieProperties(Map<String, String> options) {
@@ -555,7 +676,9 @@ public class FlinkOptions {
     return options.keySet().stream().anyMatch(k -> k.startsWith(PROPERTIES_PREFIX));
   }
 
-  /** Creates a new configuration that is initialized with the options of the given map. */
+  /**
+   * Creates a new configuration that is initialized with the options of the given map.
+   */
   public static Configuration fromMap(Map<String, String> map) {
     final Configuration configuration = new Configuration();
     map.forEach(configuration::setString);

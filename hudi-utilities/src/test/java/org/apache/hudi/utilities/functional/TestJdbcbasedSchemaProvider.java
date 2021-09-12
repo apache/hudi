@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.FunctionalTestHarness;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.JdbcbasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -41,7 +41,7 @@ import java.sql.SQLException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-public class TestJdbcbasedSchemaProvider extends FunctionalTestHarness {
+public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarness {
 
   private static final Logger LOG = LogManager.getLogger(TestJdbcbasedSchemaProvider.class);
   private static final TypedProperties PROPS = new TypedProperties();

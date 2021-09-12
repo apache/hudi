@@ -20,8 +20,9 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
@@ -45,6 +47,8 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.io.storage.HoodieConcatHandle;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -79,6 +83,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseSparkCommitActionExecutor.class);
+  protected Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
@@ -86,6 +91,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
                                        String instantTime,
                                        WriteOperationType operationType) {
     super(context, config, table, instantTime, operationType, Option.empty());
+    initKeyGenIfNeeded(config.populateMetaFields());
   }
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
@@ -95,6 +101,17 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
                                        WriteOperationType operationType,
                                        Option extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
+    initKeyGenIfNeeded(config.populateMetaFields());
+  }
+
+  private void initKeyGenIfNeeded(boolean populateMetaFields) {
+    if (!populateMetaFields) {
+      try {
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+      } catch (IOException e) {
+        throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
+      }
+    }
   }
 
   private JavaRDD<HoodieRecord<T>> clusteringHandleUpdate(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
@@ -189,16 +206,16 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   private JavaRDD<HoodieRecord<T>> partition(JavaRDD<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
-    JavaPairRDD<Tuple2, HoodieRecord<T>> mappedRDD = dedupedRecords.mapToPair(
+    JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> mappedRDD = dedupedRecords.mapToPair(
         record -> new Tuple2<>(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record));
 
-    JavaPairRDD<Tuple2, HoodieRecord<T>> partitionedRDD;
+    JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> partitionedRDD;
     if (table.requireSortedRecords()) {
       // Partition and sort within each partition as a single step. This is faster than partitioning first and then
       // applying a sort.
-      Comparator<Tuple2> comparator = (Comparator<Tuple2> & Serializable)(t1, t2) -> {
-        HoodieKey key1 = (HoodieKey) t1._1;
-        HoodieKey key2 = (HoodieKey) t2._1;
+      Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable)(t1, t2) -> {
+        HoodieKey key1 = t1._1;
+        HoodieKey key2 = t2._1;
         return key1.getRecordKey().compareTo(key2.getRecordKey());
       };
 
@@ -220,12 +237,12 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     JavaRDD<WriteStatus> statuses = table.getIndex().updateLocation(writeStatusRDD, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
-    result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));
     return statuses;
   }
   
   protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
     updateIndex(writeStatusRDD, result);
+    result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
     commitOnAutoCommit(result);
   }
 
@@ -264,7 +281,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
   }
 
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(JavaRDD<WriteStatus> writeStatuses) {
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeStatuses) {
     return Collections.emptyMap();
   }
 
@@ -328,19 +345,13 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     if (table.requireSortedRecords()) {
-      return new HoodieSortedMergeHandle<>(config, instantTime, (HoodieSparkTable) table, recordItr, partitionPath, fileId, taskContextSupplier);
+      return new HoodieSortedMergeHandle<>(config, instantTime, (HoodieSparkTable) table, recordItr, partitionPath, fileId, taskContextSupplier,
+          keyGeneratorOpt);
     } else if (!WriteOperationType.isChangingRecords(operationType) && config.allowDuplicateInserts()) {
-      return new HoodieConcatHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
+      return new HoodieConcatHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     } else {
-      return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
+      return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     }
-  }
-
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId,
-                                              Map<String, HoodieRecord<T>> keyToNewRecords,
-                                              HoodieBaseFile dataFileToBeMerged) {
-    return new HoodieMergeHandle<>(config, instantTime, table, keyToNewRecords,
-        partitionPath, fileId, dataFileToBeMerged, taskContextSupplier);
   }
 
   @Override
@@ -377,4 +388,8 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return getUpsertPartitioner(profile);
   }
 
+  @Override
+  protected void runPrecommitValidators(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
+    SparkValidatorUtils.runValidators(config, writeMetadata, context, table, instantTime);
+  }
 }

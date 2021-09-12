@@ -21,16 +21,17 @@ package org.apache.hudi.keygen;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -40,7 +41,27 @@ public class KeyGenUtils {
   protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
   protected static final String DEFAULT_PARTITION_PATH = "default";
-  protected static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+
+  /**
+   * Fetches record key from the GenericRecord.
+   * @param genericRecord generic record of interest.
+   * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
+   * @return the record key for the passed in generic record.
+   */
+  public static String getRecordKeyFromGenericRecord(GenericRecord genericRecord, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey(genericRecord) : genericRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+  }
+
+  /**
+   * Fetches partition path from the GenericRecord.
+   * @param genericRecord generic record of interest.
+   * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
+   * @return the partition path for the passed in generic record.
+   */
+  public static String getPartitionPathFromGenericRecord(GenericRecord genericRecord, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getPartitionPath(genericRecord) : genericRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+  }
 
   /**
    * Extracts the record key fields in strings out of the given record key,
@@ -104,11 +125,7 @@ public class KeyGenUtils {
             : DEFAULT_PARTITION_PATH);
       } else {
         if (encodePartitionPath) {
-          try {
-            fieldVal = URLEncoder.encode(fieldVal, StandardCharsets.UTF_8.toString());
-          } catch (UnsupportedEncodingException uoe) {
-            throw new HoodieException(uoe.getMessage(), uoe);
-          }
+          fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
         partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
       }
@@ -133,11 +150,7 @@ public class KeyGenUtils {
       partitionPath = DEFAULT_PARTITION_PATH;
     }
     if (encodePartitionPath) {
-      try {
-        partitionPath = URLEncoder.encode(partitionPath, StandardCharsets.UTF_8.toString());
-      } catch (UnsupportedEncodingException uoe) {
-        throw new HoodieException(uoe.getMessage(), uoe);
-      }
+      partitionPath = PartitionPathEncodeUtils.escapePathName(partitionPath);
     }
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;
@@ -162,5 +175,25 @@ public class KeyGenUtils {
         throw new HoodieNotSupportedException("Required property " + prop + " is missing");
       }
     });
+  }
+
+  /**
+   * Create a key generator class via reflection, passing in any configs needed.
+   * <p>
+   * This method is for user-defined classes. To create hudi's built-in key generators, please set proper
+   * {@link org.apache.hudi.keygen.constant.KeyGeneratorType} conf, and use the relevant factory, see
+   * {@link org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory}.
+   */
+  public static KeyGenerator createKeyGeneratorByClassName(TypedProperties props) throws IOException {
+    KeyGenerator keyGenerator = null;
+    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null);
+    if (!StringUtils.isNullOrEmpty(keyGeneratorClass)) {
+      try {
+        keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
+      } catch (Throwable e) {
+        throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
+      }
+    }
+    return keyGenerator;
   }
 }

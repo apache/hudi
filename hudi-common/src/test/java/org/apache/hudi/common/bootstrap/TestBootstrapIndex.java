@@ -34,6 +34,8 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,9 +53,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -91,12 +90,10 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
 
   @Test
   public void testNoOpBootstrapIndex() throws IOException {
-    Map<String, String> props = metaClient.getTableConfig().getProps();
-    props.put(HoodieTableConfig.HOODIE_BOOTSTRAP_INDEX_ENABLE, "false");
+    Properties props = metaClient.getTableConfig().getProps();
+    props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), "false");
     Properties properties = new Properties();
-    for (Map.Entry<String, String> prop : props.entrySet()) {
-      properties.setProperty(prop.getKey(), prop.getValue());
-    }
+    properties.putAll(props);
     HoodieTableConfig.createHoodieProperties(metaClient.getFs(), new Path(metaClient.getMetaPath()), properties);
 
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
@@ -187,7 +184,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     return Arrays.stream(partitions).map(partition -> {
       return Pair.of(partition, IntStream.range(0, numEntriesPerPartition).mapToObj(idx -> {
         String hudiFileId = UUID.randomUUID().toString();
-        String sourceFileName = idx + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
+        String sourceFileName = idx + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
         HoodieFileStatus sourceFileStatus = HoodieFileStatus.newBuilder()
             .setPath(HoodiePath.newBuilder().setUri(sourceBasePath + "/" + partition + "/" + sourceFileName).build())
             .setLength(256 * 1024 * 1024L)

@@ -20,11 +20,13 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
@@ -66,13 +68,14 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private static final Logger LOG = LogManager.getLogger(HoodieConcatHandle.class);
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, Iterator recordItr,
-      String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier);
+                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
   }
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, Map keyToNewRecords, String partitionPath, String fileId,
       HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier);
+    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier,
+        Option.empty());
   }
 
   /**
@@ -80,12 +83,12 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
    */
   @Override
   public void write(GenericRecord oldRecord) {
-    String key = oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+    String key = KeyGenUtils.getRecordKeyFromGenericRecord(oldRecord, keyGeneratorOpt);
     try {
       fileWriter.writeAvro(key, oldRecord);
     } catch (IOException | RuntimeException e) {
       String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-          key, getOldFilePath(), newFilePath, writerSchemaWithMetafields.toString(true));
+          key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
       LOG.debug("Old record is " + oldRecord);
       throw new HoodieUpsertException(errMsg, e);
     }

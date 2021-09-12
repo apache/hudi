@@ -21,15 +21,12 @@ package org.apache.hudi.io;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.HoodieCleanStat;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -50,7 +47,6 @@ import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -231,41 +227,6 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     // verify in-flight instants after archive
     verifyInflightInstants(metaClient, 2);
-  }
-
-  @Test
-  public void testArchiveTableWithReplacedFiles() throws Exception {
-    HoodieTestUtils.init(hadoopConf, basePath);
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
-        .build();
-
-    int numCommits = 4;
-    int commitInstant = 100;
-    for (int i = 0; i < numCommits; i++) {
-      createReplaceMetadata(String.valueOf(commitInstant));
-      commitInstant += 100;
-    }
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
-    assertEquals(4, timeline.countInstants(), "Loaded 4 commits and the count should match");
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    boolean result = archiveLog.archiveIfRequired(context);
-    assertTrue(result);
-
-    FileStatus[] allFiles = metaClient.getFs().listStatus(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
-    Set<String> allFileIds = Arrays.stream(allFiles).map(fs -> FSUtils.getFileIdFromFilePath(fs.getPath())).collect(Collectors.toSet());
-
-    // verify 100-1,200-1 are deleted by archival
-    assertFalse(allFileIds.contains("file-100-1"));
-    assertFalse(allFileIds.contains("file-200-1"));
-    assertTrue(allFileIds.contains("file-100-2"));
-    assertTrue(allFileIds.contains("file-200-2"));
-    assertTrue(allFileIds.contains("file-300-1"));
-    assertTrue(allFileIds.contains("file-400-1"));
   }
 
   @Test
@@ -513,13 +474,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     HoodieCommitMetadata hoodieCommitMetadata = new HoodieCommitMetadata();
     hoodieCommitMetadata.setOperationType(WriteOperationType.INSERT);
 
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-commitMetadata-converter")
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
-        .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
 
     org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = MetadataConversionUtils
         .convertCommitMetadata(hoodieCommitMetadata);
@@ -679,24 +634,6 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     List<HoodieInstant> notArchivedInstants = metaClient.getActiveTimeline().reload().getInstants().collect(Collectors.toList());
     assertEquals(3, notArchivedInstants.size(), "Not archived instants should be 3");
     assertEquals(notArchivedInstants, Arrays.asList(notArchivedInstant1, notArchivedInstant2, notArchivedInstant3), "");
-  }
-
-  private void createReplaceMetadata(String instantTime) throws Exception {
-    String fileId1 = "file-" + instantTime + "-1";
-    String fileId2 = "file-" + instantTime + "-2";
-
-    // create replace instant to mark fileId1 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
-        .setOperationType(WriteOperationType.INSERT_OVERWRITE.toString())
-        .setVersion(1)
-        .setExtraMetadata(Collections.emptyMap())
-        .build();
-    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
-    replaceMetadata.addReplaceFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1);
-    replaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
-    HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata)
-        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
   private HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly) throws IOException {

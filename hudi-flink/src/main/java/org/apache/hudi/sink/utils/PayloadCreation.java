@@ -66,18 +66,17 @@ public class PayloadCreation implements Serializable {
     } else {
       argTypes = new Class<?>[] {Option.class};
     }
-    final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS);
+    final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME);
     constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
     return new PayloadCreation(shouldCombine, constructor, preCombineField);
   }
 
-  public HoodieRecordPayload<?> createPayload(GenericRecord record, boolean isDelete) throws Exception {
+  public HoodieRecordPayload<?> createPayload(GenericRecord record) throws Exception {
     if (shouldCombine) {
       ValidationUtils.checkState(preCombineField != null);
       Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
           preCombineField, false);
-      return (HoodieRecordPayload<?>) constructor.newInstance(
-          isDelete ? null : record, orderingVal);
+      return (HoodieRecordPayload<?>) constructor.newInstance(record, orderingVal);
     } else {
       return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
     }

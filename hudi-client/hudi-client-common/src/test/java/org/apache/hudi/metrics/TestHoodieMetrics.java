@@ -50,8 +50,9 @@ public class TestHoodieMetrics {
   @BeforeEach
   void setUp() {
     when(config.isMetricsOn()).thenReturn(true);
+    when(config.getTableName()).thenReturn("raw_table");
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
-    metrics = new HoodieMetrics(config, "raw_table");
+    metrics = new HoodieMetrics(config);
   }
 
   @AfterEach

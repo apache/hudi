@@ -39,10 +39,18 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   public static final String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
   public static final String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
   public static final String FILENAME_METADATA_FIELD = "_hoodie_file_name";
+  public static final String OPERATION_METADATA_FIELD = "_hoodie_operation";
 
   public static final List<String> HOODIE_META_COLUMNS =
       CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
           RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD);
+
+  // Temporary to support the '_hoodie_operation' field, once we solve
+  // the compatibility problem, it can be removed.
+  public static final List<String> HOODIE_META_COLUMNS_WITH_OPERATION =
+      CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
+          RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD,
+          OPERATION_METADATA_FIELD);
 
   public static final Map<String, Integer> HOODIE_META_COLUMNS_NAME_TO_POS =
       IntStream.range(0, HOODIE_META_COLUMNS.size()).mapToObj(idx -> Pair.of(HOODIE_META_COLUMNS.get(idx), idx))
@@ -73,12 +81,22 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
    */
   private boolean sealed;
 
+  /**
+   * The cdc operation.
+   */
+  private HoodieOperation operation;
+
   public HoodieRecord(HoodieKey key, T data) {
+    this(key, data, null);
+  }
+
+  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation) {
     this.key = key;
     this.data = data;
     this.currentLocation = null;
     this.newLocation = null;
     this.sealed = false;
+    this.operation = operation;
   }
 
   public HoodieRecord(HoodieRecord<T> record) {
@@ -86,10 +104,18 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
+    this.operation = record.operation;
+  }
+
+  public HoodieRecord() {
   }
 
   public HoodieKey getKey() {
     return key;
+  }
+
+  public HoodieOperation getOperation() {
+    return operation;
   }
 
   public T getData() {

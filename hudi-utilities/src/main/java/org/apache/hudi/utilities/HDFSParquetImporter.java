@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
 import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
@@ -64,6 +65,9 @@ import scala.Tuple2;
 
 /**
  * Loads data from Parquet Sources.
+ *
+ * @deprecated This utility is deprecated in 0.10.0 and will be removed in 0.11.0. Use {@link HoodieDeltaStreamer.Config#runBootstrap} instead.
+ * @see HoodieDeltaStreamer
  */
 public class HDFSParquetImporter implements Serializable {
 
@@ -144,7 +148,7 @@ public class HDFSParquetImporter implements Serializable {
       // Get schema.
       String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
 
-      SparkRDDWriteClient client =
+      SparkRDDWriteClient<HoodieRecordPayload> client =
           UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism, Option.empty(), props);
 
       JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
@@ -206,7 +210,7 @@ public class HDFSParquetImporter implements Serializable {
    * @param hoodieRecords Hoodie Records
    * @param <T> Type
    */
-  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(SparkRDDWriteClient client, String instantTime,
+  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(SparkRDDWriteClient<T> client, String instantTime,
                                                                       JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (cfg.command.toLowerCase()) {
       case "upsert": {

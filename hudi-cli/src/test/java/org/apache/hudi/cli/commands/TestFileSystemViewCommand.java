@@ -22,7 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.NumericUtils;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
@@ -55,23 +56,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test class for {@link FileSystemViewCommand}.
  */
-public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestFileSystemViewCommand extends CLIFunctionalTestHarness {
 
   private String partitionPath;
   private SyncableFileSystemView fsView;
 
   @BeforeEach
   public void init() throws IOException {
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = hadoopConf();
 
     // Create table and connect
-    String tableName = "test_table";
-    String tablePath = Paths.get(basePath, tableName).toString();
+    String tableName = tableName();
+    String tablePath = tablePath(tableName);
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    metaClient = HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
     partitionPath = HoodieTestCommitMetadataGenerator.DEFAULT_FIRST_PARTITION_PATH;
     String fullPartitionPath = Paths.get(tablePath, partitionPath).toString();
@@ -110,7 +112,7 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
   @Test
   public void testShowCommits() {
     // Test default show fsview all
-    CommandResult cr = getShell().executeCommand("show fsview all");
+    CommandResult cr = shell().executeCommand("show fsview all");
     assertTrue(cr.isSuccess());
 
     // Get all file groups
@@ -158,7 +160,7 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
   @Test
   public void testShowCommitsWithSpecifiedValues() {
     // Test command with options, baseFileOnly and maxInstant is 2
-    CommandResult cr = getShell().executeCommand("show fsview all --baseFileOnly true --maxInstant 2");
+    CommandResult cr = shell().executeCommand("show fsview all --baseFileOnly true --maxInstant 2");
     assertTrue(cr.isSuccess());
 
     List<Comparable[]> rows = new ArrayList<>();
@@ -201,7 +203,7 @@ public class TestFileSystemViewCommand extends AbstractShellIntegrationTest {
   @Test
   public void testShowLatestFileSlices() {
     // Test show with partition path '2016/03/15'
-    CommandResult cr = getShell().executeCommand("show fsview latest --partitionPath " + partitionPath);
+    CommandResult cr = shell().executeCommand("show fsview latest --partitionPath " + partitionPath);
     assertTrue(cr.isSuccess());
 
     Stream<FileSlice> fileSlice = fsView.getLatestFileSlices(partitionPath);
