@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -64,6 +65,16 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
     return data.stream().parallel().map(throwingMapToPairWrapper(mapToPairFunc))
         .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
         .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).get())
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  public <I, K, V> List<V> reduceByKey(
+      List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    return data.stream().parallel()
+        .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
+        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
+        .filter(Objects::nonNull)
         .collect(Collectors.toList());
   }
 
