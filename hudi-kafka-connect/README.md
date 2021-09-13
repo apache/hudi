@@ -15,7 +15,7 @@
 * See the License for the specific language governing permissions and
 -->
 
-# Quick Start guide for Kafka Connect Sink for Hudi
+# Quick Start (demo) guide for Kafka Connect Sink for Hudi
 
 This repo contains a sample project that can be used to start off your own source connector for Kafka Connect.
 
@@ -75,6 +75,7 @@ The control topic should only have `1` partition
 Open a terminal to execute the following command:
 
 ```bash
+cd {$HUDI_DIR}/demo/
 bash runKafkaTrafficGenerator.sh <total_messages>
 ```
 

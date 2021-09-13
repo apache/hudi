@@ -167,28 +167,22 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       return;
     }
 
+    context.pause(partition);
+    ongoingTransactionInfo.commitInitiated();
     // send Writer Status Message and wait for ACK_COMMIT in async fashion
     try {
-      context.pause(partition);
-      ongoingTransactionInfo.commitInitiated();
       //sendWriterStatus
-      List<WriteStatus> writeStatuses = new ArrayList<>();
-      try {
-        writeStatuses = ongoingTransactionInfo.getWriter().close();
-      } catch (IOException exception) {
-        LOG.warn("Error closing the Hudi Writer", exception);
-      }
-
-      ControlEvent writeStatus = new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
+      List<WriteStatus> writeStatuses = ongoingTransactionInfo.getWriter().close();
+      ControlEvent writeStatusEvent = new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
           ControlEvent.SenderType.PARTICIPANT, ongoingTransactionInfo.getCommitTime(), partition)
           .setParticipantInfo(new ControlEvent.ParticipantInfo(
               writeStatuses,
               ongoingTransactionInfo.getLastWrittenKafkaOffset(),
               ControlEvent.OutcomeType.WRITE_SUCCESS))
           .build();
-      kafkaControlAgent.publishMessage(writeStatus);
+      kafkaControlAgent.publishMessage(writeStatusEvent);
     } catch (Exception exception) {
-      LOG.warn(String.format("Error ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
+      LOG.warn(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
     }
   }
 

@@ -131,6 +131,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   @Override
   public void stop() {
     kafkaControlClient.deregisterTransactionCoordinator(this);
+    scheduler.shutdownNow();
     hasStarted.set(false);
     if (executorService != null) {
       boolean terminated = false;

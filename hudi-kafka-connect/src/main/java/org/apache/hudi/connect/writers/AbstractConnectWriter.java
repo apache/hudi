@@ -22,6 +22,8 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
@@ -81,11 +83,11 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
   }
 
   @Override
-  public List<WriteStatus> close() {
+  public List<WriteStatus> close() throws IOException {
     return flushHudiRecords();
   }
 
   protected abstract void writeHudiRecord(HoodieRecord<HoodieAvroPayload> record);
 
-  protected abstract List<WriteStatus> flushHudiRecords();
+  protected abstract List<WriteStatus> flushHudiRecords() throws IOException;
 }
