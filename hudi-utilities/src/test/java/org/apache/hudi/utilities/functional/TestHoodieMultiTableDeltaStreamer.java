@@ -79,7 +79,7 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamerBa
       new HoodieMultiTableDeltaStreamer(cfg, jsc);
     }, "Should fail when hive sync table not provided with enableHiveSync flag");
     log.debug("Expected error when creating table execution objects", e);
-    assertTrue(e.getMessage().contains("Hive sync table field not provided!"));
+    assertTrue(e.getMessage().contains("Meta sync table field not provided!"));
   }
 
   @Test
