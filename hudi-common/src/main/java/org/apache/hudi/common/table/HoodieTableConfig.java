@@ -41,7 +41,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Map;
@@ -63,7 +62,7 @@ import java.util.stream.Collectors;
         + "initializing a path as hoodie base path and rarely changes during "
         + "the lifetime of the table. Writers/Queries' configurations are validated against these "
         + " each time for compatibility.")
-public class HoodieTableConfig extends HoodieConfig implements Serializable {
+public class HoodieTableConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
 
