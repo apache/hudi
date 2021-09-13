@@ -100,10 +100,10 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     Dataset<Row> intersectionDf = inputSnapshotDf.intersect(trimmedHudiDf);
     long inputCount = inputSnapshotDf.count();
     long outputCount = trimmedHudiDf.count();
-    log.warn("Input count: " + inputCount + "; output count: " + outputCount +", intersected count " + intersectionDf.count());
+    log.warn("Input count: " + inputCount + "; output count: " + outputCount);
     // the intersected df should be same as inputDf. if not, there is some mismatch.
     if (outputCount == 0 || inputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
-      log.error("Data set validation failed. Total count in hudi " + trimmedHudiDf.count() + ", input df count " + inputSnapshotDf.count());
+      log.error("Data set validation failed. Total count in hudi " + trimmedHudiDf.count() + ", input df count " + inputCount);
       throw new AssertionError("Hudi contents does not match contents input data. ");
     }
 
@@ -115,9 +115,11 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
       Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
           .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
       intersectionDf = inputSnapshotDf.intersect(trimmedCowDf);
+      outputCount = trimmedHudiDf.count();
+      log.warn("Input count: " + inputCount + "; output count: " + outputCount);
       // the intersected df should be same as inputDf. if not, there is some mismatch.
-      if (inputSnapshotDf.except(intersectionDf).count() != 0) {
-        log.error("Data set validation failed for COW hive table. Total count in hudi " + trimmedCowDf.count() + ", input df count " + inputSnapshotDf.count());
+      if (outputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
+        log.error("Data set validation failed for COW hive table. Total count in hudi " + outputCount + ", input df count " + inputCount);
         throw new AssertionError("Hudi hive table contents does not match contents input data. ");
       }
     }
