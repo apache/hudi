@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.generator.GenericRecordFullPayloadGenerator
+import org.apache.hudi.integ.testsuite.utils.SparkSqlUtils.getFieldNamesAndTypes
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.sql.avro.SchemaConverters
@@ -34,13 +35,25 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.slf4j.Logger
 
+import scala.math.BigDecimal.RoundingMode.RoundingMode
+
 /**
  * Utils for test nodes in Spark SQL
  */
 object SparkSqlUtils {
 
   /**
-   * Converts Avro schema in String to the SQL schema expression
+   * @param sparkSession spark session to use
+   * @param tableName    table name
+   * @return table schema in `StructType`
+   */
+  def getTableSchema(sparkSession: SparkSession, tableName: String): StructType = {
+    new StructType(sparkSession.table(tableName).schema.fields
+      .filter(field => !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name)))
+  }
+
+  /**
+   * Converts Avro schema in String to the SQL schema expression, with partition fields at the end
    *
    * For example, given the Avro schema below:
    * """
@@ -50,25 +63,30 @@ object SparkSqlUtils {
    * {"name":"end_lon","type":"double"},{"name":"fare","type":"double"},
    * {"name":"_hoodie_is_deleted","type":"boolean","default":false}]}
    * """
+   * and the partition columns Set("rider"),
    * the SQL schema expression is:
    * """
    * timestamp bigint,
    * _row_key string,
-   * rider string,
    * driver string,
    * begin_lat double,
    * begin_lon double,
    * end_lat double,
    * end_lon double,
    * fare double,
-   * _hoodie_is_deleted boolean
+   * _hoodie_is_deleted boolean,
+   * rider string
    * """
    *
    * @param avroSchemaString Avro schema String
+   * @param partitionColumns partition columns
    * @return corresponding SQL schema expression
    */
-  def convertAvroToSqlSchemaExpression(avroSchemaString: String): String = {
-    getFieldNamesAndTypes(avroSchemaString).map(e => e._1 + " " + e._2).mkString(",\n")
+  def convertAvroToSqlSchemaExpression(avroSchemaString: String, partitionColumns: Set[String]): String = {
+    val fields: Array[(String, String)] = getFieldNamesAndTypes(avroSchemaString)
+    val reorderedFields = fields.filter(field => !partitionColumns.contains(field._1)) ++
+      fields.filter(field => partitionColumns.contains(field._1))
+    reorderedFields.map(e => e._1 + " " + e._2).mkString(",\n")
   }
 
   /**
@@ -126,20 +144,6 @@ object SparkSqlUtils {
   }
 
   /**
-   * @param session   Spark session.
-   * @param tableName target table name.
-   * @return partition column names in a {@link Set}.
-   */
-  def getPartitionColumns(session: SparkSession, tableName: String): Set[String] = {
-    try {
-      session.sql("show partitions " + tableName)
-        .first.getAs[String](0).split('/').map(_.split("=")(0)).toSet
-    } catch {
-      case _: AnalysisException => Set.empty[String]
-    }
-  }
-
-  /**
    * Logs the Spark SQL query to run.
    *
    * @param log   {@link Logger} instance to use.
@@ -162,18 +166,23 @@ object SparkSqlUtils {
    * {"name":"end_lon","type":"double"},{"name":"fare","type":"double"},
    * {"name":"_hoodie_is_deleted","type":"boolean","default":false}]}
    * """
+   * and the partition columns Set("rider"),
    * the output is
    * """
-   * select timestamp, _row_key, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare,
-   * _hoodie_is_deleted from _temp_table
+   * select timestamp, _row_key, driver, begin_lat, begin_lon, end_lat, end_lon, fare,
+   * _hoodie_is_deleted, rider from _temp_table
    * """
    *
-   * @param inputSchema input Avro schema String.
-   * @param tableName   table name.
+   * @param inputSchema      input Avro schema String.
+   * @param partitionColumns partition columns
+   * @param tableName        table name.
    * @return select query String.
    */
-  def constructSelectQuery(inputSchema: String, tableName: String): String = {
-    constructSelectQuery(SparkSqlUtils.convertAvroToFieldNames(inputSchema), tableName)
+  def constructSelectQuery(inputSchema: String, partitionColumns: Set[String], tableName: String): String = {
+    val fieldNames: Array[String] = SparkSqlUtils.convertAvroToFieldNames(inputSchema)
+    val reorderedFieldNames = fieldNames.filter(name => !partitionColumns.contains(name)) ++
+      fieldNames.filter(name => partitionColumns.contains(name))
+    constructSelectQuery(reorderedFieldNames, tableName)
   }
 
   /**
@@ -191,14 +200,16 @@ object SparkSqlUtils {
    * Constructs the select query with {@link StructType} columns in the select and the partition
    * columns at the end.
    *
-   * @param structType    {@link StructType} instance.
-   * @param partitionCols partition columns in a {@link Set}
-   * @param tableName     table name.
+   * @param structType       {@link StructType} instance.
+   * @param partitionColumns partition columns in a {@link Set}
+   * @param tableName        table name.
    * @return select query String.
    */
-  def constructSelectQuery(structType: StructType, partitionCols: Set[String], tableName: String): String = {
-    val columns = structType.fields.map(field => field.name).filter(e => !partitionCols.contains(e))
-    constructSelectQuery(columns ++ partitionCols, tableName)
+  def constructSelectQuery(structType: StructType, partitionColumns: Set[String], tableName: String): String = {
+    val fieldNames: Array[String] = structType.fields.map(field => field.name)
+    val reorderedFieldNames = fieldNames.filter(name => !partitionColumns.contains(name)) ++
+      fieldNames.filter(name => partitionColumns.contains(name))
+    constructSelectQuery(reorderedFieldNames, tableName)
   }
 
   /**
@@ -221,19 +232,22 @@ object SparkSqlUtils {
    *
    * @param config          DAG node configurations.
    * @param targetTableName target table name.
+   * @param targetBasePath  target bash path for external table.
    * @param inputSchema     input Avro schema String.
    * @param inputTableName  name of the table containing input data.
    * @return create table query.
    */
-  def constructCreateTableQuery(config: Config, targetTableName: String, inputSchema: String,
-                                inputTableName: String): String = {
+  def constructCreateTableQuery(config: Config, targetTableName: String, targetBasePath: String,
+                                inputSchema: String, inputTableName: String): String = {
     // Constructs create table statement
     val createTableQueryBuilder = new StringBuilder("create table ")
     createTableQueryBuilder.append(targetTableName)
+    val partitionColumns: Set[String] =
+      if (config.getPartitionField.isPresent) Set(config.getPartitionField.get) else Set.empty
     if (!config.shouldUseCtas) {
       // Adds the schema statement if not using CTAS
       createTableQueryBuilder.append(" (")
-      createTableQueryBuilder.append(SparkSqlUtils.convertAvroToSqlSchemaExpression(inputSchema))
+      createTableQueryBuilder.append(SparkSqlUtils.convertAvroToSqlSchemaExpression(inputSchema, partitionColumns))
       createTableQueryBuilder.append("\n)")
     }
     createTableQueryBuilder.append(" using hudi")
@@ -241,10 +255,9 @@ object SparkSqlUtils {
     val primaryKeyOption = config.getPrimaryKey
     val preCombineFieldOption = config.getPreCombineField
 
-    // Adds location if set
-    val locationOption = config.getTableLocation
-    if (locationOption.isPresent) {
-      createTableQueryBuilder.append("\nlocation '" + locationOption.get() + "'")
+    // Adds location for external table
+    if (config.isTableExternal) {
+      createTableQueryBuilder.append("\nlocation '" + targetBasePath + "'")
     }
 
     // Adds options if set
@@ -271,7 +284,7 @@ object SparkSqlUtils {
     if (config.shouldUseCtas()) {
       // Adds as select query
       createTableQueryBuilder.append("\nas\n");
-      createTableQueryBuilder.append(constructSelectQuery(inputSchema, inputTableName))
+      createTableQueryBuilder.append(constructSelectQuery(inputSchema, partitionColumns, inputTableName))
     }
     createTableQueryBuilder.toString()
   }
@@ -281,11 +294,11 @@ object SparkSqlUtils {
    *
    * @param insertType      the insert type, in one of two types: "into" or "overwrite".
    * @param targetTableName target table name.
-   * @param inputSchema     input Avro schema String.
+   * @param schema          table schema to use
    * @param inputTableName  name of the table containing input data.
    * @return insert query.
    */
-  def constructInsertQuery(insertType: String, targetTableName: String, inputSchema: String,
+  def constructInsertQuery(insertType: String, targetTableName: String, schema: StructType,
                            inputTableName: String): String = {
     // Constructs insert statement
     val insertQueryBuilder = new StringBuilder("insert ")
@@ -293,7 +306,7 @@ object SparkSqlUtils {
     insertQueryBuilder.append(" ")
     insertQueryBuilder.append(targetTableName)
     insertQueryBuilder.append(" ")
-    insertQueryBuilder.append(constructSelectQuery(inputSchema, inputTableName))
+    insertQueryBuilder.append(constructSelectQuery(schema, inputTableName))
     insertQueryBuilder.toString()
   }
 
@@ -302,16 +315,16 @@ object SparkSqlUtils {
    *
    * @param config          DAG node configurations.
    * @param targetTableName target table name.
-   * @param inputSchema     input Avro schema String.
+   * @param schema          table schema to use
    * @param inputTableName  name of the table containing input data.
    * @return merge query.
    */
-  def constructMergeQuery(config: Config, targetTableName: String, inputSchema: String,
+  def constructMergeQuery(config: Config, targetTableName: String, schema: StructType,
                           inputTableName: String): String = {
     val mergeQueryBuilder = new StringBuilder("merge into ")
     mergeQueryBuilder.append(targetTableName)
     mergeQueryBuilder.append(" as target using (\n")
-    mergeQueryBuilder.append(constructSelectQuery(inputSchema, inputTableName))
+    mergeQueryBuilder.append(constructSelectQuery(schema, inputTableName))
     mergeQueryBuilder.append("\n) source\non ")
     mergeQueryBuilder.append(config.getMergeCondition)
     mergeQueryBuilder.append("\nwhen matched then ")
@@ -384,6 +397,15 @@ object SparkSqlUtils {
   }
 
   /**
+   * @param number input double number
+   * @param mode   rounding mode
+   * @return rounded double
+   */
+  def roundDouble(number: Double, mode: RoundingMode): Double = {
+    BigDecimal(number).setScale(4, mode).toDouble
+  }
+
+  /**
    * @param config          DAG node configurations.
    * @param sparkSession    Spark session.
    * @param targetTableName target table name.
@@ -392,13 +414,9 @@ object SparkSqlUtils {
   def getLowerUpperBoundsFromPercentiles(config: Config, sparkSession: SparkSession,
                                          targetTableName: String): (Double, Double) = {
     val percentiles = generatePercentiles(config)
-    println(percentiles)
-    sparkSession.sql("select count(*) from " + targetTableName).show(false)
-    println(constructPercentileQuery(config, targetTableName, percentiles))
-    sparkSession.sql(constructPercentileQuery(config, targetTableName, percentiles)).show(false)
     val result = sparkSession.sql(constructPercentileQuery(config, targetTableName, percentiles)).collect()(0)
-    println(result)
-    (result.get(0).asInstanceOf[Double], result.get(1).asInstanceOf[Double])
+    (roundDouble(result.get(0).asInstanceOf[Double], BigDecimal.RoundingMode.HALF_DOWN),
+      roundDouble(result.get(1).asInstanceOf[Double], BigDecimal.RoundingMode.HALF_UP))
   }
 
   /**
@@ -436,7 +454,7 @@ object SparkSqlUtils {
    */
   def constructChangedRecordQuery(config: Config, targetTableName: String, avroSchemaString: String,
                                   lowerBound: Double, upperBound: Double): String = {
-    val recordQueryBuilder = new StringBuilder(constructSelectQuery(avroSchemaString, targetTableName))
+    val recordQueryBuilder = new StringBuilder(constructSelectQuery(avroSchemaString, Set.empty[String], targetTableName))
     recordQueryBuilder.append(" where ")
     recordQueryBuilder.append(config.getWhereConditionColumn)
     recordQueryBuilder.append(" between ")

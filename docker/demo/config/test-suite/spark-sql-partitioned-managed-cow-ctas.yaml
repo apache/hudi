@@ -21,7 +21,7 @@ dag_content:
     config:
       table_type: cow
       primary_key: _row_key
-      pre_combine_field: timestamp
+      pre_combine_field: test_suite_source_ordering_field
       partition_field: rider
       use_ctas: true
       record_size: 1000

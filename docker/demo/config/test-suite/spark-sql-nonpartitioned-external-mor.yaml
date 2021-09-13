@@ -20,9 +20,9 @@ dag_content:
   create_table:
     config:
       table_type: mor
-      table_location: /tmp/hudi/test_suite_hudi_table1
+      is_external: true
       primary_key: _row_key
-      pre_combine_field: timestamp
+      pre_combine_field: test_suite_source_ordering_field
       record_size: 1000
       num_partitions_insert: 1
       repeat_count: 1

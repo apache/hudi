@@ -41,8 +41,10 @@ class SparkSqlInsertOverwriteNode(dagNodeConfig: Config) extends BaseSparkSqlNod
    * @return the query String.
    */
   override def queryToRun(config: Config, context: ExecutionContext): String = {
+    val targetTableName = context.getWriterContext.getCfg.targetTableName
     SparkSqlUtils.constructInsertQuery(
-      "overwrite", context.getWriterContext.getCfg.targetTableName,
-      context.getWriterContext.getHoodieTestSuiteWriter.getSchema, getTempTableName())
+      "overwrite", targetTableName,
+      SparkSqlUtils.getTableSchema(context.getWriterContext.getSparkSession, targetTableName),
+      getTempTableName())
   }
 }

@@ -37,18 +37,18 @@ dag_content:
       num_records_insert: 1000
     type: spark.sql.SparkSqlInsertNode
     deps: create_table
-  merge_records:
-    config:
-      merge_condition: target._row_key = source._row_key
-      matched_action: update set *
-      not_matched_action: insert *
-      record_size: 1000
-      num_partitions_insert: 10
-      repeat_count: 1
-      num_records_upsert: 100
-      num_records_insert: 1000
-    type: spark.sql.SparkSqlMergeNode
-    deps: insert_records
+  #merge_records:
+  #  config:
+  #    merge_condition: target._row_key = source._row_key
+  #    matched_action: update set *
+  #    not_matched_action: insert *
+  #    record_size: 1000
+  #    num_partitions_insert: 10
+  #    repeat_count: 1
+  #    num_records_upsert: 100
+  #    num_records_insert: 1000
+  #  type: spark.sql.SparkSqlMergeNode
+  #  deps: insert_records
   delete_records:
     config:
       condition_column: begin_lat

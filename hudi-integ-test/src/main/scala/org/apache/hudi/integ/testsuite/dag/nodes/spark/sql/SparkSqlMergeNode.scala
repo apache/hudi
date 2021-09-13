@@ -55,8 +55,10 @@ class SparkSqlMergeNode(dagNodeConfig: Config) extends BaseSparkSqlNode(dagNodeC
    * @return the query String.
    */
   override def queryToRun(config: Config, context: ExecutionContext): String = {
+    val targetTableName = context.getWriterContext.getCfg.targetTableName
     SparkSqlUtils.constructMergeQuery(
-      config, context.getWriterContext.getCfg.targetTableName,
-      context.getWriterContext.getHoodieTestSuiteWriter.getSchema, getTempTableName())
+      config, targetTableName,
+      SparkSqlUtils.getTableSchema(context.getWriterContext.getSparkSession, targetTableName),
+      getTempTableName())
   }
 }

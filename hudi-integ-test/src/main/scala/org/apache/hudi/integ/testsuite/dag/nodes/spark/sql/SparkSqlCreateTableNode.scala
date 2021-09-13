@@ -19,8 +19,10 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes.spark.sql
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.client.WriteStatus
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode
@@ -51,11 +53,11 @@ class SparkSqlCreateTableNode(dagNodeConfig: Config) extends DagNode[RDD[WriteSt
     LOG.info("Creating table in Spark SQL ...")
     val sparkSession = context.getWriterContext.getSparkSession
     val targetTableName = context.getWriterContext.getCfg.targetTableName
+    val targetBasePath = context.getWriterContext.getCfg.targetBasePath + "_sql"
 
-    var inputCount = 0L
-    if (config.shouldUseCtas()) {
+    if (config.shouldUseCtas) {
       if (!config.isDisableGenerate) {
-        context.getDeltaGenerator().writeRecords(context.getDeltaGenerator().generateInserts(config)).count()
+        context.getDeltaGenerator.writeRecords(context.getDeltaGenerator.generateInserts(config)).count()
       }
       val nextBatch = context.getWriterContext.getHoodieTestSuiteWriter.getNextBatch
       val sparkSession = context.getWriterContext.getSparkSession
@@ -63,21 +65,25 @@ class SparkSqlCreateTableNode(dagNodeConfig: Config) extends DagNode[RDD[WriteSt
         context.getWriterContext.getHoodieTestSuiteWriter.getSchema,
         sparkSession)
       inputDF.createOrReplaceTempView(TEMP_TABLE_NAME)
-      inputCount = inputDF.count()
     }
 
     sparkSession.sql("drop table if exists " + targetTableName)
+    if (config.isTableExternal) {
+      LOG.info("Clean up " + targetBasePath)
+      val fs = FSUtils.getFs(targetBasePath, context.getJsc.hadoopConfiguration())
+      val targetPath = new Path(targetBasePath)
+      if (fs.exists(targetPath)) {
+        fs.delete(targetPath, true)
+      }
+    }
+
     val createTableQuery = SparkSqlUtils.constructCreateTableQuery(
-      config, targetTableName, context.getWriterContext.getHoodieTestSuiteWriter.getSchema, TEMP_TABLE_NAME)
+      config, targetTableName, targetBasePath,
+      context.getWriterContext.getHoodieTestSuiteWriter.getSchema, TEMP_TABLE_NAME)
     SparkSqlUtils.logQuery(LOG, createTableQuery)
     sparkSession.sql(createTableQuery)
     val targetTableCount = sparkSession.sql("select * from " + targetTableName)
     LOG.info("Target table count: " + targetTableCount.count())
-    if (config.shouldUseCtas()) {
-      assert(targetTableCount.count() == inputCount)
-    } else {
-      assert(targetTableCount.count() == 0)
-    }
     LOG.info("Finish create table in Spark SQL.")
   }
 }

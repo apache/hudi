@@ -98,8 +98,8 @@ public class DeltaConfig implements Serializable {
 
     // Spark SQL Create Table
     private static String TABLE_TYPE = "table_type";
+    private static String IS_EXTERNAL = "is_external";
     private static String USE_CTAS = "use_ctas";
-    private static String TABLE_LOCATION = "table_location";
     private static String PRIMARY_KEY = "primary_key";
     private static String PRE_COMBINE_FIELD = "pre_combine_field";
     private static String PARTITION_FIELD = "partition_field";
@@ -223,26 +223,25 @@ public class DeltaConfig implements Serializable {
 
     public Option<String> getTableType() {
       return !configsMap.containsKey(TABLE_TYPE) ? Option.empty()
-              : Option.of(configsMap.get(TABLE_TYPE).toString());
+          : Option.of(configsMap.get(TABLE_TYPE).toString());
     }
 
     public boolean shouldUseCtas() {
       return Boolean.valueOf(configsMap.getOrDefault(USE_CTAS, false).toString());
     }
 
-    public Option<String> getTableLocation() {
-      return !configsMap.containsKey(TABLE_LOCATION) ? Option.empty()
-              : Option.of(configsMap.get(TABLE_LOCATION).toString());
+    public boolean isTableExternal() {
+      return Boolean.valueOf(configsMap.getOrDefault(IS_EXTERNAL, false).toString());
     }
 
     public Option<String> getPrimaryKey() {
       return !configsMap.containsKey(PRIMARY_KEY) ? Option.empty()
-              : Option.of(configsMap.get(PRIMARY_KEY).toString());
+          : Option.of(configsMap.get(PRIMARY_KEY).toString());
     }
 
     public Option<String> getPreCombineField() {
       return !configsMap.containsKey(PRE_COMBINE_FIELD) ? Option.empty()
-              : Option.of(configsMap.get(PRE_COMBINE_FIELD).toString());
+          : Option.of(configsMap.get(PRE_COMBINE_FIELD).toString());
     }
 
     public Option<String> getPartitionField() {

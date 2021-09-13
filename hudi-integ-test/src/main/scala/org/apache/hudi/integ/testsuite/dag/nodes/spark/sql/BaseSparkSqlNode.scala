@@ -88,7 +88,6 @@ abstract class BaseSparkSqlNode(dagNodeConfig: Config) extends DagNode[RDD[Write
     val query = queryToRun(config, context)
     SparkSqlUtils.logQuery(LOG, query)
     sparkSession.sql(query)
-    sparkSession.sql("select count(*) from " + context.getWriterContext.getCfg.targetTableName).show(false)
     LOG.info("Finish run query in Spark SQL.")
   }
 }

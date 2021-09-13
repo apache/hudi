@@ -41,8 +41,10 @@ class SparkSqlInsertNode(dagNodeConfig: Config) extends BaseSparkSqlNode(dagNode
    * @return the query String.
    */
   override def queryToRun(config: Config, context: ExecutionContext): String = {
+    val targetTableName = context.getWriterContext.getCfg.targetTableName
     SparkSqlUtils.constructInsertQuery(
-      "into", context.getWriterContext.getCfg.targetTableName,
-      context.getWriterContext.getHoodieTestSuiteWriter.getSchema, getTempTableName())
+      "into", targetTableName,
+      SparkSqlUtils.getTableSchema(context.getWriterContext.getSparkSession, targetTableName),
+      getTempTableName())
   }
 }
