@@ -76,6 +76,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
@@ -451,7 +452,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // Always use FlinkCreateHandle when insert duplication turns on
     if (config.allowDuplicateInserts()) {
       return new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
-          fileID, table.getTaskContextSupplier());
+          // always use separate fileID because the writer may flush eagerly
+          UUID.randomUUID().toString(), table.getTaskContextSupplier());
     }
 
     if (bucketToHandles.containsKey(fileID)) {
