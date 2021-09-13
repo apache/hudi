@@ -335,19 +335,19 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.index_bootstrap.tasks")
       .intType()
       .noDefaultValue()
-      .withDescription("Parallelism of tasks that do index bootstrap, default is the parallelism of the environment");
+      .withDescription("Parallelism of tasks that do index bootstrap, default is the parallelism of the execution environment");
 
   public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
       .key("write.bucket_assign.tasks")
       .intType()
       .noDefaultValue()
-      .withDescription("Parallelism of tasks that do bucket assign, default is the parallelism of the environment");
+      .withDescription("Parallelism of tasks that do bucket assign, default is the parallelism of the execution environment");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
       .intType()
-      .noDefaultValue()
-      .withDescription("Parallelism of tasks that do actual write, default is the parallelism of the environment");
+      .defaultValue(4)
+      .withDescription("Parallelism of tasks that do actual write, default is 4");
 
   public static final ConfigOption<Double> WRITE_TASK_MAX_SIZE = ConfigOptions
       .key("write.task.max.size")
