@@ -1252,7 +1252,7 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(new File(sourcePath.toString()).exists());
 
     // recreate metaClient with Bootstrap base path
-    metaClient = HoodieTestUtils.init(basePath, getTableType(), sourcePath.toString());
+    metaClient = HoodieTestUtils.init(basePath, getTableType(), sourcePath.toString(), true);
 
     // generate bootstrap index
     Map<String, List<BootstrapFileMapping>> bootstrapMapping = TestBootstrapIndex.generateBootstrapIndex(metaClient, sourcePath.toString(),
