@@ -15,7 +15,7 @@
 # limitations under the License.
 dag_name: cow-spark-long-running-multi-partitions.yaml
 dag_rounds: 50
-dag_intermittent_delay_mins: 0
+dag_intermittent_delay_mins: 1
 dag_content:
   first_insert:
     config:
@@ -33,7 +33,7 @@ dag_content:
     deps: first_insert
   first_validate:
     config:
-      validate_hive: false
+      validate_hive: true
     type: ValidateDatasetNode
     deps: first_hive_sync
   first_upsert:
@@ -60,7 +60,7 @@ dag_content:
     deps: first_delete
   second_validate:
     config:
-      validate_hive: false
+      validate_hive: true
       delete_input_data: true
     type: ValidateDatasetNode
     deps: second_hive_sync

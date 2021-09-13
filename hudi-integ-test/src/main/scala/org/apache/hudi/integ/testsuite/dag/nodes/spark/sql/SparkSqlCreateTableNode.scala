@@ -56,6 +56,7 @@ class SparkSqlCreateTableNode(dagNodeConfig: Config) extends DagNode[RDD[WriteSt
     val targetBasePath = context.getWriterContext.getCfg.targetBasePath + "_sql"
 
     if (config.shouldUseCtas) {
+      // Prepares data for CTAS query
       if (!config.isDisableGenerate) {
         context.getDeltaGenerator.writeRecords(context.getDeltaGenerator.generateInserts(config)).count()
       }
@@ -67,6 +68,7 @@ class SparkSqlCreateTableNode(dagNodeConfig: Config) extends DagNode[RDD[WriteSt
       inputDF.createOrReplaceTempView(TEMP_TABLE_NAME)
     }
 
+    // Cleans up the table
     sparkSession.sql("drop table if exists " + targetTableName)
     if (config.isTableExternal) {
       LOG.info("Clean up " + targetBasePath)
@@ -77,6 +79,7 @@ class SparkSqlCreateTableNode(dagNodeConfig: Config) extends DagNode[RDD[WriteSt
       }
     }
 
+    // Executes the create table query
     val createTableQuery = SparkSqlUtils.constructCreateTableQuery(
       config, targetTableName, targetBasePath,
       context.getWriterContext.getHoodieTestSuiteWriter.getSchema, TEMP_TABLE_NAME)

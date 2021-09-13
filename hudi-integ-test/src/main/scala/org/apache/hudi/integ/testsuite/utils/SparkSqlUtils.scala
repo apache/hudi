@@ -45,7 +45,7 @@ object SparkSqlUtils {
   /**
    * @param sparkSession spark session to use
    * @param tableName    table name
-   * @return table schema in `StructType`
+   * @return table schema excluding meta columns in `StructType`
    */
   def getTableSchema(sparkSession: SparkSession, tableName: String): StructType = {
     new StructType(sparkSession.table(tableName).schema.fields

@@ -30,7 +30,8 @@ import scala.collection.JavaConverters._
 
 /**
  * Spark datasource based insert node
- * @param config1
+ *
+ * @param dagNodeConfig DAG node configurations.
  */
 class SparkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 

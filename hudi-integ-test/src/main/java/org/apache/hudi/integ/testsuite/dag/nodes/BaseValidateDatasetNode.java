@@ -100,10 +100,10 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     Dataset<Row> intersectionDf = inputSnapshotDf.intersect(trimmedHudiDf);
     long inputCount = inputSnapshotDf.count();
     long outputCount = trimmedHudiDf.count();
-    log.warn("Input count: " + inputCount + "; output count: " + outputCount);
+    log.debug("Input count: " + inputCount + "; output count: " + outputCount);
     // the intersected df should be same as inputDf. if not, there is some mismatch.
     if (outputCount == 0 || inputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
-      log.error("Data set validation failed. Total count in hudi " + trimmedHudiDf.count() + ", input df count " + inputCount);
+      log.error("Data set validation failed. Total count in hudi " + outputCount + ", input df count " + inputCount);
       throw new AssertionError("Hudi contents does not match contents input data. ");
     }
 
@@ -144,7 +144,6 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     // todo: fix hard coded fields from configs.
     // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
-    log.warn("Input count before trimmed: " + inputDf.count());
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
     return inputDf.groupByKey(
         (MapFunction<Row, String>) value ->
