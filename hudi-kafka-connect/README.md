@@ -18,6 +18,7 @@
 # Quick Start (demo) guide for Kafka Connect Sink for Hudi
 
 This repo contains a sample project that can be used to start off your own source connector for Kafka Connect.
+This is work is tracked by [HUDI-2324](https://issues.apache.org/jira/browse/HUDI-2324) 
 
 ## Building the Hudi Sink Connector
 
@@ -129,3 +130,36 @@ curl -X GET -H "Content-Type:application/json"  http://localhost:8083/connectors
 ["hudi-sink"]
 curl -X GET -H "Content-Type:application/json"  http://localhost:8083/connectors/hudi-sink/status | jq
 ```
+
+And, you should see your Hudi table created, which you can query using Spark/Flink.
+Note: HUDI-2325 tracks Hive sync, which will unlock pretty much every other query engine.
+
+```bash
+ls -a /tmp/hoodie/hudi-test-topic
+.		.hoodie		partition-1	partition-3
+..		partition-0	partition-2	partition-4
+
+ls -lt /tmp/hoodie/hudi-test-topic/.hoodie
+total 72
+-rw-r--r--  1 user  wheel    346 Sep 14 10:32 hoodie.properties
+-rw-r--r--  1 user  wheel      0 Sep 13 23:18 20210913231805.inflight
+-rw-r--r--  1 user  wheel      0 Sep 13 23:18 20210913231805.commit.requested
+-rw-r--r--  1 user  wheel   9438 Sep 13 21:45 20210913214351.commit
+-rw-r--r--  1 user  wheel      0 Sep 13 21:43 20210913214351.inflight
+-rw-r--r--  1 user  wheel      0 Sep 13 21:43 20210913214351.commit.requested
+-rw-r--r--  1 user  wheel  18145 Sep 13 21:43 20210913214114.commit
+-rw-r--r--  1 user  wheel      0 Sep 13 21:41 20210913214114.inflight
+-rw-r--r--  1 user  wheel      0 Sep 13 21:41 20210913214114.commit.requested
+drwxr-xr-x  2 user  wheel     64 Sep 13 21:41 archived
+
+ls -l /tmp/hoodie/hudi-test-topic/partition-0
+total 5168
+-rw-r--r--  1 user  wheel  439332 Sep 13 21:43 2E0E6DB44ACC8479059574A2C71C7A7E-0_0-0-0_20210913214114.parquet
+-rw-r--r--  1 user  wheel  440179 Sep 13 21:42 3B56FAAAE2BDD04E480C1CBACD463D3E-0_0-0-0_20210913214114.parquet
+-rw-r--r--  1 user  wheel  437097 Sep 13 21:45 3B56FAAAE2BDD04E480C1CBACD463D3E-0_0-0-0_20210913214351.parquet
+-rw-r--r--  1 user  wheel  440219 Sep 13 21:42 D5AEE453699D5D9623D704C1CF399C8C-0_0-0-0_20210913214114.parquet
+-rw-r--r--  1 user  wheel  437035 Sep 13 21:45 D5AEE453699D5D9623D704C1CF399C8C-0_0-0-0_20210913214351.parquet
+-rw-r--r--  1 user  wheel  440214 Sep 13 21:43 E200FA75DCD1CED60BE86BCE6BF5D23A-0_0-0-0_20210913214114.parquet
+```
+
+
