@@ -30,11 +30,12 @@ import scala.collection.JavaConverters._
 
 /**
  * Spark datasource based bulk insert node
- * @param config1
+ *
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkBulkInsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkBulkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Execute the {@link DagNode}.
