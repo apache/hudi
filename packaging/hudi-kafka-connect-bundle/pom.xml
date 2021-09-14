@@ -74,6 +74,8 @@
                                     <exclude>commons-httpclient:commons-httpclient</exclude>
                                     <exclude>org.apache.htrace:htrace-core</exclude>
                                     <exclude>org.jamon:jamon-runtime</exclude>
+                                    <exclude>org.slf4j:*</exclude>
+                                    <exclude>log4j:log4j</exclude>
                                     <exclude>jdk.tools:jdk.tools</exclude>
                                     <exclude>junit:junit</exclude>
                                 </excludes>

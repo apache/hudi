@@ -21,6 +21,8 @@ package org.apache.hudi.connect.transaction;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
+import java.io.IOException;
+
 /**
  * Interface for the Participant that
  * manages Writes for a
@@ -35,7 +37,7 @@ public interface TransactionParticipant {
 
   void buffer(SinkRecord record);
 
-  void processRecords();
+  void processRecords() throws IOException;
 
   TopicPartition getPartition();
 

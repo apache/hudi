@@ -30,11 +30,13 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -52,7 +54,7 @@ public class HoodieSinkTask extends SinkTask {
   private static final int COORDINATOR_KAFKA_PARTITION = 0;
 
   private final Map<TopicPartition, TransactionCoordinator> transactionCoordinators;
-  private final Map<TopicPartition, TransactionParticipant> hudiTransactionParticipants;
+  private final Map<TopicPartition, TransactionParticipant> transactionParticipants;
   private KafkaConnectControlAgent controlKafkaClient;
   private KafkaConnectConfigs connectConfigs;
 
@@ -60,8 +62,8 @@ public class HoodieSinkTask extends SinkTask {
   private String connectorName;
 
   public HoodieSinkTask() {
-    transactionCoordinators = new HashMap();
-    hudiTransactionParticipants = new HashMap<>();
+    transactionCoordinators = new HashMap<>();
+    transactionParticipants = new HashMap<>();
   }
 
   @Override
@@ -80,7 +82,6 @@ public class HoodieSinkTask extends SinkTask {
       controlKafkaClient = KafkaConnectControlAgent.createKafkaControlManager(
           connectConfigs.getBootstrapServers(),
           connectConfigs.getControlTopicName());
-      bootstrap(context.assignment());
     } catch (ConfigException e) {
       throw new ConnectException("Couldn't start HdfsSinkConnector due to configuration error.", e);
     } catch (ConnectException e) {
@@ -98,11 +99,25 @@ public class HoodieSinkTask extends SinkTask {
       String topic = record.topic();
       int partition = record.kafkaPartition();
       TopicPartition tp = new TopicPartition(topic, partition);
-      hudiTransactionParticipants.get(tp).buffer(record);
+
+      TransactionParticipant transactionParticipant = transactionParticipants.get(tp);
+      if (transactionParticipant != null) {
+        transactionParticipant.buffer(record);
+      }
     }
 
     for (TopicPartition partition : context.assignment()) {
-      hudiTransactionParticipants.get(partition).processRecords();
+      if (transactionParticipants.get(partition) == null) {
+        throw new RetriableException("TransactionParticipant should be created for each assigned partition, "
+            + "but has not been created for the topic/partition: " + partition.topic() + ":" + partition.partition());
+      }
+      try {
+        transactionParticipants.get(partition).processRecords();
+      } catch (IOException exception) {
+        throw new RetriableException("Intermittent write errors for Hudi "
+            + " for the topic/partition: " + partition.topic() + ":" + partition.partition()
+            + " , ensuring kafka connect will retry ", exception);
+      }
     }
   }
 
@@ -123,12 +138,9 @@ public class HoodieSinkTask extends SinkTask {
     // committed to Hudi.
     Map<TopicPartition, OffsetAndMetadata> result = new HashMap<>();
     for (TopicPartition partition : context.assignment()) {
-      TransactionParticipant worker = hudiTransactionParticipants.get(partition);
-      if (worker != null) {
-        worker.processRecords();
-        if (worker.getLastKafkaCommittedOffset() >= 0) {
-          result.put(partition, new OffsetAndMetadata(worker.getLastKafkaCommittedOffset()));
-        }
+      TransactionParticipant worker = transactionParticipants.get(partition);
+      if (worker != null && worker.getLastKafkaCommittedOffset() >= 0) {
+        result.put(partition, new OffsetAndMetadata(worker.getLastKafkaCommittedOffset()));
       }
     }
     return result;
@@ -158,7 +170,7 @@ public class HoodieSinkTask extends SinkTask {
           transactionCoordinators.remove(partition);
         }
       }
-      TransactionParticipant worker = hudiTransactionParticipants.remove(partition);
+      TransactionParticipant worker = transactionParticipants.remove(partition);
       if (worker != null) {
         try {
           LOG.debug("Closing data writer due to task start failure.");
@@ -185,7 +197,7 @@ public class HoodieSinkTask extends SinkTask {
           transactionCoordinators.put(partition, coordinator);
         }
         ConnectTransactionParticipant worker = new ConnectTransactionParticipant(connectConfigs, partition, controlKafkaClient, context);
-        hudiTransactionParticipants.put(partition, worker);
+        transactionParticipants.put(partition, worker);
         worker.start();
       } catch (HoodieException exception) {
         LOG.error(String.format("Fatal error initializing task %s for partition %s", taskId, partition.partition()), exception);
@@ -195,7 +207,7 @@ public class HoodieSinkTask extends SinkTask {
 
   private void cleanup() {
     for (TopicPartition partition : context.assignment()) {
-      TransactionParticipant worker = hudiTransactionParticipants.get(partition);
+      TransactionParticipant worker = transactionParticipants.get(partition);
       if (worker != null) {
         try {
           LOG.debug("Closing data writer due to task start failure.");
@@ -205,7 +217,7 @@ public class HoodieSinkTask extends SinkTask {
         }
       }
     }
-    hudiTransactionParticipants.clear();
+    transactionParticipants.clear();
     transactionCoordinators.forEach((topic, transactionCoordinator) -> transactionCoordinator.stop());
     transactionCoordinators.clear();
   }
