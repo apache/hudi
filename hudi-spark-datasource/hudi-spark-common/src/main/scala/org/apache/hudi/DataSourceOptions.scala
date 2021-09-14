@@ -391,7 +391,8 @@ object DataSourceWriteOptions {
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.partition_extractor_class")
     .defaultValue(classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName)
-    .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values.")
+    .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
+      + "default 'SlashEncodedDayPartitionValueExtractor'.")
 
   val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.assume_date_partitioning")
@@ -401,7 +402,7 @@ object DataSourceWriteOptions {
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.use_pre_apache_input_format")
     .defaultValue("false")
-    .withDocumentation("Use InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
+    .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
       + "Use this when you are in the process of migrating from "
       + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format")
 
