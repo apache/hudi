@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-java@v2
         with:
           java-version: ${{ matrix.java }}
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
       - name: Build Project
         env:
