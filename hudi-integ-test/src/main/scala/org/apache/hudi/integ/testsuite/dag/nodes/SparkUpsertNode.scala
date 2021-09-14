@@ -30,11 +30,12 @@ import scala.collection.JavaConverters._
 
 /**
  * Spark datasource based upsert node
- * @param config1
+ *
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkUpsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkUpsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Execute the {@link DagNode}.
