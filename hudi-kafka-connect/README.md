@@ -25,6 +25,7 @@ The first thing you need to do to start using this connector is building it. In 
 
 - [Java 1.8+](https://openjdk.java.net/)
 - [Apache Maven](https://maven.apache.org/)
+- Install [kcat](https://github.com/edenhill/kcat)
 
 After installing these dependencies, execute the following commands. This will install all the Hudi dependency jars,
 including the fat packaged jar that contains all the dependencies required for a functional Hudi Kafka Connect Sink.
@@ -58,7 +59,8 @@ To try out the Connect Sink locally, set up a Kafka broker locally. Download the
 Once downloaded and built, run the Zookeeper server and Kafka server using the command line tools.
 
 ```bash
-cd $KAFKA_DIR
+export KAFKA_HOME=/path/to/kafka_install_dir
+cd $KAFKA_KAFKA_HOME
 ./bin/zookeeper-server-start.sh ./config/zookeeper.properties
 ./bin/kafka-server-start.sh ./config/server.properties
 ```
@@ -81,7 +83,7 @@ cd $CONFLUENT_DIR
 The control topic should only have `1` partition, since its used to coordinate the Hudi write transactions across the multiple Connect tasks.
 
 ```bash
-cd $KAFKA_DIR
+cd $KAFKA_HOME
 ./bin/kafka-topics.sh --delete --topic hudi-control-topic --bootstrap-server localhost:9092
 ./bin/kafka-topics.sh --create --topic hudi-control-topic --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
 ```
@@ -105,7 +107,7 @@ Note that if multiple workers need to be run, the webserver needs to be reconfig
 successful running of the workers.
 
 ```bash
-cd $KAFKA_DIR/
+cd $KAFKA_HOME
 ./bin/connect-distributed.sh $HUDI_DIR/hudi-kafka-connect/demo/connect-distributed.properties
 ```
 
@@ -118,4 +120,12 @@ that can be changed based on the desired properties.
 ```bash
 curl -X DELETE http://localhost:8083/connectors/hudi-sink
 curl -X POST -H "Content-Type:application/json" -d @$HUDI-DIR/hudi-kafka-connect/demo/config-sink.json http://localhost:8083/connectors
+```
+
+Now, you should see that the connector is created and tasks are running.
+
+```bash
+curl -X GET -H "Content-Type:application/json"  http://localhost:8083/connectors
+["hudi-sink"]
+curl -X GET -H "Content-Type:application/json"  http://localhost:8083/connectors/hudi-sink/status | jq
 ```

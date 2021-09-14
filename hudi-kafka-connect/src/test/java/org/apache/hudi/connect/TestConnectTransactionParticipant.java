@@ -172,8 +172,8 @@ public class TestConnectTransactionParticipant {
           throw new HoodieException("Unknown test scenario " + testScenario);
       }
     } catch (Exception exception) {
-        throw new HoodieException("Unexpected test failure ", exception);
-      }
+      throw new HoodieException("Unexpected test failure ", exception);
+    }
   }
 
   private void initializeParticipant() {
