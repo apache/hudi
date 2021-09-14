@@ -169,13 +169,6 @@
             <version>${hadoop.version}</version>
         </dependency>
 
-        <!-- Protobuf -->
-        <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
-            <version>3.17.3</version>
-        </dependency>
-
         <!-- Hudi - Test -->
         <dependency>
             <groupId>org.apache.hudi</groupId>

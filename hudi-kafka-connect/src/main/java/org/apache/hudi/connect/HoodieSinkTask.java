@@ -30,11 +30,13 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -106,10 +108,16 @@ public class HoodieSinkTask extends SinkTask {
 
     for (TopicPartition partition : context.assignment()) {
       if (transactionParticipants.get(partition) == null) {
-        throw new IllegalStateException("TransactionParticipant should be created for each assigned partition, "
+        throw new RetriableException("TransactionParticipant should be created for each assigned partition, "
             + "but has not been created for the topic/partition: " + partition.topic() + ":" + partition.partition());
       }
-      transactionParticipants.get(partition).processRecords();
+      try {
+        transactionParticipants.get(partition).processRecords();
+      } catch (IOException exception) {
+        throw new RetriableException("Intermittent write errors for Hudi "
+            + " for the topic/partition: " + partition.topic() + ":" + partition.partition()
+            + " , ensuring kafka connect will retry ", exception);
+      }
     }
   }
 

@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The events sent over the Kafka Control Topic between the
@@ -108,7 +109,9 @@ public class ControlEvent implements Serializable {
   @Override
   public String toString() {
     return String.format("%s %s %s %s %s %s", version, msgType.name(), commitTime,
-        Arrays.toString(senderPartition), coordinatorInfo.toString(), participantInfo.toString());
+        Arrays.toString(senderPartition),
+        (coordinatorInfo == null) ? "" : coordinatorInfo.toString(),
+        (participantInfo == null) ? "" : participantInfo.toString());
   }
 
   /**
@@ -163,6 +166,13 @@ public class ControlEvent implements Serializable {
     public Map<Integer, Long> getGlobalKafkaCommitOffsets() {
       return (globalKafkaCommitOffsets == null) ? new HashMap<>() : globalKafkaCommitOffsets;
     }
+
+    @Override
+    public String toString() {
+      return String.format("%s", globalKafkaCommitOffsets.keySet().stream()
+          .map(key -> key + "=" + globalKafkaCommitOffsets.get(key))
+          .collect(Collectors.joining(", ", "{", "}")));
+    }
   }
 
   /**
@@ -198,6 +208,11 @@ public class ControlEvent implements Serializable {
 
     public OutcomeType getOutcomeType() {
       return outcomeType;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("%s %s %s", Arrays.toString(writeStatusList), kafkaCommitOffset, outcomeType.name());
     }
   }
 

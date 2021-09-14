@@ -33,6 +33,7 @@ usage() {
     echo "   -r |--record-key, (optional) field to use as record key"
     echo "   -l |--num-hudi-partitions, (optional) number of hudi partitions"
     echo "   -p |--partition-key, (optional) field to use as partition"
+    echo "   -s |--schema-file, (optional) path of the file containing the schema of the records"
     exit 1
 }
 
@@ -56,8 +57,9 @@ numKafkaPartitions=4
 recordKey=volume
 numHudiPartitions=5
 partitionField=date
+schemaFile=${HUDI_DIR}/docker/demo/config/schema.avsc
 
-while getopts ":n:f:k:m:r:l:p:-:" opt; do
+while getopts ":n:f:k:m:r:l:p:s:-:" opt; do
   case $opt in
     n) num_records="$OPTARG"
     printf "Argument num-kafka-records is %s\n" "$num_records"
@@ -80,6 +82,9 @@ while getopts ":n:f:k:m:r:l:p:-:" opt; do
     p) partitionField="$OPTARG"
     printf "Argument partition-key is %s\n" "$partitionField"
     ;;
+    p) schemaFile="$OPTARG"
+    printf "Argument schema-file is %s\n" "$schemaFile"
+    ;;
     -) echo "Invalid option -$OPTARG" >&2
     ;;
 esac
@@ -91,16 +96,22 @@ $KAFKA_HOME/bin/kafka-topics.sh --delete --topic ${kafkaTopicName} --bootstrap-s
 # Create the topic with 4 partitions
 $KAFKA_HOME/bin/kafka-topics.sh --create --topic ${kafkaTopicName} --partitions $numKafkaPartitions --replication-factor 1 --bootstrap-server localhost:9092
 
-# Generate kafka messages from raw records
-# Generate the records with unique keys
 
+# Setup the schema registry
+export SCHEMA=`sed 's|/\*|\n&|g;s|*/|&\n|g' ${schemaFile} | sed '/\/\*/,/*\//d' | jq tostring`
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data "{\"schema\": $SCHEMA}" http://localhost:8081/subjects/${kafkaTopicName}/versions
+curl -X GET http://localhost:8081/subjects/${kafkaTopicName}/versions/latest
+
+
+# Generate kafka messages from raw records
+# Each records with unique keys and generate equal messages across each hudi partition
 partitions={}
 for ((i=0; i<${numHudiPartitions}; i++))
 do
     partitions[$i]="partition-"$i;
 done
 
-for ((recordValue=0; recordValue<=${num_records};  ))
+for ((recordValue=0; recordValue<=${num_records}; ))
 do 
     while IFS= read line 
     do

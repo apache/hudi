@@ -110,7 +110,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
   }
 
   @Override
-  public void processRecords() {
+  public void processRecords() throws IOException {
     while (!controlEvents.isEmpty()) {
       ControlEvent message = controlEvents.poll();
       switch (message.getMsgType()) {
@@ -152,7 +152,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
     }
   }
 
-  private void handleEndCommit(ControlEvent message) {
+  private void handleEndCommit(ControlEvent message) throws IOException {
     if (ongoingTransactionInfo == null) {
       LOG.warn(String.format("END_COMMIT %s is received while we were NOT in active transaction", message.getCommitTime()));
       return;
@@ -181,7 +181,8 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
           .build();
       kafkaControlAgent.publishMessage(writeStatusEvent);
     } catch (Exception exception) {
-      LOG.warn(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
+      LOG.error(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
+      throw new IOException(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
     }
   }
 
