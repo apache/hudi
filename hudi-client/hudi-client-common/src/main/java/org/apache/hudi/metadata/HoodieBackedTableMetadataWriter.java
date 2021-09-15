@@ -178,21 +178,21 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     if (writeConfig.isMetricsOn()) {
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
-               .withReporterType(writeConfig.getMetricsReporterType().toString())
-               .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
-               .on(true).build());
+          .withReporterType(writeConfig.getMetricsReporterType().toString())
+          .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
+          .on(true).build());
       switch (writeConfig.getMetricsReporterType()) {
         case GRAPHITE:
           builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
-                   .onGraphitePort(writeConfig.getGraphiteServerPort())
-                   .toGraphiteHost(writeConfig.getGraphiteServerHost())
-                   .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
+              .onGraphitePort(writeConfig.getGraphiteServerPort())
+              .toGraphiteHost(writeConfig.getGraphiteServerHost())
+              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
           break;
         case JMX:
           builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
-                   .onJmxPort(writeConfig.getJmxPort())
-                   .toJmxHost(writeConfig.getJmxHost())
-                   .build());
+              .onJmxPort(writeConfig.getJmxPort())
+              .toJmxHost(writeConfig.getJmxHost())
+              .build());
           break;
         case DATADOG:
         case PROMETHEUS:
