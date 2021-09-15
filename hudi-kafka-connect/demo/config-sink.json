@@ -9,11 +9,10 @@
 		"value.converter.schemas.enable": "false",
 		"topics": "hudi-test-topic",
 		"hoodie.table.name": "hudi-test-topic",
-		"hoodie.base.path": "file:///tmp/hoodie/sample-table",
+		"hoodie.base.path": "file:///tmp/hoodie/hudi-test-topic",
 		"hoodie.datasource.write.recordkey.field": "volume",
-		"hoodie.datasource.write.partitionpath.field": "year",
-		"hoodie.schemaprovider.class": "org.apache.hudi.schema.FilebasedSchemaProvider",
-		"hoodie.deltastreamer.schemaprovider.source.schema.file": "file:///tmp/hoodie/schema.avsc",
-		"hoodie.deltastreamer.schemaprovider.target.schema.file": "file:///tmp/hoodie/schema.avsc"
+		"hoodie.datasource.write.partitionpath.field": "date",
+		"hoodie.schemaprovider.class": "org.apache.hudi.schema.SchemaRegistryProvider",
+		"hoodie.deltastreamer.schemaprovider.registry.url": "http://localhost:8081/subjects/hudi-test-topic/versions/latest"
     }
 }

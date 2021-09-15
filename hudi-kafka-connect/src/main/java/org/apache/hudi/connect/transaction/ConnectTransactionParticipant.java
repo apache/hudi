@@ -32,7 +32,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -111,7 +110,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
   }
 
   @Override
-  public void processRecords() {
+  public void processRecords() throws IOException {
     while (!controlEvents.isEmpty()) {
       ControlEvent message = controlEvents.poll();
       switch (message.getMsgType()) {
@@ -153,7 +152,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
     }
   }
 
-  private void handleEndCommit(ControlEvent message) {
+  private void handleEndCommit(ControlEvent message) throws IOException {
     if (ongoingTransactionInfo == null) {
       LOG.warn(String.format("END_COMMIT %s is received while we were NOT in active transaction", message.getCommitTime()));
       return;
@@ -167,28 +166,23 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       return;
     }
 
+    context.pause(partition);
+    ongoingTransactionInfo.commitInitiated();
     // send Writer Status Message and wait for ACK_COMMIT in async fashion
     try {
-      context.pause(partition);
-      ongoingTransactionInfo.commitInitiated();
       //sendWriterStatus
-      List<WriteStatus> writeStatuses = new ArrayList<>();
-      try {
-        writeStatuses = ongoingTransactionInfo.getWriter().close();
-      } catch (IOException exception) {
-        LOG.warn("Error closing the Hudi Writer", exception);
-      }
-
-      ControlEvent writeStatus = new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
+      List<WriteStatus> writeStatuses = ongoingTransactionInfo.getWriter().close();
+      ControlEvent writeStatusEvent = new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
           ControlEvent.SenderType.PARTICIPANT, ongoingTransactionInfo.getCommitTime(), partition)
           .setParticipantInfo(new ControlEvent.ParticipantInfo(
               writeStatuses,
               ongoingTransactionInfo.getLastWrittenKafkaOffset(),
               ControlEvent.OutcomeType.WRITE_SUCCESS))
           .build();
-      kafkaControlAgent.publishMessage(writeStatus);
+      kafkaControlAgent.publishMessage(writeStatusEvent);
     } catch (Exception exception) {
-      LOG.warn(String.format("Error ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
+      LOG.error(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
+      throw new IOException(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
     }
   }
 

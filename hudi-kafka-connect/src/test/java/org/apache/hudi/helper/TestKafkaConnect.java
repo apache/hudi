@@ -25,6 +25,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -60,7 +61,7 @@ public class TestKafkaConnect implements SinkTaskContext {
     return !isPaused;
   }
 
-  public int putRecordsToParticipant() {
+  public int putRecordsToParticipant() throws IOException {
     for (int i = 1; i <= NUM_RECORDS_BATCH; i++) {
       participant.buffer(getNextKafkaRecord());
     }
