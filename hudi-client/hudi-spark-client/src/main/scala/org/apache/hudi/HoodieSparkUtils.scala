@@ -258,7 +258,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
           .mkString(",")
 
       case b: BaseKeyGenerator => b.getPartitionPathFields.asScala.mkString(",")
-      case _ => typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD.key())
+      case _ => typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
     }
   }
 

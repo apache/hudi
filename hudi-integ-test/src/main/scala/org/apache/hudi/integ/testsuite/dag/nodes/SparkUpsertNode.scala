@@ -30,11 +30,12 @@ import scala.collection.JavaConverters._
 
 /**
  * Spark datasource based upsert node
- * @param config1
+ *
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkUpsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkUpsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Execute the {@link DagNode}.
@@ -58,7 +59,7 @@ class SparkUpsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX.key, "deltastreamer.checkpoint.key")
       .option("deltastreamer.checkpoint.key", context.getWriterContext.getHoodieTestSuiteWriter.getLastCheckpoint.orElse(""))
-      .option(HoodieWriteConfig.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
+      .option(HoodieWriteConfig.TBL_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .mode(SaveMode.Append)
       .save(context.getHoodieTestSuiteWriter.getWriteConfig.getBasePath)
   }

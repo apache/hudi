@@ -149,7 +149,7 @@ public class WriteMetadataEvent implements OperatorEvent {
     ValidationUtils.checkArgument(this.taskID == other.taskID);
     // the instant time could be monotonically increasing
     this.instantTime = other.instantTime;
-    this.lastBatch |= other.lastBatch; // true if one of the event isLastBatch true.
+    this.lastBatch |= other.lastBatch; // true if one of the event lastBatch is true
     List<WriteStatus> statusList = new ArrayList<>();
     statusList.addAll(this.writeStatuses);
     statusList.addAll(other.writeStatuses);

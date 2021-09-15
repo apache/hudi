@@ -152,7 +152,7 @@ public class TestBucketAssigner {
 
   @Test
   public void testInsertOverBucketAssigned() {
-    conf.setInteger(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE.key(), 2);
+    conf.setInteger(HoodieCompactionConfig.COPY_ON_WRITE_INSERT_SPLIT_SIZE.key(), 2);
     writeConfig = StreamerUtil.getHoodieClientConfig(conf);
 
     MockBucketAssigner mockBucketAssigner = new MockBucketAssigner(context, writeConfig);

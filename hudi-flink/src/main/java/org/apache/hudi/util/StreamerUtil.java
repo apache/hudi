@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -42,8 +43,8 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
-import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.transform.ChainedTransformer;
+import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
@@ -75,7 +76,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 
 /**
  * Utilities for Flink stream read and write.
@@ -142,7 +143,7 @@ public class StreamerUtil {
     return conf;
   }
 
-  // Keep to avoid to much modifications.
+  // Keep the redundant to avoid too many modifications.
   public static org.apache.hadoop.conf.Configuration getHadoopConf() {
     return FlinkClientUtil.getHadoopConf();
   }
@@ -156,7 +157,7 @@ public class StreamerUtil {
             .withMergeAllowDuplicateOnInserts(allowDuplicateInserts(conf))
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
-                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
+                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
                     .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
                     .withInlineCompactionTriggerStrategy(
                         CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
@@ -168,6 +169,7 @@ public class StreamerUtil {
                     // actually Flink cleaning is always with parallelism 1 now
                     .withCleanerParallelism(20)
                     .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
                     .build())
             .withMemoryConfig(
                 HoodieMemoryConfig.newBuilder()
@@ -178,7 +180,10 @@ public class StreamerUtil {
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
-                .logFileMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .logFileMaxSize(conf.getLong(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .parquetBlockSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE) * 1024 * 1024)
+                .parquetPageSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE) * 1024 * 1024)
+                .parquetMaxFileSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
                 .build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
@@ -187,7 +192,7 @@ public class StreamerUtil {
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
-            .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
+            .withProps(flinkConf2TypedProperties(conf));
 
     builder = builder.withSchema(getSourceSchema(conf).toString());
     return builder.build();
@@ -201,12 +206,13 @@ public class StreamerUtil {
    * @return a TypedProperties instance
    */
   public static TypedProperties flinkConf2TypedProperties(Configuration conf) {
+    Configuration flatConf = FlinkOptions.flatOptions(conf);
     Properties properties = new Properties();
-    // put all the set up options
-    conf.addAllToProperties(properties);
+    // put all the set options
+    flatConf.addAllToProperties(properties);
     // put all the default options
     for (ConfigOption<?> option : FlinkOptions.optionalOptions()) {
-      if (!conf.contains(option) && option.hasDefaultValue()) {
+      if (!flatConf.contains(option) && option.hasDefaultValue()) {
         properties.put(option.key(), option.defaultValue());
       }
     }
@@ -227,15 +233,13 @@ public class StreamerUtil {
   public static void initTableIfNotExists(Configuration conf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
     final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
-    // Hadoop FileSystem
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    if (!fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))) {
+    if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
-          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))
-          .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
           .setPreCombineField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
           .setTimelineLayoutVersion(1)
@@ -247,6 +251,19 @@ public class StreamerUtil {
     }
     // Do not close the filesystem in order to use the CACHE,
     // some of the filesystems release the handles in #close method.
+  }
+
+  /**
+   * Returns whether the hoodie table exists under given path {@code basePath}.
+   */
+  public static boolean tableExists(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    // Hadoop FileSystem
+    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    try {
+      return fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
+    } catch (IOException e) {
+      throw new HoodieException("Error while checking whether table exists under path:" + basePath, e);
+    }
   }
 
   /**
@@ -281,10 +298,36 @@ public class StreamerUtil {
   }
 
   /**
+   * Creates the meta client for reader.
+   *
+   * <p>The streaming pipeline process is long running, so empty table path is allowed,
+   * the reader would then check and refresh the meta client.
+   *
+   * @see org.apache.hudi.source.StreamReadMonitoringFunction
+   */
+  public static HoodieTableMetaClient metaClientForReader(
+      Configuration conf,
+      org.apache.hadoop.conf.Configuration hadoopConf) {
+    final String basePath = conf.getString(FlinkOptions.PATH);
+    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && !tableExists(basePath, hadoopConf)) {
+      return null;
+    } else {
+      return createMetaClient(basePath, hadoopConf);
+    }
+  }
+
+  /**
+   * Creates the meta client.
+   */
+  public static HoodieTableMetaClient createMetaClient(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build();
+  }
+
+  /**
    * Creates the meta client.
    */
   public static HoodieTableMetaClient createMetaClient(String basePath) {
-    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(FlinkClientUtil.getHadoopConf()).build();
+    return createMetaClient(basePath, FlinkClientUtil.getHadoopConf());
   }
 
   /**
@@ -372,9 +415,13 @@ public class StreamerUtil {
 
     return fileStatus.getLen() > 0;
   }
-  
+
   public static boolean allowDuplicateInserts(Configuration conf) {
     WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
     return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkOptions.INSERT_DEDUP);
+  }
+
+  public static boolean haveSuccessfulCommits(HoodieTableMetaClient metaClient) {
+    return !metaClient.getCommitsTimeline().filterCompletedInstants().empty();
   }
 }

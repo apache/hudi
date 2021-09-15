@@ -21,30 +21,18 @@ package org.apache.hudi.streamer;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.CleanFunction;
-import org.apache.hudi.sink.StreamWriteOperatorFactory;
-import org.apache.hudi.sink.bootstrap.BootstrapFunction;
-import org.apache.hudi.sink.compact.CompactFunction;
-import org.apache.hudi.sink.compact.CompactionCommitEvent;
-import org.apache.hudi.sink.compact.CompactionCommitSink;
-import org.apache.hudi.sink.compact.CompactionPlanEvent;
-import org.apache.hudi.sink.compact.CompactionPlanOperator;
-import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.partitioner.BucketAssignOperator;
-import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.sink.transform.Transformer;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
-import org.apache.flink.formats.json.TimestampFormat;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -54,9 +42,7 @@ import java.util.Properties;
 
 /**
  * An Utility which can incrementally consume data from Kafka and apply it to the target table.
- * currently, it only support COW table and insert, upsert operation.
- * <p>
- * note: HoodieFlinkStreamer is not suitable to initialize on large tables when we have no checkpoint to restore from.
+ * currently, it only supports COW table and insert, upsert operation.
  */
 public class HoodieFlinkStreamer {
   public static void main(String[] args) throws Exception {
@@ -90,9 +76,6 @@ public class HoodieFlinkStreamer {
     int parallelism = env.getParallelism();
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
-    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf);
-
     DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
         cfg.kafkaTopic,
         new JsonRowDataDeserializationSchema(
@@ -112,51 +95,12 @@ public class HoodieFlinkStreamer {
       }
     }
 
-    DataStream<HoodieRecord> dataStream2 = dataStream
-        .map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class));
-
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      dataStream2 = dataStream2.rebalance()
-          .transform(
-              "index_bootstrap",
-              TypeInformation.of(HoodieRecord.class),
-              new ProcessOperator<>(new BootstrapFunction<>(conf)))
-          .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(parallelism))
-          .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
-    }
-
-    DataStream<Object> pipeline = dataStream2
-        // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
-        .keyBy(HoodieRecord::getRecordKey)
-        .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner" + conf.getString(FlinkOptions.TABLE_NAME))
-        .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism))
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
-        .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-        .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
-        .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, false);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
     if (StreamerUtil.needsAsyncCompaction(conf)) {
-      pipeline.transform("compact_plan_generate",
-          TypeInformation.of(CompactionPlanEvent.class),
-          new CompactionPlanOperator(conf))
-          .uid("uid_compact_plan_generate")
-          .setParallelism(1) // plan generate must be singleton
-          .rebalance()
-          .transform("compact_task",
-              TypeInformation.of(CompactionCommitEvent.class),
-              new ProcessOperator<>(new CompactFunction(conf)))
-          .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
-          .addSink(new CompactionCommitSink(conf))
-          .name("compact_commit")
-          .setParallelism(1); // compaction commit should be singleton
+      Pipelines.compact(conf, pipeline);
     } else {
-      pipeline.addSink(new CleanFunction<>(conf))
-          .setParallelism(1)
-          .name("clean_commits").uid("uid_clean_commits");
+      Pipelines.clean(conf, pipeline);
     }
 
     env.execute(cfg.targetTableName);

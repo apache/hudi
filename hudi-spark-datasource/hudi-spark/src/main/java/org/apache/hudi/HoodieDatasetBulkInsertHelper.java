@@ -77,7 +77,7 @@ public class HoodieDatasetBulkInsertHelper {
 
     TypedProperties properties = new TypedProperties();
     properties.putAll(config.getProps());
-    String keyGeneratorClass = properties.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS().key());
+    String keyGeneratorClass = properties.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key());
     BuiltinKeyGenerator keyGenerator = (BuiltinKeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, properties);
     StructType structTypeForUDF = rows.schema();
 
@@ -145,10 +145,14 @@ public class HoodieDatasetBulkInsertHelper {
             functions.lit("").cast(DataTypes.StringType));
 
     List<Column> originalFields =
-        Arrays.stream(rowsWithMetaCols.schema().fields()).filter(field -> !field.name().contains("_hoodie_")).map(f -> new Column(f.name())).collect(Collectors.toList());
+        Arrays.stream(rowsWithMetaCols.schema().fields())
+            .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(field.name()))
+            .map(f -> new Column(f.name())).collect(Collectors.toList());
 
     List<Column> metaFields =
-        Arrays.stream(rowsWithMetaCols.schema().fields()).filter(field -> field.name().contains("_hoodie_")).map(f -> new Column(f.name())).collect(Collectors.toList());
+        Arrays.stream(rowsWithMetaCols.schema().fields())
+            .filter(field -> HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(field.name()))
+            .map(f -> new Column(f.name())).collect(Collectors.toList());
 
     // reorder such that all meta columns are at the beginning followed by original columns
     List<Column> allCols = new ArrayList<>();

@@ -61,7 +61,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 
 /**
  * This is the entry point for running a Hudi Test Suite. Although this class has similarities with {@link HoodieDeltaStreamer} this class does not extend it since do not want to create a dependency
@@ -101,7 +101,7 @@ public class HoodieTestSuiteJob {
     this.cfg = cfg;
     this.jsc = jsc;
     cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
-    this.sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
+    this.sparkSession = SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
     this.fs = FSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
     this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
     log.info("Creating workload generator with configs : {}", props.toString());
@@ -111,7 +111,7 @@ public class HoodieTestSuiteJob {
     metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
 
     if (cfg.cleanInput) {

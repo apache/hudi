@@ -42,7 +42,7 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "key").
     option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "datestr").
     option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "ts").
-    option(HoodieWriteConfig.TABLE_NAME.key(), "stock_ticks_derived_mor").
+    option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor").
     option(DataSourceWriteOptions.HIVE_TABLE.key(), "stock_ticks_derived_mor").
     option(DataSourceWriteOptions.HIVE_DATABASE.key(), "default").
     option(DataSourceWriteOptions.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
@@ -74,7 +74,7 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "key").
     option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "datestr").
     option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "ts").
-    option(HoodieWriteConfig.TABLE_NAME.key(), "stock_ticks_derived_mor_bs").
+    option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor_bs").
     option(DataSourceWriteOptions.HIVE_TABLE.key(), "stock_ticks_derived_mor_bs").
     option(DataSourceWriteOptions.HIVE_DATABASE.key(), "default").
     option(DataSourceWriteOptions.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").

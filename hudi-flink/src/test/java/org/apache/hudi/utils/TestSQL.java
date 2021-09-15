@@ -22,7 +22,8 @@ package org.apache.hudi.utils;
  * Test sql statements.
  */
 public class TestSQL {
-  private TestSQL() {}
+  private TestSQL() {
+  }
 
   public static final String INSERT_T1 = "insert into t1 values\n"
       + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
@@ -33,4 +34,14 @@ public class TestSQL {
       + "('id6','Emma',20,TIMESTAMP '1970-01-01 00:00:06','par3'),\n"
       + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
       + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4')";
+
+  public static final String UPDATE_INSERT_T1 = "insert into t1 values\n"
+      + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
+      + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+      + "('id3','Julian',54,TIMESTAMP '1970-01-01 00:00:03','par2'),\n"
+      + "('id4','Fabian',32,TIMESTAMP '1970-01-01 00:00:04','par2'),\n"
+      + "('id5','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3'),\n"
+      + "('id9','Jane',19,TIMESTAMP '1970-01-01 00:00:06','par3'),\n"
+      + "('id10','Ella',38,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
+      + "('id11','Phoebe',52,TIMESTAMP '1970-01-01 00:00:08','par4')";
 }

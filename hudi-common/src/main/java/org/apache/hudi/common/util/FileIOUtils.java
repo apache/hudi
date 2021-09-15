@@ -21,18 +21,23 @@ package org.apache.hudi.common.util;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Bunch of utility methods for working with files and byte streams.
@@ -69,6 +74,20 @@ public class FileIOUtils {
     ByteArrayOutputStream bos = new ByteArrayOutputStream(length);
     copy(input, bos);
     return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+  }
+
+  /**
+   * Reads the input stream into String lines.
+   *
+   * @param input {@code InputStream} instance.
+   * @return String lines in a list.
+   */
+  public static List<String> readAsUTFStringLines(InputStream input) {
+    List<String> lines = new ArrayList<>();
+    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
+    lines = bufferedReader.lines().collect(Collectors.toList());
+    closeQuietly(bufferedReader);
+    return lines;
   }
 
   public static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {

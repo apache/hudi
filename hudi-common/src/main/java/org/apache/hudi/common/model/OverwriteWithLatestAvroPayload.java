@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * Default payload used for delta streamer.
@@ -98,6 +99,6 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * Return true if value equals defaultValue otherwise false.
    */
   public Boolean overwriteField(Object value, Object defaultValue) {
-    return defaultValue == null ? value == null : defaultValue.equals(value);
+    return Objects.equals(value, defaultValue);
   }
 }

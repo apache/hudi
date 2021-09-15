@@ -52,7 +52,8 @@ public class WriteProfiles {
 
   private static final Map<String, WriteProfile> PROFILES = new HashMap<>();
 
-  private WriteProfiles() {}
+  private WriteProfiles() {
+  }
 
   public static synchronized WriteProfile singleton(
       boolean ignoreSmallFiles,
@@ -104,7 +105,6 @@ public class WriteProfiles {
    * @param basePath Table base path
    * @param metadata The metadata
    * @param fs       The filesystem
-   *
    * @return the commit file status list
    */
   private static List<FileStatus> getWritePathsOfInstant(Path basePath, HoodieCommitMetadata metadata, FileSystem fs) {
@@ -143,7 +143,6 @@ public class WriteProfiles {
    * @param basePath  The table base path
    * @param instant   The hoodie instant
    * @param timeline  The timeline
-   *
    * @return the commit metadata or empty if any error occurs
    */
   public static Option<HoodieCommitMetadata> getCommitMetadataSafely(
@@ -172,7 +171,6 @@ public class WriteProfiles {
    * @param basePath  The table base path
    * @param instant   The hoodie instant
    * @param timeline  The timeline
-   *
    * @return the commit metadata
    */
   public static HoodieCommitMetadata getCommitMetadata(

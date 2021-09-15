@@ -23,13 +23,13 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -58,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -532,11 +533,7 @@ public class TestWriteCopyOnWrite {
 
   @Test
   public void testInsertAllowsDuplication() throws Exception {
-    // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
-    conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
-    conf.setBoolean(FlinkOptions.INSERT_DEDUP, false);
-    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+    InsertFunctionWrapper<RowData> funcWrapper = new InsertFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
@@ -547,19 +544,16 @@ public class TestWriteCopyOnWrite {
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
-    Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
-    assertThat("All data should be flushed out", dataBuffer.size(), is(0));
+    assertNull(funcWrapper.getWriterHelper());
 
     final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
-    final OperatorEvent event2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", event2, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", event1, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     String instant = funcWrapper.getWriteClient()
-            .getLastPendingInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     funcWrapper.checkpointComplete(1);
 
@@ -585,10 +579,8 @@ public class TestWriteCopyOnWrite {
 
     funcWrapper.checkpointFunction(2);
 
-    final OperatorEvent event3 = funcWrapper.getNextEvent(); // remove the first event first
-    final OperatorEvent event4 = funcWrapper.getNextEvent();
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event3);
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event4);
+    final OperatorEvent event2 = funcWrapper.getNextEvent(); // remove the first event first
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
     funcWrapper.checkpointComplete(2);
 
     // same with the original base file content.
@@ -725,8 +717,6 @@ public class TestWriteCopyOnWrite {
       funcWrapper.invoke(rowData);
     }
 
-    assertTrue(funcWrapper.isAlreadyBootstrap());
-
     checkIndexLoaded(
         new HoodieKey("id1", "par1"),
         new HoodieKey("id2", "par1"),
@@ -742,6 +732,8 @@ public class TestWriteCopyOnWrite {
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
+
+    assertTrue(funcWrapper.isAlreadyBootstrap());
 
     String instant = funcWrapper.getWriteClient()
         .getLastPendingInstant(getTableType());

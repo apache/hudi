@@ -73,7 +73,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Data set for testing, also some utilities to check the results. */
+/**
+ * Data set for testing, also some utilities to check the results.
+ */
 public class TestData {
   public static List<RowData> DATA_SET_INSERT = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
@@ -128,6 +130,7 @@ public class TestData {
   );
 
   public static List<RowData> DATA_SET_INSERT_DUPLICATES = new ArrayList<>();
+
   static {
     IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_DUPLICATES.add(
         insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
@@ -135,6 +138,7 @@ public class TestData {
   }
 
   public static List<RowData> DATA_SET_INSERT_SAME_KEY = new ArrayList<>();
+
   static {
     IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_SAME_KEY.add(
         insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
@@ -280,39 +284,34 @@ public class TestData {
           TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
   );
 
-  /**
-   * Returns string format of a list of RowData.
-   */
-  public static String rowDataToString(List<RowData> rows) {
-    return rowDataToString(rows, false);
+  private static Integer toIdSafely(Object id) {
+    if (id == null) {
+      return -1;
+    }
+    final String idStr = id.toString();
+    if (idStr.startsWith("id")) {
+      return Integer.parseInt(idStr.substring(2));
+    }
+    return -1;
   }
 
   /**
    * Returns string format of a list of RowData.
-   *
-   * @param withChangeFlag whether to print the change flag
    */
-  public static String rowDataToString(List<RowData> rows, boolean withChangeFlag) {
+  public static String rowDataToString(List<RowData> rows) {
     DataStructureConverter<Object, Object> converter =
         DataStructureConverters.getConverter(TestConfigurations.ROW_DATA_TYPE);
     return rows.stream()
-        .sorted(Comparator.comparing(o -> toStringSafely(o.getString(0))))
-        .map(row -> {
-          final String rowStr = converter.toExternal(row).toString();
-          if (withChangeFlag) {
-            return row.getRowKind().shortString() + "(" + rowStr + ")";
-          } else {
-            return rowStr;
-          }
-        })
+        .sorted(Comparator.comparing(o -> toIdSafely(o.getString(0))))
+        .map(row -> converter.toExternal(row).toString())
         .collect(Collectors.toList()).toString();
   }
 
   /**
    * Write a list of row data with Hoodie format base on the given configuration.
    *
-   * @param dataBuffer  The data buffer to write
-   * @param conf        The flink configuration
+   * @param dataBuffer The data buffer to write
+   * @param conf       The flink configuration
    * @throws Exception if error occurs
    */
   public static void writeData(
@@ -379,8 +378,8 @@ public class TestData {
    * Sort the {@code rows} using field at index {@code orderingPos} and asserts
    * it equals with the expected string {@code expected}.
    *
-   * @param rows     Actual result rows
-   * @param expected Expected string of the sorted rows
+   * @param rows        Actual result rows
+   * @param expected    Expected string of the sorted rows
    * @param orderingPos Field position for ordering
    */
   public static void assertRowsEquals(List<Row> rows, String expected, int orderingPos) {
@@ -399,7 +398,7 @@ public class TestData {
    */
   public static void assertRowsEquals(List<Row> rows, List<RowData> expected) {
     String rowsString = rows.stream()
-        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(0))))
+        .sorted(Comparator.comparing(o -> toIdSafely(o.getField(0))))
         .collect(Collectors.toList()).toString();
     assertThat(rowsString, is(rowDataToString(expected)));
   }
@@ -425,7 +424,7 @@ public class TestData {
    */
   public static void assertRowDataEquals(List<RowData> rows, List<RowData> expected) {
     String rowsString = rowDataToString(rows);
-    assertThat(rowsString, is(rowDataToString(expected)));
+    assertThat(rowDataToString(expected), is(rowsString));
   }
 
   /**
@@ -526,8 +525,8 @@ public class TestData {
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
-   * @param basePath   The file base to check, should be a directory
-   * @param expected   The expected results mapping, the key should be the partition path
+   * @param basePath The file base to check, should be a directory
+   * @param expected The expected results mapping, the key should be the partition path
    */
   public static void checkWrittenFullData(
       File basePath,
@@ -571,12 +570,12 @@ public class TestData {
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
-   * @param fs         The file system
+   * @param fs            The file system
    * @param latestInstant The latest committed instant of current table
-   * @param baseFile   The file base to check, should be a directory
-   * @param expected   The expected results mapping, the key should be the partition path
-   * @param partitions The expected partition number
-   * @param schema     The read schema
+   * @param baseFile      The file base to check, should be a directory
+   * @param expected      The expected results mapping, the key should be the partition path
+   * @param partitions    The expected partition number
+   * @param schema        The read schema
    */
   public static void checkWrittenDataMOR(
       FileSystem fs,

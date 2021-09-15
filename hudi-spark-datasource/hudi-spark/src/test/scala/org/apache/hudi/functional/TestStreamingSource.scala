@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM, INSERT_PARALLELISM, TABLE_NAME, UPSERT_PARALLELISM}
+import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
 import org.apache.log4j.Level
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.{Row, SaveMode}
@@ -32,9 +32,9 @@ class TestStreamingSource extends StreamTest {
   private val commonOptions = Map(
     RECORDKEY_FIELD.key -> "id",
     PRECOMBINE_FIELD.key -> "ts",
-    INSERT_PARALLELISM.key -> "4",
-    UPSERT_PARALLELISM.key -> "4",
-    DELETE_PARALLELISM.key -> "4"
+    INSERT_PARALLELISM_VALUE.key -> "4",
+    UPSERT_PARALLELISM_VALUE.key -> "4",
+    DELETE_PARALLELISM_VALUE.key -> "4"
   )
   private val columns = Seq("id", "name", "price", "ts")
 
@@ -50,7 +50,7 @@ class TestStreamingSource extends StreamTest {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(COPY_ON_WRITE)
           .setTableName(getTableName(tablePath))
-          .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS.defaultValue)
+          .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
           .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -100,7 +100,7 @@ class TestStreamingSource extends StreamTest {
       HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
-        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS.defaultValue)
+        .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -143,7 +143,7 @@ class TestStreamingSource extends StreamTest {
       .write
       .format("org.apache.hudi")
       .options(commonOptions)
-      .option(TABLE_NAME.key, getTableName(inputPath))
+      .option(TBL_NAME.key, getTableName(inputPath))
       .mode(SaveMode.Append)
       .save(inputPath)
   }

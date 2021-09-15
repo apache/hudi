@@ -22,11 +22,10 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.codegen.sort.SortCodeGenerator;
-import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.planner.plan.nodes.exec.spec.SortSpec;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.stream.IntStream;
 
 /**
@@ -34,13 +33,12 @@ import java.util.stream.IntStream;
  */
 public class SortOperatorGen {
   private final int[] sortIndices;
-  private final LogicalType[] sortTypes;
+  private final RowType rowType;
   private final TableConfig tableConfig = new TableConfig();
 
   public SortOperatorGen(RowType rowType, String[] sortFields) {
     this.sortIndices = Arrays.stream(sortFields).mapToInt(rowType::getFieldIndex).toArray();
-    List<RowType.RowField> fields = rowType.getFields();
-    this.sortTypes = Arrays.stream(sortIndices).mapToObj(idx -> fields.get(idx).getType()).toArray(LogicalType[]::new);
+    this.rowType = rowType;
   }
 
   public OneInputStreamOperator<RowData, RowData> createSortOperator() {
@@ -51,8 +49,8 @@ public class SortOperatorGen {
   }
 
   private SortCodeGenerator createSortCodeGenerator() {
-    boolean[] padBooleans = new boolean[sortIndices.length];
-    IntStream.range(0, sortIndices.length).forEach(i -> padBooleans[i] = true);
-    return new SortCodeGenerator(tableConfig, sortIndices, sortTypes, padBooleans, padBooleans);
+    SortSpec.SortSpecBuilder builder = SortSpec.builder();
+    IntStream.range(0, sortIndices.length).forEach(i -> builder.addField(i, true, true));
+    return new SortCodeGenerator(tableConfig, rowType, builder.build());
   }
 }

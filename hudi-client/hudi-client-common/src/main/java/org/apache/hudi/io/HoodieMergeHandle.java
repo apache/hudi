@@ -77,7 +77,7 @@ import java.util.Set;
  * Existing data:
  *     rec1_1, rec2_1, rec3_1, rec4_1
  *
- * For every existing record, merge w/ incoming if requried and write to storage.
+ * For every existing record, merge w/ incoming if required and write to storage.
  *    => rec1_1 and rec1_2 is merged to write rec1_2 to storage
  *    => rec2_1 is written as is
  *    => rec3_1 is written as is
