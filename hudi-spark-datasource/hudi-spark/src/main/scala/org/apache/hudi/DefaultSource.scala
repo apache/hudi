@@ -21,16 +21,17 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
+import org.apache.hudi.client.utils.SparkSchemaUtils
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
 import org.apache.spark.sql.sources._
@@ -50,7 +51,7 @@ class DefaultSource extends RelationProvider
   with DataSourceRegister
   with StreamSinkProvider
   with StreamSourceProvider
-  with Serializable {
+  with Serializable with SparkAdapterSupport {
 
   SparkSession.getActiveSession.foreach { spark =>
     val sparkVersion = spark.version
@@ -113,7 +114,10 @@ class DefaultSource extends RelationProvider
       case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
            (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
            (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-        getBaseFileOnlyView(useHoodieFileIndex, sqlContext, parameters, schema, tablePath,
+        val internalSchema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata
+        val newParameters = parameters ++ Map(SparkSchemaUtils.HOODIE_QUERY_SCHEMA -> SerDeHelper.toJson(internalSchema.orElse(null)),
+          SparkSchemaUtils.HOODIE_TABLE_PATH -> metaClient.getBasePath)
+        getBaseFileOnlyView(useHoodieFileIndex, sqlContext, newParameters, schema, tablePath,
           readPaths, metaClient)
 
       case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
@@ -190,7 +194,7 @@ class DefaultSource extends RelationProvider
                                   metaClient: HoodieTableMetaClient): BaseRelation = {
     log.info("Loading Base File Only View  with options :" + optParams)
     val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
-      case HoodieFileFormat.PARQUET => (new ParquetFileFormat, "parquet")
+      case HoodieFileFormat.PARQUET => (sparkAdapter.createHoodieParquetFileFormat(), "HoodieParquet")
       case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
     }
 
@@ -214,7 +218,9 @@ class DefaultSource extends RelationProvider
         "mapreduce.input.pathFilter.class",
         classOf[HoodieROTablePathFilter],
         classOf[org.apache.hadoop.fs.PathFilter])
-
+      // set internalSchema to hadoopConf
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, optParams.getOrElse(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, ""))
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkSchemaUtils.HOODIE_TABLE_PATH, optParams.getOrElse(SparkSchemaUtils.HOODIE_TABLE_PATH, ""))
       val specifySchema = if (schema == null) {
         // Load the schema from the commit meta data.
         // Here we should specify the schema to the latest commit schema since

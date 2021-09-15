@@ -19,13 +19,21 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TableInternalSchemaUtils;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.utils.AvroSchemaUtil;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -42,6 +50,8 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
@@ -78,6 +88,23 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
       readSchema = mergeHandle.getWriterSchemaWithMetaFields();
     }
 
+    Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(table.getConfig().getInternalSchema());
+    Boolean needToReWriteRecord = false;
+    // to do support bootstrap
+    if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
+      // check implicitly add columns, and position reorder(spark sql may change cols order)
+      InternalSchema querySchema = AvroSchemaUtil.evolutionSchemaFromNewAvroSchema(readSchema, querySchemaOpt.get(), true);
+      long commitTime = Long.valueOf(FSUtils.getCommitTime(mergeHandle.getOldFilePath().getName()));
+      InternalSchema writeInternalSchema = TableInternalSchemaUtils.searchSchemaAndCache(commitTime, table.getMetaClient().getBasePath(), table.getHadoopConf());
+      List<String> colNamesFromeQuerySchema = querySchema.getAllColsFullName();
+      List<String> colNamesFromWriteSchema = writeInternalSchema.getAllColsFullName();
+      List<String> diffCols = colNamesFromWriteSchema.stream()
+          .filter(f -> colNamesFromeQuerySchema.contains(f)
+              && writeInternalSchema.findIdByName(f) == querySchema.findIdByName(f)
+              && writeInternalSchema.findIdByName(f) != -1).collect(Collectors.toList());
+      readSchema = AvroInternalSchemaConverter.convert(InternalSchemaUtils.mergeSchema(writeInternalSchema, querySchema), readSchema.getName());
+      needToReWriteRecord = diffCols.size() != colNamesFromWriteSchema.size();
+    }
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
     HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
@@ -85,7 +112,11 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
-        readerIterator = reader.getRecordIterator(readSchema);
+        if (needToReWriteRecord) {
+          readerIterator = AvroSchemaUtil.rewriteRecords(reader.getRecordIterator(), readSchema);
+        } else {
+          readerIterator = reader.getRecordIterator(readSchema);
+        }
       }
 
       ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();

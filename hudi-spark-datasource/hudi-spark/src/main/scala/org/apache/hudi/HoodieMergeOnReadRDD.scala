@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.{AvroDeserializer, AvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -160,7 +161,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val deserializer = new AvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
-      private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
+      private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config, tableState.requiredInternalSchema.getOrElse(null)).getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
 
       private var recordToLoad: InternalRow = _
@@ -207,7 +208,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val requiredDeserializer = new AvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
-      private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config).getRecords
+      private val logRecords = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config, tableState.internalSchema.getOrElse(null)).getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
       private val keyToSkip = mutable.Set.empty[String]
       private val recordKeyPosition = if (recordKeyFieldOpt.isEmpty) HOODIE_RECORD_KEY_COL_POS else tableState.tableStructSchema.fieldIndex(recordKeyFieldOpt.get)
@@ -306,7 +307,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 private object HoodieMergeOnReadRDD {
   val CONFIG_INSTANTIATION_LOCK = new Object()
 
-  def scanLog(split: HoodieMergeOnReadFileSplit, logSchema: Schema, config: Configuration): HoodieMergedLogRecordScanner = {
+  def scanLog(split: HoodieMergeOnReadFileSplit, logSchema: Schema, config: Configuration, internalSchema: InternalSchema = null): HoodieMergedLogRecordScanner = {
     val fs = FSUtils.getFs(split.tablePath, config)
     HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
@@ -314,6 +315,7 @@ private object HoodieMergeOnReadRDD {
         .withLogFilePaths(split.logPaths.get.asJava)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(split.latestCommit)
+        .withInternalSchema(internalSchema)
         .withReadBlocksLazily(
           Try(config.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
             HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean)

@@ -25,8 +25,10 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Row, SparkSession}
 
@@ -87,4 +89,21 @@ trait SparkAdapter extends Serializable {
    * Create Like expression.
    */
   def createLike(left: Expression, right: Expression): Expression
+
+  /**
+    * Create parquet file read for hudi.
+    */
+  def createHoodieParquetFileFormat(): ParquetFileFormat
+
+  /**
+    * Create customResolutionRule to deal with alter command for hudi.
+    */
+  def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan]
+
+  /**
+    * parser multipartIdentifier
+    */
+  def getParserMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
+    throw new UnsupportedOperationException(s"Unsupported parseMultipartIdentifier method")
+  }
 }

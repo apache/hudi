@@ -25,6 +25,9 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForC
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.client.utils.SparkSchemaUtils
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.{AvroSchemaUtil, SerDeHelper}
 import org.apache.log4j.LogManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -46,7 +49,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
                                      val optParams: Map[String, String],
                                      val userSchema: StructType,
                                      val metaClient: HoodieTableMetaClient)
-  extends BaseRelation with PrunedFilteredScan {
+  extends BaseRelation with PrunedFilteredScan with SparkAdapterSupport {
 
   private val log = LogManager.getLogger(classOf[MergeOnReadIncrementalRelation])
   private val conf = sqlContext.sparkContext.hadoopConfiguration
@@ -74,6 +77,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   log.debug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
   private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
   private val schemaUtil = new TableSchemaResolver(metaClient)
+  private val tableInternalSchema = schemaUtil.getTableInternalSchemaFromCommitMetadata
   private val tableAvroSchema = schemaUtil.getTableAvroSchema
   private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
@@ -119,18 +123,23 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
         filters :+ isNotNullFilter :+ largerThanFilter :+ lessThanFilter
       }
-      val (requiredAvroSchema, requiredStructSchema) =
-        MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
+      val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
+        MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns, tableInternalSchema.orElse(null))
 
       val hoodieTableState = HoodieMergeOnReadTableState(
         tableStructSchema,
         requiredStructSchema,
-        tableAvroSchema.toString,
+        if (!tableInternalSchema.isPresent) tableAvroSchema.toString else AvroInternalSchemaConverter.convert(tableInternalSchema.get(), tableAvroSchema.getName).toString,
         requiredAvroSchema.toString,
         fileIndex,
         preCombineField,
-        Option.empty
+        Option.empty,
+        if (!tableInternalSchema.isPresent) None else Some(tableInternalSchema.get()),
+        if (!tableInternalSchema.isPresent) None else Some(requiredInternalSchema)
       )
+      val fullSchemaHadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+      fullSchemaHadoopConf.set(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(tableInternalSchema.orElse(null)))
+      fullSchemaHadoopConf.set(SparkSchemaUtils.HOODIE_TABLE_PATH, metaClient.getBasePath)
       val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
         sparkSession = sqlContext.sparkSession,
         dataSchema = tableStructSchema,
@@ -138,8 +147,11 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         requiredSchema = tableStructSchema,
         filters = pushDownFilter,
         options = optParams,
-        hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+        hadoopConf = fullSchemaHadoopConf
       )
+      val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+      hadoopConf.set(SparkSchemaUtils.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(requiredInternalSchema))
+      hadoopConf.set(SparkSchemaUtils.HOODIE_TABLE_PATH, metaClient.getBasePath)
       val requiredSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
         sparkSession = sqlContext.sparkSession,
         dataSchema = tableStructSchema,
@@ -147,7 +159,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         requiredSchema = requiredStructSchema,
         filters = pushDownFilter,
         options = optParams,
-        hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+        hadoopConf = hadoopConf
       )
 
       val rdd = new HoodieMergeOnReadRDD(

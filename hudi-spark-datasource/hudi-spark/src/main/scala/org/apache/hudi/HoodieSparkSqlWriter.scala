@@ -49,9 +49,12 @@ import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkContext}
-
 import java.util
 import java.util.Properties
+
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.{AvroSchemaUtil, SerDeHelper}
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
 
@@ -214,8 +217,17 @@ object HoodieSparkSqlWriter {
               Array(classOf[org.apache.avro.generic.GenericData],
                 classOf[org.apache.avro.Schema]))
             var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+            val lastestSchema = getLatestTableSchema(fs, basePath, sparkContext, schema);
             if (reconcileSchema) {
-              schema = getLatestTableSchema(fs, basePath, sparkContext, schema)
+              schema = lastestSchema
+            }
+            // Now sparkSQL will change col's nullability attribute from optional to required.
+            // This behavior is wrong. Optional col should not be convert to required.
+            // If above problem occurs, try to fix it.
+            // DataSource api has no such problems.
+            schema = {
+              val newSparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(AvroSchemaUtil.canonicalColumnNullability(schema, lastestSchema))
+              AvroConversionUtils.convertStructTypeToAvroSchema(newSparkSchema, structName, nameSpace)
             }
             sparkContext.getConf.registerAvroSchemas(schema)
             log.info(s"Registered avro schema : ${schema.toString(true)}")
@@ -243,8 +255,10 @@ object HoodieSparkSqlWriter {
 
             val writeSchema = if (dropPartitionColumns) generateSchemaWithoutPartitionColumns(partitionColumns, schema) else schema
             // Create a HoodieWriteClient & issue the write.
+            val internalSchemaOpt = getLatestTableInternalSchema(fs, basePath, sparkContext)
+            val newParameters = parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(internalSchemaOpt.getOrElse(null)))
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, writeSchema.toString, path.get,
-              tblName, mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
+              tblName, mapAsJavaMap(newParameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
             )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -311,6 +325,26 @@ object HoodieSparkSqlWriter {
       latestSchema = tableSchemaResolver.getLatestSchema(schema, false, null);
     }
     latestSchema
+  }
+
+  /**
+    * get latest internalSchema from table
+    *
+    * @param fs           instance of FileSystem.
+    * @param basePath     base path.
+    * @param sparkContext instance of spark context.
+    * @param schema       incoming record's schema.
+    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
+    */
+  def getLatestTableInternalSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext): Option[InternalSchema] = {
+    if (FSUtils.isTableExists(basePath.toString, fs)) {
+      val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
+      val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
+      val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
+      if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
+    } else {
+      None
+    }
   }
 
   def registerKryoClassesAndGetGenericRecords(tblName: String, sparkContext : SparkContext, df: Dataset[Row],

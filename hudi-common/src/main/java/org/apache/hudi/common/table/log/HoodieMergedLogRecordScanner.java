@@ -33,6 +33,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -77,8 +78,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                          Option<InstantRange> instantRange, boolean autoScan,
                                          ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
-                                         boolean withOperationField) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField);
+                                         boolean withOperationField, InternalSchema internalSchema) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField, internalSchema);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -187,6 +188,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     // operation field default false
     private boolean withOperationField = false;
 
+    private InternalSchema internalSchema;
+
     @Override
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
@@ -271,12 +274,17 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       return this;
     }
 
+    public Builder withInternalSchema(InternalSchema internalSchema) {
+      this.internalSchema = internalSchema;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordScanner build() {
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, internalSchema);
     }
   }
 }

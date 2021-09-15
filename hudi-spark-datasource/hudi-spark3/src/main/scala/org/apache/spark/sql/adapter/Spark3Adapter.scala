@@ -19,17 +19,21 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
+import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark3HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{Spark3ParsePartitionUtil, SparkParsePartitionUtil}
-import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.hudi.{ResolveHudiAlterTableCommand, SparkAdapter}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.parser.HoodieSpark3ExtendedSqlParser
 
 /**
  * The adapter for spark3.
@@ -84,5 +88,21 @@ class Spark3Adapter extends SparkAdapter {
 
   override def createLike(left: Expression, right: Expression): Expression = {
     new Like(left, right)
+  }
+
+  override def createHoodieParquetFileFormat(): ParquetFileFormat = new Spark3HoodieParquetFileFormat
+
+  override def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = {
+    Some(
+      (spark: SparkSession, delegate: ParserInterface) => new HoodieSpark3ExtendedSqlParser(spark, delegate)
+    )
+  }
+
+  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
+    ResolveHudiAlterTableCommand(sparkSession)
+  }
+
+  override def getParserMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
+    parser.parseMultipartIdentifier(sqlText)
   }
 }

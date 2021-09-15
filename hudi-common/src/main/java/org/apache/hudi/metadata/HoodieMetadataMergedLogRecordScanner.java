@@ -48,7 +48,7 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
                                               ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
                                               Option<InstantRange> instantRange) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
-        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false);
+        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false, null);
     this.mergeKeyFilter = mergeKeyFilter;
 
     performScan();

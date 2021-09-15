@@ -18,12 +18,22 @@
 package org.apache.spark.sql.hudi.command
 
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicInteger
+
 import org.apache.avro.Schema
+import org.apache.hudi.client.utils.SparkSchemaUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.{CommitUtils, Option}
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.action.TableChanges
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.io.FileBaseInternalSchemasManager
+import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.table.HoodieSparkTable
 
 import scala.collection.JavaConverters._
@@ -49,6 +59,8 @@ case class AlterHoodieTableAddColumnsCommand(
   extends RunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val schemaEvolutionEnabled = sparkSession
+      .sessionState.conf.getConfString(HoodieWriteConfig.SCHEMA_EVOLUTION_ENABLE.key(), "false").toBoolean
     if (colsToAdd.nonEmpty) {
       val resolver = sparkSession.sessionState.conf.resolver
       val table = sparkSession.sessionState.catalog.getTableMetadata(tableId)
@@ -60,13 +72,27 @@ case class AlterHoodieTableAddColumnsCommand(
           s" table columns is: [${HoodieSqlUtils.removeMetaFields(table.schema).fieldNames.mkString(",")}]")
       }
       // Get the new schema
-      val newSqlSchema = StructType(table.schema.fields ++ colsToAdd)
-      val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
-      val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
-
-      // Commit with new schema to change the table schema
-      AlterHoodieTableAddColumnsCommand.commitWithSchema(newSchema, table, sparkSession)
-
+      if (schemaEvolutionEnabled) {
+        val (oldSchema, historySchema) = AlterHoodieTableAddColumnsCommand.getInternalSchemaAndHistorySchemaStr(sparkSession, table)
+        val addChange = TableChanges.ColumnAddChange.get(oldSchema)
+        colsToAdd.foreach { col  =>
+          val colType = SparkSchemaUtils.buildTypeFromStructType(col.dataType, true, new AtomicInteger(0))
+          addChange.addColumns(col.name, colType, null)
+        }
+        val newInternalSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, addChange)
+        val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
+          SerDeHelper.inheritSchemas(oldSchema, "")
+        } else {
+          historySchema
+        }
+        // Commit with new schema to change the table schema
+        AlterHoodieTableAddColumnsCommand.commitWithSchema(Some(newInternalSchema), verifiedHistorySchema, None, table, sparkSession)
+      } else {
+        val newSqlSchema = StructType(table.schema.fields ++ colsToAdd)
+        val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
+        val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
+        AlterHoodieTableAddColumnsCommand.commitWithSchema(None, "", Some(newSchema), table, sparkSession)
+      }
       // Refresh the new schema to meta
       val newDataSchema = StructType(table.dataSchema.fields ++ colsToAdd)
       refreshSchemaInMeta(sparkSession, table, newDataSchema)
@@ -74,8 +100,7 @@ case class AlterHoodieTableAddColumnsCommand(
     Seq.empty[Row]
   }
 
-  private def refreshSchemaInMeta(sparkSession: SparkSession, table: CatalogTable,
-                                  newSqlSchema: StructType): Unit = {
+  private def refreshSchemaInMeta(sparkSession: SparkSession, table: CatalogTable, newSqlSchema: StructType): Unit = {
     try {
       sparkSession.catalog.uncacheTable(tableId.quotedString)
     } catch {
@@ -96,12 +121,21 @@ case class AlterHoodieTableAddColumnsCommand(
 
 object AlterHoodieTableAddColumnsCommand {
   /**
-   * Generate an empty commit with new schema to change the table's schema.
-   * @param schema The new schema to commit.
-   * @param table  The hoodie table.
-   * @param sparkSession The spark session.
-   */
-  def commitWithSchema(schema: Schema, table: CatalogTable, sparkSession: SparkSession): Unit = {
+    * Generate an empty commit with new schema to change the table's schema.
+    * @param schema The new schema to commit.
+    * @param table The hoodie table.
+    * @param sparkSession The spark session.
+    */
+  def commitWithSchema(
+      internalSchemaOpt: scala.Option[InternalSchema],
+      historySchemaStr: String,
+      avroSchemaOpt: scala.Option[Schema],
+      table: CatalogTable,
+      sparkSession: SparkSession): Unit = {
+    if (internalSchemaOpt.isEmpty && avroSchemaOpt.isEmpty) {
+      throw new HoodieException("cannot commit schema change, since both internalSchema and avroSchema is empty")
+    }
+    val schema = avroSchemaOpt.getOrElse(AvroInternalSchemaConverter.convert(internalSchemaOpt.get, table.identifier.table))
     val path = getTableLocation(table, sparkSession)
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
@@ -121,7 +155,30 @@ object AlterHoodieTableAddColumnsCommand {
     val metadata = new HoodieCommitMetadata
     metadata.setOperationType(WriteOperationType.INSERT)
     timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
+    if (internalSchemaOpt.isDefined) {
+      val internalSchema = internalSchemaOpt.get
+      val extraMeta = new java.util.HashMap[String, String]()
+      extraMeta.put(SerDeHelper.LATESTSCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(instantTime.toLong)))
+      val schemaManager = new FileBaseInternalSchemasManager(metaClient);
+      schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(internalSchema, historySchemaStr))
+      client.commit(instantTime, jsc.emptyRDD, Option.of(extraMeta))
+    } else {
+      client.commit(instantTime, jsc.emptyRDD)
+    }
+  }
 
-    client.commit(instantTime, jsc.emptyRDD)
+  def getInternalSchemaAndHistorySchemaStr(sparkSession: SparkSession, table: CatalogTable): (InternalSchema, String) = {
+    val path = HoodieSqlUtils.getTableLocation(table, sparkSession)
+    val hadoopConf = sparkSession.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
+      .setConf(hadoopConf).build()
+    val schemaUtil = new TableSchemaResolver(metaClient)
+
+    val schema = schemaUtil.getTableInternalSchemaFromCommitMetadata().orElse {
+      AvroInternalSchemaConverter.convert(schemaUtil.getTableAvroSchema)
+    }
+
+    val historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata.orElse("")
+    (schema, historySchemaStr)
   }
 }

@@ -148,6 +148,17 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "implementations of HoodieRecordPayload to convert incoming records to avro. This is also used as the write schema "
           + "evolving records during an update.");
 
+  public static final ConfigProperty<String> INTERNAL_SCHEMA_STRING = ConfigProperty
+      .key("hoodie.internal.schema")
+      .noDefaultValue()
+      .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
+          + "implementations of evolution of schema");
+
+  public static final ConfigProperty<Boolean> SCHEMA_EVOLUTION_ENABLE = ConfigProperty
+      .key("hoodie.schema.evolution.enable")
+      .defaultValue(false)
+      .withDocumentation("enable full schema evolution for hoodie");
+
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
       .defaultValue("false")
@@ -853,6 +864,22 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public void setSchema(String schemaStr) {
     setValue(AVRO_SCHEMA_STRING, schemaStr);
+  }
+
+  public String getInternalSchema() {
+    return getString(INTERNAL_SCHEMA_STRING);
+  }
+
+  public void setInternalSchemaString(String internalSchemaString) {
+    setValue(INTERNAL_SCHEMA_STRING, internalSchemaString);
+  }
+
+  public boolean getSchemaEvolutionEnable() {
+    return getBoolean(SCHEMA_EVOLUTION_ENABLE);
+  }
+
+  public void setSchemaEvolutionEnable(boolean enable) {
+    setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
   }
 
   /**
@@ -1822,6 +1849,16 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withSchema(String schemaStr) {
       writeConfig.setValue(AVRO_SCHEMA_STRING, schemaStr);
+      return this;
+    }
+
+    public Builder withInternalSchema(String internalSchemaStr) {
+      writeConfig.setValue(INTERNAL_SCHEMA_STRING, internalSchemaStr);
+      return this;
+    }
+
+    public Builder withSchemaEvolutionEnable(boolean enable) {
+      writeConfig.setValue(SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
       return this;
     }
 

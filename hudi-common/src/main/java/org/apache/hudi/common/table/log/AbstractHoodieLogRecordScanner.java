@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.TableInternalSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -42,6 +44,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.utils.AvroSchemaUtil;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -100,6 +106,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final Option<InstantRange> instantRange;
   // Read the operation metadata field from the avro record
   private final boolean withOperationField;
+  private final InternalSchema internalSchema;
+  private final String path;
   // FileSystem
   private final FileSystem fs;
   // Total log files read - for metrics
@@ -119,7 +127,7 @@ public abstract class AbstractHoodieLogRecordScanner {
 
   protected AbstractHoodieLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                            String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
-                                           int bufferSize, Option<InstantRange> instantRange, boolean withOperationField) {
+                                           int bufferSize, Option<InstantRange> instantRange, boolean withOperationField, InternalSchema internalSchema) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -138,6 +146,8 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
+    this.internalSchema = internalSchema;
+    this.path = basePath;
   }
 
   /**
@@ -152,7 +162,7 @@ public abstract class AbstractHoodieLogRecordScanner {
       // iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, internalSchema);
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
@@ -311,6 +321,15 @@ public abstract class AbstractHoodieLogRecordScanner {
   private void processDataBlock(HoodieDataBlock dataBlock) throws Exception {
     // TODO (NA) - Implement getRecordItr() in HoodieAvroDataBlock and use that here
     List<IndexedRecord> recs = dataBlock.getRecords();
+    if (internalSchema != null) {
+      Long currentTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
+      InternalSchema fileSchema = TableInternalSchemaUtils.searchSchemaAndCache(currentTime, path, fs.getConf());
+      if (!TableSchemaResolver.isSchemaCompatible(AvroInternalSchemaConverter.convert(fileSchema, readerSchema.getName()),
+          AvroInternalSchemaConverter.convert(internalSchema, readerSchema.getName()))) {
+        Schema readSchema = AvroInternalSchemaConverter.convert(InternalSchemaUtils.mergeSchema(fileSchema, internalSchema), readerSchema != null ? readerSchema.getName() : "tableName");
+        recs = recs.stream().map(rec -> AvroSchemaUtil.rewriteRecord((GenericRecord) rec, readSchema)).collect(Collectors.toList());
+      }
+    }
     totalLogRecords.addAndGet(recs.size());
     for (IndexedRecord rec : recs) {
       processNextRecord(createHoodieRecord(rec));

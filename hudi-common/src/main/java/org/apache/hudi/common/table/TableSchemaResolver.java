@@ -41,6 +41,9 @@ import org.apache.avro.Schema.Field;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.io.FileBaseInternalSchemasManager;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -492,5 +495,52 @@ public class TableSchemaResolver {
       return new AvroSchemaConverter().convert(lastBlock.getSchema());
     }
     return null;
+  }
+
+  /**
+   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
+   *
+   * @return InternalSchema for this table
+   */
+  public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata() {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    if (timeline.lastInstant().isPresent()) {
+      return getTableInternalSchemaFromCommitMetadata(timeline.lastInstant().get());
+    } else {
+      return Option.empty();
+    }
+  }
+
+  /**
+   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
+   *
+   * @return InternalSchema for this table
+   */
+  private Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(HoodieInstant instant) {
+    try {
+      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      byte[] data = timeline.getInstantDetails(instant).get();
+      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+      String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATESTSCHEMA);
+      if (latestInternalSchemaStr != null) {
+        return SerDeHelper.fromJson(latestInternalSchemaStr);
+      } else {
+        return Option.empty();
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Failed to read schema from commit metadata", e);
+    }
+  }
+
+  /**
+   * Gets the history schemas as String for a hoodie table from the HoodieCommitMetadata of the instant.
+   *
+   * @return history schemas string for this table
+   */
+  public Option<String> getTableHistorySchemaStrFromCommitMetadata() {
+    // now we only support FileBaseInternalSchemaManager
+    FileBaseInternalSchemasManager manager = new FileBaseInternalSchemasManager(metaClient);
+    String result = manager.getHistorySchemaStr();
+    return result.isEmpty() ? Option.empty() : Option.of(result);
   }
 }

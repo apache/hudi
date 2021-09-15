@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import javax.annotation.Nonnull;
 
@@ -46,6 +47,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected List<IndexedRecord> records;
   protected Schema schema;
+  protected InternalSchema internalSchema;
 
   public HoodieDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
@@ -68,8 +70,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected HoodieDataBlock(Option<byte[]> content, @Nonnull FSDataInputStream inputStream, boolean readBlockLazily,
       Option<HoodieLogBlockContentLocation> blockContentLocation, Schema readerSchema,
       @Nonnull Map<HeaderMetadataType, String> headers, @Nonnull Map<HeaderMetadataType, String> footer) {
+    this(content, inputStream, readBlockLazily, blockContentLocation, readerSchema, headers, footer, null);
+  }
+
+  protected HoodieDataBlock(Option<byte[]> content, @Nonnull FSDataInputStream inputStream, boolean readBlockLazily,
+      Option<HoodieLogBlockContentLocation> blockContentLocation, Schema readerSchema,
+      @Nonnull Map<HeaderMetadataType, String> headers, @Nonnull Map<HeaderMetadataType, String> footer, InternalSchema internalSchema) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.schema = readerSchema;
+    this.internalSchema = internalSchema;
   }
 
   public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,

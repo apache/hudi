@@ -26,7 +26,9 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark2HoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{Spark2ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
@@ -81,5 +83,13 @@ class Spark2Adapter extends SparkAdapter {
 
   override def createLike(left: Expression, right: Expression): Expression = {
     Like(left, right)
+  }
+
+  override def createHoodieParquetFileFormat(): ParquetFileFormat = new Spark2HoodieParquetFileFormat
+
+  override def createResolveHudiAlterTableCommand(sparkSession: SparkSession): Rule[LogicalPlan] = {
+    new Rule[LogicalPlan] {
+      override def apply(plan: LogicalPlan): LogicalPlan = plan
+    }
   }
 }

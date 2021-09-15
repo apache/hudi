@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -35,6 +36,8 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -70,6 +73,14 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     super(content, inputStream, readBlockLazily,
           Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
           footer);
+  }
+
+  public HoodieAvroDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
+       boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
+       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer, InternalSchema internalSchema) {
+    super(content, inputStream, readBlockLazily,
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
+        footer, internalSchema);
   }
 
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header) {
@@ -135,8 +146,17 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     // Get schema from the header
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
+    boolean schemaCompatible = true;
+    if (internalSchema != null && schema != null) {
+      // the writeSchema produced by flink/spark has different nameSpace,
+      // we cannot call TableSchemaResolver.isSchemaCompatible directly, so convert it first.
+      Schema convertedWriterSchema = AvroInternalSchemaConverter.convert(AvroInternalSchemaConverter.convert(writerSchema), schema.getName());
+      if (!TableSchemaResolver.isSchemaCompatible(convertedWriterSchema, schema)) {
+        schemaCompatible = false;
+      }
+    }
     // If readerSchema was not present, use writerSchema
-    if (schema == null) {
+    if (schema == null || !schemaCompatible) {
       schema = writerSchema;
     }
 
@@ -187,7 +207,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
+  public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema, InternalSchema internalSchema) throws IOException {
 
     SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
 
@@ -197,7 +217,16 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     dis.readFully(compressedSchema, 0, schemaLength);
     Schema writerSchema = new Schema.Parser().parse(HoodieAvroUtils.decompress(compressedSchema));
 
-    if (readerSchema == null) {
+    boolean schemaCompatible = true;
+    if (internalSchema != null && readerSchema != null) {
+      // the writeSchema produced by flink/spark has different nameSpace,
+      // we cannot call TableSchemaResolver.isSchemaCompatible directly, so convert it first.
+      Schema convertedWriterSchema = AvroInternalSchemaConverter.convert(AvroInternalSchemaConverter.convert(writerSchema), readerSchema.getName());
+      if (!TableSchemaResolver.isSchemaCompatible(convertedWriterSchema, readerSchema)) {
+        schemaCompatible = false;
+      }
+    }
+    if (readerSchema == null || !schemaCompatible) {
       readerSchema = writerSchema;
     }
 
@@ -216,6 +245,15 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     }
     dis.close();
     return new HoodieAvroDataBlock(records, readerSchema);
+  }
+
+  /**
+   * This method is retained to provide backwards compatibility to HoodieArchivedLogs which were written using
+   * HoodieLogFormat V1.
+   */
+  @Deprecated
+  public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
+    return getBlock(content, readerSchema, null);
   }
 
   @Deprecated
