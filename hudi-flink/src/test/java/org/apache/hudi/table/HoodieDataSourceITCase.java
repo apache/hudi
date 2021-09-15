@@ -905,6 +905,31 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "id8,Han,56,1970-01-01T00:00:08,par4]");
   }
 
+  @Test
+  void testWriteReadDecimals() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String createTable = sql("decimals")
+        .field("f0 decimal(3, 2)")
+        .field("f1 decimal(10, 2)")
+        .field("f2 decimal(20, 2)")
+        .field("f3 decimal(38, 18)")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .pkField("f0")
+        .noPartition()
+        .end();
+    tableEnv.executeSql(createTable);
+
+    String insertInto = "insert into decimals values\n"
+        + "(1.23, 12345678.12, 12345.12, 123456789.12345)";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from decimals").execute().collect());
+    assertRowsEquals(result1, "[1.23,12345678.12,12345.12,123456789.123450000000000000]");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
