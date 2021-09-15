@@ -33,6 +33,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -80,7 +81,8 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
     return data.stream().parallel().map(throwingMapToPairWrapper(mapToPairFunc))
         .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
-        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).get())
+        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
+        .filter(Objects::nonNull)
         .collect(Collectors.toList());
   }
 
