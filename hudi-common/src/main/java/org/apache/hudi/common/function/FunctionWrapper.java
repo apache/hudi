@@ -21,6 +21,7 @@ package org.apache.hudi.common.function;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
+import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -65,6 +66,16 @@ public class FunctionWrapper {
     return v1 -> {
       try {
         return throwingPairFunction.call(v1);
+      } catch (Exception e) {
+        throw new HoodieException("Error occurs when executing mapToPair", e);
+      }
+    };
+  }
+
+  public static <V> BinaryOperator<V> throwingReduceWrapper(SerializableBiFunction<V, V, V> throwingReduceFunction) {
+    return (v1, v2) -> {
+      try {
+        return throwingReduceFunction.apply(v1, v2);
       } catch (Exception e) {
         throw new HoodieException("Error occurs when executing mapToPair", e);
       }
