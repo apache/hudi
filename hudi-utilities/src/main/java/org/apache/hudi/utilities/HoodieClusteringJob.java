@@ -27,11 +27,14 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.log4j.LogManager;
@@ -43,6 +46,7 @@ import org.jetbrains.annotations.TestOnly;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class HoodieClusteringJob {
 
@@ -189,9 +193,9 @@ public class HoodieClusteringJob {
   private int doCluster(JavaSparkContext jsc) throws Exception {
     String schemaStr = getSchemaFromLatestInstant();
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
-      JavaRDD<WriteStatus> writeResponse =
-              client.cluster(cfg.clusteringInstantTime, true).getWriteStatuses();
-      return UtilHelpers.handleErrors(jsc, cfg.clusteringInstantTime, writeResponse);
+      Option<HoodieCommitMetadata> commitMetadata = client.cluster(cfg.clusteringInstantTime, true).getCommitMetadata();
+
+      return handleErrors(commitMetadata.get(), cfg.clusteringInstantTime);
     }
   }
 
@@ -230,10 +234,22 @@ public class HoodieClusteringJob {
 
       LOG.info("The schedule instant time is " + instantTime.get());
       LOG.info("Step 2: Do cluster");
-      JavaRDD<WriteStatus> writeResponse =
-              (JavaRDD<WriteStatus>) client.cluster(instantTime.get(), true).getWriteStatuses();
-      return UtilHelpers.handleErrors(jsc, instantTime.get(), writeResponse);
+      Option<HoodieCommitMetadata> metadata = client.cluster(instantTime.get(), true).getCommitMetadata();
+      return handleErrors(metadata.get(), instantTime.get());
     }
+  }
+
+  private int handleErrors(HoodieCommitMetadata metadata, String instantTime) {
+    List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
+            e.getValue().stream()).collect(Collectors.toList());
+    long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
+    if (errorsCount == 0) {
+      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
+      return 0;
+    }
+
+    LOG.error(String.format("Import failed with %d errors.", errorsCount));
+    return -1;
   }
 
 }
