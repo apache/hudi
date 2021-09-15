@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -52,11 +53,13 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
@@ -206,7 +209,7 @@ public class StreamReadMonitoringFunction
       return;
     }
     metaClient.reloadActiveTimeline();
-    HoodieTimeline commitTimeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
     if (commitTimeline.empty()) {
       LOG.warn("No splits found for the table under path " + path);
       return;
@@ -228,8 +231,7 @@ public class StreamReadMonitoringFunction
             : InstantRange.getInstance(specifiedStart, instantToIssue.getTimestamp(), InstantRange.RangeType.CLOSE_CLOSE);
       } else {
         // first time consume and no start commit, consumes the latest incremental data set.
-        HoodieInstant latestCommitInstant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
-        instantRange = InstantRange.getInstance(latestCommitInstant.getTimestamp(), instantToIssue.getTimestamp(),
+        instantRange = InstantRange.getInstance(instantToIssue.getTimestamp(), instantToIssue.getTimestamp(),
             InstantRange.RangeType.CLOSE_CLOSE);
       }
     } else {
@@ -243,8 +245,20 @@ public class StreamReadMonitoringFunction
     // 4. use the file paths from #step 3 as the back-up of the filesystem view
 
     String tableName = conf.getString(FlinkOptions.TABLE_NAME);
-    List<HoodieCommitMetadata> metadataList = instants.stream()
+    List<HoodieCommitMetadata> activeMetadataList = instants.stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
+    List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(instantRange, commitTimeline, tableName);
+    if (archivedMetadataList.size() > 0) {
+      LOG.warn(""
+          + "--------------------------------------------------------------------------------\n"
+          + "---------- caution: the reader has fall behind too much from the writer,\n"
+          + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
+          + "--------------------------------------------------------------------------------");
+    }
+    List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
+        ? mergeList(activeMetadataList, archivedMetadataList)
+        : activeMetadataList;
+
     Set<String> writePartitions = getWritePartitionPaths(metadataList);
     // apply partition push down
     if (this.requiredPartitionPaths.size() > 0) {
@@ -263,16 +277,16 @@ public class StreamReadMonitoringFunction
     final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
     List<MergeOnReadInputSplit> inputSplits = writePartitions.stream()
         .map(relPartitionPath -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, commitToIssue)
-        .map(fileSlice -> {
-          Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-              .sorted(HoodieLogFile.getLogFileComparator())
-              .map(logFile -> logFile.getPath().toString())
-              .collect(Collectors.toList()));
-          String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-          return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-              basePath, logPaths, commitToIssue,
-              metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange);
-        }).collect(Collectors.toList()))
+            .map(fileSlice -> {
+              Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+                  .sorted(HoodieLogFile.getLogFileComparator())
+                  .map(logFile -> logFile.getPath().toString())
+                  .collect(Collectors.toList()));
+              String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+              return new MergeOnReadInputSplit(cnt.getAndAdd(1),
+                  basePath, logPaths, commitToIssue,
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange);
+            }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 
@@ -281,6 +295,11 @@ public class StreamReadMonitoringFunction
     }
     // update the issues instant time
     this.issuedInstant = commitToIssue;
+    LOG.info(""
+        + "------------------------------------------------------------\n"
+        + "---------- consumed to instant: {}\n"
+        + "------------------------------------------------------------",
+        commitToIssue);
   }
 
   @Override
@@ -326,6 +345,44 @@ public class StreamReadMonitoringFunction
   }
 
   /**
+   * Returns the archived metadata in case the reader consumes untimely or it wants
+   * to read from the earliest.
+   *
+   * <p>Note: should improve it with metadata table when the metadata table is stable enough.
+   *
+   * @param instantRange   The instant range to filter the timeline instants
+   * @param commitTimeline The commit timeline
+   * @param tableName      The table name
+   * @return the list of archived metadata, or empty if there is no need to read the archived timeline
+   */
+  private List<HoodieCommitMetadata> getArchivedMetadata(
+      InstantRange instantRange,
+      HoodieTimeline commitTimeline,
+      String tableName) {
+    if (instantRange == null || commitTimeline.isBeforeTimelineStarts(instantRange.getStartInstant())) {
+      // read the archived metadata if:
+      // 1. the start commit is 'earliest';
+      // 2. the start instant is archived.
+      HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+      HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
+      if (!archivedCompleteTimeline.empty()) {
+        final String endTs = archivedCompleteTimeline.lastInstant().get().getTimestamp();
+        Stream<HoodieInstant> instantStream = archivedCompleteTimeline.getInstants();
+        if (instantRange != null) {
+          archivedTimeline.loadInstantDetailsInMemory(instantRange.getStartInstant(), endTs);
+          instantStream = instantStream.filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, instantRange.getStartInstant()));
+        } else {
+          final String startTs = archivedCompleteTimeline.firstInstant().get().getTimestamp();
+          archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
+        }
+        return instantStream
+            .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, archivedTimeline)).collect(Collectors.toList());
+      }
+    }
+    return Collections.emptyList();
+  }
+
+  /**
    * Returns the instants with a given issuedInstant to start from.
    *
    * @param commitTimeline The completed commits timeline
@@ -335,19 +392,19 @@ public class StreamReadMonitoringFunction
   private List<HoodieInstant> filterInstantsWithStart(
       HoodieTimeline commitTimeline,
       final String issuedInstant) {
+    HoodieTimeline completedTimeline = commitTimeline.filterCompletedInstants();
     if (issuedInstant != null) {
-      return commitTimeline.getInstants()
+      return completedTimeline.getInstants()
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
           .collect(Collectors.toList());
     } else if (this.conf.getOptional(FlinkOptions.READ_STREAMING_START_COMMIT).isPresent()
         && !this.conf.get(FlinkOptions.READ_STREAMING_START_COMMIT).equalsIgnoreCase(FlinkOptions.START_COMMIT_EARLIEST)) {
       String definedStartCommit = this.conf.get(FlinkOptions.READ_STREAMING_START_COMMIT);
-      return commitTimeline.getInstants()
+      return completedTimeline.getInstants()
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, definedStartCommit))
           .collect(Collectors.toList());
     } else {
-      return commitTimeline.getInstants()
-          .collect(Collectors.toList());
+      return completedTimeline.getInstants().collect(Collectors.toList());
     }
   }
 
@@ -362,5 +419,11 @@ public class StreamReadMonitoringFunction
         .map(HoodieCommitMetadata::getWritePartitionPaths)
         .flatMap(Collection::stream)
         .collect(Collectors.toSet());
+  }
+
+  private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
+    List<T> merged = new ArrayList<>(list1);
+    merged.addAll(list2);
+    return merged;
   }
 }

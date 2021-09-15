@@ -292,7 +292,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder logFileMaxSize(int logFileSize) {
+    public Builder logFileMaxSize(long logFileSize) {
       storageConfig.setValue(LOGFILE_MAX_SIZE, String.valueOf(logFileSize));
       return this;
     }

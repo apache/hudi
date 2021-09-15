@@ -162,7 +162,7 @@ public class AvroSchemaConverter {
    * <p>Use "record" as the type name.
    *
    * @param schema the schema type, usually it should be the top level record type, e.g. not a
-   *     nested type
+   *               nested type
    * @return Avro's {@link Schema} matching this logical type.
    */
   public static Schema convertToSchema(LogicalType schema) {
@@ -176,7 +176,7 @@ public class AvroSchemaConverter {
    * schema. Nested record type that only differs with type name is still compatible.
    *
    * @param logicalType logical type
-   * @param rowName the record name
+   * @param rowName     the record name
    * @return Avro's {@link Schema} matching this logical type.
    */
   public static Schema convertToSchema(LogicalType logicalType, String rowName) {
@@ -315,7 +315,9 @@ public class AvroSchemaConverter {
     return valueType;
   }
 
-  /** Returns schema with nullable true. */
+  /**
+   * Returns schema with nullable true.
+   */
   private static Schema nullableSchema(Schema schema) {
     return schema.isNullable()
         ? schema

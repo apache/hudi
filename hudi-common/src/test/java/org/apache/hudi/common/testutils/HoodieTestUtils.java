@@ -63,9 +63,10 @@ public class HoodieTestUtils {
     return init(getDefaultHadoopConf(), basePath, tableType);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath) throws IOException {
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable) throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
+    props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 

@@ -57,12 +57,12 @@ public class TestStreamerUtil {
 
     // Validate the partition fields & preCombineField in hoodie.properties.
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.builder()
-            .setBasePath(tempFile.getAbsolutePath())
-            .setConf(new org.apache.hadoop.conf.Configuration())
-            .build();
+        .setBasePath(tempFile.getAbsolutePath())
+        .setConf(new org.apache.hadoop.conf.Configuration())
+        .build();
     assertTrue(metaClient1.getTableConfig().getPartitionFields().isPresent(),
-            "Missing partition columns in the hoodie.properties.");
-    assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] { "p0", "p1" });
+        "Missing partition columns in the hoodie.properties.");
+    assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
     assertEquals(metaClient1.getTableConfig().getPreCombineField(), "ts");
 
     // Test for non-partitioned table.
@@ -70,9 +70,9 @@ public class TestStreamerUtil {
     FileIOUtils.deleteDirectory(tempFile);
     StreamerUtil.initTableIfNotExists(conf);
     HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
-            .setBasePath(tempFile.getAbsolutePath())
-            .setConf(new org.apache.hadoop.conf.Configuration())
-            .build();
+        .setBasePath(tempFile.getAbsolutePath())
+        .setConf(new org.apache.hadoop.conf.Configuration())
+        .build();
     assertFalse(metaClient2.getTableConfig().getPartitionFields().isPresent());
   }
 

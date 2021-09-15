@@ -142,22 +142,22 @@ public class FlinkStreamerConfig extends Configuration {
   public Integer writeTaskNum = 4;
 
   @Parameter(names = {"--partition-default-name"},
-          description = "The default partition name in case the dynamic partition column value is null/empty string")
+      description = "The default partition name in case the dynamic partition column value is null/empty string")
   public String partitionDefaultName = "__DEFAULT_PARTITION__";
 
   @Parameter(names = {"--index-bootstrap-enabled"},
-          description = "Whether to bootstrap the index state from existing hoodie table, default false")
+      description = "Whether to bootstrap the index state from existing hoodie table, default false")
   public Boolean indexBootstrapEnabled = false;
 
   @Parameter(names = {"--index-state-ttl"}, description = "Index state ttl in days, default 1.5 day")
   public Double indexStateTtl = 1.5D;
 
   @Parameter(names = {"--index-global-enabled"}, description = "Whether to update index for the old partition path "
-          + "if same key record with different partition path came in, default false")
+      + "if same key record with different partition path came in, default false")
   public Boolean indexGlobalEnabled = false;
 
   @Parameter(names = {"--index-partition-regex"},
-          description = "Whether to load partitions in state if partition path matching， default *")
+      description = "Whether to load partitions in state if partition path matching， default *")
   public String indexPartitionRegex = ".*";
 
   @Parameter(names = {"--source-avro-schema-path"}, description = "Source avro schema file path, the parsed schema is used for deserialization")
@@ -167,8 +167,8 @@ public class FlinkStreamerConfig extends Configuration {
   public String sourceAvroSchema = "";
 
   @Parameter(names = {"--utc-timezone"}, description = "Use UTC timezone or local timezone to the conversion between epoch"
-          + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
-          + " use UTC timezone, by default true")
+      + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
+      + " use UTC timezone, by default true")
   public Boolean utcTimezone = true;
 
   @Parameter(names = {"--write-partition-url-encode"}, description = "Whether to encode the partition path url, default false")
@@ -180,18 +180,18 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean hiveStylePartitioning = false;
 
   @Parameter(names = {"--write-task-max-size"}, description = "Maximum memory in MB for a write task, when the threshold hits,\n"
-          + "it flushes the max size data bucket to avoid OOM, default 1GB")
+      + "it flushes the max size data bucket to avoid OOM, default 1GB")
   public Double writeTaskMaxSize = 1024D;
 
   @Parameter(names = {"--write-batch-size"},
-          description = "Batch buffer size in MB to flush data into the underneath filesystem, default 64MB")
+      description = "Batch buffer size in MB to flush data into the underneath filesystem, default 64MB")
   public Double writeBatchSize = 64D;
 
   @Parameter(names = {"--write-log-block-size"}, description = "Max log block size in MB for log file, default 128MB")
   public Integer writeLogBlockSize = 128;
 
   @Parameter(names = {"--write-log-max-size"},
-          description = "Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB")
+      description = "Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB")
   public Integer writeLogMaxSize = 1024;
 
   @Parameter(names = {"--write-merge-max-memory"}, description = "Max memory in MB for merge, default 100MB")
@@ -204,11 +204,11 @@ public class FlinkStreamerConfig extends Configuration {
   public Integer compactionTasks = 10;
 
   @Parameter(names = {"--compaction-trigger-strategy"},
-          description = "Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;\n"
-                  + "'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction;\n"
-                  + "'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;\n"
-                  + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"
-                  + "Default is 'num_commits'")
+      description = "Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;\n"
+          + "'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction;\n"
+          + "'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;\n"
+          + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"
+          + "Default is 'num_commits'")
   public String compactionTriggerStrategy = FlinkOptions.NUM_COMMITS;
 
   @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 5 commits")
@@ -227,16 +227,16 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean cleanAsyncEnabled = true;
 
   @Parameter(names = {"--clean-retain-commits"},
-          description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
+      description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 10")
   public Integer cleanRetainCommits = 10;
 
   @Parameter(names = {"--archive-max-commits"},
-          description = "Max number of commits to keep before archiving older commits into a sequential log, default 30")
+      description = "Max number of commits to keep before archiving older commits into a sequential log, default 30")
   public Integer archiveMaxCommits = 30;
 
   @Parameter(names = {"--archive-min-commits"},
-          description = "Min number of commits to keep before archiving older commits into a sequential log, default 20")
+      description = "Min number of commits to keep before archiving older commits into a sequential log, default 20")
   public Integer archiveMinCommits = 20;
 
   @Parameter(names = {"--hive-sync-enable"}, description = "Asynchronously sync Hive meta to HMS, default false")
@@ -270,7 +270,7 @@ public class FlinkStreamerConfig extends Configuration {
   public String hiveSyncPartitionFields = "";
 
   @Parameter(names = {"--hive-sync-partition-extractor-class"}, description = "Tool to extract the partition value from HDFS path, "
-          + "default 'SlashEncodedDayPartitionValueExtractor'")
+      + "default 'SlashEncodedDayPartitionValueExtractor'")
   public String hiveSyncPartitionExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getCanonicalName();
 
   @Parameter(names = {"--hive-sync-assume-date-partitioning"}, description = "Assume partitioning is yyyy/mm/dd, default false")
@@ -289,7 +289,7 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean hiveSyncSkipRoSuffix = false;
 
   @Parameter(names = {"--hive-sync-support-timestamp"}, description = "INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
-          + "Disabled by default for backward compatibility.")
+      + "Disabled by default for backward compatibility.")
   public Boolean hiveSyncSupportTimestamp = false;
 
 
@@ -339,7 +339,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, config.writeTaskMaxSize);
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, config.writeBatchSize);
     conf.setInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE, config.writeLogBlockSize);
-    conf.setInteger(FlinkOptions.WRITE_LOG_MAX_SIZE, config.writeLogMaxSize);
+    conf.setLong(FlinkOptions.WRITE_LOG_MAX_SIZE, config.writeLogMaxSize);
     conf.setInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY, config.writeMergeMaxMemory);
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, config.compactionAsyncEnabled);
     conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);

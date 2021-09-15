@@ -51,7 +51,8 @@ class TestSchemaRegistryProvider {
         put("hoodie.deltastreamer.schemaprovider.registry.urlSuffix", "-value");
         put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost");
         put("hoodie.deltastreamer.source.kafka.topic", "foo");
-      }};
+      }
+    };
   }
 
   private Schema getExpectedSchema(String response) throws IOException {

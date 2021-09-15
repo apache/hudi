@@ -352,6 +352,7 @@ public class DeltaSync implements Serializable {
         }
       }
     } else {
+      // initialize the table for the first time.
       String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)

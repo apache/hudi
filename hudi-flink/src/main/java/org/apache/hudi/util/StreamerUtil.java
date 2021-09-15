@@ -143,7 +143,7 @@ public class StreamerUtil {
     return conf;
   }
 
-  // Keep to avoid to much modifications.
+  // Keep the redundant to avoid too many modifications.
   public static org.apache.hadoop.conf.Configuration getHadoopConf() {
     return FlinkClientUtil.getHadoopConf();
   }
@@ -180,7 +180,10 @@ public class StreamerUtil {
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
-                .logFileMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .logFileMaxSize(conf.getLong(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .parquetBlockSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE) * 1024 * 1024)
+                .parquetPageSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE) * 1024 * 1024)
+                .parquetMaxFileSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
                 .build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
@@ -189,7 +192,7 @@ public class StreamerUtil {
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
-            .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
+            .withProps(flinkConf2TypedProperties(conf));
 
     builder = builder.withSchema(getSourceSchema(conf).toString());
     return builder.build();
@@ -203,12 +206,13 @@ public class StreamerUtil {
    * @return a TypedProperties instance
    */
   public static TypedProperties flinkConf2TypedProperties(Configuration conf) {
+    Configuration flatConf = FlinkOptions.flatOptions(conf);
     Properties properties = new Properties();
-    // put all the set up options
-    conf.addAllToProperties(properties);
+    // put all the set options
+    flatConf.addAllToProperties(properties);
     // put all the default options
     for (ConfigOption<?> option : FlinkOptions.optionalOptions()) {
-      if (!conf.contains(option) && option.hasDefaultValue()) {
+      if (!flatConf.contains(option) && option.hasDefaultValue()) {
         properties.put(option.key(), option.defaultValue());
       }
     }

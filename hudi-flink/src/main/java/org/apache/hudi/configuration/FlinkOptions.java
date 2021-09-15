@@ -72,7 +72,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
       .key("partition.default_name")
       .stringType()
-      .defaultValue("__DEFAULT_PARTITION__")
+      .defaultValue("default") // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
@@ -222,10 +222,10 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final ConfigOption<Boolean> INSERT_DEDUP = ConfigOptions
-          .key("write.insert.deduplicate")
-          .booleanType()
-          .defaultValue(true)
-          .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
+      .key("write.insert.deduplicate")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
@@ -321,17 +321,27 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
 
+  public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
+  public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
+  public static final ConfigOption<String> PARTITION_FORMAT = ConfigOptions
+      .key("write.partition.format")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Partition path format, only valid when 'write.datetime.partitioning' is true, default is:\n"
+          + "1) 'yyyyMMddHH' for timestamp(3) WITHOUT TIME ZONE, LONG, FLOAT, DOUBLE, DECIMAL;\n"
+          + "2) 'yyyyMMdd' for DAY and INT.");
+
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")
       .intType()
       .noDefaultValue()
-      .withDescription("Parallelism of tasks that do index bootstrap, default is 4");
+      .withDescription("Parallelism of tasks that do index bootstrap, default is the parallelism of the execution environment");
 
   public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
       .key("write.bucket_assign.tasks")
       .intType()
       .noDefaultValue()
-      .withDescription("Parallelism of tasks that do bucket assign, default is 4");
+      .withDescription("Parallelism of tasks that do bucket assign, default is the parallelism of the execution environment");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
@@ -364,11 +374,32 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(128)
       .withDescription("Max log block size in MB for log file, default 128MB");
 
-  public static final ConfigOption<Integer> WRITE_LOG_MAX_SIZE = ConfigOptions
+  public static final ConfigOption<Long> WRITE_LOG_MAX_SIZE = ConfigOptions
       .key("write.log.max.size")
-      .intType()
-      .defaultValue(1024)
+      .longType()
+      .defaultValue(1024L)
       .withDescription("Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_BLOCK_SIZE = ConfigOptions
+      .key("write.parquet.block.size")
+      .intType()
+      .defaultValue(120)
+      .withDescription("Parquet RowGroup size. It's recommended to make this large enough that scan costs can be"
+          + " amortized by packing enough column values into a single row group.");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_MAX_FILE_SIZE = ConfigOptions
+      .key("write.parquet.max.file.size")
+      .intType()
+      .defaultValue(120)
+      .withDescription("Target size for parquet files produced by Hudi write phases. "
+          + "For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.");
+
+  public static final ConfigOption<Integer> WRITE_PARQUET_PAGE_SIZE = ConfigOptions
+      .key("hoodie.parquet.page.size")
+      .intType()
+      .defaultValue(1)
+      .withDescription("Parquet page size. Page is the unit of read within a parquet file. "
+          + "Within a block, pages are compressed separately.");
 
   public static final ConfigOption<Integer> WRITE_MERGE_MAX_MEMORY = ConfigOptions
       .key("write.merge.max_memory")

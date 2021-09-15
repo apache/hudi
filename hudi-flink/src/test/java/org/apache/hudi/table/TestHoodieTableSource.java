@@ -21,7 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -37,14 +36,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -64,12 +61,10 @@ public class TestHoodieTableSource {
   @TempDir
   File tempFile;
 
-  void beforeEach() throws IOException {
+  void beforeEach() throws Exception {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
-    StreamerUtil.initTableIfNotExists(conf);
-    IntStream.range(1, 5)
-        .forEach(i -> new File(path + File.separator + "par" + i).mkdirs());
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
   }
 
   @Test
