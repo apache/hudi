@@ -386,12 +386,13 @@ object DataSourceWriteOptions {
   val HIVE_PARTITION_FIELDS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.partition_fields")
     .defaultValue("")
-    .withDocumentation("field in the table to use for determining hive partition columns.")
+    .withDocumentation("Field in the table to use for determining hive partition columns.")
 
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.partition_extractor_class")
     .defaultValue(classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName)
-    .withDocumentation("")
+    .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
+      + "default 'SlashEncodedDayPartitionValueExtractor'.")
 
   val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.assume_date_partitioning")
@@ -401,7 +402,9 @@ object DataSourceWriteOptions {
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.use_pre_apache_input_format")
     .defaultValue("false")
-    .withDocumentation("")
+    .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
+      + "Use this when you are in the process of migrating from "
+      + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format")
 
   /** @deprecated Use {@link HIVE_SYNC_MODE} instead of this config from 0.9.0 */
   @Deprecated
@@ -440,7 +443,7 @@ object DataSourceWriteOptions {
   val HIVE_TABLE_SERDE_PROPERTIES: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.serde_properties")
     .noDefaultValue()
-    .withDocumentation("")
+    .withDocumentation("Serde properties to hive table.")
 
   val HIVE_SYNC_AS_DATA_SOURCE_TABLE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.sync_as_datasource")
