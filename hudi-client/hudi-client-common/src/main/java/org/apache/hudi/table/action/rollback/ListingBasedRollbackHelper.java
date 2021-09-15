@@ -43,7 +43,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -85,9 +84,10 @@ public class ListingBasedRollbackHelper implements Serializable {
                                                        List<ListingBasedRollbackRequest> rollbackRequests) {
     int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(this.getClass().getSimpleName(), "Collect rollback stats for upgrade/downgrade");
-    return new ArrayList<>(context.mapToPair(rollbackRequests,
+    return context.mapToPairAndReduceByKey(rollbackRequests,
         rollbackRequest -> maybeDeleteAndCollectStats(rollbackRequest, instantToRollback, false),
-        parallelism).values());
+        RollbackUtils::mergeRollbackStat,
+        parallelism);
   }
 
   /**
