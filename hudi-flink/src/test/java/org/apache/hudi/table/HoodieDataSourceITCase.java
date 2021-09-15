@@ -349,7 +349,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, false)
         // generate compaction plan for each commit
         .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 1)
-        .withPartition(false)
+        .noPartition()
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
@@ -399,7 +399,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_NAME, tableType.name())
-        .withPartition(false)
+        .noPartition()
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -563,7 +563,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
-        .withPartition(false)
+        .noPartition()
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -770,7 +770,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, "bulk_insert")
-        .withPartition(false)
+        .noPartition()
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -852,6 +852,31 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
         + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @Test
+  void testWriteReadDecimals() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String createTable = sql("decimals")
+        .field("f0 decimal(3, 2)")
+        .field("f1 decimal(10, 2)")
+        .field("f2 decimal(20, 2)")
+        .field("f3 decimal(38, 18)")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "bulk_insert")
+        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .pkField("f0")
+        .noPartition()
+        .end();
+    tableEnv.executeSql(createTable);
+
+    String insertInto = "insert into decimals values\n"
+        + "(1.23, 12345678.12, 12345.12, 123456789.12345)";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from decimals").execute().collect());
+    assertRowsEquals(result1, "[+I[1.23, 12345678.12, 12345.12, 123456789.123450000000000000]]");
   }
 
   // -------------------------------------------------------------------------
