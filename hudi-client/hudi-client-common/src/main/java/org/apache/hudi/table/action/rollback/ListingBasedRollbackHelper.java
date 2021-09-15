@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -43,6 +43,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -84,10 +85,9 @@ public class ListingBasedRollbackHelper implements Serializable {
                                                        List<ListingBasedRollbackRequest> rollbackRequests) {
     int parallelism = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(this.getClass().getSimpleName(), "Collect rollback stats for upgrade/downgrade");
-    return context.mapToPairAndReduceByKey(rollbackRequests,
+    return new ArrayList<>(context.mapToPair(rollbackRequests,
         rollbackRequest -> maybeDeleteAndCollectStats(rollbackRequest, instantToRollback, false),
-        RollbackUtils::mergeRollbackStat,
-        parallelism);
+        parallelism).values());
   }
 
   /**
@@ -136,7 +136,7 @@ public class ListingBasedRollbackHelper implements Serializable {
 
           // generate metadata
           if (doDelete) {
-            Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
+            Map<HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
             // if update belongs to an existing log file
             writer.appendBlock(new HoodieCommandBlock(header));
           }
@@ -233,12 +233,12 @@ public class ListingBasedRollbackHelper implements Serializable {
     return results;
   }
 
-  private Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String commit) {
+  private Map<HeaderMetadataType, String> generateHeader(String commit) {
     // generate metadata
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(3);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
-    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
-    header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
+    Map<HeaderMetadataType, String> header = new HashMap<>(3);
+    header.put(HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
+    header.put(HeaderMetadataType.TARGET_INSTANT_TIME, commit);
+    header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     return header;
   }
