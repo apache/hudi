@@ -1470,6 +1470,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieMetricsConfig.GRAPHITE_METRIC_PREFIX_VALUE);
   }
 
+  public int getGraphiteMerticReportPeriodSeconds() {
+    return getInt(HoodieMetricsConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
+  }
+
   public String getJmxHost() {
     return getString(HoodieMetricsConfig.JMX_HOST_NAME);
   }

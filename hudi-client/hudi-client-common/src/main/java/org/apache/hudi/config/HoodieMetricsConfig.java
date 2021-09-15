@@ -70,6 +70,12 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .sinceVersion("0.5.0")
       .withDocumentation("Graphite port to connect to");
 
+  public static final ConfigProperty<Integer> GRAPHITE_REPORT_PERIOD_IN_SECONDS = ConfigProperty
+      .key(GRAPHITE_PREFIX + ".report.period.seconds")
+      .defaultValue(30)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Graphite reporting period in seconds. Default to 30.");
+
   // Jmx
   public static final String JMX_PREFIX = METRIC_PREFIX + ".jmx";
 
