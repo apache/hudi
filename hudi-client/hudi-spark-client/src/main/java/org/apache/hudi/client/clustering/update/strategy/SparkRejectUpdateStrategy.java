@@ -71,4 +71,9 @@ public class SparkRejectUpdateStrategy<T extends HoodieRecordPayload<T>> extends
     // do nothing
     return true;
   }
+
+  @Override
+  public void validateClusteringWithException(HoodieInstant instant, HoodieTable table) {
+    // do nothing
+  }
 }

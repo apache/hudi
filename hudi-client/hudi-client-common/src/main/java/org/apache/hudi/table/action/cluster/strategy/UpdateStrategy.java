@@ -55,4 +55,9 @@ public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
    */
   public abstract boolean validateClustering(HoodieInstant instant, HoodieTable table);
 
+  /**
+   * Will throw HoodieClusteringUpdateException if validation failed.
+   * @param instant clustering instant could be request or inflight
+   */
+  public abstract void validateClusteringWithException(HoodieInstant instant, HoodieTable table);
 }

@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
@@ -72,9 +71,12 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
+    UpdateStrategy updateStrategy = (UpdateStrategy)ReflectionUtils
+            .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, new HashSet<HoodieFileGroupId>());
+
     HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
     // validate clustering request conflicts with incoming data updated.
-    validateClustering(instant);
+    updateStrategy.validateClusteringWithException(instant, table);
     // Mark instant as clustering inflight
     HoodieInstant inflightInstant = table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
     table.getMetaClient().reloadActiveTimeline();
@@ -88,7 +90,10 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     JavaRDD<WriteStatus> statuses = updateIndex(writeStatusRDD, writeMetadata);
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collect());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(writeMetadata));
-    validateWriteResult(writeMetadata, inflightInstant);
+    validateWriteResult(writeMetadata);
+
+    // validate clustering job conflicts with incoming data updated.
+    updateStrategy.validateClusteringWithException(inflightInstant, table);
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
@@ -98,35 +103,18 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     return writeMetadata;
   }
 
-  private void validateClustering(HoodieInstant instant) {
-    UpdateStrategy updateStrategy = (UpdateStrategy)ReflectionUtils
-            .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, new HashSet<HoodieFileGroupId>());
-
-    // HoodieClusteringUpdateException will be caught in async clustering service and will not shutdown async clustering service
-    if (!updateStrategy.validateClustering(instant, table)) {
-      if (instant.isRequested()) {
-        throw new HoodieClusteringUpdateException("Current clustering plan conflicts with incoming data updated. Skip this clustering plan + " + instant);
-      } else {
-        throw new HoodieClusteringUpdateException("Current on-going clustering job conflicts with incoming data updated. Failing current clustering job + " + instant);
-      }
-    }
-  }
-
   /**
    * Validate actions taken by clustering. In the first implementation, we validate at least one new file is written.
    * But we can extend this to add more validation. E.g. number of records read = number of records written etc.
    * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
    */
-  private void validateWriteResult(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata, HoodieInstant inflightInstant) {
+  private void validateWriteResult(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
     if (writeMetadata.getWriteStatuses().isEmpty()) {
       throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime
           + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
           + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()
           + " write statuses");
     }
-
-    // validate clustering job conflicts with incoming data updated.
-    validateClustering(inflightInstant);
   }
 
   @Override

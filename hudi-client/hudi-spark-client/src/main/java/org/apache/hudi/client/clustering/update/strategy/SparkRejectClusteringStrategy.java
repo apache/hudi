@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -126,6 +127,19 @@ public class SparkRejectClusteringStrategy<T extends HoodieRecordPayload<T>> ext
       }
     }
     return taggedRecordsRDD;
+  }
+
+  @Override
+  public void validateClusteringWithException(HoodieInstant instant, HoodieTable table) {
+
+    // HoodieClusteringUpdateException will be caught in async clustering service and will not shutdown async clustering service
+    if (!validateClustering(instant, table)) {
+      if (instant.isRequested()) {
+        throw new HoodieClusteringUpdateException("Current clustering plan conflicts with incoming data updated. Skip this clustering plan + " + instant);
+      } else {
+        throw new HoodieClusteringUpdateException("Current on-going clustering job conflicts with incoming data updated. Failing current clustering job + " + instant);
+      }
+    }
   }
 
   private String getClusteringRejectFilePath(HoodieTable table, HoodieInstant clusteringHoodieInstant) {
