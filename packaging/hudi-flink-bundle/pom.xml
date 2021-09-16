@@ -110,6 +110,7 @@
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
+                  <include>io.dropwizard.metrics:metrics-jmx</include>
                   <include>io.prometheus:simpleclient</include>
                   <include>io.prometheus:simpleclient_httpserver</include>
                   <include>io.prometheus:simpleclient_dropwizard</include>
