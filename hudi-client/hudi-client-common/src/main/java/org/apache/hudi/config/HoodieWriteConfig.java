@@ -40,6 +40,11 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -1459,23 +1464,23 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getGraphiteServerHost() {
-    return getString(HoodieMetricsConfig.GRAPHITE_SERVER_HOST_NAME);
+    return getString(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_HOST_NAME);
   }
 
   public int getGraphiteServerPort() {
-    return getInt(HoodieMetricsConfig.GRAPHITE_SERVER_PORT_NUM);
+    return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_SERVER_PORT_NUM);
   }
 
   public String getGraphiteMetricPrefix() {
-    return getString(HoodieMetricsConfig.GRAPHITE_METRIC_PREFIX_VALUE);
+    return getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE);
   }
 
   public String getJmxHost() {
-    return getString(HoodieMetricsConfig.JMX_HOST_NAME);
+    return getString(HoodieMetricsJmxConfig.JMX_HOST_NAME);
   }
 
   public String getJmxPort() {
-    return getString(HoodieMetricsConfig.JMX_PORT_NUM);
+    return getString(HoodieMetricsJmxConfig.JMX_PORT_NUM);
   }
 
   public int getDatadogReportPeriodSeconds() {
@@ -1777,6 +1782,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isMetadataConfigSet = false;
     private boolean isLockConfigSet = false;
     private boolean isPreCommitValidationConfigSet = false;
+    private boolean isMetricsJmxConfigSet = false;
+    private boolean isMetricsGraphiteConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -1928,6 +1935,18 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withLockConfig(HoodieLockConfig lockConfig) {
       writeConfig.getProps().putAll(lockConfig.getProps());
       isLockConfigSet = true;
+      return this;
+    }
+
+    public Builder withMetricsJmxConfig(HoodieMetricsJmxConfig metricsJmxConfig) {
+      writeConfig.getProps().putAll(metricsJmxConfig.getProps());
+      isMetricsJmxConfigSet = true;
+      return this;
+    }
+
+    public Builder withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig mericsGraphiteConfig) {
+      writeConfig.getProps().putAll(mericsGraphiteConfig.getProps());
+      isMetricsGraphiteConfigSet = true;
       return this;
     }
 
