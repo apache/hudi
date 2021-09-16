@@ -47,17 +47,6 @@ public class SparkMergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload
 
   @Override
   protected HoodieRollbackMetadata rollbackInstant(HoodieInstant instantToRollback) {
-    table.getMetaClient().reloadActiveTimeline();
-    MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
-        context,
-        config,
-        table,
-        HoodieActiveTimeline.createNewInstantTime(),
-        instantToRollback,
-        true,
-        true,
-        false);
-
     switch (instantToRollback.getAction()) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -66,9 +55,27 @@ public class SparkMergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload
         // TODO : Get file status and create a rollback stat and file
         // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will
         // delete these files when it does not see a corresponding instant file under .hoodie
-        return rollbackActionExecutor.execute();
+        break;
       default:
         throw new IllegalArgumentException("invalid action name " + instantToRollback.getAction());
     }
+    table.getMetaClient().reloadActiveTimeline();
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    table.scheduleRollback(context, instantTime, instantToRollback, false);
+    table.getMetaClient().reloadActiveTimeline();
+    MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
+        context,
+        config,
+        table,
+        instantTime,
+        instantToRollback,
+        true,
+        true,
+        false);
+
+    // TODO : Get file status and create a rollback stat and file
+    // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will
+    // delete these files when it does not see a corresponding instant file under .hoodie
+    return rollbackActionExecutor.execute();
   }
 }

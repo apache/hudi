@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -317,6 +318,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * Get rollback timeline.
+   */
+  public HoodieTimeline getRollbackTimeline() {
+    return getActiveTimeline().getRollbackTimeline();
+  }
+
+  /**
    * Get only the completed (no-inflights) savepoint timeline.
    */
   public HoodieTimeline getCompletedSavepointTimeline() {
@@ -417,6 +425,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime);
 
+  /**
+   * Schedule rollback for the instant time.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for scheduling rollback
+   * @param instantToRollback instant to be rolled back
+   * @return HoodieRollbackPlan containing info on rollback.
+   */
+  public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
+                                                              String instantTime,
+                                                              HoodieInstant instantToRollback,
+                                                              boolean skipTimelinePublish);
+  
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
    * <pre>
