@@ -57,7 +57,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     }
 
     this.graphiteReporter = createGraphiteReport();
-    this.periodSeconds = config.getGraphiteMerticReportPeriodSeconds();
+    this.periodSeconds = config.getGraphiteReportPeriodSeconds();
   }
 
   @Override

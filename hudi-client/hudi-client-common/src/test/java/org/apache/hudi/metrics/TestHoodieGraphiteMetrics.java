@@ -51,7 +51,7 @@ public class TestHoodieGraphiteMetrics {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.GRAPHITE);
     when(config.getGraphiteServerHost()).thenReturn("localhost");
     when(config.getGraphiteServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
-    when(config.getGraphiteMerticReportPeriodSeconds()).thenReturn(30);
+    when(config.getGraphiteReportPeriodSeconds()).thenReturn(30);
     new HoodieMetrics(config);
     registerGauge("graphite_metric", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()

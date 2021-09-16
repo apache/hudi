@@ -1475,7 +1475,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE);
   }
 
-  public int getGraphiteMerticReportPeriodSeconds() {
+  public int getGraphiteReportPeriodSeconds() {
     return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
   }
 
