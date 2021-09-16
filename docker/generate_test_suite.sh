@@ -206,34 +206,34 @@ fi
 
 cp demo/config/test-suite/templates/sanity.yaml.template demo/config/test-suite/staging/sanity.yaml
 
-sed -i  "s/NAME/$TABLE_TYPE/" demo/config/test-suite/staging/sanity.yaml
+sed -i '' "s/NAME/$TABLE_TYPE/" demo/config/test-suite/staging/sanity.yaml
 
 cp demo/config/test-suite/templates/test.properties.template demo/config/test-suite/staging/test.properties
-sed -i  "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/test.properties
+sed -i '' "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/test.properties
 
 cp demo/config/test-suite/templates/spark_command.txt.template demo/config/test-suite/staging/sanity_spark_command.sh
 
-sed -i  "s/JAR_NAME/$JAR_NAME/" demo/config/test-suite/staging/sanity_spark_command.sh
-sed -i  "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/sanity_spark_command.sh
-sed -i  "s/OUTPUT_PATH/$OUTPUT_PATH/" demo/config/test-suite/staging/sanity_spark_command.sh
-sed -i  "s/input_yaml/sanity.yaml/" demo/config/test-suite/staging/sanity_spark_command.sh
-sed -i  "s/TABLE_TYPE/$TABLE_TYPE/" demo/config/test-suite/staging/sanity_spark_command.sh
+sed -i '' "s/JAR_NAME/$JAR_NAME/" demo/config/test-suite/staging/sanity_spark_command.sh
+sed -i '' "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/sanity_spark_command.sh
+sed -i '' "s/OUTPUT_PATH/$OUTPUT_PATH/" demo/config/test-suite/staging/sanity_spark_command.sh
+sed -i '' "s/input_yaml/sanity.yaml/" demo/config/test-suite/staging/sanity_spark_command.sh
+sed -i '' "s/TABLE_TYPE/$TABLE_TYPE/" demo/config/test-suite/staging/sanity_spark_command.sh
 
 if $INCLUDE_MEDIUM_TEST_SUITE ; then
 
   cp demo/config/test-suite/templates/medium_test_suite.yaml.template demo/config/test-suite/staging/medium_test_suite.yaml
 
-  sed -i  "s/NAME/$TABLE_TYPE/" demo/config/test-suite/staging/medium_test_suite.yaml
-  sed -i  "s/medium_num_iterations/$MEDIUM_NUM_ITR/" demo/config/test-suite/staging/medium_test_suite.yaml
-  sed -i  "s/delay_in_mins/$DELAY_MINS/" demo/config/test-suite/staging/medium_test_suite.yaml
+  sed -i '' "s/NAME/$TABLE_TYPE/" demo/config/test-suite/staging/medium_test_suite.yaml
+  sed -i '' "s/medium_num_iterations/$MEDIUM_NUM_ITR/" demo/config/test-suite/staging/medium_test_suite.yaml
+  sed -i '' "s/delay_in_mins/$DELAY_MINS/" demo/config/test-suite/staging/medium_test_suite.yaml
 
   cp demo/config/test-suite/templates/spark_command.txt.template demo/config/test-suite/staging/medium_test_suite_spark_command.sh
 
-  sed -i  "s/JAR_NAME/$JAR_NAME/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
-  sed -i  "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
-  sed -i  "s/OUTPUT_PATH/$OUTPUT_PATH/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
-  sed -i  "s/input_yaml/medium_test_suite.yaml/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
-  sed -i  "s/TABLE_TYPE/$TABLE_TYPE/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
+  sed -i '' "s/JAR_NAME/$JAR_NAME/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
+  sed -i '' "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
+  sed -i '' "s/OUTPUT_PATH/$OUTPUT_PATH/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
+  sed -i '' "s/input_yaml/medium_test_suite.yaml/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
+  sed -i '' "s/TABLE_TYPE/$TABLE_TYPE/" demo/config/test-suite/staging/medium_test_suite_spark_command.sh
 
 fi
 
@@ -241,17 +241,17 @@ if $INCLUDE_LONG_TEST_SUITE ; then
 
   cp demo/config/test-suite/templates/long_test_suite.yaml.template demo/config/test-suite/staging/long_test_suite.yaml
 
-  sed -i "s/NAME/$TABLE_TYPE/" demo/config/test-suite/staging/long_test_suite.yaml
-  sed -i "s/long_num_iterations/$LONG_NUM_ITR/" demo/config/test-suite/staging/long_test_suite.yaml
-  sed -i "s/delay_in_mins/$DELAY_MINS/" demo/config/test-suite/staging/long_test_suite.yaml
+  sed -i '' "s/NAME/$TABLE_TYPE/" demo/config/test-suite/staging/long_test_suite.yaml
+  sed -i '' "s/long_num_iterations/$LONG_NUM_ITR/" demo/config/test-suite/staging/long_test_suite.yaml
+  sed -i '' "s/delay_in_mins/$DELAY_MINS/" demo/config/test-suite/staging/long_test_suite.yaml
 
   cp demo/config/test-suite/templates/spark_command.txt.template demo/config/test-suite/staging/long_test_suite_spark_command.sh
 
-  sed -i "s/JAR_NAME/$JAR_NAME/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
-  sed -i "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
-  sed -i "s/OUTPUT_PATH/$OUTPUT_PATH/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
-  sed -i "s/input_yaml/long_test_suite.yaml/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
-  sed -i "s/TABLE_TYPE/$TABLE_TYPE/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
+  sed -i '' "s/JAR_NAME/$JAR_NAME/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
+  sed -i '' "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
+  sed -i '' "s/OUTPUT_PATH/$OUTPUT_PATH/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
+  sed -i '' "s/input_yaml/long_test_suite.yaml/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
+  sed -i '' "s/TABLE_TYPE/$TABLE_TYPE/" demo/config/test-suite/staging/long_test_suite_spark_command.sh
 
 fi
 
@@ -259,19 +259,19 @@ if $INCLUDE_CLUSTER_YAML ; then
 
   cp demo/config/test-suite/templates/clustering.yaml.template demo/config/test-suite/staging/clustering.yaml
 
-  sed -i "s/NAME/$TABLE_TYPE/" demo/config/test-suite/staging/clustering.yaml
-  sed -i "s/clustering_num_iterations/$CLUSTER_NUM_ITR/" demo/config/test-suite/staging/clustering.yaml
-  sed -i "s/delay_in_mins/$CLUSTER_DELAY_MINS/" demo/config/test-suite/staging/clustering.yaml
-  sed -i "s/clustering_itr_count/$CLUSTER_ITR_COUNT/" demo/config/test-suite/staging/clustering.yaml
+  sed -i '' "s/NAME/$TABLE_TYPE/" demo/config/test-suite/staging/clustering.yaml
+  sed -i '' "s/clustering_num_iterations/$CLUSTER_NUM_ITR/" demo/config/test-suite/staging/clustering.yaml
+  sed -i '' "s/delay_in_mins/$CLUSTER_DELAY_MINS/" demo/config/test-suite/staging/clustering.yaml
+  sed -i '' "s/clustering_itr_count/$CLUSTER_ITR_COUNT/" demo/config/test-suite/staging/clustering.yaml
 
   cp demo/config/test-suite/templates/spark_command.txt.template demo/config/test-suite/staging/clustering_spark_command.sh
 
-  sed -i "s/JAR_NAME/$JAR_NAME/" demo/config/test-suite/staging/clustering_spark_command.sh
-  sed -i "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/clustering_spark_command.sh
-  sed -i "s/OUTPUT_PATH/$OUTPUT_PATH/" demo/config/test-suite/staging/clustering_spark_command.sh
-  sed -i "s/input_yaml/clustering.yaml/" demo/config/test-suite/staging/clustering_spark_command.sh
-  sed -i "s/TABLE_TYPE/$TABLE_TYPE/" demo/config/test-suite/staging/clustering_spark_command.sh
-  sed -i "/use-deltastreamer/d" demo/config/test-suite/staging/clustering_spark_command.sh
+  sed -i '' "s/JAR_NAME/$JAR_NAME/" demo/config/test-suite/staging/clustering_spark_command.sh
+  sed -i '' "s/INPUT_PATH/$INPUT_PATH/" demo/config/test-suite/staging/clustering_spark_command.sh
+  sed -i '' "s/OUTPUT_PATH/$OUTPUT_PATH/" demo/config/test-suite/staging/clustering_spark_command.sh
+  sed -i '' "s/input_yaml/clustering.yaml/" demo/config/test-suite/staging/clustering_spark_command.sh
+  sed -i '' "s/TABLE_TYPE/$TABLE_TYPE/" demo/config/test-suite/staging/clustering_spark_command.sh
+  sed -i '' "/use-deltastreamer/d" demo/config/test-suite/staging/clustering_spark_command.sh
 
 fi
 

@@ -177,7 +177,7 @@ cd /opt
 Copy the integration tests jar into the docker container
 
 ```
-docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.9.0-SNAPSHOT.jar adhoc-2:/opt
+docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar adhoc-2:/opt
 ```
 
 ```
@@ -217,7 +217,7 @@ spark-submit \
 --conf spark.driver.extraClassPath=/var/demo/jars/* \
 --conf spark.executor.extraClassPath=/var/demo/jars/* \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.9.0-SNAPSHOT.jar \
+/opt/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
@@ -264,7 +264,7 @@ spark-submit \
 --conf spark.driver.extraClassPath=/var/demo/jars/* \
 --conf spark.executor.extraClassPath=/var/demo/jars/* \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.9.0-SNAPSHOT.jar \
+/opt/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
@@ -299,87 +299,6 @@ http://localhost/dashboard
 
 ```
 
-## Running test suite on an EMR cluster
-- Start a cluster with
-    - Use glue as hive metadata option disabled
-- Copy over the necessary files and jars that are required to your cluster.
-    - docker/demo/config/test-suite/test.properties
-    - packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.9.0-SNAPSHOT.jar
-    - docker/demo/config/test-suite/source.avsc
-    - We need all yaml from `docker/demo/config/test-suite` (or that need to be run on cluster)
-    - For `generate_test_suite.sh` script to run, we need to copy all files from directory docker. (Optional)
-        - Although currently flag `--execute_test_suite` is not support for cluster.
-- Before coping ```docker/demo/config/test-suite/test.properties``` 
-    - Update config ```hoodie.deltastreamer.source.dfs.root``` in file to s3 specific path
-        - This path should be the same as we have for `--input-base-path` config in spark command
-    - Update config ```hoodie.deltastreamer.schemaprovider.target.schema.file``` in file to emr specific path
-    - Update config ```hoodie.deltastreamer.schemaprovider.source.schema.file``` in file to emr specific path
-    - Remove config ```hoodie.datasource.hive_sync.jdbcurl``` from file
-- Run ```docker/setup_graphite_on_cluster.sh``` to install necessary packages.
-- Run infra suite command with modifications required
-```
-spark-submit \
---packages org.apache.spark:spark-avro_2.11:2.4.0 \
---conf spark.task.cpus=1 \
---conf spark.executor.cores=1 \
---conf spark.task.maxFailures=100 \
---conf spark.memory.fraction=0.4  \
---conf spark.rdd.compress=true  \
---conf spark.kryoserializer.buffer.max=2000m \
---conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
---conf spark.memory.storageFraction=0.1 \
---conf spark.shuffle.service.enabled=true  \
---conf spark.sql.hive.convertMetastoreParquet=false  \
---conf spark.driver.maxResultSize=12g \
---conf spark.executor.heartbeatInterval=120s \
---conf spark.network.timeout=600s \
---conf spark.yarn.max.executor.failures=10 \
---conf spark.sql.catalogImplementation=hive \
---class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/<path/to/jar>/hudi-integ-test-bundle-0.9.0-SNAPSHOT.jar \
---source-ordering-field test_suite_source_ordering_field \
---use-deltastreamer \
---target-base-path s3://<test-bucket>/<prefix>/output \
---input-base-path s3://<test-bucket>/<prefix>/input \
---target-table table1 \
---props  file:/<path/to/file>/test.properties \
---schemaprovider-class org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider \
---source-class org.apache.hudi.utilities.sources.AvroDFSSource \
---input-file-size 125829120 \
---workload-yaml-path  file:/<path/to/file>/cow-long-running-example.yaml \
---workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
---hoodie-conf hoodie.metrics.on=true \
---hoodie-conf hoodie.metrics.reporter.type=GRAPHITE \
---hoodie-conf hoodie.metrics.graphite.host=localhost \
---hoodie-conf hoodie.metrics.graphite.port=2003 \
---table-type COPY_ON_WRITE \
---compact-scheduling-minshare 1 \
---clean-input \
---clean-output
-```
-
-### Visualize and inspect the hoodie metrics and performance (emr)
-Graphite server is already setup (and up) in ```docker/setup_graphite_on_cluster.sh```.
-
-To access the graphite server on running EMR cluster, we need to ssh tunnel the port. The graphite server is running
-at ```80``` port.
-
-For ssh tunnel on emr, refer - https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-ssh-tunnel.html
-
-Run this command on your local machine to access graphite UI.
-```
-ssh -i ~/mykeypair.pem -N -L 80:ec2-###-##-##-###.compute-1.amazonaws.com:80 hadoop@ec2-###-##-##-###.compute-1.amazonaws.com
-```
-Open browser and access metrics at
-```
-http://localhost:80
-```
-Dashboard
-```
-http://localhost/dashboard
-
-```
-
 ## Running long running test suite in Local Docker environment
 
 For long running test suite, validation has to be done differently. Idea is to run same dag in a repeated manner for 
@@ -389,12 +308,12 @@ contents both via spark datasource and hive table via spark sql engine. Hive val
 If you have "ValidateDatasetNode" in your dag, do not replace hive jars as instructed above. Spark sql engine does not 
 go well w/ hive2* jars. So, after running docker setup, follow the below steps. 
 ```
-docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.9.0-SNAPSHOT.jar adhoc-2:/opt/
-docker cp demo/config/test-suite/test.properties adhoc-2:/opt/
+docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar adhoc-2:/opt/
+docker cp docker/demo/config/test-suite/test.properties adhoc-2:/opt/
 ```
 Also copy your dag of interest to adhoc-2:/opt/
 ```
-docker cp demo/config/test-suite/complex-dag-cow.yaml adhoc-2:/opt/
+docker cp docker/demo/config/test-suite/complex-dag-cow.yaml adhoc-2:/opt/
 ```
 
 For repeated runs, two additional configs need to be set. "dag_rounds" and "dag_intermittent_delay_mins". 
@@ -538,7 +457,7 @@ spark-submit \
 --conf spark.driver.extraClassPath=/var/demo/jars/* \
 --conf spark.executor.extraClassPath=/var/demo/jars/* \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.9.0-SNAPSHOT.jar \
+/opt/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
@@ -552,8 +471,16 @@ spark-submit \
 --workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
 --table-type COPY_ON_WRITE \
 --compact-scheduling-minshare 1 \
---clean-input
+--clean-input \
 --clean-output
+```
+
+If you wish to enable metrics add below properties as well
+```
+--hoodie-conf hoodie.metrics.on=true \
+--hoodie-conf hoodie.metrics.reporter.type=GRAPHITE \
+--hoodie-conf hoodie.metrics.graphite.host=graphite \
+--hoodie-conf hoodie.metrics.graphite.port=2003 \
 ```
 
 Few ready to use dags are available under docker/demo/config/test-suite/ that could give you an idea for long running 
