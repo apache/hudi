@@ -67,7 +67,7 @@ public class KafkaConnectConfigs extends HoodieConfig {
 
   public static final ConfigProperty<String> COORDINATOR_WRITE_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.kafka.coordinator.write.timeout.secs")
-      .defaultValue("60")
+      .defaultValue("300")
       .withDocumentation("The timeout after sending an END_COMMIT until when "
           + "the coordinator will wait for the write statuses from all the partitions"
           + "to ignore the current commit and start a new commit.");

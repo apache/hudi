@@ -21,7 +21,9 @@ package org.apache.hudi.connect.writers;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
@@ -46,17 +48,19 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
   public static final String KAFKA_JSON_CONVERTER = "org.apache.kafka.connect.json.JsonConverter";
   public static final String KAFKA_STRING_CONVERTER = "org.apache.kafka.connect.storage.StringConverter";
   private static final Logger LOG = LogManager.getLogger(AbstractConnectWriter.class);
+  protected final String instantTime;
 
-  private final KafkaConnectConfigs connectConfigs;
   private final KeyGenerator keyGenerator;
   private final SchemaProvider schemaProvider;
+  protected final KafkaConnectConfigs connectConfigs;
 
   public AbstractConnectWriter(KafkaConnectConfigs connectConfigs,
                                KeyGenerator keyGenerator,
-                               SchemaProvider schemaProvider) {
+                               SchemaProvider schemaProvider, String instantTime) {
     this.connectConfigs = connectConfigs;
     this.keyGenerator = keyGenerator;
     this.schemaProvider = schemaProvider;
+    this.instantTime = instantTime;
   }
 
   @Override
@@ -76,16 +80,22 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
         throw new IOException("Unsupported Kafka Format type (" + connectConfigs.getKafkaValueConverter() + ")");
     }
 
-    HoodieRecord hoodieRecord = new HoodieRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord));
+    // Tag records with a file ID based on kafka partition and hudi partition.
+    HoodieRecord<?> hoodieRecord = new HoodieRecord<>(keyGenerator.getKey(avroRecord.get()), new HoodieAvroPayload(avroRecord));
+    String fileId = KafkaConnectUtils.hashDigest(String.format("%s-%s", record.kafkaPartition(), hoodieRecord.getPartitionPath()));
+    hoodieRecord.unseal();
+    hoodieRecord.setCurrentLocation(new HoodieRecordLocation(instantTime, fileId));
+    hoodieRecord.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+    hoodieRecord.seal();
     writeHudiRecord(hoodieRecord);
   }
 
   @Override
   public List<WriteStatus> close() throws IOException {
-    return flushHudiRecords();
+    return flushRecords();
   }
 
-  protected abstract void writeHudiRecord(HoodieRecord<HoodieAvroPayload> record);
+  protected abstract void writeHudiRecord(HoodieRecord<?> record);
 
-  protected abstract List<WriteStatus> flushHudiRecords() throws IOException;
+  protected abstract List<WriteStatus> flushRecords() throws IOException;
 }
