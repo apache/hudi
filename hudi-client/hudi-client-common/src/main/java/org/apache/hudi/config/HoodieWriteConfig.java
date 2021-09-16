@@ -46,6 +46,7 @@ import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
@@ -412,6 +413,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Whether to include '_hoodie_operation' in the metadata fields. "
           + "Once enabled, all the changes of a record are persisted to the delta log directly without merge");
+
+  public static final ConfigProperty<String> FILEID_PREFIX_PROVIDER_CLASS = ConfigProperty
+      .key("hoodie.fileid.prefix.provider.class")
+      .defaultValue(RandomFileIdPrefixProvider.class.getName())
+      .sinceVersion("0.10.0")
+      .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
 
@@ -1748,6 +1755,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
   }
 
+  public String getFileIdPrefixProviderClassName() {
+    return getString(FILEID_PREFIX_PROVIDER_CLASS);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -2076,6 +2087,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
       writeConfig.setValue(ALLOW_OPERATION_METADATA_FIELD, Boolean.toString(allowOperationMetadataField));
+      return this;
+    }
+
+    public Builder withFileIdPrefixProviderClassName(String fileIdPrefixProviderClassName) {
+      writeConfig.setValue(FILEID_PREFIX_PROVIDER_CLASS, fileIdPrefixProviderClassName);
       return this;
     }
 

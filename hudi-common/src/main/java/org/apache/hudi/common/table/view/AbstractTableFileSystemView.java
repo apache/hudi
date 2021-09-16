@@ -44,6 +44,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.AbstractMap;
@@ -220,6 +221,17 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         // get replace instant mapping for each partition, fileId
         return replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().flatMap(entry -> entry.getValue().stream().map(e ->
                 new AbstractMap.SimpleEntry<>(new HoodieFileGroupId(entry.getKey(), e), instant)));
+      } catch (HoodieIOException ex) {
+
+        if (ex.getIOException() instanceof FileNotFoundException) {
+          // Replace instant could be deleted by archive and FileNotFoundException could be threw during getInstantDetails function
+          // So that we need to catch the FileNotFoundException here and continue
+          LOG.warn(ex.getMessage());
+          return Stream.empty();
+        } else {
+          throw ex;
+        }
+
       } catch (IOException e) {
         throw new HoodieIOException("error reading commit metadata for " + instant);
       }
@@ -1013,7 +1025,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Default implementation for fetching latest base-file.
-   * 
+   *
    * @param partitionPath Partition path
    * @param fileId File Id
    * @return base File if present
@@ -1025,7 +1037,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Default implementation for fetching file-slice.
-   * 
+   *
    * @param partitionPath Partition path
    * @param fileId File Id
    * @return File Slice if present
@@ -1059,7 +1071,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
     return HoodieTimeline.compareTimestamps(instant, GREATER_THAN, hoodieInstantOption.get().getTimestamp());
   }
-  
+
   private boolean isFileGroupReplacedBeforeOrOn(HoodieFileGroupId fileGroupId, String instant) {
     Option<HoodieInstant> hoodieInstantOption = getReplaceInstant(fileGroupId);
     if (!hoodieInstantOption.isPresent()) {
@@ -1108,7 +1120,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Return Only Commits and Compaction timeline for building file-groups.
-   * 
+   *
    * @return {@code HoodieTimeline}
    */
   public HoodieTimeline getVisibleCommitsAndCompactionTimeline() {

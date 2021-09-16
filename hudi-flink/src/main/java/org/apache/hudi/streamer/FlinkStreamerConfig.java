@@ -339,7 +339,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, config.writeTaskMaxSize);
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, config.writeBatchSize);
     conf.setInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE, config.writeLogBlockSize);
-    conf.setInteger(FlinkOptions.WRITE_LOG_MAX_SIZE, config.writeLogMaxSize);
+    conf.setLong(FlinkOptions.WRITE_LOG_MAX_SIZE, config.writeLogMaxSize);
     conf.setInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY, config.writeMergeMaxMemory);
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, config.compactionAsyncEnabled);
     conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);

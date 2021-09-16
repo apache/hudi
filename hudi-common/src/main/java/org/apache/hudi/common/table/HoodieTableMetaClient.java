@@ -627,6 +627,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String partitionFields;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
+    private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
     private String keyGeneratorClassProp;
 
@@ -702,6 +703,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setBootstrapIndexEnable(Boolean bootstrapIndexEnable) {
+      this.bootstrapIndexEnable = bootstrapIndexEnable;
+      return this;
+    }
+
     public PropertyBuilder setPopulateMetaFields(boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
       return this;
@@ -749,6 +755,11 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_BASE_PATH)) {
         setBootstrapBasePath(hoodieConfig.getString(HoodieTableConfig.BOOTSTRAP_BASE_PATH));
       }
+
+      if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE)) {
+        setBootstrapIndexEnable(hoodieConfig.getBoolean(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE));
+      }
+
       if (hoodieConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)) {
         setPreCombineField(hoodieConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
       }
@@ -805,6 +816,10 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != bootstrapIndexClass) {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME, bootstrapIndexClass);
+      }
+
+      if (null != bootstrapIndexEnable) {
+        tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE, Boolean.toString(bootstrapIndexEnable));
       }
 
       if (null != bootstrapBasePath) {
