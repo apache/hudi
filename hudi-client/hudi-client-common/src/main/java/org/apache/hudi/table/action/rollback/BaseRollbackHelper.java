@@ -41,6 +41,7 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -126,6 +127,8 @@ public class BaseRollbackHelper implements Serializable {
         String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
         FileSystem fs = metaClient.getFs();
         // collect all log files that is supposed to be deleted with this rollback
+        // what happens if file was deleted when invoking fs.getFileStatus(?) below.
+        // I understand we don't delete log files. but just curious if we need to handle this case.
         Map<FileStatus, Long> writtenLogFileSizeMap = new HashMap<>();
         for (Map.Entry<String, Long> entry : logFilesToBeDeleted.entrySet()) {
           writtenLogFileSizeMap.put(fs.getFileStatus(new Path(entry.getKey())), entry.getValue());
@@ -188,7 +191,12 @@ public class BaseRollbackHelper implements Serializable {
         String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());
         boolean isDeleted = true;
         if (doDelete) {
-          isDeleted = metaClient.getFs().delete(fullDeletePath);
+          try {
+            isDeleted = metaClient.getFs().delete(fullDeletePath);
+          } catch (FileNotFoundException e) {
+            // if first rollback attempt failed and retried again, chances that some files are already deleted.
+            isDeleted = true;
+          }
         }
         return HoodieRollbackStat.newBuilder()
             .withPartitionPath(partitionPath)
