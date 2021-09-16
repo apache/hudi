@@ -20,34 +20,43 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
+import org.apache.hudi.table.marker.WriteMarkers;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Performs rollback using marker files generated during the write..
  */
-public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O> implements BaseRollbackActionExecutor.RollbackStrategy {
+public class MarkerBasedRollbackStrategy implements BaseRollbackActionExecutor.RollbackStrategy {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractMarkerBasedRollbackStrategy.class);
+  private static final Logger LOG = LogManager.getLogger(MarkerBasedRollbackStrategy.class);
 
-  protected final HoodieTable<T, I, K, O> table;
+  protected final HoodieTable<?, ?, ?, ?> table;
 
   protected final transient HoodieEngineContext context;
 
@@ -57,7 +66,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
 
   protected final String instantTime;
 
-  public AbstractMarkerBasedRollbackStrategy(HoodieTable<T, I, K, O> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
+  public MarkerBasedRollbackStrategy(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     this.table = table;
     this.context = context;
     this.basePath = table.getMetaClient().getBasePath();
@@ -124,8 +133,8 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
 
     // the information of files appended to is required for metadata sync
     Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
-          table.getMetaClient().getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
-          1L);
+        table.getMetaClient().getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
+        1L);
 
     return HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath)
@@ -135,13 +144,48 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
 
   /**
    * Returns written log file size map for the respective baseCommitTime to assist in metadata table syncing.
-   * @param partitionPath partition path of interest
-   * @param baseCommitTime base commit time of interest
-   * @param fileId fileId of interest
+   *
+   * @param partitionPathStr partition path of interest
+   * @param baseCommitTime   base commit time of interest
+   * @param fileId           fileId of interest
    * @return Map<FileStatus, File size>
    * @throws IOException
    */
-  protected Map<FileStatus, Long> getWrittenLogFileSizeMap(String partitionPath, String baseCommitTime, String fileId) throws IOException {
-    return Collections.EMPTY_MAP;
+  protected Map<FileStatus, Long> getWrittenLogFileSizeMap(String partitionPathStr, String baseCommitTime, String fileId) throws IOException {
+    // collect all log files that is supposed to be deleted with this rollback
+    return FSUtils.getAllLogFiles(table.getMetaClient().getFs(),
+        FSUtils.getPartitionPath(config.getBasePath(), partitionPathStr), fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime)
+        .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen()));
+  }
+
+  @Override
+  public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
+    try {
+      List<String> markerPaths = MarkerBasedRollbackUtils.getAllMarkerPaths(
+          table, context, instantToRollback.getTimestamp(), config.getRollbackParallelism());
+      int parallelism = Math.max(Math.min(markerPaths.size(), config.getRollbackParallelism()), 1);
+      context.setJobStatus(this.getClass().getSimpleName(), "Rolling back using marker files");
+      return context.mapToPairAndReduceByKey(markerPaths, markerFilePath -> {
+        String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
+        IOType type = IOType.valueOf(typeStr);
+        HoodieRollbackStat rollbackStat;
+        switch (type) {
+          case MERGE:
+            rollbackStat = undoMerge(WriteMarkers.stripMarkerSuffix(markerFilePath));
+            break;
+          case APPEND:
+            rollbackStat = undoAppend(WriteMarkers.stripMarkerSuffix(markerFilePath), instantToRollback);
+            break;
+          case CREATE:
+            rollbackStat = undoCreate(WriteMarkers.stripMarkerSuffix(markerFilePath));
+            break;
+          default:
+            throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
+        }
+        return new ImmutablePair<>(rollbackStat.getPartitionPath(), rollbackStat);
+      }, RollbackUtils::mergeRollbackStat, parallelism);
+    } catch (Exception e) {
+      throw new HoodieRollbackException("Error rolling back using marker files written for " + instantToRollback, e);
+    }
   }
 }

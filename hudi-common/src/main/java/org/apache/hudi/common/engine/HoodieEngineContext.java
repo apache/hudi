@@ -19,6 +19,7 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -55,6 +56,9 @@ public abstract class HoodieEngineContext {
   }
 
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
+
+  public abstract <I, K, V> List<V> mapToPairAndReduceByKey(
+      List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
 
   public abstract <I, O> List<O> flatMap(List<I> data, SerializableFunction<I, Stream<O>> func, int parallelism);
 

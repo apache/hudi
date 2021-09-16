@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.config;
+package org.apache.hudi.config.metrics;
 
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -25,8 +25,14 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import java.util.Properties;
 
-import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
+import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRIC_PREFIX;
 
+/**
+ * Configs for Prometheus/Pushgaeway reporter type.
+ * <p>
+ * {@link org.apache.hudi.metrics.MetricsReporterType#PROMETHEUS}
+ * {@link org.apache.hudi.metrics.MetricsReporterType#PROMETHEUS_PUSHGATEWAY}
+ */
 @ConfigClassProperty(name = "Metrics Configurations for Prometheus",
     groupName = ConfigGroups.Names.METRICS,
     description = "Enables reporting on Hudi metrics using Prometheus. "
@@ -171,6 +177,41 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
 
     public Builder fromProperties(Properties props) {
       this.hoodieMetricsPrometheusConfig.getProps().putAll(props);
+      return this;
+    }
+
+    public HoodieMetricsPrometheusConfig.Builder withPushgatewayHostName(String hostName) {
+      hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_HOST_NAME, String.valueOf(hostName));
+      return this;
+    }
+
+    public HoodieMetricsPrometheusConfig.Builder withPushgatewayPortNum(Integer pushgatewayPortNum) {
+      hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_PORT_NUM, String.valueOf(pushgatewayPortNum));
+      return this;
+    }
+
+    public HoodieMetricsPrometheusConfig.Builder withPushgatewayReportPeriodInSeconds(String periodTime) {
+      hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_REPORT_PERIOD_IN_SECONDS, periodTime);
+      return this;
+    }
+
+    public HoodieMetricsPrometheusConfig.Builder withPushgatewayDeleteOnShutdownEnable(boolean deleteOnShutdownEnable) {
+      hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_DELETE_ON_SHUTDOWN_ENABLE, String.valueOf(deleteOnShutdownEnable));
+      return this;
+    }
+
+    public HoodieMetricsPrometheusConfig.Builder withPushgatewayJobname(String jobname) {
+      hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_JOBNAME, jobname);
+      return this;
+    }
+
+    public HoodieMetricsPrometheusConfig.Builder withPushgatewayRandomJobnameSuffix(boolean randomJobnameSuffix) {
+      hoodieMetricsPrometheusConfig.setValue(PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX, String.valueOf(randomJobnameSuffix));
+      return this;
+    }
+
+    public HoodieMetricsPrometheusConfig.Builder withPrometheusPortNum(int prometheusPortNum) {
+      hoodieMetricsPrometheusConfig.setValue(PROMETHEUS_PORT_NUM, String.valueOf(prometheusPortNum));
       return this;
     }
 
