@@ -67,7 +67,6 @@ public class HoodieMetricsGraphiteConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Graphite reporting period in seconds. Default to 30.");
 
-
   /**
    * @deprecated Use {@link #GRAPHITE_SERVER_HOST_NAME} and its methods instead
    */
@@ -133,7 +132,7 @@ public class HoodieMetricsGraphiteConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieMetricsGraphiteConfig.Builder periodSeconds (String periodSeconds) {
+    public HoodieMetricsGraphiteConfig.Builder periodSeconds(String periodSeconds) {
       hoodieMetricsGraphiteConfig.setValue(GRAPHITE_REPORT_PERIOD_IN_SECONDS, periodSeconds);
       return this;
     }
