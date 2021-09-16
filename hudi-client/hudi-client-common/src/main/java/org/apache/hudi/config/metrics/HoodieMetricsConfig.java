@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.config;
+package org.apache.hudi.config.metrics;
 
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -55,48 +55,6 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .sinceVersion("0.5.0")
       .withDocumentation("Type of metrics reporter.");
 
-  // Graphite
-  public static final String GRAPHITE_PREFIX = METRIC_PREFIX + ".graphite";
-
-  public static final ConfigProperty<String> GRAPHITE_SERVER_HOST_NAME = ConfigProperty
-      .key(GRAPHITE_PREFIX + ".host")
-      .defaultValue("localhost")
-      .sinceVersion("0.5.0")
-      .withDocumentation("Graphite host to connect to");
-
-  public static final ConfigProperty<Integer> GRAPHITE_SERVER_PORT_NUM = ConfigProperty
-      .key(GRAPHITE_PREFIX + ".port")
-      .defaultValue(4756)
-      .sinceVersion("0.5.0")
-      .withDocumentation("Graphite port to connect to");
-
-  public static final ConfigProperty<Integer> GRAPHITE_REPORT_PERIOD_IN_SECONDS = ConfigProperty
-      .key(GRAPHITE_PREFIX + ".report.period.seconds")
-      .defaultValue(30)
-      .sinceVersion("0.10.0")
-      .withDocumentation("Graphite reporting period in seconds. Default to 30.");
-
-  // Jmx
-  public static final String JMX_PREFIX = METRIC_PREFIX + ".jmx";
-
-  public static final ConfigProperty<String> JMX_HOST_NAME = ConfigProperty
-      .key(JMX_PREFIX + ".host")
-      .defaultValue("localhost")
-      .sinceVersion("0.5.1")
-      .withDocumentation("Jmx host to connect to");
-
-  public static final ConfigProperty<Integer> JMX_PORT_NUM = ConfigProperty
-      .key(JMX_PREFIX + ".port")
-      .defaultValue(9889)
-      .sinceVersion("0.5.1")
-      .withDocumentation("Jmx port to connect to");
-
-  public static final ConfigProperty<String> GRAPHITE_METRIC_PREFIX_VALUE = ConfigProperty
-      .key(GRAPHITE_PREFIX + ".metric.prefix")
-      .noDefaultValue()
-      .sinceVersion("0.5.1")
-      .withDocumentation("Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g");
-
   // User defined
   public static final ConfigProperty<String> METRICS_REPORTER_CLASS_NAME = ConfigProperty
       .key(METRIC_PREFIX + ".reporter.class")
@@ -131,51 +89,6 @@ public class HoodieMetricsConfig extends HoodieConfig {
    */
   @Deprecated
   public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = METRICS_REPORTER_TYPE_VALUE.defaultValue();
-  /**
-   * @deprecated Use {@link #GRAPHITE_SERVER_HOST_NAME} and its methods instead
-   */
-  @Deprecated
-  public static final String GRAPHITE_SERVER_HOST = GRAPHITE_SERVER_HOST_NAME.key();
-  /**
-   * @deprecated Use {@link #GRAPHITE_SERVER_HOST_NAME} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_GRAPHITE_SERVER_HOST = GRAPHITE_SERVER_HOST_NAME.defaultValue();
-  /**
-   * @deprecated Use {@link #GRAPHITE_SERVER_PORT_NUM} and its methods instead
-   */
-  @Deprecated
-  public static final String GRAPHITE_SERVER_PORT = GRAPHITE_SERVER_PORT_NUM.key();
-  /**
-   * @deprecated Use {@link #GRAPHITE_SERVER_PORT_NUM} and its methods instead
-   */
-  @Deprecated
-  public static final int DEFAULT_GRAPHITE_SERVER_PORT = GRAPHITE_SERVER_PORT_NUM.defaultValue();
-  /**
-   * @deprecated Use {@link #JMX_HOST_NAME} and its methods instead
-   */
-  @Deprecated
-  public static final String JMX_HOST = JMX_HOST_NAME.key();
-  /**
-   * @deprecated Use {@link #JMX_HOST_NAME} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_JMX_HOST = JMX_HOST_NAME.defaultValue();
-  /**
-   * @deprecated Use {@link #JMX_PORT_NUM} and its methods instead
-   */
-  @Deprecated
-  public static final String JMX_PORT = JMX_PORT_NUM.key();
-  /**
-   * @deprecated Use {@link #JMX_PORT_NUM} and its methods instead
-   */
-  @Deprecated
-  public static final int DEFAULT_JMX_PORT = JMX_PORT_NUM.defaultValue();
-  /**
-   * @deprecated Use {@link #GRAPHITE_METRIC_PREFIX_VALUE} and its methods instead
-   */
-  @Deprecated
-  public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_METRIC_PREFIX_VALUE.key();
   /**
    * @deprecated Use {@link #METRICS_REPORTER_CLASS_NAME} and its methods instead
    */
@@ -226,31 +139,6 @@ public class HoodieMetricsConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder toGraphiteHost(String host) {
-      hoodieMetricsConfig.setValue(GRAPHITE_SERVER_HOST_NAME, host);
-      return this;
-    }
-
-    public Builder onGraphitePort(int port) {
-      hoodieMetricsConfig.setValue(GRAPHITE_SERVER_PORT_NUM, String.valueOf(port));
-      return this;
-    }
-
-    public Builder toJmxHost(String host) {
-      hoodieMetricsConfig.setValue(JMX_HOST_NAME, host);
-      return this;
-    }
-
-    public Builder onJmxPort(String port) {
-      hoodieMetricsConfig.setValue(JMX_PORT_NUM, port);
-      return this;
-    }
-
-    public Builder usePrefix(String prefix) {
-      hoodieMetricsConfig.setValue(GRAPHITE_METRIC_PREFIX_VALUE, prefix);
-      return this;
-    }
-
     public Builder withReporterClass(String className) {
       hoodieMetricsConfig.setValue(METRICS_REPORTER_CLASS_NAME, className);
       return this;
@@ -273,6 +161,10 @@ public class HoodieMetricsConfig extends HoodieConfig {
               HoodieMetricsPrometheusConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
       hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.PROMETHEUS,
               HoodieMetricsPrometheusConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
+      hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.JMX,
+          HoodieMetricsJmxConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
+      hoodieMetricsConfig.setDefaultOnCondition(reporterType == MetricsReporterType.GRAPHITE,
+          HoodieMetricsGraphiteConfig.newBuilder().fromProperties(hoodieMetricsConfig.getProps()).build());
       return hoodieMetricsConfig;
     }
   }

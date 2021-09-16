@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -40,6 +41,7 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWra
 import static org.apache.hudi.common.function.FunctionWrapper.throwingForeachWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrapper;
 
 /**
  * A java engine implementation of HoodieEngineContext.
@@ -57,6 +59,14 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
     return data.stream().parallel().map(throwingMapWrapper(func)).collect(toList());
+  }
+
+  @Override
+  public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    return data.stream().parallel().map(throwingMapToPairWrapper(mapToPairFunc))
+        .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
+        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).get())
+        .collect(Collectors.toList());
   }
 
   @Override

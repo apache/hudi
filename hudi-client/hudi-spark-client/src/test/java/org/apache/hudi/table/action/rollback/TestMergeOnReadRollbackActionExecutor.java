@@ -89,7 +89,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     //2. rollback
     HoodieInstant rollBackInstant = new HoodieInstant(isUsingMarkers, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
-    SparkMergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new SparkMergeOnReadRollbackActionExecutor(
+    MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         cfg,
         table,
@@ -98,9 +98,9 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         true);
     // assert is filelist mode
     if (!isUsingMarkers) {
-      assertFalse(mergeOnReadRollbackActionExecutor.getRollbackStrategy() instanceof SparkMarkerBasedRollbackStrategy);
+      assertFalse(mergeOnReadRollbackActionExecutor.getRollbackStrategy() instanceof MarkerBasedRollbackStrategy);
     } else {
-      assertTrue(mergeOnReadRollbackActionExecutor.getRollbackStrategy() instanceof SparkMarkerBasedRollbackStrategy);
+      assertTrue(mergeOnReadRollbackActionExecutor.getRollbackStrategy() instanceof MarkerBasedRollbackStrategy);
     }
 
     //3. assert the rollback stat
@@ -145,15 +145,15 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   public void testFailForCompletedInstants() {
     Assertions.assertThrows(IllegalArgumentException.class, () -> {
       HoodieInstant rollBackInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
-      new SparkMergeOnReadRollbackActionExecutor(
-              context,
-              getConfigBuilder().build(),
-              getHoodieTable(metaClient, getConfigBuilder().build()),
-              "003",
-              rollBackInstant,
-              true,
-              true,
-              true);
+      new MergeOnReadRollbackActionExecutor(
+          context,
+          getConfigBuilder().build(),
+          getHoodieTable(metaClient, getConfigBuilder().build()),
+          "003",
+          rollBackInstant,
+          true,
+          true,
+          true);
     });
   }
 

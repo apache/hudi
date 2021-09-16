@@ -17,23 +17,18 @@
  * under the License.
  */
 
-package org.apache.hudi.metrics.datadog;
+package org.apache.hudi.common.function;
 
-import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
+import java.io.Serializable;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.Collections;
-
-import static org.junit.jupiter.api.Assertions.assertIterableEquals;
-
-public class TestHoodieMetricsDatadogConfig {
-
-  @Test
-  public void getDatadogMetricTagsShouldReturnEmptyListWhenNotSet() {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
-    writeConfig.getProps().remove(HoodieMetricsDatadogConfig.METRIC_TAG_VALUES.key());
-    assertIterableEquals(Collections.emptyList(), writeConfig.getDatadogMetricTags());
-  }
+/**
+ * A function that accepts two arguments and produces a result.
+ *
+ * @param <T> the type of the first argument to the function
+ * @param <U> the type of the second argument to the function
+ * @param <R> the type of the result of the function
+ */
+@FunctionalInterface
+public interface SerializableBiFunction<T, U, R> extends Serializable {
+  R apply(T t, U u);
 }
