@@ -46,8 +46,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -175,19 +177,22 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withFinalizeWriteParallelism(parallelism);
 
     if (writeConfig.isMetricsOn()) {
-      HoodieMetricsConfig.Builder metricsConfig = HoodieMetricsConfig.newBuilder()
+      builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
           .withReporterType(writeConfig.getMetricsReporterType().toString())
           .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
-          .on(true);
+          .on(true).build());
       switch (writeConfig.getMetricsReporterType()) {
         case GRAPHITE:
-          metricsConfig.onGraphitePort(writeConfig.getGraphiteServerPort())
+          builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
+              .onGraphitePort(writeConfig.getGraphiteServerPort())
               .toGraphiteHost(writeConfig.getGraphiteServerHost())
-              .usePrefix(writeConfig.getGraphiteMetricPrefix());
+              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
           break;
         case JMX:
-          metricsConfig.onJmxPort(writeConfig.getJmxPort())
-              .toJmxHost(writeConfig.getJmxHost());
+          builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
+              .onJmxPort(writeConfig.getJmxPort())
+              .toJmxHost(writeConfig.getJmxHost())
+              .build());
           break;
         case DATADOG:
         case PROMETHEUS:
@@ -198,10 +203,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         default:
           throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
       }
-
-      builder.withMetricsConfig(metricsConfig.build());
     }
-
     return builder.build();
   }
 

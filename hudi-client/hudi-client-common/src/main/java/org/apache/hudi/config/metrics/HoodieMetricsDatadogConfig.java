@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.config;
+package org.apache.hudi.config.metrics;
 
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -27,7 +27,7 @@ import javax.annotation.concurrent.Immutable;
 
 import java.util.Properties;
 
-import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
+import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRIC_PREFIX;
 
 /**
  * Configs for Datadog reporter type.
