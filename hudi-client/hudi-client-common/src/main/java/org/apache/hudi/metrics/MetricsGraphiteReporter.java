@@ -42,6 +42,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
   private final HoodieWriteConfig config;
   private String serverHost;
   private int serverPort;
+  private final int periodSeconds;
 
   public MetricsGraphiteReporter(HoodieWriteConfig config, MetricRegistry registry) {
     this.registry = registry;
@@ -56,12 +57,13 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     }
 
     this.graphiteReporter = createGraphiteReport();
+    this.periodSeconds = config.getGraphiteReportPeriodSeconds();
   }
 
   @Override
   public void start() {
     if (graphiteReporter != null) {
-      graphiteReporter.start(30, TimeUnit.SECONDS);
+      graphiteReporter.start(periodSeconds, TimeUnit.SECONDS);
     } else {
       LOG.error("Cannot start as the graphiteReporter is null.");
     }

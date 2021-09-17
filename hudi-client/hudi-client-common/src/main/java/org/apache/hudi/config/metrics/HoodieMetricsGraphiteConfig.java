@@ -61,6 +61,12 @@ public class HoodieMetricsGraphiteConfig extends HoodieConfig {
       .sinceVersion("0.5.1")
       .withDocumentation("Standard prefix applied to all metrics. This helps to add datacenter, environment information for e.g");
 
+  public static final ConfigProperty<Integer> GRAPHITE_REPORT_PERIOD_IN_SECONDS = ConfigProperty
+      .key(GRAPHITE_PREFIX + ".report.period.seconds")
+      .defaultValue(30)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Graphite reporting period in seconds. Default to 30.");
+
   /**
    * @deprecated Use {@link #GRAPHITE_SERVER_HOST_NAME} and its methods instead
    */
@@ -123,6 +129,11 @@ public class HoodieMetricsGraphiteConfig extends HoodieConfig {
 
     public HoodieMetricsGraphiteConfig.Builder usePrefix(String prefix) {
       hoodieMetricsGraphiteConfig.setValue(GRAPHITE_METRIC_PREFIX_VALUE, prefix);
+      return this;
+    }
+
+    public HoodieMetricsGraphiteConfig.Builder periodSeconds(String periodSeconds) {
+      hoodieMetricsGraphiteConfig.setValue(GRAPHITE_REPORT_PERIOD_IN_SECONDS, periodSeconds);
       return this;
     }
 
