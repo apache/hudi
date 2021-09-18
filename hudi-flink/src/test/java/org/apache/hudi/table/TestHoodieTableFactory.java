@@ -232,6 +232,32 @@ public class TestHoodieTableFactory {
   }
 
   @Test
+  void testSetupReadOptionsForSource() {
+    // definition with simple primary key and partition path
+    ResolvedSchema schema1 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    // set up new retains commits that is less than min archive commits
+    this.conf.setString(FlinkOptions.READ_END_COMMIT, "123");
+
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    final Configuration conf1 = tableSource1.getConf();
+    assertThat(conf1.getString(FlinkOptions.QUERY_TYPE), is(FlinkOptions.QUERY_TYPE_INCREMENTAL));
+
+    this.conf.removeConfig(FlinkOptions.READ_END_COMMIT);
+    this.conf.setString(FlinkOptions.READ_START_COMMIT, "123");
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
+    final Configuration conf2 = tableSource2.getConf();
+    assertThat(conf2.getString(FlinkOptions.QUERY_TYPE), is(FlinkOptions.QUERY_TYPE_INCREMENTAL));
+  }
+
+  @Test
   void testInferAvroSchemaForSink() {
     // infer the schema if not specified
     final HoodieTableSink tableSink1 =

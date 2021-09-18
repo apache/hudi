@@ -45,7 +45,6 @@ import org.apache.flink.api.common.io.DefaultInputSplitAssigner;
 import org.apache.flink.api.common.io.RichInputFormat;
 import org.apache.flink.api.common.io.statistics.BaseStatistics;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -84,8 +83,6 @@ public class MergeOnReadInputFormat
   private final Configuration conf;
 
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
-
-  private Path[] paths;
 
   private final MergeOnReadTableState tableState;
 
@@ -134,14 +131,12 @@ public class MergeOnReadInputFormat
 
   private MergeOnReadInputFormat(
       Configuration conf,
-      Path[] paths,
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
       String defaultPartName,
       long limit,
       boolean emitDelete) {
     this.conf = conf;
-    this.paths = paths;
     this.tableState = tableState;
     this.fieldNames = tableState.getRowType().getFieldNames();
     this.fieldTypes = fieldTypes;
@@ -165,7 +160,7 @@ public class MergeOnReadInputFormat
     this.currentReadCount = 0L;
     this.hadoopConf = StreamerUtil.getHadoopConf();
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
-      if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
+      if (split.getInstantRange() != null) {
         // base file only with commit time filtering
         this.iterator = new BaseFileOnlyFilteringIterator(
             split.getInstantRange(),
@@ -212,16 +207,8 @@ public class MergeOnReadInputFormat
 
   @Override
   public void configure(Configuration configuration) {
-    if (this.paths.length == 0) {
-      // file path was not specified yet. Try to set it from the parameters.
-      String filePath = configuration.getString(FlinkOptions.PATH, null);
-      if (filePath == null) {
-        throw new IllegalArgumentException("File path was not specified in input format or configuration.");
-      } else {
-        this.paths = new Path[] {new Path(filePath)};
-      }
-    }
-    // may supports nested files in the future.
+    // no operation
+    // may support nested files in the future.
   }
 
   @Override
@@ -750,7 +737,6 @@ public class MergeOnReadInputFormat
    */
   public static class Builder {
     private Configuration conf;
-    private Path[] paths;
     private MergeOnReadTableState tableState;
     private List<DataType> fieldTypes;
     private String defaultPartName;
@@ -759,11 +745,6 @@ public class MergeOnReadInputFormat
 
     public Builder config(Configuration conf) {
       this.conf = conf;
-      return this;
-    }
-
-    public Builder paths(Path[] paths) {
-      this.paths = paths;
       return this;
     }
 
@@ -793,8 +774,8 @@ public class MergeOnReadInputFormat
     }
 
     public MergeOnReadInputFormat build() {
-      return new MergeOnReadInputFormat(conf, paths, tableState,
-          fieldTypes, defaultPartName, limit, emitDelete);
+      return new MergeOnReadInputFormat(conf, tableState, fieldTypes,
+          defaultPartName, limit, emitDelete);
     }
   }
 
