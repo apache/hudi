@@ -25,6 +25,8 @@ import java.util.BitSet;
  */
 public class PartitionPathEncodeUtils {
 
+  public static final String HUDI_DEFAULT_PARTITION_PATH = "default";
+
   static BitSet charToEscape = new BitSet(128);
   static {
     for (char c = 0; c < ' '; c++) {
@@ -71,7 +73,7 @@ public class PartitionPathEncodeUtils {
       if (defaultPath == null) {
         //previously, when path is empty or null and no default path is specified,
         // __HIVE_DEFAULT_PARTITION__ was the return value for escapePathName
-        return "__HIVE_DEFAULT_PARTITION__";
+        return HUDI_DEFAULT_PARTITION_PATH;
       } else {
         return defaultPath;
       }
@@ -110,5 +112,13 @@ public class PartitionPathEncodeUtils {
       sb.append(c);
     }
     return sb.toString();
+  }
+
+  public static String escapePartitionValue(String value) {
+    if (value == null || value.isEmpty()) {
+      return HUDI_DEFAULT_PARTITION_PATH;
+    } else {
+      return escapePathName(value);
+    }
   }
 }

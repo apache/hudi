@@ -54,7 +54,7 @@ import scala.collection.mutable
  * Command for create hoodie table.
  */
 case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean)
-  extends RunnableCommand with SparkAdapterSupport {
+  extends RunnableCommand with HoodieCommand with SparkAdapterSupport {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableName = table.identifier.unquotedString
@@ -129,9 +129,9 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
         (addMetaFields(tableSchema.get), options)
       } else if (userSpecifiedSchema.nonEmpty) {
         (addMetaFields(userSpecifiedSchema), options)
-    } else {
+      } else {
         throw new IllegalArgumentException(s"Missing schema for Create Table: $tableName")
-     }
+      }
     } else {
       assert(table.schema.nonEmpty, s"Missing schema for Create Table: $tableName")
       // SPARK-19724: the default location of a managed table should be non-existent or empty.
@@ -317,16 +317,6 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
         s"'type' must be '${HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_COW}' or " +
           s"'${HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_MOR}'")
     }
-  }
-
-  private def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
-    val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-    val metadataConfig = {
-      val properties = new Properties()
-      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties).asJava)
-      HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
-    }
-    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
   }
 
   /**
