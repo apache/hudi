@@ -21,8 +21,8 @@ We use the [Flink Sql Client](https://ci.apache.org/projects/flink/flink-docs-re
 quick start tool for SQL users.
 
 #### Step.1 download Flink jar
-Hudi works with Flink-1.11.x version. You can follow instructions [here](https://flink.apache.org/downloads) for setting up Flink.
-The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to use flink 1.11 bundled with scala 2.11.
+Hudi works with Flink-1.11.2 version. You can follow instructions [here](https://flink.apache.org/downloads) for setting up Flink.
+The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to use flink 1.12.2 bundled with scala 2.11.
 
 #### Step.2 start Flink cluster
 Start a standalone Flink cluster within hadoop environment.
