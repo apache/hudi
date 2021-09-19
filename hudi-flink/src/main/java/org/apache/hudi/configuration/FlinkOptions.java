@@ -197,12 +197,18 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Check interval for streaming read of SECOND, default 1 minute");
 
   public static final String START_COMMIT_EARLIEST = "earliest";
-  public static final ConfigOption<String> READ_STREAMING_START_COMMIT = ConfigOptions
-      .key("read.streaming.start-commit")
+  public static final ConfigOption<String> READ_START_COMMIT = ConfigOptions
+      .key("read.start-commit")
       .stringType()
       .noDefaultValue()
-      .withDescription("Start commit instant for streaming read, the commit time format should be 'yyyyMMddHHmmss', "
-          + "by default reading from the latest instant");
+      .withDescription("Start commit instant for reading, the commit time format should be 'yyyyMMddHHmmss', "
+          + "by default reading from the latest instant for streaming read");
+
+  public static final ConfigOption<String> READ_END_COMMIT = ConfigOptions
+      .key("read.end-commit")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("End commit instant for reading, the commit time format should be 'yyyyMMddHHmmss'");
 
   // ------------------------------------------------------------------------
   //  Write Options
