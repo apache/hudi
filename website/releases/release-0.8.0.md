@@ -12,6 +12,10 @@ last_modified_at: 2020-05-28T08:40:00-07:00
 - Specifically check upgrade instructions for 0.6.0. This release does not introduce any new table versions.
 - The `HoodieRecordPayload` interface deprecated existing methods, in favor of new ones that also lets us pass properties at runtime. Users are
 encouraged to migrate out of the deprecated methods, since they will be removed in 0.9.0.
+- "auto.offset.reset" is a config used for Kafka sources in deltastreamer utility to reset offset to be consumed from such 
+  sources. We had a bug around this config with 0.8.0 which has been fixed in 0.9.0. Please use "auto.reset.offsets" instead. 
+  Possible values for this config are "earliest" and "latest"(default). So, would recommend using "auto.reset.offsets" only in 
+  0.8.0 and for all other releases, you can use "auto.offset.reset".
 
 ## Release Highlights
 
