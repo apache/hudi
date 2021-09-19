@@ -28,9 +28,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieData;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.FlinkHoodieIndex;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.commit.FlinkCommitHelper;
 
 import java.util.List;
 
@@ -62,8 +66,40 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     }
   }
 
+  public static <T extends HoodieRecordPayload> Option<BulkInsertPartitioner<HoodieData<HoodieRecord<T>>>> convertBulkInsertPartitioner(
+      Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
+    Option<BulkInsertPartitioner<HoodieData<HoodieRecord<T>>>> partitionerOption = Option.empty();
+    if (userDefinedBulkInsertPartitioner.isPresent()) {
+      partitionerOption = Option.of(convertBulkInsertPartitioner(userDefinedBulkInsertPartitioner.get()));
+    }
+    return partitionerOption;
+  }
+
+  public static <T extends HoodieRecordPayload> BulkInsertPartitioner<HoodieData<HoodieRecord<T>>> convertBulkInsertPartitioner(
+      BulkInsertPartitioner<List<HoodieRecord<T>>> bulkInsertPartitioner) {
+    return new BulkInsertPartitioner<HoodieData<HoodieRecord<T>>>() {
+      @Override
+      public HoodieData<HoodieRecord<T>> repartitionRecords(
+          HoodieData<HoodieRecord<T>> records, int outputSparkPartitions) {
+        return HoodieListData.of(bulkInsertPartitioner.repartitionRecords(
+            FlinkCommitHelper.getList(records), outputSparkPartitions));
+      }
+
+      @Override
+      public boolean arePartitionRecordsSorted() {
+        return bulkInsertPartitioner.arePartitionRecordsSorted();
+      }
+    };
+  }
+
+  public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
+      HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
+    return metadata.clone(FlinkCommitHelper.getList(metadata.getWriteStatuses()));
+  }
+
   @Override
-  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getIndex(
+      HoodieWriteConfig config, HoodieEngineContext context) {
     return FlinkHoodieIndex.createIndex((HoodieFlinkEngineContext) context, config);
   }
 }

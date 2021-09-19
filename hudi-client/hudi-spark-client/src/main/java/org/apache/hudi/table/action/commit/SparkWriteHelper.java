@@ -18,23 +18,27 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.SparkHoodieRDDData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.data.HoodieData;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.table.action.commit.SparkCommitHelper.getRdd;
+
 /**
- * A spark implementation of {@link AbstractWriteHelper}.
+ * A spark implementation of {@link BaseWriteHelper}.
  *
  * @param <T>
  */
-public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractWriteHelper<T, JavaRDD<HoodieRecord<T>>,
-    JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
+public class SparkWriteHelper<T extends HoodieRecordPayload<T>> extends BaseWriteHelper<T> {
   private SparkWriteHelper() {
   }
 
@@ -47,11 +51,20 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> index,
-                                                     int parallelism) {
+  protected HoodieData<HoodieRecord<T>> tag(
+      HoodieData<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable table) {
+    // perform index loop up to get existing location of records
+    return SparkHoodieRDDData.of(
+        (JavaRDD<HoodieRecord<T>>) table.getIndex().tagLocation(getRdd(dedupedRecords), context, table));
+  }
+
+  @Override
+  public HoodieData<HoodieRecord<T>> deduplicateRecords(HoodieData<HoodieRecord<T>> records,
+                                                        HoodieIndex index,
+                                                        int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
-    return records.mapToPair(record -> {
+    JavaRDD<HoodieRecord<T>> recordsRdd = getRdd(records);
+    return SparkHoodieRDDData.of(recordsRdd.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
@@ -62,7 +75,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
 
       return new HoodieRecord<T>(reducedKey, reducedData);
-    }, parallelism).map(Tuple2::_2);
+    }, parallelism).map(Tuple2::_2));
   }
 
 }

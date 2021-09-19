@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.HoodieData;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -46,8 +48,7 @@ import java.util.stream.Collectors;
  * <p>Computing the records batch locations all at a time is a pressure to the engine,
  * we should avoid that in streaming system.
  */
-public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends AbstractWriteHelper<T, List<HoodieRecord<T>>,
-    List<HoodieKey>, List<WriteStatus>, R> {
+public class FlinkWriteHelper<T extends HoodieRecordPayload<T>> extends BaseWriteHelper<T> {
 
   private FlinkWriteHelper() {
   }
@@ -61,14 +62,15 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> write(String instantTime, List<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
-                                                      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table, boolean shouldCombine, int shuffleParallelism,
-                                                      BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor, boolean performTagging) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> write(
+      String instantTime, HoodieData<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
+      HoodieTable table, boolean shouldCombine, int shuffleParallelism,
+      BaseCommitHelper<T> commitHelper, boolean performTagging) {
     try {
       Instant lookupBegin = Instant.now();
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
 
-      HoodieWriteMetadata<List<WriteStatus>> result = executor.execute(inputRecords);
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = commitHelper.execute(inputRecords);
       result.setIndexLookupDuration(indexLookupDuration);
       return result;
     } catch (Throwable e) {
@@ -80,30 +82,43 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
   }
 
   @Override
-  public List<HoodieRecord<T>> deduplicateRecords(List<HoodieRecord<T>> records,
-                                                  HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> index,
-                                                  int parallelism) {
-    Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
-      // If index used is global, then records are expected to differ in their partitionPath
-      final Object key = record.getKey().getRecordKey();
-      return Pair.of(key, record);
-    }).collect(Collectors.groupingBy(Pair::getLeft));
+  protected HoodieData<HoodieRecord<T>> tag(
+      HoodieData<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable table) {
+    // perform index loop up to get existing location of records
+    return HoodieListData.of((List<HoodieRecord<T>>)
+        table.getIndex().tagLocation(FlinkCommitHelper.getList(dedupedRecords), context, table));
+  }
 
-    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
-      final T data1 = rec1.getData();
-      final T data2 = rec2.getData();
+  @Override
+  public HoodieData<HoodieRecord<T>> deduplicateRecords(
+      HoodieData<HoodieRecord<T>> records, HoodieIndex index, int parallelism) {
+    Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords =
+        FlinkCommitHelper.getList(records).stream().map(record -> {
+          // If index used is global, then records are expected to differ in their partitionPath
+          final Object key = record.getKey().getRecordKey();
+          return Pair.of(key, record);
+        }).collect(Collectors.groupingBy(Pair::getLeft));
 
-      @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1);
-      // we cannot allow the user to change the key or partitionPath, since that will affect
-      // everything
-      // so pick it from one of the records.
-      boolean choosePrev = data1.equals(reducedData);
-      HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
-      HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(reducedKey, reducedData, operation);
-      // reuse the location from the first record.
-      hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
-      return hoodieRecord;
-    }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
+    // we cannot allow the user to change the key or partitionPath, since that will affect
+    // everything
+    // so pick it from one of the records.
+    // reuse the location from the first record.
+    return HoodieListData.of(keyedRecords.values().stream()
+        .map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
+          final T data1 = rec1.getData();
+          final T data2 = rec2.getData();
+
+          @SuppressWarnings("unchecked") final T reducedData = (T) data2.preCombine(data1);
+          // we cannot allow the user to change the key or partitionPath, since that will affect
+          // everything
+          // so pick it from one of the records.
+          boolean choosePrev = data1.equals(reducedData);
+          HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
+          HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
+          HoodieRecord<T> hoodieRecord = new HoodieRecord<>(reducedKey, reducedData, operation);
+          // reuse the location from the first record.
+          hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
+          return hoodieRecord;
+        }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList()));
   }
 }

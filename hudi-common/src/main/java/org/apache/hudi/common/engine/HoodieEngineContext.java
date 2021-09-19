@@ -25,6 +25,7 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.HoodieData;
 
 import java.util.List;
 import java.util.Map;
@@ -55,6 +56,8 @@ public abstract class HoodieEngineContext {
   public TaskContextSupplier getTaskContextSupplier() {
     return taskContextSupplier;
   }
+
+  public abstract <I, O> List<O> map(HoodieData<I> data, SerializableFunction<I, O> func);
 
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
 

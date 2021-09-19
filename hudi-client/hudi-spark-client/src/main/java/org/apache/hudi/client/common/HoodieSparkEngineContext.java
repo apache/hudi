@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.SparkHoodieRDDData;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.EngineProperty;
@@ -28,8 +29,10 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.HoodieData;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import scala.Tuple2;
@@ -67,6 +70,15 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   public static JavaSparkContext getSparkContext(HoodieEngineContext context) {
     return ((HoodieSparkEngineContext) context).getJavaSparkContext();
+  }
+
+  public static <U> JavaRDD<U> getRdd(HoodieData<U> hoodieData) {
+    return ((SparkHoodieRDDData<U>) hoodieData).get();
+  }
+
+  @Override
+  public <I, O> List<O> map(HoodieData<I> data, SerializableFunction<I, O> func) {
+    return getRdd(data).map(func::apply).collect();
   }
 
   @Override

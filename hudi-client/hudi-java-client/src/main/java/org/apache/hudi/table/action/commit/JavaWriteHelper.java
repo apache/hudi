@@ -18,20 +18,22 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.HoodieData;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends AbstractWriteHelper<T, List<HoodieRecord<T>>,
-    List<HoodieKey>, List<WriteStatus>, R> {
+public class JavaWriteHelper<T extends HoodieRecordPayload<T>> extends BaseWriteHelper<T> {
 
   private JavaWriteHelper() {
   }
@@ -45,24 +47,33 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends AbstractWr
   }
 
   @Override
-  public List<HoodieRecord<T>> deduplicateRecords(List<HoodieRecord<T>> records,
-                                                  HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> index,
-                                                  int parallelism) {
-    boolean isIndexingGlobal = index.isGlobal();
-    Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
-      HoodieKey hoodieKey = record.getKey();
-      // If index used is global, then records are expected to differ in their partitionPath
-      Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-      return Pair.of(key, record);
-    }).collect(Collectors.groupingBy(Pair::getLeft));
+  protected HoodieData<HoodieRecord<T>> tag(
+      HoodieData<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable table) {
+    // perform index loop up to get existing location of records
+    return HoodieListData.of((List<HoodieRecord<T>>)
+        table.getIndex().tagLocation(JavaCommitHelper.getList(dedupedRecords), context, table));
+  }
 
-    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
-      @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData());
-      // we cannot allow the user to change the key or partitionPath, since that will affect
-      // everything
-      // so pick it from one of the records.
-      return new HoodieRecord<T>(rec1.getKey(), reducedData);
-    }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
+  @Override
+  public HoodieData<HoodieRecord<T>> deduplicateRecords(
+      HoodieData<HoodieRecord<T>> records, HoodieIndex index, int parallelism) {
+    boolean isIndexingGlobal = index.isGlobal();
+    Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords =
+        JavaCommitHelper.getList(records).stream().map(record -> {
+          HoodieKey hoodieKey = record.getKey();
+          // If index used is global, then records are expected to differ in their partitionPath
+          Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
+          return Pair.of(key, record);
+        }).collect(Collectors.groupingBy(Pair::getLeft));
+
+    return HoodieListData.of(
+        keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
+          @SuppressWarnings("unchecked")
+          T reducedData = (T) rec1.getData().preCombine(rec2.getData());
+          // we cannot allow the user to change the key or partitionPath, since that will affect
+          // everything
+          // so pick it from one of the records.
+          return new HoodieRecord<T>(rec1.getKey(), reducedData);
+        }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList()));
   }
 }

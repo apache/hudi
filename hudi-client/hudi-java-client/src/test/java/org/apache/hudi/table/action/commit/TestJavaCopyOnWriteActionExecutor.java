@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -36,6 +37,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.io.HoodieCreateHandle;
@@ -289,11 +291,11 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     records.add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
-    BaseJavaCommitActionExecutor actionExecutor = new JavaInsertCommitActionExecutor(context, config, table,
-        firstCommitTime, records);
+    JavaCommitHelper commitHelper = new JavaCommitHelper(context, config, table,
+        firstCommitTime, WriteOperationType.INSERT);
     List<WriteStatus> writeStatuses = new ArrayList<>();
-    actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator())
-        .forEachRemaining(x -> writeStatuses.addAll((List<WriteStatus>)x));
+    commitHelper.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator())
+        .forEachRemaining(x -> writeStatuses.addAll((List<WriteStatus>) x));
 
     Map<String, String> allWriteStatusMergedMetadataMap =
         MetadataMergeWriteStatus.mergeMetadataForWriteStatuses(writeStatuses);
@@ -332,12 +334,11 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     // Insert new records
     final List<HoodieRecord> recs2 = records;
-    BaseJavaCommitActionExecutor actionExecutor = new JavaInsertPreppedCommitActionExecutor(context, config, table,
-        instantTime, recs2);
+    JavaCommitHelper commitHelper = new JavaCommitHelper(context, config, table, instantTime, WriteOperationType.INSERT_PREPPED);
 
     final List<WriteStatus> returnedStatuses = new ArrayList<>();
-    actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator())
-        .forEachRemaining(x -> returnedStatuses.addAll((List<WriteStatus>)x));
+    commitHelper.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator())
+        .forEachRemaining(x -> returnedStatuses.addAll((List<WriteStatus>) x));
 
     assertEquals(2, returnedStatuses.size());
     Map<String, Long> expectedPartitionNumRecords = new HashMap<>();
@@ -353,12 +354,12 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     // Insert new records
     final List<HoodieRecord> recs3 = records;
-    BaseJavaCommitActionExecutor newActionExecutor = new JavaUpsertPreppedCommitActionExecutor(context, config, table,
-        instantTime, recs3);
+    JavaCommitHelper upsertPrepperCommitHelper = new JavaCommitHelper(context, config, table,
+        instantTime, WriteOperationType.UPSERT_PREPPED);
 
     final List<WriteStatus> returnedStatuses1 = new ArrayList<>();
-    newActionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator())
-        .forEachRemaining(x -> returnedStatuses1.addAll((List<WriteStatus>)x));
+    upsertPrepperCommitHelper.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator())
+        .forEachRemaining(x -> returnedStatuses1.addAll((List<WriteStatus>) x));
 
     assertEquals(3, returnedStatuses1.size());
     expectedPartitionNumRecords.clear();
@@ -388,11 +389,11 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     }
 
     // Insert new records
-    BaseJavaCommitActionExecutor actionExecutor = new JavaUpsertCommitActionExecutor(context, config, table,
-        instantTime, records);
+    JavaCommitHelper commitHelper = new JavaCommitHelper(context, config, table,
+        instantTime, WriteOperationType.UPSERT);
 
     Arrays.asList(1).stream()
-        .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
+        .map(i -> commitHelper.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
         .map(Transformations::flatten).collect(Collectors.toList());
 
     // Check the updated file
@@ -421,12 +422,12 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
     final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
-    BaseJavaCommitActionExecutor actionExecutor = new JavaInsertCommitActionExecutor(context, config, table,
-        instantTime, inserts);
+    JavaCommitHelper commitHelper = new JavaCommitHelper(context, config, table,
+        instantTime, WriteOperationType.INSERT);
 
     final List<List<WriteStatus>> ws = new ArrayList<>();
-    actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator())
-        .forEachRemaining(x -> ws.add((List<WriteStatus>)x));
+    commitHelper.handleInsert(UUID.randomUUID().toString(), inserts.iterator())
+        .forEachRemaining(x -> ws.add((List<WriteStatus>) x));
 
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
@@ -438,13 +439,13 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     String partitionPath = writeStatus.getPartitionPath();
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
-    BaseJavaCommitActionExecutor newActionExecutor = new JavaUpsertCommitActionExecutor(context, config, reloadedTable,
-        instantTime, updates);
+    JavaCommitHelper upsertCommitHelper = new JavaCommitHelper(context, config, reloadedTable,
+        instantTime, WriteOperationType.UPSERT);
 
     taskContextSupplier.reset();
     final List<List<WriteStatus>> updateStatus = new ArrayList<>();
-    newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator())
-        .forEachRemaining(x -> updateStatus.add((List<WriteStatus>)x));
+    upsertCommitHelper.handleUpdate(partitionPath, fileId, updates.iterator())
+        .forEachRemaining(x -> updateStatus.add((List<WriteStatus>) x));
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
@@ -460,9 +461,11 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     // Insert new records
     final List<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert();
-    JavaBulkInsertCommitActionExecutor bulkInsertExecutor = new JavaBulkInsertCommitActionExecutor(
-        context, config, table, instantTime, inputRecords, Option.empty());
-    List<WriteStatus> returnedStatuses = (List<WriteStatus>)bulkInsertExecutor.execute().getWriteStatuses();
+    BulkInsertCommitActionExecutor bulkInsertExecutor = new BulkInsertCommitActionExecutor(
+        context, config, table, instantTime, HoodieListData.of(inputRecords), Option.empty(),
+        new JavaCommitHelper(context, config, table, instantTime, WriteOperationType.BULK_INSERT),
+        JavaBulkInsertHelper.newInstance());
+    List<WriteStatus> returnedStatuses = (List<WriteStatus>) bulkInsertExecutor.execute().getWriteStatuses();
     verifyStatusResult(returnedStatuses, generateExpectedPartitionNumRecords(inputRecords));
   }
 

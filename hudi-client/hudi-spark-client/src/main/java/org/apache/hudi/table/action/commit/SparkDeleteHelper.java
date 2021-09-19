@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.SparkHoodieRDDData;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieData;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -41,13 +43,12 @@ import java.time.Instant;
 import java.util.HashMap;
 
 /**
- * A spark implementation of {@link AbstractDeleteHelper}.
+ * A spark implementation of {@link BaseDeleteHelper}.
  *
  * @param <T>
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
-    AbstractDeleteHelper<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
+public class SparkDeleteHelper<T extends HoodieRecordPayload<T>> extends BaseDeleteHelper<T> {
   private SparkDeleteHelper() {
   }
 
@@ -56,60 +57,67 @@ public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
   }
 
   public static SparkDeleteHelper newInstance() {
-    return DeleteHelperHolder.SPARK_DELETE_HELPER;
+    return SparkDeleteHelper.DeleteHelperHolder.SPARK_DELETE_HELPER;
   }
 
   @Override
-  public JavaRDD<HoodieKey> deduplicateKeys(JavaRDD<HoodieKey> keys, HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, int parallelism) {
+  public SparkHoodieRDDData<HoodieKey> deduplicateKeys(
+      HoodieData<HoodieKey> keys,
+      HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+      int parallelism) {
+    JavaRDD<HoodieKey> keysRdd = ((SparkHoodieRDDData<HoodieKey>) keys).get();
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     if (isIndexingGlobal) {
-      return keys.keyBy(HoodieKey::getRecordKey)
+      return SparkHoodieRDDData.of(keysRdd.keyBy(HoodieKey::getRecordKey)
           .reduceByKey((key1, key2) -> key1, parallelism)
-          .values();
+          .values());
     } else {
-      return keys.distinct(parallelism);
+      return SparkHoodieRDDData.of(keysRdd.distinct(parallelism));
     }
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute(String instantTime,
-                                                           JavaRDD<HoodieKey> keys,
-                                                           HoodieEngineContext context,
-                                                           HoodieWriteConfig config,
-                                                           HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
-                                                           BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> deleteExecutor) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(
+      String instantTime, HoodieData<HoodieKey> keys, HoodieEngineContext context,
+      HoodieWriteConfig config, HoodieTable table,
+      BaseCommitHelper<T> commitHelper) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
 
     try {
-      HoodieWriteMetadata result = null;
-      JavaRDD<HoodieKey> dedupedKeys = keys;
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = null;
+      SparkHoodieRDDData<HoodieKey> dedupedKeys = (SparkHoodieRDDData<HoodieKey>) keys;
       final int parallelism = config.getDeleteShuffleParallelism();
       if (config.shouldCombineBeforeDelete()) {
         // De-dupe/merge if needed
         dedupedKeys = deduplicateKeys(keys, table, parallelism);
-      } else if (!keys.partitions().isEmpty()) {
-        dedupedKeys = keys.repartition(parallelism);
+      } else {
+        JavaRDD<HoodieKey> keysRdd = ((SparkHoodieRDDData<HoodieKey>) keys).get();
+        if (!keysRdd.partitions().isEmpty()) {
+          dedupedKeys = SparkHoodieRDDData.of(keysRdd.repartition(parallelism));
+        }
       }
 
       JavaRDD<HoodieRecord<T>> dedupedRecords =
-          dedupedKeys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
+          dedupedKeys.get().map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
-      JavaRDD<HoodieRecord<T>> taggedRecords =
-          table.getIndex().tagLocation(dedupedRecords, context, table);
+      HoodieData<HoodieRecord<T>> taggedRecords = SparkHoodieRDDData.of((JavaRDD<HoodieRecord<T>>)
+          table.getIndex().tagLocation(dedupedRecords, context, table));
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
       // filter out non existent keys/records
-      JavaRDD<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(HoodieRecord::isCurrentLocationKnown);
+      HoodieData<HoodieRecord<T>> taggedValidRecords = SparkHoodieRDDData.of(
+          ((SparkHoodieRDDData<HoodieRecord<T>>) taggedRecords).get().filter(HoodieRecord::isCurrentLocationKnown));
       if (!taggedValidRecords.isEmpty()) {
-        result = deleteExecutor.execute(taggedValidRecords);
+        result = commitHelper.execute(taggedValidRecords);
         result.setIndexLookupDuration(tagLocationDuration);
       } else {
         // if entire set of keys are non existent
-        deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
-        result = new HoodieWriteMetadata();
-        result.setWriteStatuses(jsc.emptyRDD());
-        deleteExecutor.commitOnAutoCommit(result);
+        commitHelper.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(
+            Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
+        result = new HoodieWriteMetadata<>();
+        result.setWriteStatuses(SparkHoodieRDDData.of(jsc.emptyRDD()));
+        commitHelper.commitOnAutoCommit(result);
       }
       return result;
     } catch (Throwable e) {

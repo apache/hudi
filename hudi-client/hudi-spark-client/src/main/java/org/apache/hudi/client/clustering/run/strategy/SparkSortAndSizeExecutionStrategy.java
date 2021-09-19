@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.hudi.SparkHoodieRDDData;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -29,6 +30,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
@@ -42,6 +44,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
+import static org.apache.hudi.table.action.commit.SparkCommitHelper.getRdd;
 
 /**
  * Clustering Strategy based on following.
@@ -69,16 +72,18 @@ public class SparkSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
     props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), Boolean.FALSE.toString());
     props.put(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(getWriteConfig().getClusteringTargetFileMaxBytes()));
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
-    return (JavaRDD<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
-        false, getPartitioner(strategyParams, schema), true, numOutputGroups, preserveHoodieMetadata);
+    return getRdd(SparkBulkInsertHelper.newInstance().bulkInsert(
+        SparkHoodieRDDData.of(inputRecords), instantTime, getHoodieTable(), newConfig,
+        false, HoodieSparkTable.convertBulkInsertPartitioner(getPartitioner(strategyParams, schema)),
+        true, numOutputGroups, preserveHoodieMetadata));
   }
 
   /**
    * Create BulkInsertPartitioner based on strategy params.
    */
-  protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+  protected Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
-      return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
+      return Option.of(new RDDCustomColumnsSortPartitioner<T>(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
           HoodieAvroUtils.addMetadataFields(schema)));
     } else {
       return Option.empty();

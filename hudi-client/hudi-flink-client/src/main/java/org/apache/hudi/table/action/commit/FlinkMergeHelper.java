@@ -45,7 +45,7 @@ import java.util.Iterator;
 
 import scala.collection.immutable.List;
 
-public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, List<HoodieRecord<T>>,
+public class FlinkMergeHelper<T extends HoodieRecordPayload> extends BaseMergeHelper<T, List<HoodieRecord<T>>,
     List<HoodieKey>, List<WriteStatus>> {
 
   private FlinkMergeHelper() {

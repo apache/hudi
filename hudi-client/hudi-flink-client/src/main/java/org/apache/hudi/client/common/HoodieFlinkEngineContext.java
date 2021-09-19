@@ -39,6 +39,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.HoodieData;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.util.FlinkClientUtil;
 
 import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWrapper;
@@ -68,8 +70,17 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
     this.runtimeContext = ((FlinkTaskContextSupplier) taskContextSupplier).getFlinkRuntimeContext();
   }
 
+  public static <U> List<U> getList(HoodieData<U> hoodieData) {
+    return ((HoodieListData<U>) hoodieData).get();
+  }
+
   public RuntimeContext getRuntimeContext() {
     return this.runtimeContext;
+  }
+
+  @Override
+  public <I, O> List<O> map(HoodieData<I> data, SerializableFunction<I, O> func) {
+    return getList(data).stream().map(throwingMapWrapper(func)).collect(Collectors.toList());
   }
 
   @Override

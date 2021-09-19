@@ -18,17 +18,20 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.SparkHoodieRDDData;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
@@ -37,17 +40,24 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaCommitActionExecutor;
+
+import org.apache.hudi.table.action.bootstrap.BootstrapCommitActionExecutor;
+import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitHelper;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
+import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaHelper;
+import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BulkInsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.DeleteCommitActionExecutor;
+import org.apache.hudi.table.action.commit.InsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.InsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
+import org.apache.hudi.table.action.commit.SparkDeleteHelper;
+import org.apache.hudi.table.action.commit.SparkWriteHelper;
+import org.apache.hudi.table.action.commit.UpsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.UpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.compact.SparkRunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.SparkScheduleCompactionActionExecutor;
-import org.apache.hudi.table.action.deltacommit.SparkBulkInsertDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.deltacommit.SparkBulkInsertPreppedDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.deltacommit.SparkDeleteDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.deltacommit.SparkInsertDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.deltacommit.SparkInsertPreppedDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.deltacommit.SparkUpsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.SparkDeltaCommitHelper;
 import org.apache.hudi.table.action.compact.BaseScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.restore.SparkMergeOnReadRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
@@ -74,7 +84,7 @@ import java.util.Map;
  * action
  * </p>
  */
-public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieSparkCopyOnWriteTable<T> {
+public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload<T>> extends HoodieSparkCopyOnWriteTable<T> {
 
   HoodieSparkMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -82,43 +92,64 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, JavaRDD<HoodieRecord<T>> records) {
-    return new SparkUpsertDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, records).execute();
+    return convertMetadata(new UpsertCommitActionExecutor<T>(
+        context, config, this, instantTime, SparkHoodieRDDData.of(records),
+        new SparkDeltaCommitHelper<>(context, config, this, instantTime, WriteOperationType.UPSERT),
+        SparkWriteHelper.newInstance()).execute());
   }
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> insert(HoodieEngineContext context, String instantTime, JavaRDD<HoodieRecord<T>> records) {
-    return new SparkInsertDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, records).execute();
+    return convertMetadata(new InsertCommitActionExecutor<T>(
+        context, config, this, instantTime, WriteOperationType.INSERT, SparkHoodieRDDData.of(records),
+        new SparkDeltaCommitHelper<>(context, config, this, instantTime, WriteOperationType.INSERT),
+        SparkWriteHelper.newInstance()).execute());
   }
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> bulkInsert(HoodieEngineContext context, String instantTime, JavaRDD<HoodieRecord<T>> records,
       Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
-    return new SparkBulkInsertDeltaCommitActionExecutor((HoodieSparkEngineContext) context, config,
-        this, instantTime, records, userDefinedBulkInsertPartitioner).execute();
+    return convertMetadata(new BulkInsertCommitActionExecutor<T>(
+        context, config, this, instantTime, SparkHoodieRDDData.of(records),
+        convertBulkInsertPartitioner(userDefinedBulkInsertPartitioner),
+        new SparkDeltaCommitHelper<>(context, config, this, instantTime, WriteOperationType.BULK_INSERT_PREPPED),
+        SparkBulkInsertHelper.newInstance()).execute());
   }
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> delete(HoodieEngineContext context, String instantTime, JavaRDD<HoodieKey> keys) {
-    return new SparkDeleteDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, keys).execute();
+    return convertMetadata(new DeleteCommitActionExecutor<T>(
+        context, config, this, instantTime, SparkHoodieRDDData.of(keys),
+        new SparkDeltaCommitHelper<>(context, config, this, instantTime, WriteOperationType.DELETE),
+        SparkDeleteHelper.newInstance()).execute());
   }
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
       JavaRDD<HoodieRecord<T>> preppedRecords) {
-    return new SparkUpsertPreppedDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
+    return convertMetadata(new UpsertPreppedCommitActionExecutor<>(
+        context, config, this, instantTime, SparkHoodieRDDData.of(preppedRecords),
+        new SparkDeltaCommitHelper<>(
+            context, config, this, instantTime, WriteOperationType.UPSERT_PREPPED)).execute());
   }
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> insertPrepped(HoodieEngineContext context, String instantTime,
       JavaRDD<HoodieRecord<T>> preppedRecords) {
-    return new SparkInsertPreppedDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
+    return convertMetadata(new InsertPreppedCommitActionExecutor<>(
+        context, config, this, instantTime, SparkHoodieRDDData.of(preppedRecords),
+        new SparkDeltaCommitHelper<>(
+            context, config, this, instantTime, WriteOperationType.INSERT_PREPPED)).execute());
   }
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> bulkInsertPrepped(HoodieEngineContext context, String instantTime,
       JavaRDD<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
-    return new SparkBulkInsertPreppedDeltaCommitActionExecutor((HoodieSparkEngineContext) context, config,
-        this, instantTime, preppedRecords, userDefinedBulkInsertPartitioner).execute();
+    return convertMetadata(new BulkInsertPreppedCommitActionExecutor<T>(
+        context, config, this, instantTime, SparkHoodieRDDData.of(preppedRecords),
+        convertBulkInsertPartitioner(userDefinedBulkInsertPartitioner),
+        new SparkDeltaCommitHelper<>(context, config, this, instantTime, WriteOperationType.BULK_INSERT_PREPPED),
+        SparkBulkInsertHelper.newInstance()).execute());
   }
 
   @Override
@@ -136,7 +167,14 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieBootstrapWriteMetadata<JavaRDD<WriteStatus>> bootstrap(HoodieEngineContext context, Option<Map<String, String>> extraMetadata) {
-    return new SparkBootstrapDeltaCommitActionExecutor((HoodieSparkEngineContext) context, config, this, extraMetadata).execute();
+    HoodieWriteConfig bootstrapConfig = new HoodieWriteConfig.Builder().withProps(config.getProps())
+        .withAutoCommit(true).withWriteStatusClass(BootstrapWriteStatus.class)
+        .withBulkInsertParallelism(config.getBootstrapParallelism())
+        .build();
+    return convertBootstrapMetadata(new BootstrapCommitActionExecutor<T>(
+        context, bootstrapConfig, this, extraMetadata,
+        new SparkBootstrapCommitHelper<>(context, bootstrapConfig, this, extraMetadata),
+        SparkBootstrapDeltaHelper.newInstance()).execute());
   }
 
   @Override

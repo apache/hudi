@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -40,8 +41,7 @@ import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.table.action.deltacommit.AbstractSparkDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.deltacommit.SparkDeleteDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.deltacommit.SparkDeltaCommitHelper;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
@@ -524,11 +524,11 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       JavaRDD<HoodieRecord> deleteRDD = jsc().parallelize(fewRecordsForDelete, 1);
 
       // initialize partitioner
-      AbstractSparkDeltaCommitActionExecutor actionExecutor = new SparkDeleteDeltaCommitActionExecutor(context(), cfg, hoodieTable,
-          newDeleteTime, deleteRDD);
-      actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
+      SparkDeltaCommitHelper deltaCommitHelper = new SparkDeltaCommitHelper(
+          context(), cfg, hoodieTable, newDeleteTime, WriteOperationType.DELETE);
+      deltaCommitHelper.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
       final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Arrays.asList(1)).map(x -> {
-        return actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator());
+        return deltaCommitHelper.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator());
       }).map(Transformations::flatten).collect();
 
       // Verify there are  errors because records are from multiple partitions (but handleUpdate is invoked for
@@ -536,7 +536,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       WriteStatus status = deleteStatus.get(0).get(0);
       assertTrue(status.hasErrors());
       long numRecordsInPartition = fewRecordsForDelete.stream().filter(u ->
-              u.getPartitionPath().equals(partitionPath)).count();
+          u.getPartitionPath().equals(partitionPath)).count();
       assertEquals(fewRecordsForDelete.size() - numRecordsInPartition, status.getTotalErrorRecords());
     }
   }

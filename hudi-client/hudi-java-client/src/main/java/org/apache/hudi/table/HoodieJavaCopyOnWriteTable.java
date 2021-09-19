@@ -32,24 +32,30 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.JavaCleanActionExecutor;
 import org.apache.hudi.table.action.clean.JavaScheduleCleanActionExecutor;
-import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaInsertCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaInsertOverwriteCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaInsertOverwriteTableCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaUpsertCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaUpsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BulkInsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.DeleteCommitActionExecutor;
+import org.apache.hudi.table.action.commit.InsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.InsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
+import org.apache.hudi.table.action.commit.JavaCommitHelper;
+import org.apache.hudi.table.action.commit.JavaDeleteHelper;
+import org.apache.hudi.table.action.commit.JavaInsertOverwriteCommitHelper;
+import org.apache.hudi.table.action.commit.JavaInsertOverwriteTableCommitHelper;
+import org.apache.hudi.table.action.commit.JavaWriteHelper;
+import org.apache.hudi.table.action.commit.UpsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.UpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.restore.JavaCopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
@@ -58,7 +64,7 @@ import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieJavaTable<T> {
+public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload<T>> extends HoodieJavaTable<T> {
   protected HoodieJavaCopyOnWriteTable(HoodieWriteConfig config,
                                        HoodieEngineContext context,
                                        HoodieTableMetaClient metaClient) {
@@ -69,16 +75,20 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   public HoodieWriteMetadata<List<WriteStatus>> upsert(HoodieEngineContext context,
                                                        String instantTime,
                                                        List<HoodieRecord<T>> records) {
-    return new JavaUpsertCommitActionExecutor<>(context, config,
-        this, instantTime, records).execute();
+    return convertMetadata(new UpsertCommitActionExecutor<T>(
+        context, config, this, instantTime, HoodieListData.of(records),
+        new JavaCommitHelper<>(context, config, this, instantTime, WriteOperationType.UPSERT),
+        JavaWriteHelper.newInstance()).execute());
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insert(HoodieEngineContext context,
                                                        String instantTime,
                                                        List<HoodieRecord<T>> records) {
-    return new JavaInsertCommitActionExecutor<>(context, config,
-        this, instantTime, records).execute();
+    return convertMetadata(new InsertCommitActionExecutor<T>(
+        context, config, this, instantTime, WriteOperationType.INSERT, HoodieListData.of(records),
+        new JavaCommitHelper<>(context, config, this, instantTime, WriteOperationType.INSERT),
+        JavaWriteHelper.newInstance()).execute());
   }
 
   @Override
@@ -86,15 +96,21 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                                            String instantTime,
                                                            List<HoodieRecord<T>> records,
                                                            Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
-    return new JavaBulkInsertCommitActionExecutor((HoodieJavaEngineContext) context, config,
-        this, instantTime, records, bulkInsertPartitioner).execute();
+    return convertMetadata(new BulkInsertCommitActionExecutor<T>(
+        context, config, this, instantTime, HoodieListData.of(records),
+        convertBulkInsertPartitioner(bulkInsertPartitioner),
+        new JavaCommitHelper<>(context, config, this, instantTime, WriteOperationType.BULK_INSERT),
+        JavaBulkInsertHelper.newInstance()).execute());
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> delete(HoodieEngineContext context,
                                                        String instantTime,
                                                        List<HoodieKey> keys) {
-    return new JavaDeleteCommitActionExecutor<>(context, config, this, instantTime, keys).execute();
+    return convertMetadata(new DeleteCommitActionExecutor<T>(
+        context, config, this, instantTime, HoodieListData.of(keys),
+        new JavaCommitHelper<>(context, config, this, instantTime, WriteOperationType.DELETE),
+        JavaDeleteHelper.newInstance()).execute());
   }
 
   @Override
@@ -106,17 +122,20 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(HoodieEngineContext context,
                                                               String instantTime,
                                                               List<HoodieRecord<T>> preppedRecords) {
-    return new JavaUpsertPreppedCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
-        this, instantTime, preppedRecords).execute();
-
+    return convertMetadata(new UpsertPreppedCommitActionExecutor<>(
+        context, config, this, instantTime, HoodieListData.of(preppedRecords),
+        new JavaCommitHelper<>(
+            context, config, this, instantTime, WriteOperationType.UPSERT_PREPPED)).execute());
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertPrepped(HoodieEngineContext context,
                                                               String instantTime,
                                                               List<HoodieRecord<T>> preppedRecords) {
-    return new JavaInsertPreppedCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
-        this, instantTime, preppedRecords).execute();
+    return convertMetadata(new InsertPreppedCommitActionExecutor<>(
+        context, config, this, instantTime, HoodieListData.of(preppedRecords),
+        new JavaCommitHelper<>(
+            context, config, this, instantTime, WriteOperationType.INSERT_PREPPED)).execute());
   }
 
   @Override
@@ -124,24 +143,35 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                                                   String instantTime,
                                                                   List<HoodieRecord<T>> preppedRecords,
                                                                   Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
-    return new JavaBulkInsertPreppedCommitActionExecutor((HoodieJavaEngineContext) context, config,
-        this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
+    return convertMetadata(new BulkInsertPreppedCommitActionExecutor<T>(
+        context, config, this, instantTime, HoodieListData.of(preppedRecords),
+        convertBulkInsertPartitioner(bulkInsertPartitioner),
+        new JavaCommitHelper<>(context, config, this, instantTime, WriteOperationType.BULK_INSERT_PREPPED),
+        JavaBulkInsertHelper.newInstance()).execute());
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(HoodieEngineContext context,
                                                                 String instantTime,
                                                                 List<HoodieRecord<T>> records) {
-    return new JavaInsertOverwriteCommitActionExecutor(
-        context, config, this, instantTime, records).execute();
+    return convertMetadata(new InsertCommitActionExecutor<T>(
+        context, config, this, instantTime, WriteOperationType.INSERT_OVERWRITE,
+        HoodieListData.of(records),
+        new JavaInsertOverwriteCommitHelper<>(
+            context, config, this, instantTime, WriteOperationType.INSERT_OVERWRITE),
+        JavaWriteHelper.newInstance()).execute());
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(HoodieEngineContext context,
                                                                      String instantTime,
                                                                      List<HoodieRecord<T>> records) {
-    return new JavaInsertOverwriteTableCommitActionExecutor(
-        context, config, this, instantTime, records).execute();
+    return convertMetadata(new InsertCommitActionExecutor<T>(
+        context, config, this, instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE,
+        HoodieListData.of(records),
+        new JavaInsertOverwriteTableCommitHelper<>(
+            context, config, this, instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE),
+        JavaWriteHelper.newInstance()).execute());
   }
 
   @Override

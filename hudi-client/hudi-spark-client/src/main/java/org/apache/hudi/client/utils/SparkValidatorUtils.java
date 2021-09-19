@@ -30,13 +30,13 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+
 import scala.collection.JavaConverters;
 
 import java.util.Arrays;
@@ -51,11 +51,11 @@ import java.util.stream.Stream;
  * Spark validator utils to verify and run any precommit validators configured.
  */
 public class SparkValidatorUtils {
-  private static final Logger LOG = LogManager.getLogger(BaseSparkCommitActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(SparkValidatorUtils.class);
 
   /**
    * Check configured pre-commit validators and run them. Note that this only works for COW tables
-   * 
+   * <p>
    * Throw error if there are validation failures.
    */
   public static void runValidators(HoodieWriteConfig config,
@@ -75,7 +75,7 @@ public class SparkValidatorUtils {
       // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
       table.getMetaClient().reloadActiveTimeline();
       Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table).cache();
-      Dataset<Row> afterState  = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime).cache();
+      Dataset<Row> afterState = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime).cache();
 
       Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
           .map(validatorClass -> {
@@ -141,8 +141,8 @@ public class SparkValidatorUtils {
    * Get reads from paritions modified including any inflight commits.
    * Note that this only works for COW tables
    */
-  public static Dataset<Row> getRecordsFromPendingCommits(SQLContext sqlContext, 
-                                                          Set<String> partitionsAffected, 
+  public static Dataset<Row> getRecordsFromPendingCommits(SQLContext sqlContext,
+                                                          Set<String> partitionsAffected,
                                                           HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata,
                                                           HoodieTable table,
                                                           String instantTime) {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.SparkHoodieRDDData;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -34,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieData;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.io.HoodieCreateHandle;
@@ -73,6 +76,7 @@ import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateExpectedPartitionNumRecords;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateTestRecordsForBulkInsert;
+import static org.apache.hudi.table.action.commit.SparkCommitHelper.getRdd;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -287,8 +291,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     records.add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
-    BaseSparkCommitActionExecutor actionExecutor = new SparkInsertCommitActionExecutor(context, config, table,
-        firstCommitTime, jsc.parallelize(records));
+    SparkCommitHelper actionExecutor = new SparkCommitHelper<>(context, config, table,
+        firstCommitTime, WriteOperationType.INSERT);
     List<WriteStatus> writeStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator());
     }).flatMap(Transformations::flattenAsIterator).collect();
@@ -330,8 +334,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     // Insert new records
     final List<HoodieRecord> recs2 = records;
-    BaseSparkCommitActionExecutor actionExecutor = new SparkInsertPreppedCommitActionExecutor(context, config, table,
-        instantTime, jsc.parallelize(recs2));
+    SparkCommitHelper actionExecutor = new SparkCommitHelper(context, config, table,
+        instantTime, WriteOperationType.INSERT_PREPPED);
     List<WriteStatus> returnedStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator());
     }).flatMap(Transformations::flattenAsIterator).collect();
@@ -351,10 +355,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     // Insert new records
     final List<HoodieRecord> recs3 = records;
-    BaseSparkCommitActionExecutor newActionExecutor = new SparkUpsertPreppedCommitActionExecutor(context, config, table,
-        instantTime, jsc.parallelize(recs3));
+    SparkCommitHelper sparkCommitHelper = new SparkCommitHelper(context, config, table,
+        instantTime, WriteOperationType.UPSERT_PREPPED);
     returnedStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return newActionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator());
+      return sparkCommitHelper.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator());
     }).flatMap(Transformations::flattenAsIterator).collect();
 
     assertEquals(3, returnedStatuses.size());
@@ -384,10 +388,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     }
 
     // Insert new records
-    BaseSparkCommitActionExecutor actionExecutor = new SparkUpsertCommitActionExecutor(context, config, table,
-        instantTime, jsc.parallelize(records));
+    SparkCommitHelper sparkCommitHelper = new SparkCommitHelper(context, config, table,
+        instantTime, WriteOperationType.UPSERT);
     jsc.parallelize(Arrays.asList(1))
-        .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
+        .map(i -> sparkCommitHelper.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
         .map(Transformations::flatten).collect();
 
     // Check the updated file
@@ -405,15 +409,15 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     Schema schema = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString())
-            .withStorageConfig(HoodieStorageConfig.newBuilder()
-                .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build()).build();
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build()).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
     final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
-    BaseSparkCommitActionExecutor actionExecutor = new SparkInsertCommitActionExecutor(context, config, table,
-        instantTime, jsc.parallelize(inserts));
+    SparkCommitHelper actionExecutor = new SparkCommitHelper<>(context, config, table,
+        instantTime, WriteOperationType.INSERT);
     final List<List<WriteStatus>> ws = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator());
     }).map(Transformations::flatten).collect();
@@ -426,10 +430,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     String partitionPath = writeStatus.getPartitionPath();
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
     table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, HoodieTableMetaClient.reload(metaClient));
-    BaseSparkCommitActionExecutor newActionExecutor = new SparkUpsertCommitActionExecutor(context, config, table,
-        instantTime, jsc.parallelize(updates));
+    SparkCommitHelper sparkCommitHelper = new SparkCommitHelper(context, config, table,
+        instantTime, WriteOperationType.UPSERT);
     final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator());
+      return sparkCommitHelper.handleUpdate(partitionPath, fileId, updates.iterator());
     }).map(Transformations::flatten).collect();
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
@@ -446,9 +450,11 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     // Insert new records
     final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc);
-    SparkBulkInsertCommitActionExecutor bulkInsertExecutor = new SparkBulkInsertCommitActionExecutor(
-        context, config, table, instantTime, inputRecords, Option.empty());
-    List<WriteStatus> returnedStatuses = ((JavaRDD<WriteStatus>)bulkInsertExecutor.execute().getWriteStatuses()).collect();
+    BulkInsertCommitActionExecutor bulkInsertExecutor = new BulkInsertCommitActionExecutor(
+        context, config, table, instantTime, SparkHoodieRDDData.of(inputRecords), Option.empty(),
+        new SparkCommitHelper(context, config, table, instantTime, WriteOperationType.BULK_INSERT),
+        SparkBulkInsertHelper.newInstance());
+    List<WriteStatus> returnedStatuses = (getRdd((HoodieData<WriteStatus>) bulkInsertExecutor.execute().getWriteStatuses())).collect();
     verifyStatusResult(returnedStatuses, generateExpectedPartitionNumRecords(inputRecords));
   }
 

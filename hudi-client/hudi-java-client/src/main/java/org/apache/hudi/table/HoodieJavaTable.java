@@ -28,11 +28,16 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieData;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndex;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
+
+import static org.apache.hudi.table.action.commit.JavaCommitHelper.getList;
 
 public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
@@ -59,6 +64,38 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
+  }
+
+  public static <T extends HoodieRecordPayload> Option<BulkInsertPartitioner<HoodieData<HoodieRecord<T>>>> convertBulkInsertPartitioner(
+      Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
+    Option<BulkInsertPartitioner<HoodieData<HoodieRecord<T>>>> partitionerOption = Option.empty();
+    if (userDefinedBulkInsertPartitioner.isPresent()) {
+      partitionerOption = Option.of(
+          convertBulkInsertPartitioner(userDefinedBulkInsertPartitioner.get()));
+    }
+    return partitionerOption;
+  }
+
+  public static <T extends HoodieRecordPayload> BulkInsertPartitioner<HoodieData<HoodieRecord<T>>> convertBulkInsertPartitioner(
+      BulkInsertPartitioner<List<HoodieRecord<T>>> bulkInsertPartitioner) {
+    return new BulkInsertPartitioner<HoodieData<HoodieRecord<T>>>() {
+      @Override
+      public HoodieData<HoodieRecord<T>> repartitionRecords(
+          HoodieData<HoodieRecord<T>> records, int outputSparkPartitions) {
+        return HoodieListData.of(bulkInsertPartitioner.repartitionRecords(
+            getList(records), outputSparkPartitions));
+      }
+
+      @Override
+      public boolean arePartitionRecordsSorted() {
+        return bulkInsertPartitioner.arePartitionRecordsSorted();
+      }
+    };
+  }
+
+  public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
+      HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
+    return metadata.clone(getList(metadata.getWriteStatuses()));
   }
 
   @Override

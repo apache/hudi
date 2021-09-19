@@ -25,17 +25,21 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.delta.FlinkUpsertDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.commit.delta.FlinkUpsertPreppedDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.FlinkWriteHelper;
+import org.apache.hudi.table.action.commit.UpsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.UpsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.delta.FlinkDeltaCommitHelper;
 import org.apache.hudi.table.action.compact.BaseScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.FlinkScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
@@ -44,7 +48,7 @@ import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
+public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload<T>>
     extends HoodieFlinkCopyOnWriteTable<T> {
 
   HoodieFlinkMergeOnReadTable(
@@ -63,7 +67,11 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
     ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
         "MOR write handle should always be a FlinkAppendHandle");
     FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
-    return new FlinkUpsertDeltaCommitActionExecutor<>(context, appendHandle, config, this, instantTime, hoodieRecords).execute();
+    return convertMetadata(new UpsertCommitActionExecutor<T>(
+        context, config, this, instantTime, HoodieListData.of(hoodieRecords),
+        new FlinkDeltaCommitHelper<>(
+            context, appendHandle, config, this, instantTime, WriteOperationType.UPSERT),
+        FlinkWriteHelper.newInstance()).execute());
   }
 
   @Override
@@ -75,7 +83,10 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
     ValidationUtils.checkArgument(writeHandle instanceof FlinkAppendHandle,
         "MOR write handle should always be a FlinkAppendHandle");
     FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
-    return new FlinkUpsertPreppedDeltaCommitActionExecutor<>(context, appendHandle, config, this, instantTime, preppedRecords).execute();
+    return convertMetadata(new UpsertPreppedCommitActionExecutor<>(
+        context, config, this, instantTime, HoodieListData.of(preppedRecords),
+        new FlinkDeltaCommitHelper<>(
+            context, appendHandle, config, this, instantTime, WriteOperationType.UPSERT_PREPPED)).execute());
   }
 
   @Override
@@ -86,7 +97,11 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       List<HoodieRecord<T>> hoodieRecords) {
     if (writeHandle instanceof FlinkAppendHandle) {
       FlinkAppendHandle<?, ?, ?, ?> appendHandle = (FlinkAppendHandle<?, ?, ?, ?>) writeHandle;
-      return new FlinkUpsertDeltaCommitActionExecutor<>(context, appendHandle, config, this, instantTime, hoodieRecords).execute();
+      return convertMetadata(new UpsertCommitActionExecutor<T>(
+          context, config, this, instantTime, HoodieListData.of(hoodieRecords),
+          new FlinkDeltaCommitHelper<>(
+              context, appendHandle, config, this, instantTime, WriteOperationType.UPSERT),
+          FlinkWriteHelper.newInstance()).execute());
     } else {
       return super.insert(context, writeHandle, instantTime, hoodieRecords);
     }

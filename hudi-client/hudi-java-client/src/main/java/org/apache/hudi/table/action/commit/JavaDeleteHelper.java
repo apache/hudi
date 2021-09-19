@@ -23,8 +23,11 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieData;
+import org.apache.hudi.data.HoodieListData;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -40,9 +43,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@SuppressWarnings("checkstyle:LineLength")
-public class JavaDeleteHelper<R> extends
-    AbstractDeleteHelper<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> {
+public class JavaDeleteHelper<T extends HoodieRecordPayload<T>> extends BaseDeleteHelper<T> {
 
   private JavaDeleteHelper() {
   }
@@ -56,37 +57,38 @@ public class JavaDeleteHelper<R> extends
   }
 
   @Override
-  public List<HoodieKey> deduplicateKeys(List<HoodieKey> keys,
-                                         HoodieTable<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>> table,
-                                         int parallelism) {
+  public HoodieData<HoodieKey> deduplicateKeys(
+      HoodieData<HoodieKey> keys,
+      HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
+      int parallelism) {
+    List<HoodieKey> keysList = ((HoodieListData<HoodieKey>) keys).get();
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     if (isIndexingGlobal) {
-      HashSet<String> recordKeys = keys.stream().map(HoodieKey::getRecordKey).collect(Collectors.toCollection(HashSet::new));
+      HashSet<String> recordKeys = keysList.stream()
+          .map(HoodieKey::getRecordKey).collect(Collectors.toCollection(HashSet::new));
       List<HoodieKey> deduplicatedKeys = new LinkedList<>();
-      keys.forEach(x -> {
+      keysList.forEach(x -> {
         if (recordKeys.contains(x.getRecordKey())) {
           deduplicatedKeys.add(x);
         }
       });
-      return deduplicatedKeys;
+      return HoodieListData.of(deduplicatedKeys);
     } else {
-      HashSet<HoodieKey> set = new HashSet<>(keys);
-      keys.clear();
-      keys.addAll(set);
+      HashSet<HoodieKey> set = new HashSet<>(keysList);
+      keysList.clear();
+      keysList.addAll(set);
       return keys;
     }
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute(String instantTime,
-                                                        List<HoodieKey> keys,
-                                                        HoodieEngineContext context,
-                                                        HoodieWriteConfig config,
-                                                        HoodieTable<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>> table,
-                                                        BaseCommitActionExecutor<EmptyHoodieRecordPayload, List<HoodieRecord<EmptyHoodieRecordPayload>>, List<HoodieKey>, List<WriteStatus>, R> deleteExecutor) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(
+      String instantTime, HoodieData<HoodieKey> keys, HoodieEngineContext context,
+      HoodieWriteConfig config, HoodieTable table,
+      BaseCommitHelper<T> commitHelper) {
     try {
-      HoodieWriteMetadata<List<WriteStatus>> result = null;
-      List<HoodieKey> dedupedKeys = keys;
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = null;
+      HoodieData<HoodieKey> dedupedKeys = keys;
       final int parallelism = config.getDeleteShuffleParallelism();
       if (config.shouldCombineBeforeDelete()) {
         // De-dupe/merge if needed
@@ -94,24 +96,28 @@ public class JavaDeleteHelper<R> extends
       }
 
       List<HoodieRecord<EmptyHoodieRecordPayload>> dedupedRecords =
-          dedupedKeys.stream().map(key -> new HoodieRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
+          JavaCommitHelper.getList(dedupedKeys).stream().map(key ->
+              new HoodieRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
       Instant beginTag = Instant.now();
       // perform index look up to get existing location of records
-      List<HoodieRecord<EmptyHoodieRecordPayload>> taggedRecords =
-          table.getIndex().tagLocation(dedupedRecords, context, table);
+      HoodieData<HoodieRecord<T>> taggedRecords = (HoodieData<HoodieRecord<T>>)
+          table.getIndex().tagLocation(HoodieListData.of(dedupedRecords), context, table);
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
       // filter out non existent keys/records
-      List<HoodieRecord<EmptyHoodieRecordPayload>> taggedValidRecords = taggedRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).collect(Collectors.toList());
+      List<HoodieRecord<T>> taggedValidRecords =
+          JavaCommitHelper.getList(taggedRecords).stream()
+              .filter(HoodieRecord::isCurrentLocationKnown).collect(Collectors.toList());
       if (!taggedValidRecords.isEmpty()) {
-        result = deleteExecutor.execute(taggedValidRecords);
+        result = commitHelper.execute(HoodieListData.of(taggedValidRecords));
         result.setIndexLookupDuration(tagLocationDuration);
       } else {
         // if entire set of keys are non existent
-        deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
+        commitHelper.saveWorkloadProfileMetadataToInflight(
+            new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
-        result.setWriteStatuses(Collections.EMPTY_LIST);
-        deleteExecutor.commitOnAutoCommit(result);
+        result.setWriteStatuses(HoodieListData.of(Collections.EMPTY_LIST));
+        commitHelper.commitOnAutoCommit(result);
       }
       return result;
     } catch (Throwable e) {

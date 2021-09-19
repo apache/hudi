@@ -30,6 +30,8 @@ import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.HoodieData;
+import org.apache.hudi.data.HoodieListData;
 
 import java.util.List;
 import java.util.Map;
@@ -55,6 +57,15 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
 
   public HoodieJavaEngineContext(Configuration conf, TaskContextSupplier taskContextSupplier) {
     super(new SerializableConfiguration(conf), taskContextSupplier);
+  }
+
+  public static <U> List<U> getList(HoodieData<U> hoodieData) {
+    return ((HoodieListData<U>) hoodieData).get();
+  }
+
+  @Override
+  public <I, O> List<O> map(HoodieData<I> data, SerializableFunction<I, O> func) {
+    return getList(data).stream().map(throwingMapWrapper(func)).collect(Collectors.toList());
   }
 
   @Override
