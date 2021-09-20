@@ -28,7 +28,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -86,7 +85,7 @@ public class FileIndex {
     }
     List<Map<String, String>> partitions = new ArrayList<>();
     for (String partitionPath : partitionPaths) {
-      String[] paths = partitionPath.split(File.separator);
+      String[] paths = partitionPath.split(Path.SEPARATOR);
       Map<String, String> partitionMapping = new LinkedHashMap<>();
       if (hivePartition) {
         Arrays.stream(paths).forEach(p -> {

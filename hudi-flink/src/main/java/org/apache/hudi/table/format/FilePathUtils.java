@@ -28,7 +28,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -97,7 +96,7 @@ public class FilePathUtils {
     int i = 0;
     for (Map.Entry<String, String> e : partitionKVs.entrySet()) {
       if (i > 0) {
-        suffixBuf.append(File.separator);
+        suffixBuf.append(Path.SEPARATOR);
       }
       if (hivePartition) {
         suffixBuf.append(escapePathName(e.getKey()));
@@ -107,7 +106,7 @@ public class FilePathUtils {
       i++;
     }
     if (sepSuffix) {
-      suffixBuf.append(File.separator);
+      suffixBuf.append(Path.SEPARATOR);
     }
     return suffixBuf.toString();
   }

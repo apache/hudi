@@ -49,7 +49,6 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -205,7 +204,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Heartbeat folder path.
    */
   public static String getHeartbeatFolderPath(String basePath) {
-    return String.format("%s%s%s", basePath, File.separator, HEARTBEAT_FOLDER_NAME);
+    return String.format("%s%s%s", basePath, Path.SEPARATOR, HEARTBEAT_FOLDER_NAME);
   }
 
   /**
