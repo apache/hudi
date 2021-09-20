@@ -163,6 +163,14 @@ public class KafkaConnectUtils {
     return StringUtils.toHexString(digest).toUpperCase();
   }
 
+  /**
+   * Build Protobuf message containing the Hudi {@link WriteStatus}.
+   *
+   * @param writeStatuses The list of Hudi {@link WriteStatus}.
+   * @return the protobuf message {@link org.apache.hudi.connect.ControlMessage.ConnectWriteStatus}
+   * that wraps the Hudi {@link WriteStatus}.
+   * @throws IOException thrown if the conversion failed.
+   */
   public static ControlMessage.ConnectWriteStatus buildWriteStatuses(List<WriteStatus> writeStatuses) throws IOException {
     return ControlMessage.ConnectWriteStatus.newBuilder()
         .setSerializedWriteStatus(
@@ -171,6 +179,13 @@ public class KafkaConnectUtils {
         .build();
   }
 
+  /**
+   * Unwrap the Hudi {@link WriteStatus} from the received Protobuf message.
+   *
+   * @param participantInfo The {@link ControlMessage.ParticipantInfo} that contains the
+   *                        underlying {@link WriteStatus} sent by the participants.
+   * @return the list of {@link WriteStatus} returned by Hudi on a write transaction.
+   */
   public static List<WriteStatus> getWriteStatuses(ControlMessage.ParticipantInfo participantInfo) {
     ControlMessage.ConnectWriteStatus connectWriteStatus = participantInfo.getWriteStatus();
     return SerializationUtils.deserialize(connectWriteStatus.getSerializedWriteStatus().toByteArray());
