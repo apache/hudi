@@ -23,9 +23,9 @@ import org.apache.log4j.Level
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.scalactic.source
-import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.scalatest.{BeforeAndAfterAll, Tag}
 
-class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
+class TestHoodieSqlBase extends HoodieSparkFunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(Level.WARN)
 
   private lazy val sparkWareHouse = {
