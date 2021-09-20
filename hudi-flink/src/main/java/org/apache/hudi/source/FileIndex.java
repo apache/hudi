@@ -28,6 +28,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
+import javax.annotation.Nullable;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * A file index which supports listing files efficiently through metadata table.
@@ -137,10 +140,28 @@ public class FileIndex {
   }
 
   // -------------------------------------------------------------------------
+  //  Getter/Setter
+  // -------------------------------------------------------------------------
+
+  /**
+   * Sets up explicit partition paths for pruning.
+   */
+  public void setPartitionPaths(@Nullable Set<String> partitionPaths) {
+    if (partitionPaths != null) {
+      this.partitionPaths = new ArrayList<>(partitionPaths);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private List<String> getOrBuildPartitionPaths() {
+  /**
+   * Returns all the relative partition paths.
+   *
+   * <p>The partition paths are cached once invoked.
+   */
+  public List<String> getOrBuildPartitionPaths() {
     if (this.partitionPaths != null) {
       return this.partitionPaths;
     }
