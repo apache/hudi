@@ -19,17 +19,12 @@
 package org.apache.hudi.connect.kafka;
 
 import org.apache.hudi.connect.ControlMessage;
-import org.apache.hudi.connect.transaction.ControlEvent;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -76,24 +71,5 @@ public class KafkaControlProducer {
     ProducerRecord<String, byte[]> record
         = new ProducerRecord<>(controlTopicName, message.getType().name(), message.toByteArray());
     producer.send(record);
-  }
-
-  public static class KafkaJsonSerializer implements Serializer<ControlEvent> {
-
-    private static final Logger LOG = LogManager.getLogger(KafkaJsonSerializer.class);
-
-    @Override
-    public byte[] serialize(String topic, ControlEvent data) {
-      byte[] retVal = null;
-      ObjectMapper objectMapper = new ObjectMapper();
-      objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-
-      try {
-        retVal = objectMapper.writeValueAsBytes(data);
-      } catch (Exception e) {
-        LOG.error("Fatal error during serialization of Kafka Control Message ", e);
-      }
-      return retVal;
-    }
   }
 }
