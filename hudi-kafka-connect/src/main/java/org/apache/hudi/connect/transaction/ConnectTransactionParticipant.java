@@ -19,7 +19,9 @@
 package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
+import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.connect.writers.ConnectWriterProvider;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.connect.writers.KafkaConnectWriterProvider;
@@ -46,7 +48,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
   private static final Logger LOG = LogManager.getLogger(ConnectTransactionParticipant.class);
 
   private final LinkedList<SinkRecord> buffer;
-  private final BlockingQueue<ControlEvent> controlEvents;
+  private final BlockingQueue<ControlMessage> controlEvents;
   private final TopicPartition partition;
   private final SinkTaskContext context;
   private final KafkaControlAgent kafkaControlAgent;
@@ -95,7 +97,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
   }
 
   @Override
-  public void processControlEvent(ControlEvent message) {
+  public void processControlEvent(ControlMessage message) {
     controlEvents.add(message);
   }
 
@@ -112,8 +114,8 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
   @Override
   public void processRecords() throws IOException {
     while (!controlEvents.isEmpty()) {
-      ControlEvent message = controlEvents.poll();
-      switch (message.getMsgType()) {
+      ControlMessage message = controlEvents.poll();
+      switch (message.getType()) {
         case START_COMMIT:
           handleStartCommit(message);
           break;
@@ -127,14 +129,14 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
           // ignore write status since its only processed by leader
           break;
         default:
-          throw new IllegalStateException("HudiTransactionParticipant received incorrect state " + message.getMsgType());
+          throw new IllegalStateException("HudiTransactionParticipant received incorrect state " + message.getType().name());
       }
     }
 
     writeRecords();
   }
 
-  private void handleStartCommit(ControlEvent message) {
+  private void handleStartCommit(ControlMessage message) {
     // If there is an existing/ongoing transaction locally
     // but it failed globally since we received another START_COMMIT instead of an END_COMMIT or ACK_COMMIT,
     // so close it and start new transaction
@@ -152,7 +154,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
     }
   }
 
-  private void handleEndCommit(ControlEvent message) throws IOException {
+  private void handleEndCommit(ControlMessage message) throws IOException {
     if (ongoingTransactionInfo == null) {
       LOG.warn(String.format("END_COMMIT %s is received while we were NOT in active transaction", message.getCommitTime()));
       return;
@@ -172,13 +174,22 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
     try {
       //sendWriterStatus
       List<WriteStatus> writeStatuses = ongoingTransactionInfo.getWriter().close();
-      ControlEvent writeStatusEvent = new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
-          ControlEvent.SenderType.PARTICIPANT, ongoingTransactionInfo.getCommitTime(), partition)
-          .setParticipantInfo(new ControlEvent.ParticipantInfo(
-              writeStatuses,
-              ongoingTransactionInfo.getLastWrittenKafkaOffset(),
-              ControlEvent.OutcomeType.WRITE_SUCCESS))
-          .build();
+
+      ControlMessage writeStatusEvent = ControlMessage.newBuilder()
+          .setType(ControlMessage.EventType.WRITE_STATUS)
+          .setTopicName(partition.topic())
+          .setSenderType(ControlMessage.EntityType.PARTICIPANT)
+          .setSenderPartition(partition.partition())
+          .setReceiverType(ControlMessage.EntityType.COORDINATOR)
+          .setReceiverPartition(ConnectTransactionCoordinator.COORDINATOR_KAFKA_PARTITION)
+          .setCommitTime(ongoingTransactionInfo.getCommitTime())
+          .setParticipantInfo(
+              ControlMessage.ParticipantInfo.newBuilder()
+                  .setWriteStatus(KafkaConnectUtils.buildWriteStatuses(writeStatuses))
+                  .setKafkaOffset(ongoingTransactionInfo.getLastWrittenKafkaOffset())
+                  .build()
+          ).build();
+
       kafkaControlAgent.publishMessage(writeStatusEvent);
     } catch (Exception exception) {
       LOG.error(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
@@ -186,7 +197,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
     }
   }
 
-  private void handleAckCommit(ControlEvent message) {
+  private void handleAckCommit(ControlMessage message) {
     // Update lastKafkCommitedOffset locally.
     if (ongoingTransactionInfo != null && committedKafkaOffset < ongoingTransactionInfo.getLastWrittenKafkaOffset()) {
       committedKafkaOffset = ongoingTransactionInfo.getLastWrittenKafkaOffset();
@@ -230,9 +241,9 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
     }
   }
 
-  private void syncKafkaOffsetWithLeader(ControlEvent message) {
-    if (message.getCoordinatorInfo() != null) {
-      Long coordinatorCommittedKafkaOffset = message.getCoordinatorInfo().getGlobalKafkaCommitOffsets().get(partition.partition());
+  private void syncKafkaOffsetWithLeader(ControlMessage message) {
+    if (message.getCoordinatorInfo().getGlobalKafkaCommitOffsetsMap().containsKey(partition.partition())) {
+      Long coordinatorCommittedKafkaOffset = message.getCoordinatorInfo().getGlobalKafkaCommitOffsetsMap().get(partition.partition());
       // Recover kafka committed offsets, treating the commit offset from the coordinator
       // as the source of truth
       if (coordinatorCommittedKafkaOffset != null && coordinatorCommittedKafkaOffset >= 0) {

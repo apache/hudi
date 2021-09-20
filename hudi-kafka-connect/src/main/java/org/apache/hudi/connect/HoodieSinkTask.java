@@ -51,7 +51,6 @@ public class HoodieSinkTask extends SinkTask {
 
   public static final String TASK_ID_CONFIG_NAME = "task.id";
   private static final Logger LOG = LogManager.getLogger(HoodieSinkTask.class);
-  private static final int COORDINATOR_KAFKA_PARTITION = 0;
 
   private final Map<TopicPartition, TransactionCoordinator> transactionCoordinators;
   private final Map<TopicPartition, TransactionParticipant> transactionParticipants;
@@ -164,7 +163,7 @@ public class HoodieSinkTask extends SinkTask {
     // make sure we apply the WAL, and only reuse the temp file if the starting offset is still
     // valid. For now, we prefer the simpler solution that may result in a bit of wasted effort.
     for (TopicPartition partition : partitions) {
-      if (partition.partition() == COORDINATOR_KAFKA_PARTITION) {
+      if (partition.partition() == ConnectTransactionCoordinator.COORDINATOR_KAFKA_PARTITION) {
         if (transactionCoordinators.containsKey(partition)) {
           transactionCoordinators.get(partition).stop();
           transactionCoordinators.remove(partition);
@@ -188,7 +187,7 @@ public class HoodieSinkTask extends SinkTask {
     for (TopicPartition partition : partitions) {
       try {
         // If the partition is 0, instantiate the Leader
-        if (partition.partition() == COORDINATOR_KAFKA_PARTITION) {
+        if (partition.partition() == ConnectTransactionCoordinator.COORDINATOR_KAFKA_PARTITION) {
           ConnectTransactionCoordinator coordinator = new ConnectTransactionCoordinator(
               connectConfigs,
               partition,
@@ -220,5 +219,6 @@ public class HoodieSinkTask extends SinkTask {
     transactionParticipants.clear();
     transactionCoordinators.forEach((topic, transactionCoordinator) -> transactionCoordinator.stop());
     transactionCoordinators.clear();
+    controlKafkaClient.stop();
   }
 }

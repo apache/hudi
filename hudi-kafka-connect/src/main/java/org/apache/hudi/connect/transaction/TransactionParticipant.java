@@ -18,6 +18,8 @@
 
 package org.apache.hudi.connect.transaction;
 
+import org.apache.hudi.connect.ControlMessage;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
@@ -41,7 +43,7 @@ public interface TransactionParticipant {
 
   TopicPartition getPartition();
 
-  void processControlEvent(ControlEvent message);
+  void processControlEvent(ControlMessage message);
 
   long getLastKafkaCommittedOffset();
 }
