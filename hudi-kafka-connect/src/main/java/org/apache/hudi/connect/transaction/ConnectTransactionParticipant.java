@@ -26,6 +26,7 @@ import org.apache.hudi.connect.writers.ConnectWriterProvider;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.connect.writers.KafkaConnectWriterProvider;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -112,7 +113,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
   }
 
   @Override
-  public void processRecords() throws IOException {
+  public void processRecords() {
     while (!controlEvents.isEmpty()) {
       ControlMessage message = controlEvents.poll();
       switch (message.getType()) {
@@ -154,7 +155,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
     }
   }
 
-  private void handleEndCommit(ControlMessage message) throws IOException {
+  private void handleEndCommit(ControlMessage message) {
     if (ongoingTransactionInfo == null) {
       LOG.warn(String.format("END_COMMIT %s is received while we were NOT in active transaction", message.getCommitTime()));
       return;
@@ -193,7 +194,8 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       kafkaControlAgent.publishMessage(writeStatusEvent);
     } catch (Exception exception) {
       LOG.error(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
-      throw new IOException(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()), exception);
+      throw new HoodieIOException(String.format("Error writing records and ending commit %s for partition %s", message.getCommitTime(), partition.partition()),
+          new IOException(exception));
     }
   }
 
@@ -235,7 +237,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       try {
         ongoingTransactionInfo.getWriter().close();
         ongoingTransactionInfo = null;
-      } catch (IOException exception) {
+      } catch (HoodieIOException exception) {
         LOG.warn("Error received while trying to cleanup existing transaction", exception);
       }
     }

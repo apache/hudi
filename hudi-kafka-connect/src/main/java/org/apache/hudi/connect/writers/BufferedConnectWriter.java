@@ -92,7 +92,7 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
   }
 
   @Override
-  public List<WriteStatus> flushRecords() throws IOException {
+  public List<WriteStatus> flushRecords() {
     try {
       LOG.info("Number of entries in MemoryBasedMap => "
           + bufferedRecords.getInMemoryMapNumEntries()
@@ -122,7 +122,7 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
       LOG.info("Flushed hudi records and got writeStatuses: " + writeStatuses);
       return writeStatuses;
     } catch (Exception e) {
-      throw new IOException("Write records failed", e);
+      throw new HoodieIOException("Write records failed", new IOException(e));
     }
   }
 }

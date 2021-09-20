@@ -30,6 +30,7 @@
     <properties>
         <checkstyle.skip>true</checkstyle.skip>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <proto.version>3.17.3</proto.version>
     </properties>
 
     <build>
@@ -157,10 +158,19 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- Protobuf -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${proto.version}</version>
+            <scope>compile</scope>
+        </dependency>
+
         <!-- Hadoop -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
+            <version>${hadoop.version}</version>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>

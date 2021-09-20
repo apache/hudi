@@ -22,14 +22,12 @@ import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionParticipant;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -197,33 +195,6 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
             "Unclean Kafka Control Manager executor service shutdown ");
         executorService.shutdownNow();
       }
-    }
-  }
-
-  /**
-   * Deserializes the incoming Kafka records for the Control Topic.
-   *
-   * @param <T> represents the object that is sent over the Control Topic.
-   */
-  public static class KafkaJsonDeserializer<T> implements Deserializer<T> {
-
-    private static final Logger LOG = LogManager.getLogger(KafkaJsonDeserializer.class);
-    private final Class<T> type;
-
-    KafkaJsonDeserializer(Class<T> type) {
-      this.type = type;
-    }
-
-    @Override
-    public T deserialize(String s, byte[] bytes) {
-      ObjectMapper mapper = new ObjectMapper();
-      T obj = null;
-      try {
-        obj = mapper.readValue(bytes, type);
-      } catch (Exception e) {
-        LOG.error(e.getMessage());
-      }
-      return obj;
     }
   }
 }

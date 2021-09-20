@@ -164,12 +164,6 @@
             <artifactId>protobuf-java</artifactId>
             <version>${proto.version}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/com.googlecode.protobuf-java-format/protobuf-java-format -->
-        <dependency>
-            <groupId>com.googlecode.protobuf-java-format</groupId>
-            <artifactId>protobuf-java-format</artifactId>
-            <version>1.4</version>
-        </dependency>
 
         <!-- Logging -->
         <dependency>

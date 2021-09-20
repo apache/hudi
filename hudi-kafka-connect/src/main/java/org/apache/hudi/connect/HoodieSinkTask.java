@@ -25,6 +25,7 @@ import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionParticipant;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -36,7 +37,6 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -112,7 +112,7 @@ public class HoodieSinkTask extends SinkTask {
       }
       try {
         transactionParticipants.get(partition).processRecords();
-      } catch (IOException exception) {
+      } catch (HoodieIOException exception) {
         throw new RetriableException("Intermittent write errors for Hudi "
             + " for the topic/partition: " + partition.topic() + ":" + partition.partition()
             + " , ensuring kafka connect will retry ", exception);
@@ -219,6 +219,5 @@ public class HoodieSinkTask extends SinkTask {
     transactionParticipants.clear();
     transactionCoordinators.forEach((topic, transactionCoordinator) -> transactionCoordinator.stop());
     transactionCoordinators.clear();
-    controlKafkaClient.stop();
   }
 }

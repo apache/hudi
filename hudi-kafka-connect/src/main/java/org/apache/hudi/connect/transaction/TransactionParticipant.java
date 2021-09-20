@@ -23,8 +23,6 @@ import org.apache.hudi.connect.ControlMessage;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-import java.io.IOException;
-
 /**
  * Interface for the Participant that
  * manages Writes for a
@@ -39,7 +37,7 @@ public interface TransactionParticipant {
 
   void buffer(SinkRecord record);
 
-  void processRecords() throws IOException;
+  void processRecords();
 
   TopicPartition getPartition();
 
