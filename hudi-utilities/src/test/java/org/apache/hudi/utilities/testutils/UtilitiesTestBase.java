@@ -386,7 +386,7 @@ public class UtilitiesTestBase {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
     }
 
-    public static void addAvroRecord(
+    private static void addAvroRecord(
             VectorizedRowBatch batch,
             GenericRecord record,
             TypeDescription orcSchema,

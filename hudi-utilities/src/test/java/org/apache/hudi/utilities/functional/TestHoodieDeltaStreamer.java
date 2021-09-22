@@ -1423,7 +1423,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
                     transformerClassNames, PROPS_FILENAME_TEST_ORC, false,
                     useSchemaProvider, 100000, false, null, null, "timestamp", null), jsc);
     deltaStreamer.sync();
-    TestHelpers.assertRecordCount(ORC_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertRecordCount(ORC_NUM_RECORDS, tableBasePath + "/*/*.orc", sqlContext);
     testNum++;
   }
 
