@@ -32,9 +32,12 @@ import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Configurations for the test.
@@ -57,22 +60,37 @@ public class TestConfigurations {
       .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())
       .build();
 
+  private static final List<String> FIELDS = ROW_TYPE.getFields().stream()
+      .map(RowType.RowField::asSummaryString).collect(Collectors.toList());
+
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
-    return getCreateHoodieTableDDL(tableName, options, true);
+    return getCreateHoodieTableDDL(tableName, options, true, "partition");
   }
 
-  public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options, boolean havePartition) {
+  public static String getCreateHoodieTableDDL(
+      String tableName,
+      Map<String, String> options,
+      boolean havePartition,
+      String partitionField) {
+    return getCreateHoodieTableDDL(tableName, FIELDS, options, havePartition, "uuid", partitionField);
+  }
+
+  public static String getCreateHoodieTableDDL(
+      String tableName,
+      List<String> fields,
+      Map<String, String> options,
+      boolean havePartition,
+      String pkField,
+      String partitionField) {
     StringBuilder builder = new StringBuilder();
-    builder.append("create table " + tableName + "(\n"
-        + "  uuid varchar(20),\n"
-        + "  name varchar(10),\n"
-        + "  age int,\n"
-        + "  ts timestamp(3),\n"
-        + "  `partition` varchar(20),\n"
-        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
-        + ")\n");
+    builder.append("create table ").append(tableName).append("(\n");
+    for (String field : fields) {
+      builder.append("  ").append(field).append(",\n");
+    }
+    builder.append("  PRIMARY KEY(").append(pkField).append(") NOT ENFORCED\n")
+        .append(")\n");
     if (havePartition) {
-      builder.append("PARTITIONED BY (`partition`)\n");
+      builder.append("PARTITIONED BY (`").append(partitionField).append("`)\n");
     }
     builder.append("with (\n"
         + "  'connector' = 'hudi'");
@@ -201,31 +219,48 @@ public class TestConfigurations {
    */
   public static class Sql {
     private final Map<String, String> options;
-    private String tableName;
+    private final String tableName;
+    private List<String> fields = new ArrayList<>();
     private boolean withPartition = true;
+    private String pkField = "uuid";
+    private String partitionField = "partition";
 
     public Sql(String tableName) {
       options = new HashMap<>();
       this.tableName = tableName;
     }
 
-    public Sql option(ConfigOption<?> option, String val) {
-      this.options.put(option.key(), val);
+    public Sql option(ConfigOption<?> option, Object val) {
+      this.options.put(option.key(), val.toString());
       return this;
     }
 
-    public Sql option(ConfigOption<?> option, boolean val) {
-      this.options.put(option.key(), val + "");
+    public Sql noPartition() {
+      this.withPartition = false;
       return this;
     }
 
-    public Sql withPartition(boolean withPartition) {
-      this.withPartition = withPartition;
+    public Sql pkField(String pkField) {
+      this.pkField = pkField;
+      return this;
+    }
+
+    public Sql partitionField(String partitionField) {
+      this.partitionField = partitionField;
+      return this;
+    }
+
+    public Sql field(String fieldSchema) {
+      fields.add(fieldSchema);
       return this;
     }
 
     public String end() {
-      return TestConfigurations.getCreateHoodieTableDDL(this.tableName, options, this.withPartition);
+      if (this.fields.size() == 0) {
+        this.fields = FIELDS;
+      }
+      return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
+          this.withPartition, this.pkField, this.partitionField);
     }
   }
 }

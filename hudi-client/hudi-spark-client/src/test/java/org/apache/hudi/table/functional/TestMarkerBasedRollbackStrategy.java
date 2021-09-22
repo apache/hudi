@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.functional;
 
+import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -32,7 +33,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.action.rollback.SparkMarkerBasedRollbackStrategy;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
+import org.apache.hudi.table.action.rollback.MarkerBasedRollbackStrategy;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -93,8 +96,13 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         .withMarkerFile("partA", f2, IOType.CREATE);
 
     // when
-    List<HoodieRollbackStat> stats = new SparkMarkerBasedRollbackStrategy(HoodieSparkTable.create(getConfig(), context, metaClient), context, getConfig(), "002")
-        .execute(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
+    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
+        "002").getRollbackRequests(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
+
+    List<HoodieRollbackStat> stats = new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"),
+        rollbackRequests);
 
     // then: ensure files are deleted correctly, non-existent files reported as failed deletes
     assertEquals(2, stats.size());
@@ -175,9 +183,14 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     writeStatuses = writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
     writeStatuses.collect();
 
+    HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
+    List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(),
+        "003").getRollbackRequests(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"));
+
     // rollback 2nd commit and ensure stats reflect the info.
-    return new SparkMarkerBasedRollbackStrategy(HoodieSparkTable.create(writeConfig, context, metaClient), context, writeConfig, "003")
-        .execute(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"));
+    return new BaseRollbackHelper(hoodieTable.getMetaClient(), getConfig()).performRollback(context,
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"),
+        rollbackRequests);
   }
 
 }

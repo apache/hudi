@@ -284,6 +284,14 @@ public class TestData {
           TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
   );
 
+  public static List<RowData> dataSetInsert(int... ids) {
+    List<RowData> inserts = new ArrayList<>();
+    Arrays.stream(ids).forEach(i -> inserts.add(
+        insertRow(StringData.fromString("id" + i), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(i), StringData.fromString("par1"))));
+    return inserts;
+  }
+
   private static Integer toIdSafely(Object id) {
     if (id == null) {
       return -1;
@@ -424,7 +432,7 @@ public class TestData {
    */
   public static void assertRowDataEquals(List<RowData> rows, List<RowData> expected) {
     String rowsString = rowDataToString(rows);
-    assertThat(rowDataToString(expected), is(rowsString));
+    assertThat(rowsString, is(rowDataToString(expected)));
   }
 
   /**

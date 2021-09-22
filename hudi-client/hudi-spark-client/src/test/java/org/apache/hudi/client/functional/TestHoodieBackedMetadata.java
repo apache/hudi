@@ -47,9 +47,10 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
@@ -1305,7 +1306,9 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
             .enable(useFileListingMetadata)
             .enableMetrics(enableMetrics).build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
-            .withExecutorMetrics(true).usePrefix("unit-test").build());
+            .withExecutorMetrics(true).build())
+        .withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
+            .usePrefix("unit-test").build());
   }
 
   @Override

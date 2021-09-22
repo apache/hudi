@@ -19,7 +19,7 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.testutils.FunctionalTestHarness;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-public class TestChainedTransformer extends FunctionalTestHarness {
+public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
 
   @Test
   public void testChainedTransformation() {
