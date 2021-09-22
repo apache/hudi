@@ -975,7 +975,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         clientConfig.getSpillableMapBasePath());
   }
 
-
   @Override
   protected HoodieTableType getTableType() {
     return tableType;
