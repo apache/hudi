@@ -47,7 +47,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.Time;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -349,7 +348,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
    */
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
-  @Disabled
   public void testSync(HoodieTableType tableType) throws Exception {
     init(tableType);
     // Initial commits without metadata table enabled
@@ -377,8 +375,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     // savepoint
     if (COPY_ON_WRITE.equals(tableType)) {
       testTable.doSavepoint("007");
-      syncTableMetadata(writeConfig);
-      assertTrue(metadata(writeConfig, context).isInSync());
+      syncAndValidate(testTable);
     }
 
     // trigger delete
