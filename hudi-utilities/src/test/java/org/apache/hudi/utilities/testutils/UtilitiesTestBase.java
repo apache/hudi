@@ -330,8 +330,15 @@ public class UtilitiesTestBase {
       try (Writer writer = OrcFile.createWriter(targetFile, options)) {
         VectorizedRowBatch batch = schema.createRowBatch();
         for (GenericRecord record : records) {
-          addAvroRecord(batch, record, schema, records.size(), writer);
+          addAvroRecord(batch, record, schema);
+          batch.size++;
+          if (batch.size % records.size() == 0 || batch.size == batch.getMaxSize()) {
+            writer.addRowBatch(batch);
+            batch.reset();
+            batch.size = 0;
+          }
         }
+        writer.addRowBatch(batch);
       }
     }
 
@@ -389,10 +396,8 @@ public class UtilitiesTestBase {
     private static void addAvroRecord(
             VectorizedRowBatch batch,
             GenericRecord record,
-            TypeDescription orcSchema,
-            int orcBatchSize,
-            Writer writer
-    ) throws IOException {
+            TypeDescription orcSchema
+    ) {
       for (int c = 0; c < batch.numCols; c++) {
         ColumnVector colVector = batch.cols[c];
         final String thisField = orcSchema.getFieldNames().get(c);
@@ -402,15 +407,6 @@ public class UtilitiesTestBase {
         Schema.Field avroField = record.getSchema().getField(thisField);
         AvroOrcUtils.addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
       }
-
-      batch.size++;
-
-      if (batch.size % orcBatchSize == 0 || batch.size == batch.getMaxSize()) {
-        writer.addRowBatch(batch);
-        batch.reset();
-        batch.size = 0;
-      }
     }
-
   }
 }
