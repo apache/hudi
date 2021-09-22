@@ -116,6 +116,19 @@ public class FileSlice implements Serializable {
     return (baseFile == null) && (logFiles.isEmpty());
   }
 
+  public long getFileGroupSize() {
+    long totalSize = 0;
+    if (baseFile != null) {
+      totalSize += baseFile.getFileSize();
+    }
+    if (logFiles != null) {
+      for (HoodieLogFile logFile : logFiles) {
+        totalSize += logFile.getFileSize();
+      }
+    }
+    return totalSize;
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("FileSlice {");

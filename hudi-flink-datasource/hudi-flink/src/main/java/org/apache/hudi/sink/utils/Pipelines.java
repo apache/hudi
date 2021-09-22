@@ -44,6 +44,7 @@ import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
+import org.apache.hudi.sink.nonindex.NonIndexStreamWriteOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
@@ -328,6 +329,12 @@ public class Pipelines {
       return dataStream.partitionCustom(partitioner, HoodieRecord::getKey)
           .transform(opIdentifier("bucket_write", conf), TypeInformation.of(Object.class), operatorFactory)
           .uid("uid_bucket_write" + conf.getString(FlinkOptions.TABLE_NAME))
+          .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+    } else if (OptionsResolver.isNonIndexType(conf)) {
+      WriteOperatorFactory<HoodieRecord> operatorFactory = NonIndexStreamWriteOperator.getFactory(conf);
+      return dataStream.transform("non_index_write",
+              TypeInformation.of(Object.class), operatorFactory)
+          .uid("uid_non_index_write" + conf.getString(FlinkOptions.TABLE_NAME))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
     } else {
       WriteOperatorFactory<HoodieRecord> operatorFactory = StreamWriteOperator.getFactory(conf);

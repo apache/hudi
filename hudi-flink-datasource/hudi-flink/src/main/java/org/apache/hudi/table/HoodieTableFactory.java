@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -27,6 +28,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.EmptyAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -56,6 +58,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.configuration.FlinkOptions.REALTIME_SKIP_MERGE;
 
 /**
  * Hoodie data source/sink factory.
@@ -188,6 +191,15 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupWriteOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toPhysicalRowDataType().notNull().getLogicalType());
+    setupDefaultOptionsForNonIndex(conf);
+  }
+
+  private static void setupDefaultOptionsForNonIndex(Configuration conf) {
+    if (OptionsResolver.isNonIndexType(conf)) {
+      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, EmptyAvroKeyGenerator.class.getName());
+      conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+      conf.setString(FlinkOptions.MERGE_TYPE, REALTIME_SKIP_MERGE);
+    }
   }
 
   /**

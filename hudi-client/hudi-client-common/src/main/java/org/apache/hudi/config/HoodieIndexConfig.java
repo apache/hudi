@@ -270,6 +270,34 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "If not set, use record key field as default");
 
   /**
+   *   public static final String NON_INDEX_PARTITION_FILE_GROUP_CACHE_INTERVAL_MINUTE = "hoodie.non.index.partition.file.group.cache.interval.minute";  //minutes
+   *   public static final String DEFAULT_NON_INDEX_PARTITION_FILE_GROUP_CACHE_INTERVAL_MINUTE = "1800";
+   *
+   *   public static final String NON_INDEX_PARTITION_FILE_GROUP_STORAGE_TYPE = "hoodie.non.index.partition.file.group.storage.type";
+   *   public static final String DEFAULT_NON_INDEX_PARTITION_FILE_GROUP_CACHE_STORAGE_TYPE = "IN_MEMORY";
+   *
+   *   public static final String NON_INDEX_PARTITION_FILE_GROUP_CACHE_SIZE = "hoodie.non.index.partition.file.group.cache.size";  //byte
+   *   public static final String DEFAULT_NON_INDEX_PARTITION_FILE_GROUP_CACHE_SIZE = String.valueOf(1048576000);
+   */
+  public static final ConfigProperty<Integer> NON_INDEX_PARTITION_FILE_GROUP_CACHE_INTERVAL_MINUTE = ConfigProperty
+      .key("hoodie.non.index.partition.file.group.cache.interval.minute")
+      .defaultValue(1800)
+      .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
+          + "and each partition is divided to N buckets.");
+
+  public static final ConfigProperty<String> NON_INDEX_PARTITION_FILE_GROUP_STORAGE_TYPE = ConfigProperty
+      .key("hoodie.non.index.partition.file.group.storage.type")
+      .defaultValue("IN_MEMORY")
+      .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
+          + "and each partition is divided to N buckets.");
+
+  public static final ConfigProperty<Long> NON_INDEX_PARTITION_FILE_GROUP_CACHE_SIZE = ConfigProperty
+      .key("hoodie.non.index.partition.file.group.cache.size")
+      .defaultValue(1024 * 1024 * 1024L)
+      .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
+          + "and each partition is divided to N buckets.");
+
+  /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
    */
   @Deprecated
@@ -602,6 +630,21 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withIndexKeyField(String keyField) {
       hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD, keyField);
+      return this;
+    }
+
+    public Builder withPartitionFileGroupCacheInterval(int cacheInterval) {
+      hoodieIndexConfig.setValue(NON_INDEX_PARTITION_FILE_GROUP_CACHE_INTERVAL_MINUTE, String.valueOf(cacheInterval));
+      return this;
+    }
+
+    public Builder withPartitionFileGroupStorageType(String storageType) {
+      hoodieIndexConfig.setValue(NON_INDEX_PARTITION_FILE_GROUP_STORAGE_TYPE, storageType);
+      return this;
+    }
+
+    public Builder withPartitionFileGroupCacheSize(long size) {
+      hoodieIndexConfig.setValue(NON_INDEX_PARTITION_FILE_GROUP_CACHE_SIZE, String.valueOf(size));
       return this;
     }
 

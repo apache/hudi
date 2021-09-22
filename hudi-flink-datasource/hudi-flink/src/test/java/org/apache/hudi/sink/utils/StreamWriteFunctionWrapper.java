@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -27,6 +28,7 @@ import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.nonindex.NonIndexStreamWriteFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.utils.TestConfigurations;
@@ -164,9 +166,13 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   public void invoke(I record) throws Exception {
     HoodieRecord<?> hoodieRecord = toHoodieFunction.map((RowData) record);
     ScalaCollector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
-    bucketAssignerFunction.processElement(hoodieRecord, null, collector);
-    bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
-    writeFunction.processElement(collector.getVal(), null, null);
+    if (OptionsResolver.isNonIndexType(conf)) {
+      writeFunction.processElement(hoodieRecord, null, null);
+    } else {
+      bucketAssignerFunction.processElement(hoodieRecord, null, collector);
+      bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
+      writeFunction.processElement(collector.getVal(), null, null);
+    }
   }
 
   public WriteMetadataEvent[] getEventBuffer() {
@@ -233,6 +239,11 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     return coordinator;
   }
 
+  @Override
+  public HoodieFlinkWriteClient getWriteClient() {
+    return coordinator.getWriteClient();
+  }
+
   public MockOperatorCoordinatorContext getCoordinatorContext() {
     return coordinatorContext;
   }
@@ -254,7 +265,11 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    writeFunction = new StreamWriteFunction<>(conf);
+    if (OptionsResolver.isNonIndexType(conf)) {
+      writeFunction = new NonIndexStreamWriteFunction<>(conf);
+    } else {
+      writeFunction = new StreamWriteFunction<>(conf);
+    }
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
