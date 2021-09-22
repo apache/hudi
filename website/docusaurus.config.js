@@ -56,6 +56,16 @@ module.exports = {
       },
     ],
     [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'learn',
+        path: 'learn',
+        routeBasePath: 'learn',
+        showLastUpdateAuthor: false,
+        showLastUpdateTime: false,
+      },
+    ],
+    [
       '@docusaurus/plugin-client-redirects',
       {
         fromExtensions: ['html'],
@@ -78,6 +88,10 @@ module.exports = {
           {
             from: ['/releases'],
             to: '/releases/release-0.9.0',
+          },
+          {
+            from: ['/docs/learn'],
+            to: '/learn/faq',
           },
         ],
       },
@@ -113,7 +127,7 @@ module.exports = {
             },
             {
               label: 'FAQ',
-              href: 'https://cwiki.apache.org/confluence/display/HUDI/FAQ',
+              href: '/learn/faq',
             },
             {
               label: 'Technical Wiki',
@@ -244,7 +258,7 @@ module.exports = {
             },
             {
               label: 'FAQ',
-              href: 'https://cwiki.apache.org/confluence/display/HUDI/FAQ',
+              href: '/learn/faq',
             },
             {
               label: 'Technical Wiki',
