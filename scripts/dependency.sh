@@ -16,19 +16,21 @@
 # limitations under the License.
 #
 
-set -o pipefail
-set -e
+set -eou pipefail
 set -x
 
 export LC_ALL=C
 
 PWD=$(cd "$(dirname "$0")"/.. || exit; pwd)
 
-DEP_PR="${PWD}"/dev/dependencyList.tmp
-DEP="${PWD}"/dev/dependencyList
+function printUsage() {
+  echo "Usage: $(basename "${0}") [-p <artifactId>] -r " 2>&1
+  echo '   -r   [OPTIONAL] to replace the old dependencyList file with new dependencies'
+  echo '   -p   [MUST] to generate new dependencyList file for the specified module'
+}
 
 function build_classpath() {
-  mvn dependency:build-classpath -pl :hudi-spark-bundle_2.11 |\
+  mvn dependency:build-classpath -pl :${PL} |\
     grep -E -v "INFO|WARNING" | \
     tr ":" "\n" | \
     awk -F '/' '{
@@ -50,12 +52,46 @@ function check_diff() {
     if [[ -n $the_diff ]]; then
         echo "Dependency List Changed Detected: "
         echo ${the_diff}
-        echo "To update the dependency file, run './build/dependency.sh --replace'."
+        echo "To update the dependency file, refer to the usage:"
+        printUsage
         exit 1
     fi
 }
 
+if [[ ${#} -eq 0 ]]; then
+  printUsage
+fi
+
+PL=''
+REPLACE='false'
+
+while getopts "rp:" arg; do
+  case "${arg}" in
+    r)
+      REPLACE="true"
+      ;;
+    p)
+      PL=$OPTARG
+      ;;
+    ?)
+      printUsage
+      ;;
+  esac
+done
+
+shift "$(( OPTIND - 1 ))"
+
+# check must option
+if [ -z "$PL" ]; then
+  echo 'Missing -p argument' >&2
+  exit 1
+fi
+
+DEP_PR="${PWD}"/dev/dependencyList"${PL}".tmp
+DEP="${PWD}"/dev/dependencyList_"${PL}"
+
 rm -rf "${DEP_PR}"
+
 cat >"${DEP_PR}"<<EOF
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
@@ -78,10 +114,10 @@ EOF
 
 build_classpath
 
-if [[ "$1" == "--replace" ]]; then
-    rm -rf "${DEP}"
-    mv "${DEP_PR}" "${DEP}"
-    exit 0
+if [ $REPLACE == "true" ]; then
+  rm -rf "${DEP}"
+  mv "${DEP_PR}" "${DEP}"
+  exit 0
 fi
 
 check_diff
