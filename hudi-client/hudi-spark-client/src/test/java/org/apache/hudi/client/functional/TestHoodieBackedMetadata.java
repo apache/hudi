@@ -369,29 +369,29 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     }
 
     // trigger an upsert
-    testTable.doWriteOperation("007", UPSERT, asList("p1", "p2", "p3"), 2);
+    testTable.doWriteOperation("008", UPSERT, asList("p1", "p2", "p3"), 2);
     syncAndValidate(testTable, emptyList(), true, false, true);
 
     // savepoint
     if (COPY_ON_WRITE.equals(tableType)) {
-      testTable.doSavepoint("007");
+      testTable.doSavepoint("008");
       syncAndValidate(testTable);
     }
 
     // trigger delete
-    testTable.doWriteOperation("008", DELETE, emptyList(), asList("p1", "p2", "p3"), 2);
+    testTable.doWriteOperation("009", DELETE, emptyList(), asList("p1", "p2", "p3"), 2);
     syncAndValidate(testTable, emptyList(), true, true, false);
 
     // trigger clean
-    testTable.doCleanBasedOnCommits("009", asList("001", "002"));
+    testTable.doCleanBasedOnCommits("010", asList("001", "002"));
     syncAndValidate(testTable, emptyList(), true, false, false);
 
     // trigger another upsert
-    testTable.doWriteOperation("010", UPSERT, asList("p1", "p2", "p3"), 2);
+    testTable.doWriteOperation("011", UPSERT, asList("p1", "p2", "p3"), 2);
     syncAndValidate(testTable, emptyList(), true, false, false);
 
     // trigger clustering
-    testTable.doCluster("011", new HashMap<>());
+    testTable.doCluster("012", new HashMap<>());
     syncAndValidate(testTable, emptyList(), true, true, false);
 
     // If there is an inflight operation, the Metadata Table is not updated beyond that operations but the
@@ -400,9 +400,9 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         asList("p1", "p2", "p3"), 2, false, true);
     // trigger upsert
     testTable.doWriteOperation("013", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
-    // testTable validation will fetch only files pertaining to completed commits. So, validateMetadata() will skip files for 006
+    // testTable validation will fetch only files pertaining to completed commits. So, validateMetadata() will skip files for 007
     // while validating against actual metadata table.
-    syncAndValidate(testTable, singletonList("012"), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), false);
+    syncAndValidate(testTable, singletonList("007"), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), false);
     // Remove the inflight instance holding back table sync
     testTable.moveInflightCommitToComplete("007", inflightCommitMeta);
     syncTableMetadata(writeConfig);

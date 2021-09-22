@@ -486,8 +486,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       try {
         validateFilesPerPartition(testTable, tableMetadata, tableView, partitionToFilesMap, partition);
       } catch (IOException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
         fail("Exception should not be raised: " + e);
       }
     });
