@@ -67,7 +67,7 @@ import java.util.stream.Collectors;
  * <p><h2>The Semantics</h2>
  *
  * <p>The task implements exactly-once semantics by buffering the data between checkpoints. The operator coordinator
- * starts a new instant on the time line when a checkpoint triggers, the coordinator checkpoints always
+ * starts a new instant on the timeline when a checkpoint triggers, the coordinator checkpoints always
  * start before its operator, so when this function starts a checkpoint, a REQUESTED instant already exists.
  *
  * <p>The function process thread blocks data buffering after the checkpoint thread finishes flushing the existing data buffer until

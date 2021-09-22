@@ -125,7 +125,7 @@ public class MergeOnReadInputFormat
 
   /**
    * Flag saying whether to emit the deletes. In streaming read mode, downstream
-   * operators need the delete messages to retract the legacy accumulator.
+   * operators need the DELETE messages to retract the legacy accumulator.
    */
   private boolean emitDelete;
 
