@@ -23,7 +23,6 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -58,15 +57,20 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.apache.hudi.common.model.WriteOperationType.BULK_INSERT;
+import static org.apache.hudi.common.model.WriteOperationType.DELETE;
+import static org.apache.hudi.common.model.WriteOperationType.INSERT;
+import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -99,7 +103,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   }
 
   public static List<Arguments> bootstrapAndTableOperationTestArgs() {
-    return Arrays.asList(
+    return asList(
         Arguments.of(COPY_ON_WRITE, true),
         Arguments.of(COPY_ON_WRITE, false),
         Arguments.of(MERGE_ON_READ, true),
@@ -115,27 +119,26 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   public void testMetadataTableBootstrap(HoodieTableType tableType, boolean addRollback) throws Exception {
     init(tableType);
     // bootstrap with few commits
-    testTable.doWriteOperation("001", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2, true);
-    testTable.doWriteOperation("002", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), 2, true);
+    testTable.doWriteOperation("001", INSERT, asList("p1", "p2"), asList("p1", "p2"), 2, true);
+    testTable.doWriteOperation("002", INSERT, asList("p1", "p2"), 2, true);
     syncAndValidate(testTable);
 
     if (addRollback) {
       // trigger an UPSERT that will be rolled back
-      testTable.doWriteOperation("003", WriteOperationType.UPSERT,
-          Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 2);
+      testTable.doWriteOperation("003", UPSERT, singletonList("p3"), asList("p1", "p2", "p3"), 2);
       syncTableMetadata(writeConfig);
       // rollback last commit
       testTable = testTable.doRollback("003", "004");
       syncAndValidate(testTable);
     }
 
-    testTable.doWriteOperation("005", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), 4);
+    testTable.doWriteOperation("005", INSERT, asList("p1", "p2"), 4);
     syncAndValidate(testTable);
 
     // trigger an upsert and validate
-    testTable.doWriteOperation("006", WriteOperationType.UPSERT, Collections.singletonList("p3"),
-        Arrays.asList("p1", "p2", "p3"), 4);
-    syncAndValidate(testTable);
+    testTable.doWriteOperation("006", UPSERT, singletonList("p3"),
+        asList("p1", "p2", "p3"), 4);
+    syncAndValidate(testTable, true);
   }
 
   /**
@@ -163,7 +166,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.NEVER, true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withDirectoryFilterRegex(filterDirRegex).build()).build();
-    testTable.doWriteOperation("003", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 1, true);
+    testTable.doWriteOperation("003", UPSERT, emptyList(), asList("p1", "p2"), 1, true);
     syncTableMetadata(writeConfig);
 
     List<String> partitions = metadataWriter(writeConfig).metadata().getAllPartitionPaths();
@@ -183,8 +186,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     assertEquals(3, statuses.length);
     statuses = metadata(writeConfig, context).getAllFilesInPartition(new Path(basePath, "p2"));
     assertEquals(6, statuses.length);
-    Map<String, FileStatus[]> partitionsToFilesMap = metadata(writeConfig, context).getAllFilesInPartitions(
-        Arrays.asList(basePath + "/p1", basePath + "/p2"));
+    Map<String, FileStatus[]> partitionsToFilesMap = metadata(writeConfig, context).getAllFilesInPartitions(asList(basePath + "/p1", basePath + "/p2"));
     assertEquals(2, partitionsToFilesMap.size());
     assertEquals(3, partitionsToFilesMap.get(basePath + "/p1").length);
     assertEquals(6, partitionsToFilesMap.get(basePath + "/p2").length);
@@ -198,33 +200,33 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   public void testTableOperations(HoodieTableType tableType, boolean doNotSyncFewCommits) throws Exception {
     init(tableType);
     // bootstrap w/ 2 commits
-    bootstrapMetadata(testTable);
+    doWriteOperationsAndBootstrapMetadata(testTable);
 
     // trigger an upsert
-    testTable.doWriteOperation("003", WriteOperationType.UPSERT, Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 3);
+    testTable.doWriteOperation("003", UPSERT, singletonList("p3"), asList("p1", "p2", "p3"), 3);
     syncAndValidate(testTable);
 
     // trigger compaction
     if (MERGE_ON_READ.equals(tableType)) {
-      testTable = testTable.doCompaction("004", Arrays.asList("p1", "p2"));
+      testTable = testTable.doCompaction("004", asList("p1", "p2"));
       syncAndValidate(testTable);
     }
 
     // trigger an upsert
-    testTable.doWriteOperation("005", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
+    testTable.doWriteOperation("005", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
     if (doNotSyncFewCommits) {
-      syncAndValidate(testTable, Collections.emptyList(), true, false, true);
+      syncAndValidate(testTable, emptyList(), true, false, true);
     }
 
     // trigger clean
-    testTable.doClean("006", Collections.singletonList("001"));
+    testTable.doCleanBasedOnCommits("006", singletonList("001"));
     if (doNotSyncFewCommits) {
-      syncAndValidate(testTable, Collections.emptyList(), true, false, false);
+      syncAndValidate(testTable, emptyList(), true, false, false);
     }
 
     // trigger delete
-    testTable.doWriteOperation("007", WriteOperationType.DELETE, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
-    syncAndValidate(testTable, Collections.emptyList(), true, true, false);
+    testTable.doWriteOperation("007", DELETE, emptyList(), asList("p1", "p2", "p3"), 2);
+    syncAndValidate(testTable, emptyList(), true, true, false);
   }
 
   /**
@@ -235,14 +237,14 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   public void testRollbackOperations(HoodieTableType tableType) throws Exception {
     init(tableType);
     // bootstrap w/ 2 commits
-    bootstrapMetadata(testTable);
+    doWriteOperationsAndBootstrapMetadata(testTable);
 
     // trigger an upsert
-    testTable.doWriteOperation("003", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+    testTable.doWriteOperation("003", UPSERT, emptyList(), asList("p1", "p2"), 2);
     syncAndValidate(testTable);
 
     // trigger a commit and rollback
-    testTable.doWriteOperation("004", WriteOperationType.UPSERT, Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 3);
+    testTable.doWriteOperation("004", UPSERT, singletonList("p3"), asList("p1", "p2", "p3"), 3);
     syncTableMetadata(writeConfig);
     // rollback last commit
     testTable = testTable.doRollback("004", "005");
@@ -250,16 +252,42 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     // trigger few upserts and validate
     for (int i = 6; i < 10; i++) {
-      testTable.doWriteOperation("00" + i, WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
+      testTable.doWriteOperation("00" + i, UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
     }
     syncAndValidate(testTable);
 
-    testTable.doWriteOperation("010", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 3);
+    testTable.doWriteOperation("010", UPSERT, emptyList(), asList("p1", "p2", "p3"), 3);
     syncAndValidate(testTable);
 
     // rollback last commit. sync and validate.
     testTable.doRollback("010", "011");
     syncTableMetadata(writeConfig);
+
+    // rollback of compaction
+    if (MERGE_ON_READ.equals(tableType)) {
+      testTable = testTable.doCompaction("012", asList("p1", "p2"));
+      syncTableMetadata(writeConfig);
+      testTable.doRollback("012", "013");
+      syncTableMetadata(writeConfig);
+    }
+
+    // roll back of delete
+    testTable.doWriteOperation("014", DELETE, emptyList(), asList("p1", "p2", "p3"), 2);
+    syncTableMetadata(writeConfig);
+    testTable.doRollback("014", "015");
+    syncTableMetadata(writeConfig);
+
+    // rollback partial commit
+    writeConfig = getWriteConfigBuilder(false, true, false).withRollbackUsingMarkers(false).build();
+    testTable.doWriteOperation("016", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
+    testTable.doRollback("016", "017");
+    syncAndValidate(testTable);
+
+    // marker-based rollback of partial commit
+    writeConfig = getWriteConfigBuilder(false, true, false).withRollbackUsingMarkers(true).build();
+    testTable.doWriteOperation("018", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
+    testTable.doRollback("018", "019");
+    syncAndValidate(testTable, true);
   }
 
   /**
@@ -270,7 +298,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testManualRollbacks(HoodieTableType tableType) throws Exception {
     init(tableType);
-    bootstrapMetadata(testTable);
+    doWriteOperationsAndBootstrapMetadata(testTable);
 
     // Setting to archive more aggressively on the Metadata Table than the Dataset
     final int maxDeltaCommitsBeforeCompaction = 4;
@@ -285,13 +313,13 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         .build();
     for (int i = 3; i < 10; i++) {
       if (i == 3) {
-        testTable.doWriteOperation("00" + i, WriteOperationType.UPSERT, Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 2);
+        testTable.doWriteOperation("00" + i, UPSERT, singletonList("p3"), asList("p1", "p2", "p3"), 2);
         syncTableMetadata(writeConfig);
       } else {
-        testTable.doWriteOperation("00" + i, WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
+        testTable.doWriteOperation("00" + i, UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
       }
     }
-    syncAndValidate(testTable);
+    syncAndValidate(testTable, true);
 
     // We can only rollback those commits whose deltacommit have not been archived yet.
     int numRollbacks = 0;
@@ -326,25 +354,25 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     init(tableType);
     // Initial commits without metadata table enabled
     writeConfig = getWriteConfigBuilder(true, false, false).build();
-    testTable.doWriteOperation("001", WriteOperationType.BULK_INSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 1);
-    testTable.doWriteOperation("002", WriteOperationType.BULK_INSERT, Arrays.asList("p1", "p2"), 1);
+    testTable.doWriteOperation("001", BULK_INSERT, asList("p1", "p2"), asList("p1", "p2"), 1);
+    testTable.doWriteOperation("002", BULK_INSERT, asList("p1", "p2"), 1);
     // Enable metadata table so it initialized by listing from file system
-    testTable.doWriteOperation("003", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), 1);
-    syncAndValidate(testTable, Collections.emptyList(), true, true, true);
+    testTable.doWriteOperation("003", INSERT, asList("p1", "p2"), 1);
+    syncAndValidate(testTable, emptyList(), true, true, true);
     // Various table operations without metadata table enabled
-    testTable.doWriteOperation("004", WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), 1);
-    testTable.doWriteOperation("005", WriteOperationType.UPSERT, Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 3);
+    testTable.doWriteOperation("004", UPSERT, asList("p1", "p2"), 1);
+    testTable.doWriteOperation("005", UPSERT, singletonList("p3"), asList("p1", "p2", "p3"), 3);
     syncAndValidate(testTable);
 
     // trigger compaction
     if (MERGE_ON_READ.equals(tableType)) {
-      testTable = testTable.doCompaction("006", Arrays.asList("p1", "p2"));
+      testTable = testTable.doCompaction("006", asList("p1", "p2"));
       syncAndValidate(testTable);
     }
 
     // trigger an upsert
-    testTable.doWriteOperation("007", WriteOperationType.UPSERT, Arrays.asList("p1", "p2", "p3"), 2);
-    syncAndValidate(testTable, Collections.emptyList(), true, false, true);
+    testTable.doWriteOperation("007", UPSERT, asList("p1", "p2", "p3"), 2);
+    syncAndValidate(testTable, emptyList(), true, false, true);
 
     // savepoint
     if (COPY_ON_WRITE.equals(tableType)) {
@@ -354,36 +382,36 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     }
 
     // trigger delete
-    testTable.doWriteOperation("008", WriteOperationType.DELETE, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
-    syncAndValidate(testTable, Collections.emptyList(), true, true, false);
+    testTable.doWriteOperation("008", DELETE, emptyList(), asList("p1", "p2", "p3"), 2);
+    syncAndValidate(testTable, emptyList(), true, true, false);
 
     // trigger clean
-    testTable.doClean("009", Arrays.asList("001", "002"));
-    syncAndValidate(testTable, Collections.emptyList(), true, false, false);
+    testTable.doCleanBasedOnCommits("009", asList("001", "002"));
+    syncAndValidate(testTable, emptyList(), true, false, false);
 
     // trigger another upsert
-    testTable.doWriteOperation("010", WriteOperationType.UPSERT, Arrays.asList("p1", "p2", "p3"), 2);
-    syncAndValidate(testTable, Collections.emptyList(), true, false, false);
+    testTable.doWriteOperation("010", UPSERT, asList("p1", "p2", "p3"), 2);
+    syncAndValidate(testTable, emptyList(), true, false, false);
 
     // trigger clustering
     testTable.doCluster("011", new HashMap<>());
-    syncAndValidate(testTable, Collections.emptyList(), true, true, false);
+    syncAndValidate(testTable, emptyList(), true, true, false);
 
     // If there is an inflight operation, the Metadata Table is not updated beyond that operations but the
     // in-memory merge should consider all the completed operations.
-    HoodieCommitMetadata inflightCommitMeta = testTable.doWriteOperation("012", WriteOperationType.UPSERT, Collections.emptyList(),
-        Arrays.asList("p1", "p2", "p3"), 2, false, true);
+    HoodieCommitMetadata inflightCommitMeta = testTable.doWriteOperation("007", UPSERT, emptyList(),
+        asList("p1", "p2", "p3"), 2, false, true);
     // trigger upsert
-    testTable.doWriteOperation("013", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
+    testTable.doWriteOperation("013", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
     // testTable validation will fetch only files pertaining to completed commits. So, validateMetadata() will skip files for 006
     // while validating against actual metadata table.
-    syncAndValidate(testTable, Collections.singletonList("012"), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), false);
+    syncAndValidate(testTable, singletonList("012"), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), false);
     // Remove the inflight instance holding back table sync
-    testTable.moveInflightCommitToComplete("012", inflightCommitMeta);
+    testTable.moveInflightCommitToComplete("007", inflightCommitMeta);
     syncTableMetadata(writeConfig);
     // A regular commit should get synced
-    testTable.doWriteOperation("014", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
-    syncAndValidate(testTable, Collections.emptyList(), true, true, false);
+    testTable.doWriteOperation("014", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
+    syncAndValidate(testTable, emptyList(), true, true, false);
 
     /* TODO: Restore to savepoint, enable metadata table and ensure it is synced
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
@@ -407,7 +435,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testCleaningArchivingAndCompaction(HoodieTableType tableType) throws Exception {
     init(tableType);
-    bootstrapMetadata(testTable);
+    doWriteOperationsAndBootstrapMetadata(testTable);
 
     final int maxDeltaCommitsBeforeCompaction = 4;
     final int minArchiveLimit = 4;
@@ -421,13 +449,13 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         .build();
     for (int i = 3; i < 10; i++) {
       if (i == 3) {
-        testTable.doWriteOperation("00" + i, WriteOperationType.UPSERT, Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 2);
+        testTable.doWriteOperation("00" + i, UPSERT, singletonList("p3"), asList("p1", "p2", "p3"), 2);
         syncTableMetadata(writeConfig);
       } else {
-        testTable.doWriteOperation("00" + i, WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
+        testTable.doWriteOperation("00" + i, UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
       }
     }
-    syncAndValidate(testTable);
+    syncAndValidate(testTable, true);
 
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
     HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(writeConfig.getBasePath()).build();
@@ -452,11 +480,9 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     init(tableType);
     // TESTCASE: If commit on the metadata table succeeds but fails on the dataset, then on next init the metadata table
     // should be rolled back to last valid commit.
-    testTable.doWriteOperation("001", WriteOperationType.UPSERT, Arrays.asList("p1", "p2"),
-        Arrays.asList("p1", "p2"), 1);
+    testTable.doWriteOperation("001", UPSERT, asList("p1", "p2"), asList("p1", "p2"), 1);
     syncAndValidate(testTable);
-    testTable.doWriteOperation("002", WriteOperationType.BULK_INSERT, Collections.emptyList(),
-        Arrays.asList("p1", "p2"), 1);
+    testTable.doWriteOperation("002", BULK_INSERT, emptyList(), asList("p1", "p2"), 1);
     syncAndValidate(testTable);
     // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
     // instant so that only the inflight is left over.
@@ -464,8 +490,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     assertTrue(fs.delete(new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
         commitInstantFileName), false));
     // Next upsert
-    testTable.doWriteOperation("003", WriteOperationType.UPSERT, Collections.emptyList(),
-        Arrays.asList("p1", "p2"), 1);
+    testTable.doWriteOperation("003", UPSERT, emptyList(), asList("p1", "p2"), 1);
     // Post rollback commit and metadata should be valid
     syncTableMetadata(writeConfig);
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
@@ -483,7 +508,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   public void testNonPartitioned(HoodieTableType tableType) throws Exception {
     init(tableType);
     // Non-partitioned bulk insert
-    testTable.doWriteOperation("001", WriteOperationType.BULK_INSERT, Collections.emptyList(), 1);
+    testTable.doWriteOperation("001", BULK_INSERT, emptyList(), 1);
     syncTableMetadata(writeConfig);
     List<String> metadataPartitions = metadata(writeConfig, context).getAllPartitionPaths();
     assertTrue(metadataPartitions.isEmpty(), "Must contain empty partition");
@@ -497,8 +522,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   public void testMetadataMetrics(HoodieTableType tableType) throws Exception {
     init(tableType);
     writeConfig = getWriteConfigBuilder(true, true, true).build();
-    testTable.doWriteOperation(HoodieActiveTimeline.createNewInstantTime(), WriteOperationType.INSERT, Arrays.asList("p1", "p2"),
-        Arrays.asList("p1", "p2"), 2, true);
+    testTable.doWriteOperation(HoodieActiveTimeline.createNewInstantTime(), INSERT, asList("p1", "p2"),
+        asList("p1", "p2"), 2, true);
     syncTableMetadata(writeConfig);
     Registry metricsRegistry = Registry.getRegistry("HoodieMetadata");
     assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".count"));
@@ -517,28 +542,28 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testMetadataOutOfSync(HoodieTableType tableType) throws Exception {
     init(tableType);
-    testTable.doWriteOperation("001", WriteOperationType.BULK_INSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 1);
+    testTable.doWriteOperation("001", BULK_INSERT, asList("p1", "p2"), asList("p1", "p2"), 1);
     // Enable metadata so table is initialized but do not sync
-    syncAndValidate(testTable, Collections.emptyList(), true, false, false);
+    syncAndValidate(testTable, emptyList(), true, false, false);
     // Perform an insert and upsert
-    testTable.doWriteOperation("002", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), 1);
-    testTable.doWriteOperation("003", WriteOperationType.UPSERT, Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 1);
+    testTable.doWriteOperation("002", INSERT, asList("p1", "p2"), 1);
+    testTable.doWriteOperation("003", UPSERT, singletonList("p3"), asList("p1", "p2", "p3"), 1);
     // Run compaction for MOR table
     if (MERGE_ON_READ.equals(tableType)) {
-      testTable = testTable.doCompaction("004", Arrays.asList("p1", "p2"));
+      testTable = testTable.doCompaction("004", asList("p1", "p2"));
     }
     assertFalse(metadata(writeConfig, context).isInSync());
-    testTable.doWriteOperation("005", WriteOperationType.UPSERT, Arrays.asList("p1", "p2", "p3"), 1);
+    testTable.doWriteOperation("005", UPSERT, asList("p1", "p2", "p3"), 1);
     if (MERGE_ON_READ.equals(tableType)) {
-      testTable = testTable.doCompaction("006", Arrays.asList("p1", "p2"));
+      testTable = testTable.doCompaction("006", asList("p1", "p2"));
     }
-    testTable.doClean("007", Collections.singletonList("001"));
+    testTable.doCleanBasedOnCommits("007", singletonList("001"));
     /* TODO: Perform restore with metadata disabled
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
       client.restoreToInstant("004");
     }*/
     assertFalse(metadata(writeConfig, context).isInSync());
-    syncAndValidate(testTable, Collections.emptyList(), true, true, true);
+    syncAndValidate(testTable, emptyList(), true, true, true, true);
   }
 
   /**
@@ -548,9 +573,9 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   @EnumSource(HoodieTableType.class)
   public void testMetdataTableCommitFailure(HoodieTableType tableType) throws Exception {
     init(tableType);
-    testTable.doWriteOperation("001", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2, true);
+    testTable.doWriteOperation("001", INSERT, asList("p1", "p2"), asList("p1", "p2"), 2, true);
     syncTableMetadata(writeConfig);
-    testTable.doWriteOperation("002", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), 2, true);
+    testTable.doWriteOperation("002", INSERT, asList("p1", "p2"), 2, true);
     syncTableMetadata(writeConfig);
 
     // At this time both commits 001 and 002 must be synced to the metadata table
@@ -566,7 +591,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     assertTrue(timeline.containsInstant(new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "002")));
 
     // In this commit deltacommit "002" will be rolled back and attempted again.
-    testTable.doWriteOperation("003", WriteOperationType.BULK_INSERT, Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 2);
+    testTable.doWriteOperation("003", BULK_INSERT, singletonList("p3"), asList("p1", "p2", "p3"), 2);
     syncTableMetadata(writeConfig);
 
     timeline = metadataMetaClient.reloadActiveTimeline();
@@ -584,54 +609,63 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   public void testInFlightCommit(HoodieTableType tableType) throws Exception {
     init(tableType);
     // bootstrap w/ 2 commits
-    bootstrapMetadata(testTable);
+    doWriteOperationsAndBootstrapMetadata(testTable);
 
     // trigger an upsert
-    testTable.doWriteOperation("003", WriteOperationType.UPSERT, Collections.singletonList("p3"), Arrays.asList("p1", "p2", "p3"), 3);
+    testTable.doWriteOperation("003", UPSERT, singletonList("p3"), asList("p1", "p2", "p3"), 3);
     syncAndValidate(testTable);
 
     // trigger an upsert
-    testTable.doWriteOperation("005", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
+    testTable.doWriteOperation("005", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
     syncAndValidate(testTable);
 
     // create an inflight commit.
-    HoodieCommitMetadata inflightCommitMeta = testTable.doWriteOperation("006", WriteOperationType.UPSERT, Collections.emptyList(),
-        Arrays.asList("p1", "p2", "p3"), 2, false, true);
+    HoodieCommitMetadata inflightCommitMeta = testTable.doWriteOperation("006", UPSERT, emptyList(),
+        asList("p1", "p2", "p3"), 2, false, true);
 
     // trigger upsert
-    testTable.doWriteOperation("007", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
+    testTable.doWriteOperation("007", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
     // testTable validation will fetch only files pertaining to completed commits. So, validateMetadata() will skip files for 006
     // while validating against actual metadata table.
-    syncAndValidate(testTable, Collections.singletonList("006"), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), false);
+    syncAndValidate(testTable, singletonList("006"), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), false);
 
     // Remove the inflight instance holding back table sync
     testTable.moveInflightCommitToComplete("006", inflightCommitMeta);
     syncTableMetadata(writeConfig);
 
     // A regular commit should get synced
-    testTable.doWriteOperation("008", WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2", "p3"), 2);
-    syncAndValidate(testTable);
+    testTable.doWriteOperation("008", UPSERT, emptyList(), asList("p1", "p2", "p3"), 2);
+    syncAndValidate(testTable, true);
   }
 
-  private void bootstrapMetadata(HoodieTestTable testTable) throws Exception {
-    testTable.doWriteOperation("001", WriteOperationType.INSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"),
+  private void doWriteOperationsAndBootstrapMetadata(HoodieTestTable testTable) throws Exception {
+    testTable.doWriteOperation("001", INSERT, asList("p1", "p2"), asList("p1", "p2"),
         2, true);
-    testTable.doWriteOperation("002", WriteOperationType.INSERT, Arrays.asList("p1", "p2"),
+    testTable.doWriteOperation("002", INSERT, asList("p1", "p2"),
         2, true);
     syncAndValidate(testTable);
   }
 
   private void syncAndValidate(HoodieTestTable testTable) throws IOException {
-    syncAndValidate(testTable, Collections.emptyList(), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), true);
+    syncAndValidate(testTable, emptyList(), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), true);
   }
 
-  private void syncAndValidate(HoodieTestTable testTable, List<String> inflightCommits, boolean shouldEnableMetadata, boolean shouldEnableMetadataSync, boolean shouldValidateMetadata)
-      throws IOException {
-    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE, String.valueOf(shouldEnableMetadata));
-    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.SYNC_ENABLE, String.valueOf(shouldEnableMetadataSync));
-    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.VALIDATE_ENABLE, String.valueOf(shouldValidateMetadata));
+  private void syncAndValidate(HoodieTestTable testTable, boolean doFullValidation) throws IOException {
+    syncAndValidate(testTable, emptyList(), writeConfig.isMetadataTableEnabled(), writeConfig.getMetadataConfig().enableSync(), true, doFullValidation);
+  }
+
+  private void syncAndValidate(HoodieTestTable testTable, List<String> inflightCommits, boolean enableMetadata,
+                               boolean enableMetadataSync, boolean enableValidation) throws IOException {
+    syncAndValidate(testTable, inflightCommits, enableMetadata, enableMetadataSync, enableValidation, false);
+  }
+
+  private void syncAndValidate(HoodieTestTable testTable, List<String> inflightCommits, boolean enableMetadata,
+                               boolean enableMetadataSync, boolean enableValidation, boolean doFullValidation) throws IOException {
+    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE, String.valueOf(enableMetadata));
+    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.SYNC_ENABLE, String.valueOf(enableMetadataSync));
+    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.VALIDATE_ENABLE, String.valueOf(enableValidation));
     syncTableMetadata(writeConfig);
-    validateMetadata(testTable, inflightCommits, writeConfig, metadataTableBasePath);
+    validateMetadata(testTable, inflightCommits, writeConfig, metadataTableBasePath, doFullValidation);
   }
 
   private HoodieWriteConfig getWriteConfig(boolean autoCommit, boolean useFileListingMetadata) {

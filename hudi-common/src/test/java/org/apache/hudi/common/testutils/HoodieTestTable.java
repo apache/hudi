@@ -86,8 +86,6 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCleanFile;
@@ -111,6 +109,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.apache.hudi.common.util.CommitUtils.buildMetadata;
+import static org.apache.hudi.common.util.CommitUtils.getCommitActionType;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 public class HoodieTestTable {
@@ -187,13 +186,13 @@ public class HoodieTestTable {
   }
 
   public HoodieCommitMetadata createCommitMetadata(WriteOperationType operationType, String commitTime, HoodieTestTableState testTableState) {
-    String actionType = MERGE_ON_READ.equals(metaClient.getTableType()) ? DELTA_COMMIT_ACTION : COMMIT_ACTION;
+    String actionType = getCommitActionType(operationType, metaClient.getTableType());
     return createCommitMetadata(operationType, commitTime, Collections.emptyMap(), testTableState, false, actionType);
   }
 
   public HoodieCommitMetadata createCommitMetadata(WriteOperationType operationType, String commitTime,
                                                    HoodieTestTableState testTableState, boolean bootstrap) {
-    String actionType = MERGE_ON_READ.equals(metaClient.getTableType()) ? DELTA_COMMIT_ACTION : COMMIT_ACTION;
+    String actionType = getCommitActionType(operationType, metaClient.getTableType());
     return createCommitMetadata(operationType, commitTime, Collections.emptyMap(), testTableState, bootstrap, actionType);
   }
 
@@ -273,7 +272,7 @@ public class HoodieTestTable {
         CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
     HoodieCleanStat cleanStats = new HoodieCleanStat(
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-        HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
+        HoodieTestUtils.DEFAULT_PARTITION_PATHS[RANDOM.nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
         Collections.emptyList(),
         Collections.emptyList(),
         Collections.emptyList(),
@@ -621,7 +620,7 @@ public class HoodieTestTable {
       try {
         Files.delete(Paths.get(basePath, partitionPath, entry.getPath().getName()));
       } catch (IOException e) {
-        e.printStackTrace();
+        throw new HoodieTestTableException(e);
       }
     });
   }
@@ -670,7 +669,7 @@ public class HoodieTestTable {
     return cleanerMeta.getValue();
   }
 
-  public HoodieCleanMetadata doClean(String cleanCommitTime, List<String> commitsToClean) throws IOException {
+  public HoodieCleanMetadata doCleanBasedOnCommits(String cleanCommitTime, List<String> commitsToClean) throws IOException {
     Map<String, Integer> partitionFileCountsToDelete = new HashMap<>();
     for (String commitTime : commitsToClean) {
       Option<HoodieCommitMetadata> commitMetadata = getMetadataForInstant(commitTime);
@@ -706,9 +705,6 @@ public class HoodieTestTable {
     HoodieCommitMetadata commitMetadata = createCommitMetadata(COMPACT, commitTime, testTableState);
     for (String partition : partitions) {
       this.withBaseFilesInPartition(partition, testTableState.getPartitionToBaseFileInfoMap(commitTime).get(partition));
-      if (MERGE_ON_READ.equals(metaClient.getTableType())) {
-        this.withLogFilesInPartition(partition, testTableState.getPartitionToLogFileInfoMap(commitTime).get(partition));
-      }
     }
     return addCompaction(commitTime, commitMetadata);
   }
