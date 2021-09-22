@@ -444,4 +444,115 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
     }
   }
 
+  test("Test ignoring case") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ID int,
+           |  NAME string,
+           |  PRICE double,
+           |  TS long,
+           |  DT string
+           |) using hudi
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "/")}/$tableName'
+           | options (
+           |  primaryKey ='ID',
+           |  preCombineField = 'TS'
+           | )
+       """.stripMargin)
+
+      // First merge with a extra input field 'flag' (insert a new record)
+      spark.sql(
+        s"""
+           | merge into $tableName
+           | using (
+           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-05-05' as dt, '1' as flag
+           | ) s0
+           | on s0.id = $tableName.id
+           | when matched and flag = '1' then update set
+           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, dt = s0.dt
+           | when not matched and flag = '1' then insert *
+       """.stripMargin)
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 10.0, 1000, "2021-05-05")
+      )
+
+      // Second merge (update the record)
+      spark.sql(
+        s"""
+           | merge into $tableName
+           | using (
+           |  select 1 as id, 'a1' as name, 20 as price, '2021-05-05' as dt, 1001 as ts
+           | ) s0
+           | on s0.id = $tableName.id
+           | when matched then update set
+           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, dt = s0.dt
+           | when not matched then insert *
+       """.stripMargin)
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 20.0, 1001, "2021-05-05")
+      )
+
+      // Test ignoring case when column name matches
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 1 as id, 'a1' as name, 1111 as ts, '2021-05-05' as dt, 111 as price union all
+           |  select 2 as id, 'a2' as name, 1112 as ts, '2021-05-05' as dt, 112 as price
+           | ) as s0
+           | on t0.id = s0.id
+           | when matched then update set *
+           | when not matched then insert *
+           |""".stripMargin)
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 111.0, 1111, "2021-05-05"),
+        Seq(2, "a2", 112.0, 1112, "2021-05-05")
+      )
+    }
+  }
+
+  test("Test ignoring case for MOR table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Create a mor partitioned table.
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           | ) using hudi
+           | options (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(dt)
+           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "/")}/$tableName'
+         """.stripMargin)
+
+      // Test ignoring case when column name matches
+      spark.sql(
+        s"""
+           | merge into $tableName as t0
+           | using (
+           |  select 1 as id, 'a1' as name, 1111 as ts, '2021-05-05' as dt, 111 as price
+           | ) as s0
+           | on t0.id = s0.id
+           | when matched then update set *
+           | when not matched then insert *
+         """.stripMargin
+      )
+      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+        Seq(1, "a1", 111.0, 1111, "2021-05-05")
+      )
+    }
+  }
+
 }

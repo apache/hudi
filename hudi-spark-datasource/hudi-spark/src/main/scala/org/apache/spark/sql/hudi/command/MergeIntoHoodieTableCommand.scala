@@ -96,16 +96,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       throw new IllegalArgumentException("Non-Equal condition is not support for Merge " +
         s"Into Statement: ${mergeInto.mergeCondition.sql}")
     }
-    val targetAttrs = mergeInto.targetTable.output
+    val targetAttrs = mergeInto.targetTable.output.map(attr => (attr.withName(attr.name.toLowerCase), attr.name)).toMap
 
     val target2Source = conditions.map(_.asInstanceOf[EqualTo])
       .map {
         case EqualTo(left: AttributeReference, right)
-          if targetAttrs.indexOf(left) >= 0 => // left is the target field
-          left.name -> right
+          if targetAttrs.getOrElse(left.withName(left.name.toLowerCase()), null) != null => // left is the target field
+          targetAttrs(left.withName(left.name.toLowerCase())) -> right
         case EqualTo(left, right: AttributeReference)
-          if targetAttrs.indexOf(right) >= 0 => // right is the target field
-          right.name -> left
+          if targetAttrs.getOrElse(right.withName(right.name.toLowerCase), null) != null  => // right is the target field
+          targetAttrs(right.withName(right.name.toLowerCase)) -> left
         case eq =>
           throw new AnalysisException(s"Invalidate Merge-On condition: ${eq.sql}." +
             "The validate condition should be 'targetColumn = sourceColumnExpression', e.g." +
@@ -353,7 +353,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     val attr2Assignment = assignments.map {
       case Assignment(attr: AttributeReference, value) => {
         val rewriteValue = replaceAttributeInExpression(value)
-        attr -> Alias(rewriteValue, attr.name)()
+        attr.withName(attr.name.toLowerCase) -> Alias(rewriteValue, attr.name)()
       }
       case assignment => throw new IllegalArgumentException(s"Illegal Assignment: ${assignment.sql}")
     }.toMap[Attribute, Expression]
@@ -361,7 +361,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     mergeInto.targetTable.output
       .filterNot(attr => isMetaField(attr.name))
       .map(attr => {
-        val assignment = attr2Assignment.getOrElse(attr,
+        val assignment = attr2Assignment.getOrElse(attr.withName(attr.name.toLowerCase),
           throw new IllegalArgumentException(s"Cannot find related assignment for field: ${attr.name}"))
         castIfNeeded(assignment, attr.dataType, sparkSession.sqlContext.conf)
       })

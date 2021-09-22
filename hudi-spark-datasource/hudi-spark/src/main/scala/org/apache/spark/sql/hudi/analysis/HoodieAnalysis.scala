@@ -163,15 +163,15 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           // assignments is empty means insert * or update set *
           val resolvedSourceOutputWithoutMetaFields = resolvedSource.output.filter(attr => !HoodieSqlUtils.isMetaField(attr.name))
           val targetOutputWithoutMetaFields = target.output.filter(attr => !HoodieSqlUtils.isMetaField(attr.name))
-          val resolvedSourceColumnNamesWithoutMetaFields = resolvedSourceOutputWithoutMetaFields.map(_.name)
-          val targetColumnNamesWithoutMetaFields = targetOutputWithoutMetaFields.map(_.name)
+          val resolvedSourceColumnNamesWithoutMetaFields = resolvedSourceOutputWithoutMetaFields.map(_.name.toLowerCase)
+          val targetColumnNamesWithoutMetaFields = targetOutputWithoutMetaFields.map(_.name.toLowerCase)
 
           if(targetColumnNamesWithoutMetaFields.toSet.subsetOf(resolvedSourceColumnNamesWithoutMetaFields.toSet)){
             //If sourceTable's columns contains all targetTable's columns,
             //We fill assign all the source fields to the target fields by column name matching.
-            val sourceColNameAttrMap = resolvedSourceOutputWithoutMetaFields.map(attr => (attr.name, attr)).toMap
+            val sourceColNameAttrMap = resolvedSourceOutputWithoutMetaFields.map(attr => (attr.name.toLowerCase, attr)).toMap
             targetOutputWithoutMetaFields.map(targetAttr => {
-              val sourceAttr = sourceColNameAttrMap(targetAttr.name)
+              val sourceAttr = sourceColNameAttrMap(targetAttr.name.toLowerCase)
               Assignment(targetAttr, sourceAttr)
             })
           } else {
@@ -209,13 +209,13 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           // Get the map of target attribute to value of the update assignments.
           val target2Values = resolvedAssignments.map {
               case Assignment(attr: AttributeReference, value) =>
-                attr.name -> value
+                attr.name.toLowerCase -> value
               case o => throw new IllegalArgumentException(s"Assignment key must be an attribute, current is: ${o.key}")
           }.toMap
 
           // Validate if there are incorrect target attributes.
           val unKnowTargets = target2Values.keys
-            .filterNot(removeMetaFields(target.output).map(_.name).contains(_))
+            .filterNot(removeMetaFields(target.output).map(_.name.toLowerCase).contains(_))
           if (unKnowTargets.nonEmpty) {
             throw new AnalysisException(s"Cannot find target attributes: ${unKnowTargets.mkString(",")}.")
           }
@@ -225,18 +225,18 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           val newAssignments = removeMetaFields(target.output)
             .map(attr => {
               // TODO support partial update for MOR.
-              if (!target2Values.contains(attr.name) && targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
+              if (!target2Values.contains(attr.name.toLowerCase) && targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
                 throw new AnalysisException(s"Missing specify the value for target field: '${attr.name}' in merge into update action" +
                   s" for MOR table. Currently we cannot support partial update for MOR," +
                   s" please complete all the target fields just like '...update set id = s0.id, name = s0.name ....'")
               }
               if (preCombineField.isDefined && preCombineField.get.equalsIgnoreCase(attr.name)
-                  && !target2Values.contains(attr.name)) {
+                  && !target2Values.contains(attr.name.toLowerCase)) {
                 throw new AnalysisException(s"Missing specify value for the preCombineField:" +
                   s" ${preCombineField.get} in merge-into update action. You should add" +
                   s" '... update set ${preCombineField.get} = xx....' to the when-matched clause.")
               }
-              Assignment(attr, target2Values.getOrElse(attr.name, attr))
+              Assignment(attr, target2Values.getOrElse(attr.name.toLowerCase, attr))
             })
           UpdateAction(resolvedCondition, newAssignments)
         case DeleteAction(condition) =>
