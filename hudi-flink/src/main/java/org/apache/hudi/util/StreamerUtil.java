@@ -250,7 +250,7 @@ public class StreamerUtil {
           basePath, conf.getString(FlinkOptions.TABLE_NAME));
     }
     // Do not close the filesystem in order to use the CACHE,
-    // some of the filesystems release the handles in #close method.
+    // some filesystems release the handles in #close method.
   }
 
   /**
@@ -359,7 +359,7 @@ public class StreamerUtil {
   }
 
   /**
-   * Return the median instant time between the given two instant time.
+   * Returns the median instant time between the given two instant time.
    */
   public static String medianInstantTime(String highVal, String lowVal) {
     try {
@@ -399,6 +399,10 @@ public class StreamerUtil {
     }
   }
 
+  /**
+   * Returns whether the give file is in valid hoodie format.
+   * For example, filtering out the empty or corrupt files.
+   */
   public static boolean isValidFile(FileStatus fileStatus) {
     final String extension = FSUtils.getFileExtension(fileStatus.getPath().toString());
     if (PARQUET.getFileExtension().equals(extension)) {
@@ -416,11 +420,19 @@ public class StreamerUtil {
     return fileStatus.getLen() > 0;
   }
 
+  /**
+   * Returns whether insert deduplication is allowed with given configuration {@code conf}.
+   */
   public static boolean allowDuplicateInserts(Configuration conf) {
     WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
     return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkOptions.INSERT_DEDUP);
   }
 
+  /**
+   * Returns whether there are successful commits on the timeline.
+   * @param metaClient The meta client
+   * @return true if there is any successful commit
+   */
   public static boolean haveSuccessfulCommits(HoodieTableMetaClient metaClient) {
     return !metaClient.getCommitsTimeline().filterCompletedInstants().empty();
   }

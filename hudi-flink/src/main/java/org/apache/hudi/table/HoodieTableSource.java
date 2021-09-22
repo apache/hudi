@@ -40,6 +40,7 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ChangelogModes;
+import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -48,7 +49,6 @@ import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.java.io.CollectionInputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -107,9 +107,6 @@ public class HoodieTableSource implements
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSource.class);
 
   private static final int NO_LIMIT_CONSTANT = -1;
-
-  private static final InputFormat<RowData, ?> EMPTY_INPUT_FORMAT =
-      new CollectionInputFormat<>(Collections.emptyList(), null);
 
   private final transient org.apache.hadoop.conf.Configuration hadoopConf;
   private final transient HoodieTableMetaClient metaClient;
@@ -340,7 +337,7 @@ public class HoodieTableSource implements
             if (inputSplits.size() == 0) {
               // When there is no input splits, just return an empty source.
               LOG.warn("No input splits generate for MERGE_ON_READ input format, returns empty collection instead");
-              return EMPTY_INPUT_FORMAT;
+              return InputFormats.EMPTY_INPUT_FORMAT;
             }
             return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
                 rowDataType, inputSplits, false);
@@ -360,7 +357,7 @@ public class HoodieTableSource implements
         if (result.isEmpty()) {
           // When there is no input splits, just return an empty source.
           LOG.warn("No input splits generate for incremental read, returns empty collection instead");
-          return new CollectionInputFormat<>(Collections.emptyList(), null);
+          return InputFormats.EMPTY_INPUT_FORMAT;
         }
         return mergeOnReadInputFormat(rowType, requiredRowType, tableAvroSchema,
             rowDataType, result.getInputSplits(), false);
@@ -419,7 +416,7 @@ public class HoodieTableSource implements
   private InputFormat<RowData, ?> baseFileOnlyInputFormat() {
     final Path[] paths = getReadPaths();
     if (paths.length == 0) {
-      return EMPTY_INPUT_FORMAT;
+      return InputFormats.EMPTY_INPUT_FORMAT;
     }
     FileInputFormat<RowData> format = new CopyOnWriteInputFormat(
         FilePathUtils.toFlinkPaths(paths),
