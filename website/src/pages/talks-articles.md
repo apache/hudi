@@ -76,6 +76,12 @@ Data Summit Connect, May, 2021
 
 30. ["Building a Large-scale Transactional Data Lake Using Apache Hudi"](https://www.youtube.com/watch?v=J6EcGiExx7M) - By Satish Kotha, AICamp
 
+31. ["Apache Hudi table format, Purpose-built for low latency data lake use-cases"](https://www.dremio.com/subsurface/introducing-the-apache-hudi-table-format-purpose-built-for-low-latency-data-lake-use-cases/) - By Nishith Agarwal and Sivabalan Narayanan. July, 2021
+
+32. ["Community round table: Open data lakes with Presto, Hudi and Aws - the next generation of analytics"](https://ahana.io/videos-presentations/roundtable-presto-hudi-aws/) - By Vinoth chandar, Roy Hasson, Dipti Borkar, Coordinated by Eric Kavanagh. July, 2021
+
+33. ["DataEngineering Podcast: Charting A Path For Streaming Data To Fill Your Data Lake With Hudi"](https://www.dataengineeringpodcast.com/hudi-streaming-data-lake-episode-209/) - By Vinoth Chandar. Aug, 2021
+
 ## Articles
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
@@ -106,3 +112,6 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 24. ["Build a data lake using amazon kinesis data stream for amazon dynamodb and apache hudi"](https://aws.amazon.com/blogs/big-data/build-a-data-lake-using-amazon-kinesis-data-streams-for-amazon-dynamodb-and-apache-hudi/) - Amazon AWS
 25. ["Amazon Athena expands Apache Hudi support"](https://aws.amazon.com/about-aws/whats-new/2021/07/amazon-athena-expands-apache-hudi-support/) - Amazon AWS
 26. ["Part1: Query apache hudi dataset in an amazon S3 data lake with amazon athena : Read optimized queries"](https://aws.amazon.com/blogs/big-data/part-1-query-an-apache-hudi-dataset-in-an-amazon-s3-data-lake-with-amazon-athena-part-1-read-optimized-queries/) - Amazon AWS
+27. ["Baixin bank’s real-time data lake evolution scheme based on Apache Hudi"](https://developpaper.com/baixin-banks-real-time-data-lake-evolution-scheme-based-on-apache-hudi/) July, 2021
+28. ["MLOps Wars: Versioned Feature Data with a Lakehouse"](https://www.logicalclocks.com/blog/mlops-wars-versioned-feature-data-with-a-lakehouse) - By David Bzhalava and Jim Dowling. Aug, 2021
+29. ["Cost-Efficient Open Source Big Data Platform at Uber"](https://eng.uber.com/cost-efficient-big-data-platform/) - By Zheng Shao and Mohammad Islam. Aug, 2021
