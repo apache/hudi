@@ -295,7 +295,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     try {
       ddlExecutor.close();
       if (client != null) {
-        client.close();
+        Hive.closeCurrent();
         client = null;
       }
     } catch (Exception e) {
