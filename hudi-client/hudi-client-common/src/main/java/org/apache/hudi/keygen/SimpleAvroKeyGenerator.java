@@ -29,8 +29,8 @@ import java.util.Collections;
 public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
 
   public SimpleAvroKeyGenerator(TypedProperties props) {
-    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key()),
-        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key()));
+    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
   SimpleAvroKeyGenerator(TypedProperties props, String partitionPathField) {

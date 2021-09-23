@@ -23,8 +23,9 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -37,11 +38,12 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -56,17 +58,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test Cases for {@link CleansCommand}.
  */
-public class TestCleansCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestCleansCommand extends CLIFunctionalTestHarness {
 
-  private String tablePath;
   private URL propsFilePath;
+  private HoodieTableMetaClient metaClient;
 
   @BeforeEach
   public void init() throws Exception {
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = hadoopConf();
 
-    String tableName = "test_table";
-    tablePath = basePath + File.separator + tableName;
+    String tableName = tableName();
+    String tablePath = tablePath(tableName);
     propsFilePath = TestCleansCommand.class.getClassLoader().getResource("clean.properties");
 
     // Create table and connect
@@ -79,6 +82,7 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
     metaClient = HoodieCLI.getTableMetaClient();
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();
+    FileSystem fs = FSUtils.getFs(basePath(), hadoopConf());
     HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
 
     // Create four commits
@@ -108,11 +112,11 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
     assertNotNull(propsFilePath, "Not found properties file");
 
     // First, run clean
-    SparkMain.clean(jsc, HoodieCLI.basePath, propsFilePath.getPath(), new ArrayList<>());
+    SparkMain.clean(jsc(), HoodieCLI.basePath, propsFilePath.getPath(), new ArrayList<>());
     assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
         "Loaded 1 clean and the count should match");
 
-    CommandResult cr = getShell().executeCommand("cleans show");
+    CommandResult cr = shell().executeCommand("cleans show");
     assertTrue(cr.isSuccess());
 
     HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().orElse(null);
@@ -139,18 +143,18 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
    * Test case for show partitions of a clean instant.
    */
   @Test
-  public void testShowCleanPartitions() throws IOException {
+  public void testShowCleanPartitions() {
     // Check properties file exists.
     assertNotNull(propsFilePath, "Not found properties file");
 
     // First, run clean with two partition
-    SparkMain.clean(jsc, HoodieCLI.basePath, propsFilePath.toString(), new ArrayList<>());
+    SparkMain.clean(jsc(), HoodieCLI.basePath, propsFilePath.toString(), new ArrayList<>());
     assertEquals(1, metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().count(),
         "Loaded 1 clean and the count should match");
 
     HoodieInstant clean = metaClient.getActiveTimeline().reload().getCleanerTimeline().getInstants().findFirst().get();
 
-    CommandResult cr = getShell().executeCommand("clean showpartitions --clean " + clean.getTimestamp());
+    CommandResult cr = shell().executeCommand("clean showpartitions --clean " + clean.getTimestamp());
     assertTrue(cr.isSuccess());
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)

@@ -55,9 +55,9 @@ class TestDataSourceDefaults {
 
   private def getKeyConfig(recordKeyFieldName: String, partitionPathField: String, hiveStylePartitioning: String): TypedProperties = {
     val props = new TypedProperties()
-    props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, recordKeyFieldName)
-    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, partitionPathField)
-    props.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key, hiveStylePartitioning)
+    props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, recordKeyFieldName)
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, partitionPathField)
+    props.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStylePartitioning)
     props
   }
 
@@ -75,7 +75,7 @@ class TestDataSourceDefaults {
     // partition path field not specified
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -86,7 +86,7 @@ class TestDataSourceDefaults {
     // partition path field not specified using Row
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
       val keyGen = new SimpleKeyGenerator(props)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
@@ -98,7 +98,7 @@ class TestDataSourceDefaults {
     // recordkey field not specified
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "partitionField")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partitionField")
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -109,7 +109,7 @@ class TestDataSourceDefaults {
     // recordkey field not specified using Row
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "partitionField")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
       val keyGen = new SimpleKeyGenerator(props)
       keyGen.getPartitionPath(baseRow)
       fail("Should have errored out")
@@ -181,8 +181,8 @@ class TestDataSourceDefaults {
     try {
       baseRecord.put("field1", "")
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1")
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "name")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "name")
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -193,8 +193,8 @@ class TestDataSourceDefaults {
     // if record key is empty, throw error. Using Row
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1")
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "name")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "name")
       keyGen = new SimpleKeyGenerator(props)
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       keyGen.getRecordKey(baseRow)
@@ -208,8 +208,8 @@ class TestDataSourceDefaults {
     try {
       baseRecord.put("field1", null)
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1")
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "name")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "name")
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -220,8 +220,8 @@ class TestDataSourceDefaults {
     // if record key is null, throw error. Using Row
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1")
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "name")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "name")
       keyGen = new SimpleKeyGenerator(props)
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       keyGen.getRecordKey(baseRow)
@@ -239,8 +239,8 @@ class TestDataSourceDefaults {
   }
 
   class UserDefinedKeyGenerator(props: TypedProperties) extends KeyGenerator(props) with SparkKeyGeneratorInterface {
-    val recordKeyProp: String = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key)
-    val partitionPathProp: String = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key)
+    val recordKeyProp: String = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD.key)
+    val partitionPathProp: String = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD.key)
     val STRUCT_NAME: String = "hoodieRowTopLevelField"
     val NAMESPACE: String = "hoodieRow"
     var converterFn: Function1[Any, Any] = _
@@ -279,7 +279,7 @@ class TestDataSourceDefaults {
     // partition path field not specified
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
       new ComplexKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -290,7 +290,7 @@ class TestDataSourceDefaults {
     // partition path field not specified using Row
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
       val keyGen = new ComplexKeyGenerator(props)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
@@ -302,7 +302,7 @@ class TestDataSourceDefaults {
     // recordkey field not specified
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "partitionField")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
       new ComplexKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -313,7 +313,7 @@ class TestDataSourceDefaults {
     // recordkey field not specified
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "partitionField")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
       val keyGen = new ComplexKeyGenerator(props)
       keyGen.getPartitionPath(baseRow)
       fail("Should have errored out")
@@ -395,8 +395,8 @@ class TestDataSourceDefaults {
       baseRecord.put("name", "")
       baseRecord.put("field1", null)
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1,name")
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "field1,name")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1,name")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "field1,name")
       new ComplexKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -409,8 +409,8 @@ class TestDataSourceDefaults {
       baseRecord.put("name", "")
       baseRecord.put("field1", null)
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1,name")
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "field1,name")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1,name")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "field1,name")
       keyGen = new ComplexKeyGenerator(props)
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       keyGen.getRecordKey(baseRow)
@@ -453,7 +453,7 @@ class TestDataSourceDefaults {
 
     // top level, partition value not included
     val props = new TypedProperties()
-    props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1,name")
+    props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1,name")
     keyGen = new GlobalDeleteKeyGenerator(props)
     val hk2 = keyGen.getKey(baseRecord)
     assertEquals("field1:field1,name:name1", hk2.getRecordKey)
@@ -487,7 +487,7 @@ class TestDataSourceDefaults {
     // recordkey field not specified
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "partitionField")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
       new GlobalDeleteKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -498,7 +498,7 @@ class TestDataSourceDefaults {
     // recordkey field not specified
     try {
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "partitionField")
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
       val keyGen = new GlobalDeleteKeyGenerator(props)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")
@@ -532,7 +532,7 @@ class TestDataSourceDefaults {
       baseRecord.put("name", "")
       baseRecord.put("field1", null)
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1,name")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1,name")
       new GlobalDeleteKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
@@ -546,7 +546,7 @@ class TestDataSourceDefaults {
       baseRecord.put("field1", null)
       baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
       val props = new TypedProperties()
-      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "field1,name")
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1,name")
       val keyGen = new GlobalDeleteKeyGenerator(props)
       keyGen.getRecordKey(baseRow)
       fail("Should have errored out")

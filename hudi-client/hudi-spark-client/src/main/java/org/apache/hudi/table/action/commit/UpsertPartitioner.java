@@ -232,13 +232,13 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
 
         // Go over all such buckets, and assign weights as per amount of incoming inserts.
         List<InsertBucketCumulativeWeightPair> insertBuckets = new ArrayList<>();
-        double curentCumulativeWeight = 0;
+        double currentCumulativeWeight = 0;
         for (int i = 0; i < bucketNumbers.size(); i++) {
           InsertBucket bkt = new InsertBucket();
           bkt.bucketNumber = bucketNumbers.get(i);
           bkt.weight = (1.0 * recordsPerBucket.get(i)) / pStat.getNumInserts();
-          curentCumulativeWeight += bkt.weight;
-          insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, curentCumulativeWeight));
+          currentCumulativeWeight += bkt.weight;
+          insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
         LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);

@@ -37,11 +37,11 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
     if (getComplexRecordKey) {
-      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key, pii_col");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key, pii_col");
     } else {
-      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     }
-    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
     return properties;
   }
 
@@ -51,19 +51,19 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getPropertiesWithPartitionPathProp() {
     TypedProperties properties = getCommonProps(true);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp,ts_ms");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp,ts_ms");
     return properties;
   }
 
   private TypedProperties getPropertiesWithoutRecordKeyProp() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
     return properties;
   }
 
   private TypedProperties getWrongRecordKeyFieldProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_wrong_key");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_wrong_key");
     return properties;
   }
 
@@ -78,7 +78,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
     NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
     GenericRecord record = getRecord();
     Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals(properties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key()), "timestamp,ts_ms");
+    Assertions.assertEquals(properties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()), "timestamp,ts_ms");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "");
   }
 
@@ -101,8 +101,8 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testSingleValueKeyGeneratorNonPartitioned() {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "timestamp");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "timestamp");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
     assertEquals(keyGenerator.getRecordKeyFields().size(), 1);
     assertEquals(keyGenerator.getPartitionPathFields().size(), 0);
@@ -118,8 +118,8 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testMultipleValueKeyGeneratorNonPartitioned1() {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "timestamp,driver");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "timestamp,driver");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
     assertEquals(keyGenerator.getRecordKeyFields().size(), 2);
     assertEquals(keyGenerator.getPartitionPathFields().size(), 0);

@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 public class FileSystemViewStorageConfig extends HoodieConfig {
 
   // Property Names
-  public static final ConfigProperty<FileSystemViewStorageType> FILESYSTEM_VIEW_STORAGE_TYPE = ConfigProperty
+  public static final ConfigProperty<FileSystemViewStorageType> VIEW_TYPE = ConfigProperty
       .key("hoodie.filesystem.view.type")
       .defaultValue(FileSystemViewStorageType.MEMORY)
       .withDocumentation("File system view provides APIs for viewing the files on the underlying lake storage, "
@@ -48,69 +48,69 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
           + Arrays.stream(FileSystemViewStorageType.values()).map(Enum::name).collect(Collectors.joining(","))
           + " which provide different trade offs for memory usage and API request performance.");
 
-  public static final ConfigProperty<String> FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE = ConfigProperty
+  public static final ConfigProperty<String> INCREMENTAL_TIMELINE_SYNC_ENABLE = ConfigProperty
       .key("hoodie.filesystem.view.incr.timeline.sync.enable")
       .defaultValue("false")
       .withDocumentation("Controls whether or not, the file system view is incrementally updated as "
           + "new actions are performed on the timeline.");
 
-  public static final ConfigProperty<FileSystemViewStorageType> FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE = ConfigProperty
+  public static final ConfigProperty<FileSystemViewStorageType> SECONDARY_VIEW_TYPE = ConfigProperty
       .key("hoodie.filesystem.view.secondary.type")
       .defaultValue(FileSystemViewStorageType.MEMORY)
       .withDocumentation("Specifies the secondary form of storage for file system view, if the primary (e.g timeline server) "
           + " is unavailable.");
 
-  public static final ConfigProperty<String> FILESYSTEM_VIEW_REMOTE_HOST = ConfigProperty
+  public static final ConfigProperty<String> REMOTE_HOST_NAME = ConfigProperty
       .key("hoodie.filesystem.view.remote.host")
       .defaultValue("localhost")
       .withDocumentation("We expect this to be rarely hand configured.");
 
-  public static final ConfigProperty<Integer> FILESYSTEM_VIEW_REMOTE_PORT = ConfigProperty
+  public static final ConfigProperty<Integer> REMOTE_PORT_NUM = ConfigProperty
       .key("hoodie.filesystem.view.remote.port")
       .defaultValue(26754)
       .withDocumentation("Port to serve file system view queries, when remote. We expect this to be rarely hand configured.");
 
-  public static final ConfigProperty<String> FILESYSTEM_VIEW_SPILLABLE_DIR = ConfigProperty
+  public static final ConfigProperty<String> SPILLABLE_DIR = ConfigProperty
       .key("hoodie.filesystem.view.spillable.dir")
-      .defaultValue("/tmp/view_map/")
+      .defaultValue("/tmp/")
       .withDocumentation("Path on local storage to use, when file system view is held in a spillable map.");
 
-  public static final ConfigProperty<Long> FILESYSTEM_VIEW_SPILLABLE_MEM = ConfigProperty
+  public static final ConfigProperty<Long> SPILLABLE_MEMORY = ConfigProperty
       .key("hoodie.filesystem.view.spillable.mem")
       .defaultValue(100 * 1024 * 1024L) // 100 MB
       .withDocumentation("Amount of memory to be used for holding file system view, before spilling to disk.");
 
-  public static final ConfigProperty<Double> FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION = ConfigProperty
+  public static final ConfigProperty<Double> SPILLABLE_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.compaction.mem.fraction")
       .defaultValue(0.8)
       .withDocumentation("Fraction of the file system view memory, to be used for holding compaction related metadata.");
 
-  public static final ConfigProperty<Double> FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION = ConfigProperty
+  public static final ConfigProperty<Double> BOOTSTRAP_BASE_FILE_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.bootstrap.base.file.mem.fraction")
       .defaultValue(0.05)
       .withDocumentation("Fraction of the file system view memory, to be used for holding mapping to bootstrap base files.");
 
-  public static final ConfigProperty<Double> FILESYSTEM_VIEW_REPLACED_MEM_FRACTION = ConfigProperty
+  public static final ConfigProperty<Double> SPILLABLE_REPLACED_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.replaced.mem.fraction")
       .defaultValue(0.01)
       .withDocumentation("Fraction of the file system view memory, to be used for holding replace commit related metadata.");
 
-  public static final ConfigProperty<Double> FILESYSTEM_VIEW_PENDING_CLUSTERING_MEM_FRACTION = ConfigProperty
+  public static final ConfigProperty<Double> SPILLABLE_CLUSTERING_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.clustering.mem.fraction")
       .defaultValue(0.01)
       .withDocumentation("Fraction of the file system view memory, to be used for holding clustering related metadata.");
 
-  public static final ConfigProperty<String> ROCKSDB_BASE_PATH_PROP = ConfigProperty
+  public static final ConfigProperty<String> ROCKSDB_BASE_PATH = ConfigProperty
       .key("hoodie.filesystem.view.rocksdb.base.path")
       .defaultValue("/tmp/hoodie_timeline_rocksdb")
       .withDocumentation("Path on local storage to use, when storing file system view in embedded kv store/rocksdb.");
 
-  public static final ConfigProperty<Integer> FILESYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS = ConfigProperty
+  public static final ConfigProperty<Integer> REMOTE_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.filesystem.view.remote.timeout.secs")
       .defaultValue(5 * 60) // 5 min
       .withDocumentation("Timeout in seconds, to wait for API requests against a remote file system view. e.g timeline server.");
 
-  public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_HANDLER_ENABLE = ConfigProperty
+  public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_ENABLE = ConfigProperty
       .key("hoodie.filesystem.remote.backup.view.enable")
       .defaultValue("true") // Need to be disabled only for tests.
       .withDocumentation("Config to control whether backup needs to be configured if clients were not able to reach"
@@ -125,70 +125,70 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   }
 
   public FileSystemViewStorageType getStorageType() {
-    return FileSystemViewStorageType.valueOf(getString(FILESYSTEM_VIEW_STORAGE_TYPE));
+    return FileSystemViewStorageType.valueOf(getString(VIEW_TYPE));
   }
 
   public boolean isIncrementalTimelineSyncEnabled() {
-    return getBoolean(FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE);
+    return getBoolean(INCREMENTAL_TIMELINE_SYNC_ENABLE);
   }
 
   public String getRemoteViewServerHost() {
-    return getString(FILESYSTEM_VIEW_REMOTE_HOST);
+    return getString(REMOTE_HOST_NAME);
   }
 
   public Integer getRemoteViewServerPort() {
-    return getInt(FILESYSTEM_VIEW_REMOTE_PORT);
+    return getInt(REMOTE_PORT_NUM);
   }
 
   public Integer getRemoteTimelineClientTimeoutSecs() {
-    return getInt(FILESYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS);
+    return getInt(REMOTE_TIMEOUT_SECS);
   }
 
   public long getMaxMemoryForFileGroupMap() {
-    long totalMemory = getLong(FILESYSTEM_VIEW_SPILLABLE_MEM);
+    long totalMemory = getLong(SPILLABLE_MEMORY);
     return totalMemory - getMaxMemoryForPendingCompaction() - getMaxMemoryForBootstrapBaseFile();
   }
 
   public long getMaxMemoryForPendingCompaction() {
-    long totalMemory = getLong(FILESYSTEM_VIEW_SPILLABLE_MEM);
-    return new Double(totalMemory * getDouble(FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION))
+    long totalMemory = getLong(SPILLABLE_MEMORY);
+    return new Double(totalMemory * getDouble(SPILLABLE_COMPACTION_MEM_FRACTION))
         .longValue();
   }
 
   public long getMaxMemoryForBootstrapBaseFile() {
-    long totalMemory = getLong(FILESYSTEM_VIEW_SPILLABLE_MEM);
+    long totalMemory = getLong(SPILLABLE_MEMORY);
     long reservedForExternalDataFile =
-        new Double(totalMemory * getDouble(FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION))
+        new Double(totalMemory * getDouble(BOOTSTRAP_BASE_FILE_MEM_FRACTION))
             .longValue();
     return reservedForExternalDataFile;
   }
 
   public long getMaxMemoryForReplacedFileGroups() {
-    long totalMemory = getLong(FILESYSTEM_VIEW_SPILLABLE_MEM);
-    return new Double(totalMemory * getDouble(FILESYSTEM_VIEW_REPLACED_MEM_FRACTION))
+    long totalMemory = getLong(SPILLABLE_MEMORY);
+    return new Double(totalMemory * getDouble(SPILLABLE_REPLACED_MEM_FRACTION))
         .longValue();
   }
 
   public long getMaxMemoryForPendingClusteringFileGroups() {
-    long totalMemory = getLong(FILESYSTEM_VIEW_SPILLABLE_MEM);
-    return new Double(totalMemory * getDouble(FILESYSTEM_VIEW_PENDING_CLUSTERING_MEM_FRACTION))
+    long totalMemory = getLong(SPILLABLE_MEMORY);
+    return new Double(totalMemory * getDouble(SPILLABLE_CLUSTERING_MEM_FRACTION))
         .longValue();
   }
 
   public String getSpillableDir() {
-    return getString(FILESYSTEM_VIEW_SPILLABLE_DIR);
+    return getString(SPILLABLE_DIR);
   }
 
   public FileSystemViewStorageType getSecondaryStorageType() {
-    return FileSystemViewStorageType.valueOf(getString(FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE));
+    return FileSystemViewStorageType.valueOf(getString(SECONDARY_VIEW_TYPE));
   }
 
   public boolean shouldEnableBackupForRemoteFileSystemView() {
-    return getBoolean(REMOTE_BACKUP_VIEW_HANDLER_ENABLE);
+    return getBoolean(REMOTE_BACKUP_VIEW_ENABLE);
   }
 
   public String getRocksdbBasePath() {
-    return getString(ROCKSDB_BASE_PATH_PROP);
+    return getString(ROCKSDB_BASE_PATH);
   }
 
   /**
@@ -211,73 +211,203 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
     }
 
     public Builder withStorageType(FileSystemViewStorageType storageType) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_VIEW_STORAGE_TYPE, storageType.name());
+      fileSystemViewStorageConfig.setValue(VIEW_TYPE, storageType.name());
       return this;
     }
 
     public Builder withSecondaryStorageType(FileSystemViewStorageType storageType) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE, storageType.name());
+      fileSystemViewStorageConfig.setValue(SECONDARY_VIEW_TYPE, storageType.name());
       return this;
     }
 
     public Builder withIncrementalTimelineSync(boolean enableIncrTimelineSync) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE, Boolean.toString(enableIncrTimelineSync));
+      fileSystemViewStorageConfig.setValue(INCREMENTAL_TIMELINE_SYNC_ENABLE, Boolean.toString(enableIncrTimelineSync));
       return this;
     }
 
     public Builder withRemoteServerHost(String remoteServerHost) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_VIEW_REMOTE_HOST, remoteServerHost);
+      fileSystemViewStorageConfig.setValue(REMOTE_HOST_NAME, remoteServerHost);
       return this;
     }
 
     public Builder withRemoteServerPort(Integer remoteServerPort) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_VIEW_REMOTE_PORT, remoteServerPort.toString());
+      fileSystemViewStorageConfig.setValue(REMOTE_PORT_NUM, remoteServerPort.toString());
       return this;
     }
 
     public Builder withMaxMemoryForView(Long maxMemoryForView) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_VIEW_SPILLABLE_MEM, maxMemoryForView.toString());
+      fileSystemViewStorageConfig.setValue(SPILLABLE_MEMORY, maxMemoryForView.toString());
       return this;
     }
 
     public Builder withRemoteTimelineClientTimeoutSecs(Long timelineClientTimeoutSecs) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS, timelineClientTimeoutSecs.toString());
+      fileSystemViewStorageConfig.setValue(REMOTE_TIMEOUT_SECS, timelineClientTimeoutSecs.toString());
       return this;
     }
 
     public Builder withMemFractionForPendingCompaction(Double memFractionForPendingCompaction) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION, memFractionForPendingCompaction.toString());
+      fileSystemViewStorageConfig.setValue(SPILLABLE_COMPACTION_MEM_FRACTION, memFractionForPendingCompaction.toString());
       return this;
     }
 
     public Builder withMemFractionForExternalDataFile(Double memFractionForExternalDataFile) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION, memFractionForExternalDataFile.toString());
+      fileSystemViewStorageConfig.setValue(BOOTSTRAP_BASE_FILE_MEM_FRACTION, memFractionForExternalDataFile.toString());
       return this;
     }
 
     public Builder withBaseStoreDir(String baseStorePath) {
-      fileSystemViewStorageConfig.setValue(FILESYSTEM_VIEW_SPILLABLE_DIR, baseStorePath);
+      fileSystemViewStorageConfig.setValue(SPILLABLE_DIR, baseStorePath);
       return this;
     }
 
     public Builder withRocksDBPath(String basePath) {
-      fileSystemViewStorageConfig.setValue(ROCKSDB_BASE_PATH_PROP, basePath);
+      fileSystemViewStorageConfig.setValue(ROCKSDB_BASE_PATH, basePath);
       return this;
     }
 
     public Builder withEnableBackupForRemoteFileSystemView(boolean enable) {
-      fileSystemViewStorageConfig.setValue(REMOTE_BACKUP_VIEW_HANDLER_ENABLE, Boolean.toString(enable));
+      fileSystemViewStorageConfig.setValue(REMOTE_BACKUP_VIEW_ENABLE, Boolean.toString(enable));
       return this;
     }
 
     public FileSystemViewStorageConfig build() {
       fileSystemViewStorageConfig.setDefaults(FileSystemViewStorageConfig.class.getName());
       // Validations
-      FileSystemViewStorageType.valueOf(fileSystemViewStorageConfig.getString(FILESYSTEM_VIEW_STORAGE_TYPE));
-      FileSystemViewStorageType.valueOf(fileSystemViewStorageConfig.getString(FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE));
-      ValidationUtils.checkArgument(fileSystemViewStorageConfig.getInt(FILESYSTEM_VIEW_REMOTE_PORT) > 0);
+      FileSystemViewStorageType.valueOf(fileSystemViewStorageConfig.getString(VIEW_TYPE));
+      FileSystemViewStorageType.valueOf(fileSystemViewStorageConfig.getString(SECONDARY_VIEW_TYPE));
+      ValidationUtils.checkArgument(fileSystemViewStorageConfig.getInt(REMOTE_PORT_NUM) > 0);
       return fileSystemViewStorageConfig;
     }
   }
 
+  /**
+   * @deprecated Use {@link #VIEW_TYPE} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_STORAGE_TYPE = VIEW_TYPE.key();
+  /**
+   * @deprecated Use {@link #VIEW_TYPE} and its methods.
+   */
+  @Deprecated
+  public static final FileSystemViewStorageType DEFAULT_VIEW_STORAGE_TYPE = VIEW_TYPE.defaultValue();
+  /**
+   * @deprecated Use {@link #INCREMENTAL_TIMELINE_SYNC_ENABLE} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE = INCREMENTAL_TIMELINE_SYNC_ENABLE.key();
+  /**
+   * @deprecated Use {@link #INCREMENTAL_TIMELINE_SYNC_ENABLE} and its methods.
+   */
+  @Deprecated
+  public static final String DEFAULT_FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE = INCREMENTAL_TIMELINE_SYNC_ENABLE.defaultValue();
+  /**
+   * @deprecated Use {@link #SECONDARY_VIEW_TYPE} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE = SECONDARY_VIEW_TYPE.key();
+  /**
+   * @deprecated Use {@link #SECONDARY_VIEW_TYPE} and its methods.
+   */
+  @Deprecated
+  public static final FileSystemViewStorageType DEFAULT_SECONDARY_VIEW_STORAGE_TYPE = SECONDARY_VIEW_TYPE.defaultValue();
+  /**
+   * @deprecated Use {@link #REMOTE_HOST_NAME} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_REMOTE_HOST = REMOTE_HOST_NAME.key();
+  /**
+   * @deprecated Use {@link #REMOTE_HOST_NAME} and its methods.
+   */
+  @Deprecated
+  public static final String DEFUALT_REMOTE_VIEW_SERVER_HOST = REMOTE_HOST_NAME.defaultValue();
+  /**
+   * @deprecated Use {@link #REMOTE_PORT_NUM} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_REMOTE_PORT = REMOTE_PORT_NUM.key();
+  /**
+   * @deprecated Use {@link #REMOTE_PORT_NUM} and its methods.
+   */
+  @Deprecated
+  public static final Integer DEFAULT_REMOTE_VIEW_SERVER_PORT = REMOTE_PORT_NUM.defaultValue();
+  /**
+   * @deprecated Use {@link #SPILLABLE_DIR} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_SPILLABLE_DIR = SPILLABLE_DIR.key();
+  /**
+   * @deprecated Use {@link #SPILLABLE_DIR} and its methods.
+   */
+  @Deprecated
+  public static final String DEFAULT_VIEW_SPILLABLE_DIR = SPILLABLE_DIR.defaultValue();
+  /**
+   * @deprecated Use {@link #SPILLABLE_MEMORY} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_SPILLABLE_MEM = SPILLABLE_MEMORY.key();
+  /**
+   * @deprecated Use {@link #SPILLABLE_MEMORY} and its methods.
+   */
+  @Deprecated
+  private static final Long DEFAULT_MAX_MEMORY_FOR_VIEW = SPILLABLE_MEMORY.defaultValue();
+  /**
+   * @deprecated Use {@link #SPILLABLE_COMPACTION_MEM_FRACTION} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION = SPILLABLE_COMPACTION_MEM_FRACTION.key();
+  /**
+   * @deprecated Use {@link #SPILLABLE_COMPACTION_MEM_FRACTION} and its methods.
+   */
+  @Deprecated
+  private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_COMPACTION = SPILLABLE_COMPACTION_MEM_FRACTION.defaultValue();
+  /**
+   * @deprecated Use {@link #BOOTSTRAP_BASE_FILE_MEM_FRACTION} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION = BOOTSTRAP_BASE_FILE_MEM_FRACTION.key();
+  /**
+   * @deprecated Use {@link #SPILLABLE_REPLACED_MEM_FRACTION} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_REPLACED_MEM_FRACTION = SPILLABLE_REPLACED_MEM_FRACTION.key();
+  /**
+   * @deprecated Use {@link #SPILLABLE_REPLACED_MEM_FRACTION} and its methods.
+   */
+  @Deprecated
+  private static final Double DEFAULT_MEM_FRACTION_FOR_REPLACED_FILEGROUPS = SPILLABLE_REPLACED_MEM_FRACTION.defaultValue();
+  /**
+   * @deprecated Use {@link #SPILLABLE_CLUSTERING_MEM_FRACTION} and its methods.
+   */
+  @Deprecated
+  public static final String FILESYSTEM_VIEW_PENDING_CLUSTERING_MEM_FRACTION = SPILLABLE_CLUSTERING_MEM_FRACTION.key();
+  /**
+   * @deprecated Use {@link #SPILLABLE_CLUSTERING_MEM_FRACTION} and its methods.
+   */
+  @Deprecated
+  private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_CLUSTERING_FILEGROUPS = SPILLABLE_CLUSTERING_MEM_FRACTION.defaultValue();
+  /**
+   * @deprecated Use {@link #ROCKSDB_BASE_PATH} and its methods.
+   */
+  @Deprecated
+  private static final String ROCKSDB_BASE_PATH_PROP = ROCKSDB_BASE_PATH.key();
+  /**
+   * @deprecated Use {@link #ROCKSDB_BASE_PATH} and its methods.
+   */
+  @Deprecated
+  public static final String DEFAULT_ROCKSDB_BASE_PATH = ROCKSDB_BASE_PATH.defaultValue();
+  /**
+   * @deprecated Use {@link #REMOTE_TIMEOUT_SECS} and its methods.
+   */
+  @Deprecated
+  public static final String FILESTYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS = REMOTE_TIMEOUT_SECS.key();
+  /**
+   * @deprecated Use {@link #REMOTE_TIMEOUT_SECS} and its methods.
+   */
+  @Deprecated
+  public static final Integer DEFAULT_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS = REMOTE_TIMEOUT_SECS.defaultValue();
+  /**
+   * @deprecated Use {@link #BOOTSTRAP_BASE_FILE_MEM_FRACTION} and its methods.
+   */
+  @Deprecated
+  private static final Double DEFAULT_MEM_FRACTION_FOR_EXTERNAL_DATA_FILE = BOOTSTRAP_BASE_FILE_MEM_FRACTION.defaultValue();
 }

@@ -46,8 +46,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -67,7 +69,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
@@ -97,7 +99,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
 
-    if (writeConfig.useFileListingMetadata()) {
+    if (writeConfig.isMetadataTableEnabled()) {
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig);
       enabled = true;
@@ -107,7 +109,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       ValidationUtils.checkArgument(!this.metadataWriteConfig.inlineCompactionEnabled(), "Compaction is controlled internally for metadata table.");
       // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)
       ValidationUtils.checkArgument(this.metadataWriteConfig.shouldAutoCommit(), "Auto commit is required for Metadata Table");
-      ValidationUtils.checkArgument(!this.metadataWriteConfig.useFileListingMetadata(), "File listing cannot be used for Metadata Table");
+      ValidationUtils.checkArgument(!this.metadataWriteConfig.isMetadataTableEnabled(), "File listing cannot be used for Metadata Table");
 
       initRegistry();
       HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(datasetWriteConfig.getBasePath()).build();
@@ -137,6 +139,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) {
     int parallelism = writeConfig.getMetadataInsertParallelism();
 
+    int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
+    int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
+
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
@@ -162,7 +167,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
-            .archiveCommitsWith(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMetadataMaxCommitsToKeep())
+            .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
             // we will trigger compaction manually, to control the instant times
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
@@ -172,19 +177,22 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withFinalizeWriteParallelism(parallelism);
 
     if (writeConfig.isMetricsOn()) {
-      HoodieMetricsConfig.Builder metricsConfig = HoodieMetricsConfig.newBuilder()
+      builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
           .withReporterType(writeConfig.getMetricsReporterType().toString())
           .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
-          .on(true);
+          .on(true).build());
       switch (writeConfig.getMetricsReporterType()) {
         case GRAPHITE:
-          metricsConfig.onGraphitePort(writeConfig.getGraphiteServerPort())
+          builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
+              .onGraphitePort(writeConfig.getGraphiteServerPort())
               .toGraphiteHost(writeConfig.getGraphiteServerHost())
-              .usePrefix(writeConfig.getGraphiteMetricPrefix());
+              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
           break;
         case JMX:
-          metricsConfig.onJmxPort(writeConfig.getJmxPort())
-              .toJmxHost(writeConfig.getJmxHost());
+          builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
+              .onJmxPort(writeConfig.getJmxPort())
+              .toJmxHost(writeConfig.getJmxHost())
+              .build());
           break;
         case DATADOG:
         case PROMETHEUS:
@@ -195,10 +203,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         default:
           throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
       }
-
-      builder.withMetricsConfig(metricsConfig.build());
     }
-
     return builder.build();
   }
 
@@ -248,7 +253,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       if (!latestMetadataInstant.isPresent()) {
         LOG.warn("Metadata Table will need to be re-bootstrapped as no instants were found");
         rebootstrap = true;
-      } else if (datasetMetaClient.getActiveTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
+      } else if (!latestMetadataInstant.get().getTimestamp().equals(SOLO_COMMIT_TIMESTAMP)
+          && datasetMetaClient.getActiveTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
         LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
             + " latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
             + ", latestDatasetInstant=" + datasetMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
@@ -295,9 +301,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
 
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(HoodieTableType.MERGE_ON_READ)
-      .setTableName(tableName)
-      .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .setTableName(tableName)
+        .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
       .setPayloadClassName(HoodieMetadataPayload.class.getName())
       .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
       .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
@@ -415,7 +421,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       for (HoodieInstant instant : instantsToSync) {
         LOG.info("Syncing instant " + instant + " to metadata table");
 
-        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient, instant, getLatestSyncedInstantTime());
+        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient,
+            metaClient.getActiveTimeline(), instant, metadata.getUpdateTime());
         if (records.isPresent()) {
           commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
         }
@@ -477,7 +484,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
     if (enabled) {
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(restoreMetadata, instantTime, metadata.getSyncedInstantTime());
+      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metaClient.getActiveTimeline(),
+          restoreMetadata, instantTime, metadata.getUpdateTime());
       commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
     }
   }
@@ -491,7 +499,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
     if (enabled) {
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(rollbackMetadata, instantTime, metadata.getSyncedInstantTime());
+      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metaClient.getActiveTimeline(),
+          rollbackMetadata, instantTime, metadata.getUpdateTime());
       commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
     }
   }
@@ -501,6 +510,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (metadata != null) {
       metadata.close();
     }
+  }
+
+  public HoodieBackedTableMetadata getMetadataReader() {
+    return metadata;
   }
 
   /**

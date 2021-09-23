@@ -37,15 +37,16 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.CheckpointListener;
+import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
-import org.apache.flink.table.runtime.util.StateTtlConfigUtil;
 import org.apache.flink.util.Collector;
 
 import java.util.Objects;
@@ -91,8 +92,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   private final Configuration conf;
 
-  private transient org.apache.hadoop.conf.Configuration hadoopConf;
-
   private final boolean isChangingRecords;
 
   /**
@@ -110,25 +109,31 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
-    this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
+    this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED)
+        && !conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(this.hadoopConf),
+        new SerializableConfiguration(StreamerUtil.getHadoopConf()),
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(
         getRuntimeContext().getIndexOfThisSubtask(),
+        getRuntimeContext().getMaxNumberOfParallelSubtasks(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
-        WriteOperationType.isOverwrite(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION))),
+        ignoreSmallFiles(writeConfig),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
     this.payloadCreation = PayloadCreation.instance(this.conf);
+  }
+
+  private boolean ignoreSmallFiles(HoodieWriteConfig writeConfig) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return WriteOperationType.isOverwrite(operationType) || writeConfig.allowDuplicateInserts();
   }
 
   @Override
@@ -144,7 +149,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
             TypeInformation.of(HoodieRecordGlobalLocation.class));
     double ttl = conf.getDouble(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
     if (ttl > 0) {
-      indexStateDesc.enableTimeToLive(StateTtlConfigUtil.createTtlConfig((long) ttl));
+      indexStateDesc.enableTimeToLive(StateTtlConfig.newBuilder(Time.milliseconds((long) ttl)).build());
     }
     indexState = context.getKeyedStateStore().getState(indexStateDesc);
   }

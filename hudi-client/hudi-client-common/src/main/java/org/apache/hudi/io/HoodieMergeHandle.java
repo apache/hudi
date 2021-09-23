@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -76,7 +77,7 @@ import java.util.Set;
  * Existing data:
  *     rec1_1, rec2_1, rec3_1, rec4_1
  *
- * For every existing record, merge w/ incoming if requried and write to storage.
+ * For every existing record, merge w/ incoming if required and write to storage.
  *    => rec1_1 and rec1_2 is merged to write rec1_2 to storage
  *    => rec2_1 is written as is
  *    => rec3_1 is written as is
@@ -264,6 +265,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       writeStatus.markFailure(hoodieRecord, failureEx, recordMetadata);
       return false;
     }
+    if (HoodieOperation.isDelete(hoodieRecord.getOperation())) {
+      indexedRecord = Option.empty();
+    }
     try {
       if (indexedRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
@@ -357,7 +361,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         }
       }
 
-      keyToNewRecords.clear();
       ((ExternalSpillableMap) keyToNewRecords).close();
       writtenRecordKeys.clear();
 

@@ -24,7 +24,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -49,6 +50,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
 
   private boolean isClosed = false;
+  private final WriteMarkers writeMarkers;
 
   public FlinkAppendHandle(
       HoodieWriteConfig config,
@@ -59,6 +61,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
+    this.writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
   }
 
   @Override
@@ -66,10 +69,9 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
     // In some rare cases, the task was pulled up again with same write file name,
     // for e.g, reuse the small log files from last commit instant.
 
-    // Just skip the marker file creation if it already exists, the new data would append to
+    // Just skip the marker creation if it already exists, the new data would append to
     // the file directly.
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
-    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
+    writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override
@@ -79,6 +81,9 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   protected boolean isUpdateRecord(HoodieRecord<T> hoodieRecord) {
+    // do not use the HoodieRecord operation because hoodie writer has its own
+    // INSERT/MERGE bucket for 'UPSERT' semantics. For e.g, a hoodie record with fresh new key
+    // and operation HoodieCdcOperation.DELETE would be put into either an INSERT bucket or UPDATE bucket.
     return hoodieRecord.getCurrentLocation() != null
         && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
   }

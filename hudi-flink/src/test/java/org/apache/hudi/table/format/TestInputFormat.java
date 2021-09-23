@@ -19,8 +19,11 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieTableSource;
+import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -43,6 +46,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -60,17 +64,17 @@ public class TestInputFormat {
   File tempFile;
 
   void beforeEach(HoodieTableType tableType) throws IOException {
+    beforeEach(tableType, Collections.emptyMap());
+  }
+
+  void beforeEach(HoodieTableType tableType, Map<String, String> options) throws IOException {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // close the async compaction
+    options.forEach((key, value) -> conf.setString(key, value));
 
     StreamerUtil.initTableIfNotExists(conf);
-    this.tableSource = new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getAbsolutePath()),
-        Collections.singletonList("partition"),
-        "default",
-        conf);
+    this.tableSource = getTableSource(conf);
   }
 
   @ParameterizedTest
@@ -98,17 +102,18 @@ public class TestInputFormat {
     result = readData(inputFormat);
 
     actual = TestData.rowDataToString(result);
-    expected = "[id1,Danny,24,1970-01-01T00:00:00.001,par1, "
-        + "id10,Ella,38,1970-01-01T00:00:00.007,par4, "
-        + "id11,Phoebe,52,1970-01-01T00:00:00.008,par4, "
-        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
-        + "id3,Julian,54,1970-01-01T00:00:00.003,par2, "
-        + "id4,Fabian,32,1970-01-01T00:00:00.004,par2, "
-        + "id5,Sophia,18,1970-01-01T00:00:00.005,par3, "
-        + "id6,Emma,20,1970-01-01T00:00:00.006,par3, "
-        + "id7,Bob,44,1970-01-01T00:00:00.007,par4, "
-        + "id8,Han,56,1970-01-01T00:00:00.008,par4, "
-        + "id9,Jane,19,1970-01-01T00:00:00.006,par3]";
+    expected = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id3, Julian, 54, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 32, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4], "
+        + "+I[id9, Jane, 19, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id10, Ella, 38, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id11, Phoebe, 52, 1970-01-01T00:00:00.008, par4]]";
     assertThat(actual, is(expected));
   }
 
@@ -144,27 +149,119 @@ public class TestInputFormat {
     result = readData(inputFormat);
 
     actual = TestData.rowDataToString(result);
-    expected = "[id1,Danny,24,1970-01-01T00:00:00.001,par1, "
-        + "id10,Ella,38,1970-01-01T00:00:00.007,par4, "
-        + "id11,Phoebe,52,1970-01-01T00:00:00.008,par4, "
-        + "id12,Monica,27,1970-01-01T00:00:00.009,par5, "
-        + "id13,Phoebe,31,1970-01-01T00:00:00.010,par5, "
-        + "id14,Rachel,52,1970-01-01T00:00:00.011,par6, "
-        + "id15,Ross,29,1970-01-01T00:00:00.012,par6, "
-        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
-        + "id3,Julian,54,1970-01-01T00:00:00.003,par2, "
-        + "id4,Fabian,32,1970-01-01T00:00:00.004,par2, "
-        + "id5,Sophia,18,1970-01-01T00:00:00.005,par3, "
-        + "id6,Emma,20,1970-01-01T00:00:00.006,par3, "
-        + "id7,Bob,44,1970-01-01T00:00:00.007,par4, "
-        + "id8,Han,56,1970-01-01T00:00:00.008,par4, "
-        + "id9,Jane,19,1970-01-01T00:00:00.006,par3]";
+    expected = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id3, Julian, 54, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 32, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4], "
+        + "+I[id9, Jane, 19, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id10, Ella, 38, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id11, Phoebe, 52, 1970-01-01T00:00:00.008, par4], "
+        + "+I[id12, Monica, 27, 1970-01-01T00:00:00.009, par5], "
+        + "+I[id13, Phoebe, 31, 1970-01-01T00:00:00.010, par5], "
+        + "+I[id14, Rachel, 52, 1970-01-01T00:00:00.011, par6], "
+        + "+I[id15, Ross, 29, 1970-01-01T00:00:00.012, par6]]";
     assertThat(actual, is(expected));
   }
 
   @Test
-  void testReadWithDeletes() throws Exception {
-    beforeEach(HoodieTableType.MERGE_ON_READ);
+  void testReadBaseAndLogFilesWithDeletes() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write base first with compaction.
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    // write another commit using logs and read again.
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    // when isEmitDelete is false.
+    List<RowData> result1 = readData(inputFormat);
+
+    final String actual1 = TestData.rowDataToString(result1);
+    final String expected1 = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]";
+    assertThat(actual1, is(expected1));
+
+    // refresh the input format and set isEmitDelete to true.
+    this.tableSource.reset();
+    inputFormat = this.tableSource.getInputFormat();
+    ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+
+    List<RowData> result2 = readData(inputFormat);
+
+    final String actual2 = TestData.rowDataToString(result2);
+    final String expected2 = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "-D[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+        + "-D[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4], "
+        + "-D[id9, Jane, 19, 1970-01-01T00:00:00.006, par3]]";
+    assertThat(actual2, is(expected2));
+  }
+
+  @Test
+  void testReadBaseAndLogFilesWithDisorderUpdateDelete() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write base first with compaction.
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    TestData.writeData(TestData.DATA_SET_SINGLE_INSERT, conf);
+
+    // write another commit using logs and read again.
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    TestData.writeData(TestData.DATA_SET_DISORDER_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    // when isEmitDelete is false.
+    List<RowData> result1 = readData(inputFormat);
+
+    final String actual1 = TestData.rowDataToString(result1);
+    final String expected1 = "[+U[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
+    assertThat(actual1, is(expected1));
+
+    // refresh the input format and set isEmitDelete to true.
+    this.tableSource.reset();
+    inputFormat = this.tableSource.getInputFormat();
+    ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+
+    List<RowData> result2 = readData(inputFormat);
+
+    final String actual2 = TestData.rowDataToString(result2);
+    final String expected2 = "[+U[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
+    assertThat(actual2, is(expected2));
+  }
+
+  @Test
+  void testReadWithDeletesMOR() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
     // write another commit to read again
     TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
@@ -177,11 +274,30 @@ public class TestInputFormat {
 
     final String actual = TestData.rowDataToString(result);
     final String expected = "["
-        + "id1,Danny,24,1970-01-01T00:00:00.001,par1, "
-        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
-        + "id3,null,null,null,null, "
-        + "id5,null,null,null,null, "
-        + "id9,null,null,null,null]";
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1], "
+        + "-D[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+        + "-D[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "-D[id9, Jane, 19, 1970-01-01T00:00:00.006, par3]]";
+    assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testReadWithDeletesCOW() throws Exception {
+    beforeEach(HoodieTableType.COPY_ON_WRITE);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(CopyOnWriteInputFormat.class));
+
+    List<RowData> result = readData(inputFormat);
+
+    final String actual = TestData.rowDataToString(result);
+    final String expected = "["
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 34, 1970-01-01T00:00:00.002, par1]]";
     assertThat(actual, is(expected));
   }
 
@@ -201,13 +317,146 @@ public class TestInputFormat {
     List<RowData> result = readData(inputFormat);
 
     String actual = TestData.rowDataToString(result);
-    String expected = "[id1,Danny,23,1970-01-01T00:00:00.001,par1, id2,Stephen,33,1970-01-01T00:00:00.002,par1]";
+    String expected = "["
+        + "+I[id1, Danny, 23, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1]]";
     assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testReadChangesMergedMOR() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> result1 = readData(inputFormat);
+
+    final String actual1 = TestData.rowDataToString(result1);
+    // the data set is merged when the data source is bounded.
+    final String expected1 = "[]";
+    assertThat(actual1, is(expected1));
+
+    // refresh the input format and set isEmitDelete to true.
+    this.tableSource.reset();
+    inputFormat = this.tableSource.getInputFormat();
+    ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+
+    List<RowData> result2 = readData(inputFormat);
+
+    final String actual2 = TestData.rowDataToString(result2);
+    final String expected2 = "[-D[id1, Danny, 22, 1970-01-01T00:00:00.005, par1]]";
+    assertThat(actual2, is(expected2));
+  }
+
+  @Test
+  void testReadChangesUnMergedMOR() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_INSERT_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> result = readData(inputFormat);
+
+    final String actual = TestData.rowDataToString(result);
+    // the data set is merged when the data source is bounded.
+    final String expected = "["
+        + "+I[id1, Danny, 19, 1970-01-01T00:00:00.001, par1], "
+        + "-U[id1, Danny, 19, 1970-01-01T00:00:00.001, par1], "
+        + "+U[id1, Danny, 20, 1970-01-01T00:00:00.002, par1], "
+        + "-U[id1, Danny, 20, 1970-01-01T00:00:00.002, par1], "
+        + "+U[id1, Danny, 21, 1970-01-01T00:00:00.003, par1], "
+        + "-U[id1, Danny, 21, 1970-01-01T00:00:00.003, par1], "
+        + "+U[id1, Danny, 22, 1970-01-01T00:00:00.004, par1], "
+        + "-D[id1, Danny, 22, 1970-01-01T00:00:00.005, par1]]";
+    assertThat(actual, is(expected));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testReadIncrementally(HoodieTableType tableType) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    beforeEach(tableType, options);
+
+    // write another commit to read again
+    for (int i = 0; i < 6; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath());
+    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+    assertThat(commits.size(), is(3));
+
+    // only the start commit
+    conf.setString(FlinkOptions.READ_START_COMMIT, commits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat1 = this.tableSource.getInputFormat();
+    assertThat(inputFormat1, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual1 = readData(inputFormat1);
+    final List<RowData> expected1 = TestData.dataSetInsert(3, 4, 5, 6);
+    TestData.assertRowDataEquals(actual1, expected1);
+
+    // only the start commit: earliest
+    conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat2 = this.tableSource.getInputFormat();
+    assertThat(inputFormat2, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual2 = readData(inputFormat2);
+    final List<RowData> expected2 = TestData.dataSetInsert(1, 2, 3, 4, 5, 6);
+    TestData.assertRowDataEquals(actual2, expected2);
+
+    // start and end commit: [start commit, end commit]
+    conf.setString(FlinkOptions.READ_START_COMMIT, commits.get(0));
+    conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat3 = this.tableSource.getInputFormat();
+    assertThat(inputFormat3, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual3 = readData(inputFormat3);
+    final List<RowData> expected3 = TestData.dataSetInsert(1, 2, 3, 4);
+    TestData.assertRowDataEquals(actual3, expected3);
+
+    // only the end commit: point in time query
+    conf.removeConfig(FlinkOptions.READ_START_COMMIT);
+    conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat4 = this.tableSource.getInputFormat();
+    assertThat(inputFormat4, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual4 = readData(inputFormat4);
+    final List<RowData> expected4 = TestData.dataSetInsert(3, 4);
+    TestData.assertRowDataEquals(actual4, expected4);
   }
 
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  private HoodieTableSource getTableSource(Configuration conf) {
+    return new HoodieTableSource(
+        TestConfigurations.TABLE_SCHEMA,
+        new Path(tempFile.getAbsolutePath()),
+        Collections.singletonList("partition"),
+        "default",
+        conf);
+  }
 
   @SuppressWarnings("unchecked, rawtypes")
   private static List<RowData> readData(InputFormat inputFormat) throws IOException {

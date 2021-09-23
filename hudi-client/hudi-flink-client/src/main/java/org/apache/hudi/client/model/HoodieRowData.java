@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.model;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
@@ -35,12 +35,7 @@ import org.apache.flink.types.RowKind;
  * copy rather than fetching from {@link RowData}.
  */
 public class HoodieRowData implements RowData {
-
-  private final String commitTime;
-  private final String commitSeqNumber;
-  private final String recordKey;
-  private final String partitionPath;
-  private final String fileName;
+  private final String[] metaColumns;
   private final RowData row;
   private final int metaColumnsNum;
 
@@ -49,14 +44,19 @@ public class HoodieRowData implements RowData {
                        String recordKey,
                        String partitionPath,
                        String fileName,
-                       RowData row) {
-    this.commitTime = commitTime;
-    this.commitSeqNumber = commitSeqNumber;
-    this.recordKey = recordKey;
-    this.partitionPath = partitionPath;
-    this.fileName = fileName;
+                       RowData row,
+                       boolean withOperation) {
+    this.metaColumnsNum = withOperation ? 6 : 5;
+    this.metaColumns = new String[metaColumnsNum];
+    metaColumns[0] = commitTime;
+    metaColumns[1] = commitSeqNumber;
+    metaColumns[2] = recordKey;
+    metaColumns[3] = partitionPath;
+    metaColumns[4] = fileName;
+    if (withOperation) {
+      metaColumns[5] = HoodieOperation.fromValue(row.getRowKind().toByteValue()).getName();
+    }
     this.row = row;
-    this.metaColumnsNum = HoodieRecord.HOODIE_META_COLUMNS.size();
   }
 
   @Override
@@ -72,28 +72,6 @@ public class HoodieRowData implements RowData {
   @Override
   public void setRowKind(RowKind kind) {
     this.row.setRowKind(kind);
-  }
-
-  private String getMetaColumnVal(int ordinal) {
-    switch (ordinal) {
-      case 0: {
-        return commitTime;
-      }
-      case 1: {
-        return commitSeqNumber;
-      }
-      case 2: {
-        return recordKey;
-      }
-      case 3: {
-        return partitionPath;
-      }
-      case 4: {
-        return fileName;
-      }
-      default:
-        throw new IllegalArgumentException("Not expected");
-    }
   }
 
   @Override
@@ -156,7 +134,7 @@ public class HoodieRowData implements RowData {
 
   @Override
   public StringData getString(int ordinal) {
-    if (ordinal < HoodieRecord.HOODIE_META_COLUMNS.size()) {
+    if (ordinal < metaColumnsNum) {
       return StringData.fromString(getMetaColumnVal(ordinal));
     }
     return row.getString(ordinal - metaColumnsNum);
@@ -180,5 +158,9 @@ public class HoodieRowData implements RowData {
   @Override
   public MapData getMap(int ordinal) {
     return row.getMap(ordinal - metaColumnsNum);
+  }
+
+  private String getMetaColumnVal(int ordinal) {
+    return this.metaColumns[ordinal];
   }
 }

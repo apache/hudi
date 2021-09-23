@@ -96,7 +96,7 @@ public class DataSourceUtils {
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
           ? Option.empty() :
-          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass, config));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + bulkInsertPartitionerClass, e);
     }
@@ -115,7 +115,7 @@ public class DataSourceUtils {
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
           ? Option.empty() :
-          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass, config));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitionerRows class " + bulkInsertPartitionerClass, e);
     }
@@ -136,9 +136,9 @@ public class DataSourceUtils {
 
   public static Map<String, String> getExtraMetadata(Map<String, String> properties) {
     Map<String, String> extraMetadataMap = new HashMap<>();
-    if (properties.containsKey(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX_OPT_KEY().key())) {
+    if (properties.containsKey(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key())) {
       properties.entrySet().forEach(entry -> {
-        if (entry.getKey().startsWith(properties.get(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX_OPT_KEY().key()))) {
+        if (entry.getKey().startsWith(properties.get(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key()))) {
           extraMetadataMap.put(entry.getKey(), entry.getValue());
         }
       });
@@ -169,13 +169,13 @@ public class DataSourceUtils {
 
   public static HoodieWriteConfig createHoodieConfig(String schemaStr, String basePath,
       String tblName, Map<String, String> parameters) {
-    boolean asyncCompact = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY().key()));
-    boolean inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY().key())
+    boolean asyncCompact = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key()));
+    boolean inlineCompact = !asyncCompact && parameters.get(DataSourceWriteOptions.TABLE_TYPE().key())
         .equals(DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
-    boolean asyncClusteringEnabled = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE_OPT_KEY().key()));
-    boolean inlineClusteringEnabled = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INLINE_CLUSTERING_ENABLE_OPT_KEY().key()));
+    boolean asyncClusteringEnabled = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key()));
+    boolean inlineClusteringEnabled = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INLINE_CLUSTERING_ENABLE().key()));
     // insert/bulk-insert combining to be true, if filtering for duplicates
-    boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY().key()));
+    boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS().key()));
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withAutoCommit(false).combineInput(combineInserts, true);
     if (schemaStr != null) {
@@ -185,12 +185,12 @@ public class DataSourceUtils {
     return builder.forTable(tblName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY().key()))
+            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key()))
             .withInlineCompaction(inlineCompact).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withInlineClustering(inlineClusteringEnabled)
             .withAsyncClustering(asyncClusteringEnabled).build())
-        .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY().key()))
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD().key()))
             .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
@@ -224,6 +224,11 @@ public class DataSourceUtils {
   public static HoodieWriteResult doDeleteOperation(SparkRDDWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
       String instantTime) {
     return new HoodieWriteResult(client.delete(hoodieKeys, instantTime));
+  }
+
+  public static HoodieWriteResult doDeletePartitionsOperation(SparkRDDWriteClient client, List<String> partitionsToDelete,
+                                                    String instantTime) {
+    return client.deletePartitions(partitionsToDelete, instantTime);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
@@ -268,37 +273,37 @@ public class DataSourceUtils {
   }
 
   public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath, String baseFileFormat) {
-    checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY().key()));
+    checkRequiredProperties(props, Collections.singletonList(DataSourceWriteOptions.HIVE_TABLE().key()));
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
     hiveSyncConfig.basePath = basePath;
     hiveSyncConfig.usePreApacheInputFormat =
-        props.getBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY().key(),
-            Boolean.parseBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY().defaultValue()));
-    hiveSyncConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY().key(),
-        DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY().defaultValue());
-    hiveSyncConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY().key());
+        props.getBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT().key(),
+            Boolean.parseBoolean(DataSourceWriteOptions.HIVE_USE_PRE_APACHE_INPUT_FORMAT().defaultValue()));
+    hiveSyncConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE().key(),
+        DataSourceWriteOptions.HIVE_DATABASE().defaultValue());
+    hiveSyncConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE().key());
     hiveSyncConfig.baseFileFormat = baseFileFormat;
     hiveSyncConfig.hiveUser =
-        props.getString(DataSourceWriteOptions.HIVE_USER_OPT_KEY().key(), DataSourceWriteOptions.HIVE_USER_OPT_KEY().defaultValue());
+        props.getString(DataSourceWriteOptions.HIVE_USER().key(), DataSourceWriteOptions.HIVE_USER().defaultValue());
     hiveSyncConfig.hivePass =
-        props.getString(DataSourceWriteOptions.HIVE_PASS_OPT_KEY().key(), DataSourceWriteOptions.HIVE_PASS_OPT_KEY().defaultValue());
+        props.getString(DataSourceWriteOptions.HIVE_PASS().key(), DataSourceWriteOptions.HIVE_PASS().defaultValue());
     hiveSyncConfig.jdbcUrl =
-        props.getString(DataSourceWriteOptions.HIVE_URL_OPT_KEY().key(), DataSourceWriteOptions.HIVE_URL_OPT_KEY().defaultValue());
+        props.getString(DataSourceWriteOptions.HIVE_URL().key(), DataSourceWriteOptions.HIVE_URL().defaultValue());
     hiveSyncConfig.partitionFields =
-        props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY().key(), ",", new ArrayList<>());
+        props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), ",", new ArrayList<>());
     hiveSyncConfig.partitionValueExtractorClass =
-        props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY().key(),
+        props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
             SlashEncodedDayPartitionValueExtractor.class.getName());
-    hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY().key(),
-        DataSourceWriteOptions.HIVE_USE_JDBC_OPT_KEY().defaultValue()));
-    hiveSyncConfig.autoCreateDatabase = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE_OPT_KEY().key(),
-        DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE_OPT_KEY().defaultValue()));
-    hiveSyncConfig.ignoreExceptions = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS_OPT_KEY().key(),
-        DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS_OPT_KEY().defaultValue()));
-    hiveSyncConfig.skipROSuffix = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX().key(),
-        DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX().defaultValue()));
-    hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP().key(),
-        DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP().defaultValue()));
+    hiveSyncConfig.useJdbc = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_USE_JDBC().key(),
+        DataSourceWriteOptions.HIVE_USE_JDBC().defaultValue()));
+    hiveSyncConfig.autoCreateDatabase = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE().key(),
+        DataSourceWriteOptions.HIVE_AUTO_CREATE_DATABASE().defaultValue()));
+    hiveSyncConfig.ignoreExceptions = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().key(),
+        DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().defaultValue()));
+    hiveSyncConfig.skipROSuffix = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE().key(),
+        DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE().defaultValue()));
+    hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().key(),
+        DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP_TYPE().defaultValue()));
     return hiveSyncConfig;
   }
 }

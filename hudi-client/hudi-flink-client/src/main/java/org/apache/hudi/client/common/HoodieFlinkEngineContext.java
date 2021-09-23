@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -32,6 +33,8 @@ import org.apache.flink.api.common.functions.RuntimeContext;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -42,12 +45,19 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWra
 import static org.apache.hudi.common.function.FunctionWrapper.throwingForeachWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrapper;
 
 /**
  * A flink engine implementation of HoodieEngineContext.
  */
 public class HoodieFlinkEngineContext extends HoodieEngineContext {
-  private RuntimeContext runtimeContext;
+  public static final HoodieFlinkEngineContext DEFAULT = new HoodieFlinkEngineContext();
+
+  private final RuntimeContext runtimeContext;
+
+  private HoodieFlinkEngineContext() {
+    this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
+  }
 
   public HoodieFlinkEngineContext(TaskContextSupplier taskContextSupplier) {
     this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), taskContextSupplier);
@@ -65,6 +75,25 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
     return data.stream().parallel().map(throwingMapWrapper(func)).collect(Collectors.toList());
+  }
+
+  @Override
+  public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    return data.stream().parallel().map(throwingMapToPairWrapper(mapToPairFunc))
+        .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
+        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  public <I, K, V> List<V> reduceByKey(
+      List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    return data.stream().parallel()
+        .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
+        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList());
   }
 
   @Override
@@ -96,5 +125,35 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
     // no operation for now
+  }
+
+  /**
+   * Override the flink context supplier to return constant write token.
+   */
+  private static class DefaultTaskContextSupplier extends FlinkTaskContextSupplier {
+
+    public DefaultTaskContextSupplier() {
+      this(null);
+    }
+
+    public DefaultTaskContextSupplier(RuntimeContext flinkRuntimeContext) {
+      super(flinkRuntimeContext);
+    }
+
+    public Supplier<Integer> getPartitionIdSupplier() {
+      return () -> 0;
+    }
+
+    public Supplier<Integer> getStageIdSupplier() {
+      return () -> 1;
+    }
+
+    public Supplier<Long> getAttemptIdSupplier() {
+      return () -> 0L;
+    }
+
+    public Option<String> getProperty(EngineProperty prop) {
+      return Option.empty();
+    }
   }
 }

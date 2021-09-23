@@ -18,14 +18,15 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -37,21 +38,24 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
+import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
 import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
+import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.SplitLocationInfo;
-import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -77,6 +81,24 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     // grouped on file id
     List<InputSplit> rtSplits = new ArrayList<>();
     try {
+      // Pre process tableConfig from first partition to fetch virtual key info
+      Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
+      if (partitionsToParquetSplits.size() > 0) {
+        HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionsToParquetSplits.keySet().iterator().next());
+        HoodieTableConfig tableConfig = metaClient.getTableConfig();
+        if (!tableConfig.populateMetaFields()) {
+          TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+          try {
+            MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
+            hoodieVirtualKeyInfo = Option.of(new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(),
+                tableConfig.getPartitionFieldProp(), parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp()),
+                parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
+          } catch (Exception exception) {
+            throw new HoodieException("Fetching table schema failed with exception ", exception);
+          }
+        }
+      }
+      Option<HoodieVirtualKeyInfo> finalHoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
       partitionsToParquetSplits.keySet().forEach(partitionPath -> {
         // for each partition path obtain the data & log file groupings, then map back to inputsplits
         HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
@@ -121,7 +143,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
                 rtSplits.add(new RealtimeBootstrapBaseFileSplit(baseSplit, metaClient.getBasePath(),
                     logFilePaths, maxCommitTime, eSplit.getBootstrapFileSplit()));
               } else {
-                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime));
+                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime, finalHoodieVirtualKeyInfo));
               }
             } catch (IOException e) {
               throw new HoodieIOException("Error creating hoodie real time split ", e);
@@ -173,7 +195,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     });
     return baseAndLogsList;
   }
-  
+
 
   /**
    * Add a field to the existing fields projected.
@@ -204,23 +226,34 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     return conf;
   }
 
-  public static void addRequiredProjectionFields(Configuration configuration) {
+  public static void addRequiredProjectionFields(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
     // Need this to do merge records in HoodieRealtimeRecordReader
-    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
-    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS);
-    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS);
+    if (!hoodieVirtualKeyInfo.isPresent()) {
+      addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
+      addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS);
+      addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS);
+    } else {
+      HoodieVirtualKeyInfo hoodieVirtualKey = hoodieVirtualKeyInfo.get();
+      addProjectionField(configuration, hoodieVirtualKey.getRecordKeyField(), hoodieVirtualKey.getRecordKeyFieldIndex());
+      addProjectionField(configuration, hoodieVirtualKey.getPartitionPathField(), hoodieVirtualKey.getPartitionPathFieldIndex());
+    }
   }
 
-  public static boolean requiredProjectionFieldsExistInConf(Configuration configuration) {
+  public static boolean requiredProjectionFieldsExistInConf(Configuration configuration, Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo) {
     String readColNames = configuration.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "");
-    return readColNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        && readColNames.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-        && readColNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    if (!hoodieVirtualKeyInfo.isPresent()) {
+      return readColNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+          && readColNames.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+          && readColNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    } else {
+      return readColNames.contains(hoodieVirtualKeyInfo.get().getRecordKeyField())
+          && readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField());
+    }
   }
 
   public static boolean canAddProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
     return jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null
-            || (!realtimeSplit.getDeltaLogPaths().isEmpty() && !HoodieRealtimeInputFormatUtils.requiredProjectionFieldsExistInConf(jobConf));
+            || (!realtimeSplit.getDeltaLogPaths().isEmpty() && !HoodieRealtimeInputFormatUtils.requiredProjectionFieldsExistInConf(jobConf, realtimeSplit.getHoodieVirtualKeyInfo()));
   }
 
   /**

@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.HoodieWriterUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -52,13 +53,14 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.exception.HoodieDeltaStreamerException;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
@@ -86,26 +88,26 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.function.Function;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
-import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
+import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
+import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
+import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
+import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
+import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
+import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
-import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING_PROP;
-import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_PROP;
-import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT_PROP;
-import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT_PROP;
-import static org.apache.hudi.config.HoodieWriteConfig.HOODIE_AUTO_COMMIT_PROP;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
@@ -212,13 +214,12 @@ public class DeltaSync implements Serializable {
     this.props = props;
     this.userProvidedSchemaProvider = schemaProvider;
     this.processedSchema = new SchemaSet();
-
+    this.keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     refreshTimeline();
     // Register User Provided schema first
     registerAvroSchemas(schemaProvider);
 
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
-    this.keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
 
@@ -247,15 +248,19 @@ public class DeltaSync implements Serializable {
       }
     } else {
       this.commitTimelineOpt = Option.empty();
-      String partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator);
-
+      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionFields(partitionColumns)
+          .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
+          .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+              Boolean.parseBoolean(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue())))
+          .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
+              SimpleKeyGenerator.class.getName()))
           .setPreCombineField(cfg.sourceOrderingField)
           .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
@@ -347,14 +352,20 @@ public class DeltaSync implements Serializable {
         }
       }
     } else {
-      String partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator);
+      // initialize the table for the first time.
+      String partitionColumns = HoodieSparkUtils.getPartitionColumns(keyGenerator, props);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionFields(partitionColumns)
+          .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
+          .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+              Boolean.parseBoolean(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue())))
+          .setKeyGeneratorClassProp(props.getProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
+              SimpleKeyGenerator.class.getName()))
           .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 
@@ -365,7 +376,7 @@ public class DeltaSync implements Serializable {
 
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
-    final SchemaProvider schemaProvider;
+    SchemaProvider schemaProvider;
     if (transformer.isPresent()) {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
@@ -374,28 +385,40 @@ public class DeltaSync implements Serializable {
 
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
+
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
+      boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
-                t, this.userProvidedSchemaProvider.getTargetSchema(),
-                HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                Option.of(this.userProvidedSchemaProvider.getTargetSchema())
+            ).toJavaRDD());
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
         // Use Transformed Row's schema if not overridden. If target schema is not specified
         // default to RowBasedSchemaProvider
         schemaProvider =
             transformed
-                .map(r -> (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
-                    dataAndCheckpoint.getSchemaProvider(),
-                    UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc)))
+                .map(r -> {
+                  // determine the targetSchemaProvider. use latestTableSchema if reconcileSchema is enabled.
+                  SchemaProvider targetSchemaProvider = null;
+                  if (reconcileSchema) {
+                    targetSchemaProvider = UtilHelpers.createLatestSchemaProvider(r.schema(), jssc, fs, cfg.targetBasePath);
+                  } else {
+                    targetSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc);
+                  }
+                  return (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
+                    dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
-                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, reconcileSchema,
+                Option.ofNullable(schemaProvider.getTargetSchema())
+            ).toJavaRDD());
       }
     } else {
       // Pull the data from the source & prepare the write
@@ -574,22 +597,19 @@ public class DeltaSync implements Serializable {
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         impl = impl.trim();
-        AbstractSyncTool syncTool = null;
         switch (impl) {
           case "org.apache.hudi.hive.HiveSyncTool":
-            HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-            LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-                + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
-            syncTool = new HiveSyncTool(hiveSyncConfig, new HiveConf(conf, HiveConf.class), fs);
+            syncHive();
             break;
           default:
             FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
             Properties properties = new Properties();
             properties.putAll(props);
             properties.put("basePath", cfg.targetBasePath);
-            syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[]{Properties.class, FileSystem.class}, properties, fs);
+            properties.put("baseFileFormat", cfg.baseFileFormat);
+            AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[]{Properties.class, FileSystem.class}, properties, fs);
+            syncTool.syncHoodieTable();
         }
-        syncTool.syncHoodieTable();
         long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
         metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
       }
@@ -686,17 +706,17 @@ public class DeltaSync implements Serializable {
 
     // Validate what deltastreamer assumes of write-config to be really safe
     ValidationUtils.checkArgument(config.inlineCompactionEnabled() == cfg.isInlineCompactionEnabled(),
-        String.format("%s should be set to %s", INLINE_COMPACT_PROP.key(), cfg.isInlineCompactionEnabled()));
+        String.format("%s should be set to %s", INLINE_COMPACT.key(), cfg.isInlineCompactionEnabled()));
     ValidationUtils.checkArgument(config.inlineClusteringEnabled() == cfg.isInlineClusteringEnabled(),
-        String.format("%s should be set to %s", INLINE_CLUSTERING_PROP.key(), cfg.isInlineClusteringEnabled()));
+        String.format("%s should be set to %s", INLINE_CLUSTERING.key(), cfg.isInlineClusteringEnabled()));
     ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == cfg.isAsyncClusteringEnabled(),
-        String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE_OPT_KEY.key(), cfg.isAsyncClusteringEnabled()));
+        String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), cfg.isAsyncClusteringEnabled()));
     ValidationUtils.checkArgument(!config.shouldAutoCommit(),
-        String.format("%s should be set to %s", HOODIE_AUTO_COMMIT_PROP.key(), autoCommit));
+        String.format("%s should be set to %s", AUTO_COMMIT_ENABLE.key(), autoCommit));
     ValidationUtils.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes,
-        String.format("%s should be set to %s", COMBINE_BEFORE_INSERT_PROP.key(), cfg.filterDupes));
+        String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
     ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),
-        String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT_PROP.key(), combineBeforeUpsert));
+        String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT.key(), combineBeforeUpsert));
 
     return config;
   }

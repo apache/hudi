@@ -17,23 +17,25 @@
 
 package org.apache.spark.sql.hudi.command
 
-import java.util.Base64
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
+import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils, SparkAdapterSupport}
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteAction, InsertAction, MergeIntoTable, SubqueryAlias, UpdateAction}
+import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
-import org.apache.spark.sql.types.{BooleanType, StructType}
-import org.apache.spark.sql._
-import org.apache.spark.sql.hudi.{HoodieOptionConfig, SerDeUtils}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
+import org.apache.spark.sql.hudi.{HoodieOptionConfig, SerDeUtils}
+import org.apache.spark.sql.types.{BooleanType, StructType}
+
+import java.util.Base64
 
 /**
  * The Command for hoodie MergeIntoTable.
@@ -194,9 +196,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
   }
 
   private def isEqualToTarget(targetColumnName: String, sourceExpression: Expression): Boolean = {
+    val sourceColNameMap = sourceDFOutput.map(attr => (attr.name.toLowerCase, attr.name)).toMap
+
     sourceExpression match {
-      case attr: AttributeReference if attr.name.equalsIgnoreCase(targetColumnName) => true
-      case Cast(attr: AttributeReference, _, _) if attr.name.equalsIgnoreCase(targetColumnName) => true
+      case attr: AttributeReference if sourceColNameMap(attr.name.toLowerCase).equals(targetColumnName) => true
+      case Cast(attr: AttributeReference, _, _) if sourceColNameMap(attr.name.toLowerCase).equals(targetColumnName) => true
       case _=> false
     }
   }
@@ -228,9 +232,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     // may be different from the target table, because the are transform logical in the update or
     // insert actions.
     var writeParams = parameters +
-      (OPERATION_OPT_KEY.key -> UPSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA_PROP.key -> getTableSchema.toString) +
-      (DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key -> targetTableType)
+      (OPERATION.key -> UPSERT_OPERATION_OPT_VAL) +
+      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
+      (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
     // Map of Condition -> Assignments
     val updateConditionToAssignments =
@@ -275,8 +279,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     checkInsertAssignments(insertActions)
 
     var writeParams = parameters +
-      (OPERATION_OPT_KEY.key -> INSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA_PROP.key -> getTableSchema.toString)
+      (OPERATION.key -> INSERT_OPERATION_OPT_VAL) +
+      (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString)
 
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))
@@ -415,7 +419,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     val targetTableDb = targetTableIdentify.database.getOrElse("default")
     val targetTableName = targetTableIdentify.identifier
     val path = getTableLocation(targetTable, sparkSession)
-      .getOrElse(s"missing location for $targetTableIdentify")
 
     val options = targetTable.storage.properties
     val definedPk = HoodieOptionConfig.getPrimaryColumns(options)
@@ -430,24 +433,25 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       withSparkConf(sparkSession, options) {
         Map(
           "path" -> path,
-          RECORDKEY_FIELD_OPT_KEY.key -> targetKey2SourceExpression.keySet.mkString(","),
-          KEYGENERATOR_CLASS_OPT_KEY.key -> classOf[SqlKeyGenerator].getCanonicalName,
-          PRECOMBINE_FIELD_OPT_KEY.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
-          TABLE_NAME.key -> targetTableName,
-          PARTITIONPATH_FIELD_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
-          PAYLOAD_CLASS_OPT_KEY.key -> classOf[ExpressionPayload].getCanonicalName,
-          META_SYNC_ENABLED_OPT_KEY.key -> enableHive.toString,
-          HIVE_USE_JDBC_OPT_KEY.key -> "false",
-          HIVE_DATABASE_OPT_KEY.key -> targetTableDb,
-          HIVE_TABLE_OPT_KEY.key -> targetTableName,
-          HIVE_SUPPORT_TIMESTAMP.key -> "true",
-          HIVE_STYLE_PARTITIONING_OPT_KEY.key -> "true",
-          HIVE_PARTITION_FIELDS_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
-          HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-          URL_ENCODE_PARTITIONING_OPT_KEY.key -> "true", // enable the url decode for sql.
-          HoodieWriteConfig.INSERT_PARALLELISM.key -> "200", // set the default parallelism to 200 for sql
-          HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
-          HoodieWriteConfig.DELETE_PARALLELISM.key -> "200",
+          RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
+          KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+          PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
+          TBL_NAME.key -> targetTableName,
+          PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
+          PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
+          META_SYNC_ENABLED.key -> enableHive.toString,
+          HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
+          HIVE_USE_JDBC.key -> "false",
+          HIVE_DATABASE.key -> targetTableDb,
+          HIVE_TABLE.key -> targetTableName,
+          HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
+          HIVE_STYLE_PARTITIONING.key -> "true",
+          HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
+          HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+          URL_ENCODE_PARTITIONING.key -> "true", // enable the url decode for sql.
+          HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200", // set the default parallelism to 200 for sql
+          HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
+          HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
           SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
         )
       })

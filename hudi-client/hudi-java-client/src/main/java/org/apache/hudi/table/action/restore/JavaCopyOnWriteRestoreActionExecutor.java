@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.rollback.JavaCopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
 import java.util.List;
 
@@ -48,7 +48,7 @@ public class JavaCopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload>
   @Override
   protected HoodieRollbackMetadata rollbackInstant(HoodieInstant instantToRollback) {
     table.getMetaClient().reloadActiveTimeline();
-    JavaCopyOnWriteRollbackActionExecutor rollbackActionExecutor = new JavaCopyOnWriteRollbackActionExecutor(
+    CopyOnWriteRollbackActionExecutor rollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(
         context,
         config,
         table,

@@ -68,8 +68,6 @@ import scala.collection.JavaConversions;
 
 /**
  * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
- *
- * @experimental This export is an experimental tool. If you want to export hudi to hudi, please use HoodieSnapshotCopier.
  */
 public class HoodieSnapshotExporter {
 

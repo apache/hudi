@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.rollback.SparkCopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -48,20 +48,23 @@ public class SparkCopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload
 
   @Override
   protected HoodieRollbackMetadata rollbackInstant(HoodieInstant instantToRollback) {
-    table.getMetaClient().reloadActiveTimeline();
-    SparkCopyOnWriteRollbackActionExecutor rollbackActionExecutor = new SparkCopyOnWriteRollbackActionExecutor(
-        (HoodieSparkEngineContext) context,
-        config,
-        table,
-        HoodieActiveTimeline.createNewInstantTime(),
-        instantToRollback,
-        true,
-        true,
-        false);
     if (!instantToRollback.getAction().equals(HoodieTimeline.COMMIT_ACTION)
         && !instantToRollback.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }
+    table.getMetaClient().reloadActiveTimeline();
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    table.scheduleRollback(context, instantTime, instantToRollback, false);
+    table.getMetaClient().reloadActiveTimeline();
+    CopyOnWriteRollbackActionExecutor rollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(
+        (HoodieSparkEngineContext) context,
+        config,
+        table,
+        instantTime,
+        instantToRollback,
+        true,
+        true,
+        false);
     return rollbackActionExecutor.execute();
   }
 }

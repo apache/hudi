@@ -17,18 +17,18 @@
 
 package org.apache.hudi.sql;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 /***
- * A interface for CodeGen to execute expressions on the record
- * and return the results with a array for each expression.
+ * A interface for CodeGen to execute expressions on the record.
  */
 public interface IExpressionEvaluator {
 
   /**
    * Evaluate the result of the expressions based on the record.
    */
-  Object[] eval(IndexedRecord record);
+  GenericRecord eval(IndexedRecord record);
 
   /**
    * Get the code of the expressions. This is used for debug.

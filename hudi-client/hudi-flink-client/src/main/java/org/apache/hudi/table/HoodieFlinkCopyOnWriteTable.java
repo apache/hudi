@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -53,7 +54,8 @@ import org.apache.hudi.table.action.commit.FlinkInsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.commit.FlinkMergeHelper;
 import org.apache.hudi.table.action.commit.FlinkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.rollback.FlinkCopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
+import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -299,13 +301,19 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
+                                                     boolean skipTimelinePublish) {
+    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
+  }
+
+  @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
     return new FlinkCleanActionExecutor(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
   public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants) {
-    return new FlinkCopyOnWriteRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
+    return new CopyOnWriteRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 
   @Override
@@ -354,7 +362,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
           dataFileToBeMerged, taskContextSupplier, Option.empty());
     } else {
       return new HoodieMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged,taskContextSupplier, Option.empty());
+          dataFileToBeMerged, taskContextSupplier, Option.empty());
     }
   }
 

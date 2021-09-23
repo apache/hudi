@@ -17,15 +17,16 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
+import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
+import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, SubqueryAlias, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateTable}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
@@ -37,10 +38,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
   with SparkAdapterSupport {
 
   private val table = updateTable.table
-  private val tableId = table match {
-    case SubqueryAlias(name, _) => sparkAdapter.toTableIdentify(name)
-    case _ => throw new IllegalArgumentException(s"Illegal table: $table")
-  }
+  private val tableId = getTableIdentify(table)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute update command for $tableId")
@@ -87,7 +85,6 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
     val targetTable = sparkSession.sessionState.catalog
       .getTableMetadata(tableId)
     val path = getTableLocation(targetTable, sparkSession)
-      .getOrElse(s"missing location for $tableId")
 
     val primaryColumns = HoodieOptionConfig.getPrimaryColumns(targetTable.storage.properties)
 
@@ -97,22 +94,23 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
     withSparkConf(sparkSession, targetTable.storage.properties) {
       Map(
         "path" -> path,
-        RECORDKEY_FIELD_OPT_KEY.key -> primaryColumns.mkString(","),
-        KEYGENERATOR_CLASS_OPT_KEY.key -> classOf[SqlKeyGenerator].getCanonicalName,
-        PRECOMBINE_FIELD_OPT_KEY.key -> primaryColumns.head, //set the default preCombine field.
-        TABLE_NAME.key -> tableId.table,
-        OPERATION_OPT_KEY.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-        PARTITIONPATH_FIELD_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
-        META_SYNC_ENABLED_OPT_KEY.key -> enableHive.toString,
-        HIVE_USE_JDBC_OPT_KEY.key -> "false",
-        HIVE_DATABASE_OPT_KEY.key -> tableId.database.getOrElse("default"),
-        HIVE_TABLE_OPT_KEY.key -> tableId.table,
-        HIVE_PARTITION_FIELDS_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
-        HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-        URL_ENCODE_PARTITIONING_OPT_KEY.key -> "true",
-        HIVE_SUPPORT_TIMESTAMP.key -> "true",
-        HIVE_STYLE_PARTITIONING_OPT_KEY.key -> "true",
-        HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
+        RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
+        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        PRECOMBINE_FIELD.key -> primaryColumns.head, //set the default preCombine field.
+        TBL_NAME.key -> tableId.table,
+        OPERATION.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
+        META_SYNC_ENABLED.key -> enableHive.toString,
+        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
+        HIVE_USE_JDBC.key -> "false",
+        HIVE_DATABASE.key -> tableId.database.getOrElse("default"),
+        HIVE_TABLE.key -> tableId.table,
+        HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
+        HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+        URL_ENCODE_PARTITIONING.key -> "true",
+        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
+        HIVE_STYLE_PARTITIONING.key -> "true",
+        HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
       )
     }

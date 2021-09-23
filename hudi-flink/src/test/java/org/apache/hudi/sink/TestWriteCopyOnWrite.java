@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.utils.InsertFunctionWrapper;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -57,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -398,33 +400,29 @@ public class TestWriteCopyOnWrite {
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
 
-    Map<String, String> expected = new HashMap<>();
-    // id3, id5 were deleted and id9 is ignored
-    expected.put("par1", "[id1,par1,id1,Danny,24,1,par1, id2,par1,id2,Stephen,34,2,par1]");
-    expected.put("par2", "[id4,par2,id4,Fabian,31,4,par2]");
-    expected.put("par3", "[id6,par3,id6,Emma,20,6,par3]");
-    expected.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
+    Map<String, String> expected = getUpsertWithDeleteExpected();
     checkWrittenData(tempFile, expected);
   }
 
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0008); // 839 bytes batch size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
+    // record (operation: 'I') is 304 bytes and record (operation: 'U') is 352 bytes.
+    // so 3 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(2));
+        is(3));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -471,22 +469,23 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0008); // 839 bytes batch size
     conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
+    // record (operation: 'I') is 304 bytes and record (operation: 'U') is 352 bytes.
+    // so 3 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
       funcWrapper.invoke(rowData);
     }
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(2));
+        is(3));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -533,14 +532,82 @@ public class TestWriteCopyOnWrite {
   }
 
   @Test
+  public void testInsertAllowsDuplication() throws Exception {
+    InsertFunctionWrapper<RowData> funcWrapper = new InsertFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
+    // open the function and ingest data
+    funcWrapper.openFunction();
+    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
+    for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
+      funcWrapper.invoke(rowData);
+    }
+
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+    assertNull(funcWrapper.getWriterHelper());
+
+    final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
+    assertThat("The operator expect to send an event", event1, instanceOf(WriteMetadataEvent.class));
+
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    String instant = funcWrapper.getWriteClient()
+        .getLastPendingInstant(getTableType());
+
+    funcWrapper.checkpointComplete(1);
+
+    Map<String, String> expected = new HashMap<>();
+
+    expected.put("par1", "["
+        + "id1,par1,id1,Danny,23,0,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,2,par1, "
+        + "id1,par1,id1,Danny,23,3,par1, "
+        + "id1,par1,id1,Danny,23,4,par1]");
+
+    TestData.checkWrittenAllData(tempFile, expected, 1);
+
+    // started a new instant already
+    checkInflightInstant(funcWrapper.getWriteClient());
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+
+    // insert duplicates again
+    for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
+      funcWrapper.invoke(rowData);
+    }
+
+    funcWrapper.checkpointFunction(2);
+
+    final OperatorEvent event2 = funcWrapper.getNextEvent(); // remove the first event first
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
+    funcWrapper.checkpointComplete(2);
+
+    // same with the original base file content.
+    expected.put("par1", "["
+        + "id1,par1,id1,Danny,23,0,par1, "
+        + "id1,par1,id1,Danny,23,0,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,2,par1, "
+        + "id1,par1,id1,Danny,23,2,par1, "
+        + "id1,par1,id1,Danny,23,3,par1, "
+        + "id1,par1,id1,Danny,23,3,par1, "
+        + "id1,par1,id1,Danny,23,4,par1, "
+        + "id1,par1,id1,Danny,23,4,par1]");
+    TestData.checkWrittenAllData(tempFile, expected, 1);
+  }
+
+  @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0008); // 839 bytes buffer size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // each record is 208 bytes. so 4 records expect to trigger buffer flush:
+    // record (operation: 'I') is 304 bytes and record (operation: 'U') is 352 bytes.
+    // so 3 records expect to trigger a mini-batch write
     // flush the max size bucket once at a time.
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
@@ -548,9 +615,9 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(2));
+        is(3));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -599,8 +666,17 @@ public class TestWriteCopyOnWrite {
     // the last 2 lines are merged
     expected.put("par1", "["
         + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1]");
+        + "id1,par1,id1,Danny,23,1,par1" + "]");
+    return expected;
+  }
+
+  protected Map<String, String> getUpsertWithDeleteExpected() {
+    Map<String, String> expected = new HashMap<>();
+    // id3, id5 were deleted and id9 is ignored
+    expected.put("par1", "[id1,par1,id1,Danny,24,1,par1, id2,par1,id2,Stephen,34,2,par1]");
+    expected.put("par2", "[id4,par2,id4,Fabian,31,4,par2]");
+    expected.put("par3", "[id6,par3,id6,Emma,20,6,par3]");
+    expected.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
     return expected;
   }
 
@@ -641,8 +717,6 @@ public class TestWriteCopyOnWrite {
       funcWrapper.invoke(rowData);
     }
 
-    assertTrue(funcWrapper.isAlreadyBootstrap());
-
     checkIndexLoaded(
         new HoodieKey("id1", "par1"),
         new HoodieKey("id2", "par1"),
@@ -658,6 +732,8 @@ public class TestWriteCopyOnWrite {
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
+
+    assertTrue(funcWrapper.isAlreadyBootstrap());
 
     String instant = funcWrapper.getWriteClient()
         .getLastPendingInstant(getTableType());

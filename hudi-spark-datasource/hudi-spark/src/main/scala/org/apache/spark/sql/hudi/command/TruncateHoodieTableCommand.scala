@@ -35,7 +35,6 @@ class TruncateHoodieTableCommand(
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val table = sparkSession.sessionState.catalog.getTableMetadata(tableName)
     val path = getTableLocation(table, sparkSession)
-      .getOrElse(s"missing location for ${table.identifier}")
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     // If we have not specified the partition, truncate will delete all the
     // data in the table path include the hoodi.properties. In this case we

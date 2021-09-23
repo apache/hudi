@@ -124,23 +124,23 @@ public class HoodieJavaGenerateApp {
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
       LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
-      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY().key(), hiveTable)
-          .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY().key(), hiveDB)
-          .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY().key(), hiveJdbcUrl)
-          .option(DataSourceWriteOptions.HIVE_USER_OPT_KEY().key(), hiveUser)
-          .option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY().key(), hivePass)
-          .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY().key(), "true");
+      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE().key(), hiveTable)
+          .option(DataSourceWriteOptions.HIVE_DATABASE().key(), hiveDB)
+          .option(DataSourceWriteOptions.HIVE_URL().key(), hiveJdbcUrl)
+          .option(DataSourceWriteOptions.HIVE_USER().key(), hiveUser)
+          .option(DataSourceWriteOptions.HIVE_PASS().key(), hivePass)
+          .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED().key(), "true");
       if (nonPartitionedTable) {
         writer = writer
-            .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY().key(),
+            .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
                 NonPartitionedExtractor.class.getCanonicalName())
-            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "");
+            .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "");
       } else if (useMultiPartitionKeys) {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY().key(), "year,month,day").option(
-            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY().key(),
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "year,month,day").option(
+            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
             MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY().key(), "dateStr");
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr");
       }
     }
     return writer;
@@ -165,19 +165,19 @@ public class HoodieJavaGenerateApp {
         // full list in HoodieWriteConfig & its package
         .option("hoodie.upsert.shuffle.parallelism", "2")
         // Hoodie Table Type
-        .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY().key(), tableType)
+        .option(DataSourceWriteOptions.TABLE_TYPE().key(), tableType)
         // insert
-        .option(DataSourceWriteOptions.OPERATION_OPT_KEY().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())
+        .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())
         // This is the record key
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), "_row_key")
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         // this is the partition to place it into
-        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "partition")
+        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         // use to combine duplicate records in input/with disk val
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY().key(), "timestamp")
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         // Used by hive sync and queries
-        .option(HoodieWriteConfig.TABLE_NAME.key(), tableName)
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY().key(),
+        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
         .mode(commitType);

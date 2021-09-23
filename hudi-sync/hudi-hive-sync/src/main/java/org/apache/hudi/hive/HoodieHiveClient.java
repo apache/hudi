@@ -22,18 +22,17 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
+import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
-
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -63,21 +62,22 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private final HiveSyncConfig syncConfig;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
-    super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, fs);
+    super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, cfg.withOperationField, fs);
     this.syncConfig = cfg;
 
-    // Support JDBC, HiveQL and metastore based implementations for backwards compatiblity. Future users should
+    // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     try {
       if (!StringUtils.isNullOrEmpty(cfg.syncMode)) {
-        switch (cfg.syncMode.toLowerCase()) {
-          case "hms":
+        HiveSyncMode syncMode = HiveSyncMode.of(cfg.syncMode);
+        switch (syncMode) {
+          case HMS:
             ddlExecutor = new HMSDDLExecutor(configuration, cfg, fs);
             break;
-          case "hiveql":
+          case HIVEQL:
             ddlExecutor = new HiveQueryDDLExecutor(cfg, fs, configuration);
             break;
-          case "jdbc":
+          case JDBC:
             ddlExecutor = new JDBCExecutor(cfg, fs);
             break;
           default:
@@ -221,14 +221,14 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    */
   public boolean doesDataBaseExist(String databaseName) {
     try {
-      Database database = client.getDatabase(databaseName);
-      if (database != null && databaseName.equals(database.getName())) {
-        return true;
-      }
+      client.getDatabase(databaseName);
+      return true;
+    } catch (NoSuchObjectException noSuchObjectException) {
+      // NoSuchObjectException is thrown when there is no existing database of the name.
+      return false;
     } catch (TException e) {
       throw new HoodieHiveSyncException("Failed to check if database exists " + databaseName, e);
     }
-    return false;
   }
 
   public void createDatabase(String databaseName) {

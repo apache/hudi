@@ -51,16 +51,16 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCompactionPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCompactionPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRequestedReplaceMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 
 public class FileCreateUtils {
 
   private static final String WRITE_TOKEN = "1-0-1";
-  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().getFileExtension();
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   public static String baseFileName(String instantTime, String fileId) {
     return baseFileName(instantTime, fileId, BASE_FILE_EXTENSION);
@@ -272,6 +272,30 @@ public class FileCreateUtils {
       Files.createFile(markerFilePath);
     }
     return markerFilePath.toAbsolutePath().toString();
+  }
+
+  private static void removeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Path metaFilePath = parentPath.resolve(instantTime + suffix);
+    if (Files.exists(metaFilePath)) {
+      Files.delete(metaFilePath);
+    }
+  }
+
+  public static void deleteCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
+  }
+
+  public static void deleteRequestedCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
+  }
+
+  public static void deleteInflightCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
+  }
+
+  public static void deleteDeltaCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
   }
 
   public static long getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime, IOType ioType) throws IOException {

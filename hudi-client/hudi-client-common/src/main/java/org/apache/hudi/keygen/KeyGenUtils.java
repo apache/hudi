@@ -60,7 +60,7 @@ public class KeyGenUtils {
    * @return the partition path for the passed in generic record.
    */
   public static String getPartitionPathFromGenericRecord(GenericRecord genericRecord, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getRecordKey(genericRecord) : genericRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    return keyGeneratorOpt.isPresent() ? keyGeneratorOpt.get().getPartitionPath(genericRecord) : genericRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
   }
 
   /**
@@ -186,7 +186,7 @@ public class KeyGenUtils {
    */
   public static KeyGenerator createKeyGeneratorByClassName(TypedProperties props) throws IOException {
     KeyGenerator keyGenerator = null;
-    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), null);
+    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null);
     if (!StringUtils.isNullOrEmpty(keyGeneratorClass)) {
       try {
         keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);

@@ -36,8 +36,7 @@ import java.util.List;
 /**
  * Function performing actual checking of list containing (fileId, hoodieKeys) against the actual files.
  */
-//TODO we can move this class into the hudi-client-common and reuse it for spark client
-public class HoodieBaseBloomIndexCheckFunction 
+public class HoodieBaseBloomIndexCheckFunction
         implements Function<Iterator<Pair<String, HoodieKey>>, Iterator<List<KeyLookupResult>>> {
 
   private final HoodieTable hoodieTable;
@@ -52,16 +51,6 @@ public class HoodieBaseBloomIndexCheckFunction
   @Override
   public Iterator<List<KeyLookupResult>> apply(Iterator<Pair<String, HoodieKey>> fileParitionRecordKeyTripletItr) {
     return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
-  }
-
-  @Override
-  public <V> Function<V, Iterator<List<KeyLookupResult>>> compose(Function<? super V, ? extends Iterator<Pair<String, HoodieKey>>> before) {
-    return null;
-  }
-
-  @Override
-  public <V> Function<Iterator<Pair<String, HoodieKey>>, V> andThen(Function<? super Iterator<List<KeyLookupResult>>, ? extends V> after) {
-    return null;
   }
 
   class LazyKeyCheckIterator extends LazyIterableIterator<Pair<String, HoodieKey>, List<KeyLookupResult>> {

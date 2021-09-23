@@ -27,6 +27,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.KeyGenerator;
@@ -66,7 +67,8 @@ public class SparkParquetBootstrapDataProvider extends FullRecordBootstrapDataPr
       KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
       String structName = tableName + "_record";
       String namespace = "hoodie." + tableName;
-      RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace);
+      RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace, false,
+          Option.empty());
       return genericRecords.toJavaRDD().map(gr -> {
         String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
             gr, props.getString("hoodie.datasource.write.precombine.field"), false);

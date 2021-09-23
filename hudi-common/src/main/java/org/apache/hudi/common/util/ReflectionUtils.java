@@ -51,8 +51,7 @@ public class ReflectionUtils {
     synchronized (CLAZZ_CACHE) {
       if (!CLAZZ_CACHE.containsKey(clazzName)) {
         try {
-          Class<?> clazz = Class.forName(clazzName, true,
-              Thread.currentThread().getContextClassLoader());
+          Class<?> clazz = Class.forName(clazzName);
           CLAZZ_CACHE.put(clazzName, clazz);
         } catch (ClassNotFoundException e) {
           throw new HoodieException("Unable to load class", e);

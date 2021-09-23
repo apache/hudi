@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-import java.util.stream.Collectors;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
@@ -43,13 +42,14 @@ import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.streaming.DataStreamWriter;
 import org.apache.spark.sql.streaming.OutputMode;
+import org.apache.spark.sql.streaming.StreamingQuery;
 import org.apache.spark.sql.streaming.Trigger;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import org.apache.spark.sql.streaming.StreamingQuery;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 
@@ -332,9 +332,9 @@ public class HoodieJavaStreamingApp {
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
       Dataset<Row> hoodieIncViewDF = spark.read().format("hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
           // Only changes in write 2 above
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY().key(), commitInstantTime1)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), commitInstantTime1)
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 
@@ -355,15 +355,15 @@ public class HoodieJavaStreamingApp {
     DataStreamWriter<Row> writer = streamingInput.writeStream().format("org.apache.hudi")
         .option("hoodie.insert.shuffle.parallelism", "2").option("hoodie.upsert.shuffle.parallelism", "2")
         .option("hoodie.delete.shuffle.parallelism", "2")
-        .option(DataSourceWriteOptions.OPERATION_OPT_KEY().key(), operationType)
-        .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY().key(), tableType)
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), "_row_key")
-        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY().key(), "timestamp")
-        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key(), "1")
-        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY().key(), "true")
-        .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE_OPT_KEY().key(), "true")
-        .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).option("checkpointLocation", checkpointLocation)
+        .option(DataSourceWriteOptions.OPERATION().key(), operationType)
+        .option(DataSourceWriteOptions.TABLE_TYPE().key(), tableType)
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
+        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
+        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1")
+        .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE().key(), "true")
+        .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE().key(), "true")
+        .option(HoodieWriteConfig.TBL_NAME.key(), tableName).option("checkpointLocation", checkpointLocation)
         .outputMode(OutputMode.Append());
 
     updateHiveSyncConfig(writer);
@@ -380,18 +380,18 @@ public class HoodieJavaStreamingApp {
   private DataStreamWriter<Row> updateHiveSyncConfig(DataStreamWriter<Row> writer) {
     if (enableHiveSync) {
       LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
-      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY().key(), hiveTable)
-          .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY().key(), hiveDB)
-          .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY().key(), hiveJdbcUrl)
-          .option(DataSourceWriteOptions.HIVE_USER_OPT_KEY().key(), hiveUser)
-          .option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY().key(), hivePass)
-          .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY().key(), "true");
+      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE().key(), hiveTable)
+          .option(DataSourceWriteOptions.HIVE_DATABASE().key(), hiveDB)
+          .option(DataSourceWriteOptions.HIVE_URL().key(), hiveJdbcUrl)
+          .option(DataSourceWriteOptions.HIVE_USER().key(), hiveUser)
+          .option(DataSourceWriteOptions.HIVE_PASS().key(), hivePass)
+          .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED().key(), "true");
       if (useMultiPartitionKeys) {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY().key(), "year,month,day").option(
-            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY().key(),
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "year,month,day").option(
+            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
             MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY().key(), "dateStr");
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr");
       }
     }
     return writer;

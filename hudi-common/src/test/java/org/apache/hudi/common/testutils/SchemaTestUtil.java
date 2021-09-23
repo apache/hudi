@@ -71,17 +71,20 @@ public final class SchemaTestUtil {
     return toRecords(getSimpleSchema(), getSimpleSchema(), from, limit);
   }
 
+  public static List<String> generateTestJsonRecords(int from, int limit) throws IOException, URISyntaxException {
+    Path dataPath = initializeSampleDataPath();
+
+    try (Stream<String> stream = Files.lines(dataPath)) {
+      return stream.skip(from).limit(limit).collect(Collectors.toList());
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
+    }
+  }
+
   private static List<IndexedRecord> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)
       throws IOException, URISyntaxException {
     GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
-    // Required to register the necessary JAR:// file system
-    URI resource = SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI();
-    Path dataPath;
-    if (resource.toString().contains("!")) {
-      dataPath = uriToPath(resource);
-    } else {
-      dataPath = Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
-    }
+    Path dataPath = initializeSampleDataPath();
 
     try (Stream<String> stream = Files.lines(dataPath)) {
       return stream.skip(from).limit(limit).map(s -> {
@@ -93,6 +96,21 @@ public final class SchemaTestUtil {
       }).collect(Collectors.toList());
     } catch (IOException e) {
       throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
+    }
+  }
+
+  /**
+   * Required to register the necessary JAR:// file system.
+   * @return Path to the sample data in the resource file.
+   * @throws IOException
+   * @throws URISyntaxException
+   */
+  private static Path initializeSampleDataPath() throws IOException, URISyntaxException {
+    URI resource = SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI();
+    if (resource.toString().contains("!")) {
+      return uriToPath(resource);
+    } else {
+      return Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
     }
   }
 
@@ -185,8 +203,13 @@ public final class SchemaTestUtil {
   }
 
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
-      String fileId) throws IOException {
-    SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId);
+                                                         String fileId) throws IOException {
+    return generateAvroRecordFromJson(schema, recordNumber, instantTime, fileId, true);
+  }
+
+  public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
+      String fileId, boolean populateMetaFields) throws IOException {
+    SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId, populateMetaFields);
     MercifulJsonConverter converter = new MercifulJsonConverter();
     return converter.convert(record.toJsonString(), schema);
   }

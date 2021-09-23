@@ -106,7 +106,7 @@ public class BulkInsertDataInternalWriterHelper {
   private Option<BuiltinKeyGenerator> getKeyGenerator(Properties properties) {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.putAll(properties);
-    if (properties.get(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY().key()).equals(NonpartitionedKeyGenerator.class.getName())) {
+    if (properties.get(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key()).equals(NonpartitionedKeyGenerator.class.getName())) {
       return Option.empty(); // Do not instantiate NonPartitionKeyGen
     } else {
       try {

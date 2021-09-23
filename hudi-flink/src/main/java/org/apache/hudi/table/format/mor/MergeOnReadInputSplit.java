@@ -97,15 +97,15 @@ public class MergeOnReadInputSplit implements InputSplit {
   @Override
   public String toString() {
     return "MergeOnReadInputSplit{"
-            + "splitNum=" + splitNum
-            + ", basePath=" + basePath
-            + ", logPaths=" + logPaths
-            + ", latestCommit='" + latestCommit + '\''
-            + ", tablePath='" + tablePath + '\''
-            + ", maxCompactionMemoryInBytes=" + maxCompactionMemoryInBytes
-            + ", mergeType='" + mergeType + '\''
-            + ", instantRange=" + instantRange
-            + '}';
+        + "splitNum=" + splitNum
+        + ", basePath=" + basePath
+        + ", logPaths=" + logPaths
+        + ", latestCommit='" + latestCommit + '\''
+        + ", tablePath='" + tablePath + '\''
+        + ", maxCompactionMemoryInBytes=" + maxCompactionMemoryInBytes
+        + ", mergeType='" + mergeType + '\''
+        + ", instantRange=" + instantRange
+        + '}';
   }
-  
+
 }
