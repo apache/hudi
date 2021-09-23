@@ -210,13 +210,13 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         "Must not contain the filtered directory " + filteredDirectoryThree);
 
     FileStatus[] statuses = metadata(writeConfig, context).getAllFilesInPartition(new Path(basePath, "p1"));
-    assertEquals(3, statuses.length);
+    assertEquals(tableType == COPY_ON_WRITE ? 3 : 4, statuses.length);
     statuses = metadata(writeConfig, context).getAllFilesInPartition(new Path(basePath, "p2"));
-    assertEquals(6, statuses.length);
+    assertEquals(tableType == COPY_ON_WRITE ? 6 : 7, statuses.length);
     Map<String, FileStatus[]> partitionsToFilesMap = metadata(writeConfig, context).getAllFilesInPartitions(asList(basePath + "/p1", basePath + "/p2"));
     assertEquals(2, partitionsToFilesMap.size());
-    assertEquals(3, partitionsToFilesMap.get(basePath + "/p1").length);
-    assertEquals(6, partitionsToFilesMap.get(basePath + "/p2").length);
+    assertEquals(tableType == COPY_ON_WRITE ? 3 : 4, partitionsToFilesMap.get(basePath + "/p1").length);
+    assertEquals(tableType == COPY_ON_WRITE ? 6 : 7, partitionsToFilesMap.get(basePath + "/p2").length);
   }
 
   /**
@@ -755,7 +755,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   private void doWriteOperationsAndBootstrapMetadata(HoodieTestTable testTable) throws Exception {
     testTable.doWriteOperation("001", INSERT, asList("p1", "p2"), asList("p1", "p2"),
         2, true);
-    testTable.doWriteOperation("002", INSERT, asList("p1", "p2"),
+    testTable.doWriteOperation("002", UPSERT, asList("p1", "p2"),
         2, true);
     syncAndValidate(testTable);
   }
@@ -777,7 +777,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
                                boolean enableMetadataSync, boolean enableValidation, boolean doFullValidation) throws IOException {
     writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE, String.valueOf(enableMetadata));
     writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.SYNC_ENABLE, String.valueOf(enableMetadataSync));
-    writeConfig.getMetadataConfig().setValue(HoodieMetadataConfig.VALIDATE_ENABLE, String.valueOf(enableValidation));
     syncTableMetadata(writeConfig);
     validateMetadata(testTable, inflightCommits, writeConfig, metadataTableBasePath, doFullValidation);
   }
