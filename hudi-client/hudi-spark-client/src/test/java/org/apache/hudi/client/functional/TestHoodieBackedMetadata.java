@@ -148,9 +148,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   public void testMetadataTableBootstrap(HoodieTableType tableType, boolean addRollback) throws Exception {
     init(tableType);
     // bootstrap with few commits
-    testTable.doWriteOperation("001", INSERT, asList("p1", "p2"), asList("p1", "p2"), 2, true);
-    testTable.doWriteOperation("002", INSERT, asList("p1", "p2"), 2, true);
-    syncAndValidate(testTable);
+    doWriteOperationsAndBootstrapMetadata(testTable);
 
     if (addRollback) {
       // trigger an UPSERT that will be rolled back

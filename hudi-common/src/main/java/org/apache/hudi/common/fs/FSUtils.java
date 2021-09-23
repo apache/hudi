@@ -167,6 +167,9 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
+    if (isLogFile(new Path(fullFileName))) {
+      return fullFileName.split("_")[1].split("\\.")[0];
+    }
     return fullFileName.split("_")[2].split("\\.")[0];
   }
 

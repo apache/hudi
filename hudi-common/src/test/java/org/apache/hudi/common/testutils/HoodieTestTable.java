@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -52,10 +55,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -82,7 +81,6 @@ import static java.time.temporal.ChronoUnit.SECONDS;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.CLUSTER;
 import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
-import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
@@ -200,7 +198,7 @@ public class HoodieTestTable {
                                                    Map<String, List<String>> partitionToReplaceFileIds,
                                                    HoodieTestTableState testTableState, boolean bootstrap, String action) {
     List<HoodieWriteStat> writeStats = generateHoodieWriteStatForPartition(testTableState.getPartitionToBaseFileInfoMap(commitTime), commitTime, bootstrap);
-    if (MERGE_ON_READ.equals(metaClient.getTableType())) {
+    if (MERGE_ON_READ.equals(metaClient.getTableType()) && UPSERT.equals(operationType)) {
       writeStats.addAll(generateHoodieWriteStatForPartitionLogFiles(testTableState.getPartitionToLogFileInfoMap(commitTime), commitTime, bootstrap));
     }
     Map<String, String> extraMetadata = createImmutableMap("test", "test");
@@ -725,7 +723,7 @@ public class HoodieTestTable {
     if (partitions.isEmpty()) {
       partitions = Collections.singletonList(EMPTY_STRING);
     }
-    HoodieTestTableState testTableState = getTestTableStateWithPartitionFileInfo(metaClient.getTableType(), commitTime, partitions, 1);
+    HoodieTestTableState testTableState = getTestTableStateWithPartitionFileInfo(COMPACT, metaClient.getTableType(), commitTime, partitions, 1);
     HoodieCommitMetadata commitMetadata = createCommitMetadata(COMPACT, commitTime, testTableState);
     for (String partition : partitions) {
       this.withBaseFilesInPartition(partition, testTableState.getPartitionToBaseFileInfoMap(commitTime).get(partition));
@@ -761,7 +759,7 @@ public class HoodieTestTable {
     if (partitions.isEmpty()) {
       partitions = Collections.singletonList(EMPTY_STRING);
     }
-    HoodieTestTableState testTableState = getTestTableStateWithPartitionFileInfo(metaClient.getTableType(), commitTime, partitions, filesPerPartition);
+    HoodieTestTableState testTableState = getTestTableStateWithPartitionFileInfo(operationType, metaClient.getTableType(), commitTime, partitions, filesPerPartition);
     HoodieCommitMetadata commitMetadata = createCommitMetadata(operationType, commitTime, testTableState, bootstrap);
     for (String str : newPartitionsToAdd) {
       this.withPartitionMetaFiles(str);
@@ -773,7 +771,7 @@ public class HoodieTestTable {
     }
     for (String partition : partitions) {
       this.withBaseFilesInPartition(partition, testTableState.getPartitionToBaseFileInfoMap(commitTime).get(partition));
-      if (MERGE_ON_READ.equals(metaClient.getTableType()) && (INSERT.equals(operationType) || UPSERT.equals(operationType))) {
+      if (MERGE_ON_READ.equals(metaClient.getTableType()) && UPSERT.equals(operationType)) {
         this.withLogFilesInPartition(partition, testTableState.getPartitionToLogFileInfoMap(commitTime).get(partition));
       }
     }
@@ -816,10 +814,11 @@ public class HoodieTestTable {
     return partitionFilesToDelete;
   }
 
-  private static HoodieTestTableState getTestTableStateWithPartitionFileInfo(HoodieTableType tableType, String commitTime, List<String> partitions, int filesPerPartition) {
+  private static HoodieTestTableState getTestTableStateWithPartitionFileInfo(WriteOperationType operationType, HoodieTableType tableType, String commitTime,
+          List<String> partitions, int filesPerPartition) {
     for (String partition : partitions) {
       Stream<Integer> fileLengths = IntStream.range(0, filesPerPartition).map(i -> 100 + RANDOM.nextInt(500)).boxed();
-      if (MERGE_ON_READ.equals(tableType)) {
+      if (MERGE_ON_READ.equals(tableType) && UPSERT.equals(operationType)) {
         List<Pair<Integer, Integer>> fileVersionAndLength = fileLengths.map(len -> Pair.of(0, len)).collect(Collectors.toList());
         testTableState = testTableState.createTestTableStateForBaseAndLogFiles(commitTime, partition, fileVersionAndLength);
       } else {
