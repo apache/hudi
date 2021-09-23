@@ -135,7 +135,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   }
 
   /**
-   * Setup the config options based on the table definition, for e.g the table name, primary key.
+   * Sets up the config options based on the table definition, for e.g the table name, primary key.
    *
    * @param conf      The configuration to setup
    * @param tableName The table name

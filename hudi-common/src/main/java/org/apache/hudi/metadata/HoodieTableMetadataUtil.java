@@ -195,7 +195,7 @@ public class HoodieTableMetadataUtil {
 
     cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
       // Files deleted from a partition
-      List<String> deletedFiles = partitionMetadata.getSuccessDeleteFiles();
+      List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
           Option.of(new ArrayList<>(deletedFiles)));
 
@@ -285,7 +285,7 @@ public class HoodieTableMetadataUtil {
       }
 
       final String partition = pm.getPartitionPath();
-      if (!pm.getSuccessDeleteFiles().isEmpty() && !shouldSkip) {
+      if ((!pm.getSuccessDeleteFiles().isEmpty() || !pm.getFailedDeleteFiles().isEmpty()) && !shouldSkip) {
         if (!partitionToDeletedFiles.containsKey(partition)) {
           partitionToDeletedFiles.put(partition, new ArrayList<>());
         }
@@ -293,6 +293,10 @@ public class HoodieTableMetadataUtil {
         // Extract deleted file name from the absolute paths saved in getSuccessDeleteFiles()
         List<String> deletedFiles = pm.getSuccessDeleteFiles().stream().map(p -> new Path(p).getName())
             .collect(Collectors.toList());
+        if (!pm.getFailedDeleteFiles().isEmpty()) {
+          deletedFiles.addAll(pm.getFailedDeleteFiles().stream().map(p -> new Path(p).getName())
+              .collect(Collectors.toList()));
+        }
         partitionToDeletedFiles.get(partition).addAll(deletedFiles);
       }
 
