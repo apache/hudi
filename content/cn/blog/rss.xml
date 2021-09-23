@@ -15,18 +15,18 @@
             <description><![CDATA[Ziyue Guan from Bytedance shares the experience of building an ExaByte(EB)-level data lake using Apache Hudi at Bytedance.]]></description>
         </item>
         <item>
-            <title><![CDATA[Reliable ingestion from AWS S3 using Hudi]]></title>
-            <link>https://hudi.apache.org/cn/blog/2021/08/23/s3-events-source</link>
-            <guid>Reliable ingestion from AWS S3 using Hudi</guid>
-            <pubDate>Mon, 23 Aug 2021 00:00:00 GMT</pubDate>
-            <description><![CDATA[In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.]]></description>
-        </item>
-        <item>
             <title><![CDATA[Asynchronous Clustering using Hudi]]></title>
             <link>https://hudi.apache.org/cn/blog/2021/08/23/async-clustering</link>
             <guid>Asynchronous Clustering using Hudi</guid>
             <pubDate>Mon, 23 Aug 2021 00:00:00 GMT</pubDate>
             <description><![CDATA[In one of the previous blog posts, we introduced a new]]></description>
+        </item>
+        <item>
+            <title><![CDATA[Reliable ingestion from AWS S3 using Hudi]]></title>
+            <link>https://hudi.apache.org/cn/blog/2021/08/23/s3-events-source</link>
+            <guid>Reliable ingestion from AWS S3 using Hudi</guid>
+            <pubDate>Mon, 23 Aug 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.]]></description>
         </item>
         <item>
             <title><![CDATA[Improving Marker Mechanism in Apache Hudi]]></title>
