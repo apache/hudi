@@ -226,7 +226,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getArchivePath() {
     String archiveFolder = tableConfig.getArchivelogFolder();
-    return getMetaPath() + "/" + archiveFolder;
+    return getMetaPath() + Path.SEPARATOR + archiveFolder;
   }
 
   /**

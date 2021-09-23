@@ -82,7 +82,7 @@ public class FilePathUtils {
    * @param partitionKVs  The partition key value mapping
    * @param hivePartition Whether the partition path is with Hive style,
    *                      e.g. {partition key} = {partition value}
-   * @param sepSuffix     Whether to append the file separator as suffix
+   * @param sepSuffix     Whether to append the path separator as suffix
    * @return an escaped, valid partition name
    */
   public static String generatePartitionPath(
