@@ -50,6 +50,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -156,6 +157,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String instantTime = COMMIT_FORMATTER.format(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
+    // test log file name
+    fullFileName = FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
   }
 
