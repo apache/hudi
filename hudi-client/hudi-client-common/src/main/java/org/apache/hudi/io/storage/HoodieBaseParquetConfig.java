@@ -27,13 +27,13 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
  */
 public class HoodieBaseParquetConfig<T> {
   private final T writeSupport;
-  private CompressionCodecName compressionCodecName;
-  private int blockSize;
-  private int pageSize;
-  private long maxFileSize;
-  private Configuration hadoopConf;
-  private double compressionRatio;
-  private boolean directionaryEnabled;
+  private final CompressionCodecName compressionCodecName;
+  private final int blockSize;
+  private final int pageSize;
+  private final long maxFileSize;
+  private final Configuration hadoopConf;
+  private final double compressionRatio;
+  private final boolean dictionaryEnabled;
 
   public HoodieBaseParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
       int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
@@ -41,7 +41,7 @@ public class HoodieBaseParquetConfig<T> {
   }
 
   public HoodieBaseParquetConfig(T writeSupport, CompressionCodecName compressionCodecName, int blockSize,
-                                 int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio, boolean directionaryEnabled) {
+                                 int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio, boolean dictionaryEnabled) {
     this.writeSupport = writeSupport;
     this.compressionCodecName = compressionCodecName;
     this.blockSize = blockSize;
@@ -49,7 +49,7 @@ public class HoodieBaseParquetConfig<T> {
     this.maxFileSize = maxFileSize;
     this.hadoopConf = hadoopConf;
     this.compressionRatio = compressionRatio;
-    this.directionaryEnabled = directionaryEnabled;
+    this.dictionaryEnabled = dictionaryEnabled;
   }
 
   public CompressionCodecName getCompressionCodecName() {
@@ -80,7 +80,7 @@ public class HoodieBaseParquetConfig<T> {
     return writeSupport;
   }
 
-  public boolean isDirectionaryEnabled() {
-    return directionaryEnabled;
+  public boolean dictionaryEnabled() {
+    return dictionaryEnabled;
   }
 }

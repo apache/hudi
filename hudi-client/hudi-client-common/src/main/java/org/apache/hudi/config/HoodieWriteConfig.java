@@ -1403,10 +1403,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
   }
 
-  public long getLogFileMaxSize() {
-    return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
-  }
-
   public double getParquetCompressionRatio() {
     return getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION);
   }
@@ -1415,8 +1411,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return CompressionCodecName.fromConf(getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME));
   }
 
-  public boolean enableParquetDictionary() {
+  public boolean parquetDictionaryEnabled() {
     return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
+  }
+
+  public long getLogFileMaxSize() {
+    return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
   }
 
   public double getLogFileToParquetCompressionRatio() {
