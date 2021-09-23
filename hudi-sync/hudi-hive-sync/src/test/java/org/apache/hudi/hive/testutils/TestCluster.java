@@ -47,6 +47,7 @@ import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -265,7 +266,7 @@ public class TestCluster implements BeforeAllCallback, AfterAllCallback,
 
   public void shutDown() {
     stopHiveServer2();
-    client.close();
+    Hive.closeCurrent();
     hiveTestService.getHiveMetaStore().stop();
     hdfsTestService.stop();
   }
