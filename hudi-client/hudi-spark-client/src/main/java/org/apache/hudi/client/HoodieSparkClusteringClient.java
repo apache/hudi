@@ -34,6 +34,7 @@ import org.apache.spark.api.java.JavaRDD;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Async clustering client for Spark datasource.
@@ -53,9 +54,9 @@ public class HoodieSparkClusteringClient<T extends HoodieRecordPayload> extends
     LOG.info("Executing clustering instance " + instant);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) clusteringClient;
     Option<HoodieCommitMetadata> commitMetadata = writeClient.cluster(instant.getTimestamp(), true).getCommitMetadata();
-    List<HoodieWriteStat> writeStats = commitMetadata.get().getPartitionToWriteStats().entrySet().stream().flatMap(e ->
-            e.getValue().stream()).collect(Collectors.toList());
-    long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
+    Stream<HoodieWriteStat> hoodieWriteStatStream = commitMetadata.get().getPartitionToWriteStats().entrySet().stream().flatMap(e ->
+            e.getValue().stream());
+    long errorsCount = hoodieWriteStatStream.mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount > 0) {
       // TODO: Should we treat this fatal and throw exception?
       LOG.error("Clustering for instant (" + instant + ") failed with write errors");
