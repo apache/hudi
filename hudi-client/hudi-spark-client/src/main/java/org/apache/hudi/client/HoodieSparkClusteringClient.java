@@ -32,8 +32,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
