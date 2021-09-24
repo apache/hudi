@@ -179,6 +179,9 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
     }
   }
 
+  /**
+   * Class to assist in checking if an instant is part of a set of instants.
+   */
   private static class ExplicitMatchRange extends InstantRange {
     Set<String> instants;
 

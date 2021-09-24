@@ -308,8 +308,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     try {
       // TODO: check if we need HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config) here.
-      this.txnManager.beginTransaction(Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime)),
-          lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+      this.txnManager.beginTransaction(Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime)), Option.empty());
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
       table.getMetadataWriter().ifPresent(w -> w.update(metadata, compactionCommitTime));
@@ -391,7 +390,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     try {
       // TODO: check if we need HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config) here.
       this.txnManager.beginTransaction(Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime)),
-          lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+          Option.empty());
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
       table.getMetadataWriter().ifPresent(w -> w.update(metadata, clusteringCommitTime));

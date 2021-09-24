@@ -22,6 +22,8 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,6 +36,8 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -56,6 +60,23 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 public class HoodieTableMetadataUtil {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetadataUtil.class);
+
+  /**
+   * Delete the metadata table for the dataset. This will be invoked during upgrade/downgrade operation during which no other
+   * process should be running.
+   *
+   * @param basePath base path of the dataset
+   * @param context instance of {@link HoodieEngineContext}.
+   */
+  public static void deleteMetadataTable(String basePath, HoodieEngineContext context) {
+    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    try {
+      fs.delete(new Path(metadataTablePath), true);
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Failed to remove metadata table from path " + metadataTablePath, e);
+    }
+  }
 
   /**
    * Finds all new files/partitions created as part of commit and creates metadata table records for them.
@@ -85,7 +106,6 @@ public class HoodieTableMetadataUtil {
         ValidationUtils.checkState(!newFiles.containsKey(filename), "Duplicate files in HoodieCommitMetadata");
         newFiles.put(filename, hoodieWriteStat.getTotalWriteBytes());
       });
-
       // New files added to a partition
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(
           partition, Option.of(newFiles), Option.empty());
@@ -138,7 +158,6 @@ public class HoodieTableMetadataUtil {
   public static List<HoodieRecord> convertMetadataToRecords(HoodieCleanMetadata cleanMetadata, String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
-
     cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
@@ -322,18 +341,18 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Map a key to a bucket.
+   * Map a record key to a bucket in partition of interest.
    *
    * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
    * implementation is not guaranteed by the JVM to be consistent across JVM versions and implementations.
    *
-   * @param str
+   * @param recordKey record key for which the bucket index is looked up for.
    * @return An integer hash of the given string
    */
-  public static int keyToBucket(String str, int numBuckets) {
+  public static int mapRecordKeyToBucket(String recordKey, int numBuckets) {
     int h = 0;
-    for (int i = 0; i < str.length(); ++i) {
-      h = 31 * h + str.charAt(i);
+    for (int i = 0; i < recordKey.length(); ++i) {
+      h = 31 * h + recordKey.charAt(i);
     }
 
     return Math.abs(Math.abs(h) % numBuckets);

@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -48,9 +49,11 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(BaseCleanActionExecutor.class);
+  private final TransactionManager txnManager;
 
   public BaseCleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
   protected static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
@@ -114,15 +117,26 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
           Option.of(timer.endTimer()),
           cleanStats
       );
-
-      writeTableMetadata(metadata);
-
+      writeToMetadata(metadata);
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
       return metadata;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to clean up after commit", e);
+    }
+  }
+
+  /**
+   * Update metadata table if available. Any update to metadata table happens within data table lock.
+   * @param cleanMetadata intance of {@link HoodieCleanMetadata} to be applied to metadata.
+   */
+  private void writeToMetadata(HoodieCleanMetadata cleanMetadata) {
+    try {
+      this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      writeTableMetadata(cleanMetadata);
+    } finally {
+      this.txnManager.endTransaction();
     }
   }
 

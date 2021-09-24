@@ -190,7 +190,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         HoodieTimer timer = new HoodieTimer().startTimer();
         List<FileSlice> bucketFileSlices = HoodieTableMetadataUtil.loadPartitionBucketsWithLatestFileSlices(metaClient, partitionName);
         ValidationUtils.checkArgument(bucketFileSlices.size() == 1, String.format("Invalid number of buckets: found=%d, required=%d", bucketFileSlices.size(), 1));
-        final FileSlice slice = bucketFileSlices.get(HoodieTableMetadataUtil.keyToBucket(key, bucketFileSlices.size()));
+        final FileSlice slice = bucketFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToBucket(key, bucketFileSlices.size()));
 
         // If the base file is present then create a reader
         Option<HoodieBaseFile> basefile = slice.getBaseFile();
@@ -216,7 +216,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         // This is because the metadata table is updated before the dataset instants are committed.
         HoodieActiveTimeline datasetTimeline = datasetMetaClient.getActiveTimeline();
         Set<String> validInstantTimestamps = datasetTimeline.filterCompletedInstants().getInstants()
-            .map(i -> i.getTimestamp()).collect(Collectors.toSet());
+            .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
         // For any rollbacks and restores, we cannot neglect the instants that they are rolling back.
         // The rollback instant should be more recent than the start of the timeline for it to have rolled back any
@@ -336,25 +336,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public Option<String> getSyncedInstantTime() {
     if (metaClient != null) {
-      Option<HoodieInstant> latestInstant = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
+      Option<HoodieInstant> latestInstant = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant();
       if (latestInstant.isPresent()) {
         return Option.of(latestInstant.get().getTimestamp());
       }
     }
     return Option.empty();
-  }
-
-  /**
-   * Return the timestamp of the latest synced instant.
-   */
-  @Override
-  public Option<String> getUpdateTime() {
-    if (!enabled) {
-      return Option.empty();
-    }
-    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
-    return timeline.getDeltaCommitTimeline().filterCompletedInstants()
-        .lastInstant().map(HoodieInstant::getTimestamp);
   }
 
   @Override

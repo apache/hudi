@@ -222,11 +222,6 @@ public class HoodieLockConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieLockConfig.Builder withLockProviderClass(String lockProviderClassName) {
-      lockConfig.setValue(LOCK_PROVIDER_CLASS_NAME, lockProviderClassName);
-      return this;
-    }
-
     public HoodieLockConfig.Builder withHiveDatabaseName(String databaseName) {
       lockConfig.setValue(HIVE_DATABASE_NAME, databaseName);
       return this;

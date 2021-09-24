@@ -98,14 +98,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
       if (!metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
+        // if this is a new commit being applied to metadata for the first time
         writeClient.startCommitWithTime(instantTime);
       } else {
         // this code path refers to a re-attempted commit that got committed to metadata, but failed in dataset.
         // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
-        // when retried again, client will first rollback pending compaction. these will be applied to metadata table, but all changes
-        // are upserts and so only a new delta commit will be created.
-        // once rollback is complete, compaction will be retried again,which will eventually hit this code block where the respective commit already
-        // is part of completed commit. So, we have to manually remove the completed instant and proceed.
+        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
+        // are upserts to metadata table and so only a new delta commit will be created.
+        // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
+        // already part of completed commit. So, we have to manually remove the completed instant and proceed.
         // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
         HoodieInstant alreadyCompletedInstant = metaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
         FSUtils.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), alreadyCompletedInstant);
@@ -170,15 +171,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   /**
    * Tag each record with the location in the given partition.
    *
-   * The record is sharded to a file based on its record key.
+   * The record is tagged with respective bucket's file location based on its record key.
    */
-  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int shardCount) {
-    List<FileSlice> shards = HoodieTableMetadataUtil.loadPartitionBucketsWithLatestFileSlices(metaClient, partitionName);
-    ValidationUtils.checkArgument(shards.size() == shardCount, String.format("Invalid number of shards: found=%d, required=%d", shards.size(), shardCount));
+  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int bucketCount) {
+    List<FileSlice> buckets = HoodieTableMetadataUtil.loadPartitionBucketsWithLatestFileSlices(metaClient, partitionName);
+    ValidationUtils.checkArgument(buckets.size() == bucketCount, String.format("Invalid number of buckets: found=%d, required=%d", buckets.size(), bucketCount));
 
     JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
     return jsc.parallelize(records, 1).map(r -> {
-      FileSlice slice = shards.get(HoodieTableMetadataUtil.keyToBucket(r.getRecordKey(), shardCount));
+      FileSlice slice = buckets.get(HoodieTableMetadataUtil.mapRecordKeyToBucket(r.getRecordKey(), bucketCount));
       r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       return r;
     });

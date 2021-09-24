@@ -192,7 +192,6 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
       // Verify that all data file has one log file
       table = HoodieSparkTable.create(config, context);
-      table.getHoodieView().sync();
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<FileSlice> groupedLogFiles =
             table.getSliceView().getLatestFileSlices(partitionPath).collect(Collectors.toList());

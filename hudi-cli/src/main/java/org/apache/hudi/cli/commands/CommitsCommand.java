@@ -440,14 +440,6 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commits sync", help = "Compare commits with another Hoodie table")
-  public String syncCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path) {
-    HoodieCLI.metaClient = HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
-    HoodieCLI.state = HoodieCLI.CLIState.SYNC;
-    return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "
-        + HoodieCLI.metaClient.getTableConfig().getTableName();
-  }
-
   /*
   Checks whether a commit or replacecommit action exists in the timeline.
   * */

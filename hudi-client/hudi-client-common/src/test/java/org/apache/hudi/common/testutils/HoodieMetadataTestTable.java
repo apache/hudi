@@ -19,10 +19,13 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -31,6 +34,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * {@link HoodieTestTable} impl used for testing metadata. This class does synchronous updates to HoodieTableMetadataWriter if non null.
+ */
 public class HoodieMetadataTestTable extends HoodieTestTable {
 
   private HoodieTableMetadataWriter writer;
@@ -54,10 +60,19 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
                                                List<String> newPartitionsToAdd, List<String> partitions,
                                                int filesPerPartition, boolean bootstrap, boolean createInflightCommit) throws Exception {
     HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd, partitions, filesPerPartition, bootstrap, createInflightCommit);
-    if (writer != null) {
+    if (writer != null && !createInflightCommit) {
       writer.update(commitMetadata, commitTime);
     }
     return commitMetadata;
+  }
+
+  @Override
+  public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
+    super.moveInflightCommitToComplete(instantTime, metadata);
+    if (writer != null) {
+      writer.update(metadata, instantTime);
+    }
+    return this;
   }
 
   @Override
@@ -82,6 +97,19 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     super.addRollback(instantTime, rollbackMetadata);
     if (writer != null) {
       writer.update(rollbackMetadata, instantTime);
+    }
+    return this;
+  }
+
+  @Override
+  public HoodieTestTable addReplaceCommit(
+      String instantTime,
+      Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
+      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
+    super.addReplaceCommit(instantTime, requestedReplaceMetadata, inflightReplaceMetadata, completeReplaceMetadata);
+    if (writer != null) {
+      writer.update(completeReplaceMetadata, instantTime);
     }
     return this;
   }

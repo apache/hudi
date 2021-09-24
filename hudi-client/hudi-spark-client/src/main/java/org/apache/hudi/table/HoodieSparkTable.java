@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -37,10 +36,17 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
+
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+
+  private final AtomicBoolean isMetadataInfoUpdated = new AtomicBoolean(false);
+  private boolean isMetadataTableAvailable;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -74,21 +80,31 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
 
   /**
    * Fetch instance of {@link HoodieTableMetadataWriter}.
+   *
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
   public Option<HoodieTableMetadataWriter> getMetadataWriter() {
-    if (!config.isMetadataTableEnabled()) {
-      return Option.empty();
-    }
-
-    try {
-      if (!metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
-        return Option.empty();
+    synchronized (this) {
+      if (!isMetadataInfoUpdated.getAndSet(true)) {
+        // this code assumes that bootstrap of metadata table is done elsewhere (SparkRDDWriteClient) and so, we gauge whether metadata table
+        // is available or not once here and reuse the same info for repeated calls to getMetadataWriter(). Please remove memoization if
+        // that's not the case.
+        try {
+          if (!config.isMetadataTableEnabled() || !metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
+            isMetadataTableAvailable = false;
+          } else {
+            isMetadataTableAvailable = true;
+          }
+        } catch (IOException e) {
+          throw new HoodieMetadataException("Could not instantiate metadata table writer", e);
+        }
       }
+    }
+    if (isMetadataTableAvailable) {
       return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context));
-    } catch (Exception e) {
-      throw new HoodieMetadataException("Could not create metadata table writer", e);
+    } else {
+      return Option.empty();
     }
   }
 }

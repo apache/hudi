@@ -104,9 +104,6 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFile;
-import static org.apache.hudi.common.testutils.FileCreateUtils.deleteCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.deleteInflightCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.deleteRequestedCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
@@ -232,7 +229,11 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
-    createCommit(basePath, instantTime, metadata);
+    if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      createCommit(basePath, instantTime, metadata);
+    } else {
+      createDeltaCommit(basePath, instantTime, metadata);
+    }
     inflightCommits.remove(instantTime);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -249,9 +250,9 @@ public class HoodieTestTable {
   }
 
   public HoodieTestTable addDeltaCommit(String instantTime, HoodieCommitMetadata metadata) throws Exception {
-    createRequestedCommit(basePath, instantTime);
-    createInflightCommit(basePath, instantTime);
-    createCommit(basePath, instantTime, metadata);
+    createRequestedDeltaCommit(basePath, instantTime);
+    createInflightDeltaCommit(basePath, instantTime);
+    createDeltaCommit(basePath, instantTime, metadata);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return this;
@@ -914,13 +915,6 @@ public class HoodieTestTable {
     public HoodieTestTableException(Throwable t) {
       super(t);
     }
-  }
-
-  public void removeCommit(String instantTime) throws Exception {
-    deleteRequestedCommit(basePath, instantTime);
-    deleteInflightCommit(basePath, instantTime);
-    deleteCommit(basePath, instantTime);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
   }
 
   static class HoodieTestTableState {

@@ -214,9 +214,4 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     return datasetMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant()
         .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
   }
-
-  public Option<String> getReaderTime() {
-    // TODO fix.
-    return Option.empty();
-  }
 }

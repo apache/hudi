@@ -248,7 +248,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         rebootstrap = true;
       } else if (!latestMetadataInstant.get().getTimestamp().equals(SOLO_COMMIT_TIMESTAMP)
           && datasetMetaClient.getActiveTimeline().getAllCommitsTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
-        // TODO: Revisit this logic. as of now filtering for all commits timeline.
+        // TODO: Revisit this logic and validate that filtering for all commits timeline is the right thing to do
         LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
             + " latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
             + ", latestDatasetInstant=" + datasetMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
@@ -413,18 +413,21 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
     blockHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
-    // For ease of usage, we always create a delete log block here so that metadata reader don't need to determine if log file is present or base file is present.
-    // reader can safely assume every bucket will have a log file to get started.
+    // Archival of data table has a dependency on compaction(base files) in metadata table.
+    // It is assumed that as of time Tx of base instant (/compaction time) in metadata table,
+    // all commits in data table is in sync with metadata table. So, we always create start with log file for any bucket.
+    // but we have to work on relaxing that in future : https://issues.apache.org/jira/browse/HUDI-2458
     final HoodieDeleteBlock block = new HoodieDeleteBlock(new HoodieKey[0], blockHeader);
 
     LOG.info(String.format("Creating %d buckets for partition %s with base fileId %s at instant time %s",
         bucketCount, partition, BUCKET_PREFIX, instantTime));
     for (int i = 0; i < bucketCount; ++i) {
-      // Generate a indexed fileId for each bucket and write a log block into it to create the file.
       final String bucketFileId = String.format("%s%04d", BUCKET_PREFIX, i + 1);
       try {
-        String writeToken = FSUtils.makeWriteToken(0, 0, 0); // since all shards are initialized in driver, we don't need to create
-        // random write token. TODO: what if driver crashed mid-way. during re-initializing, we might run into issues.
+        // since all shards are initialized in driver, we don't need to create a random write token.
+        String writeToken = FSUtils.makeWriteToken(0, 0, 0);
+        // TODO: what if driver crashed mid-way during initialization of buckets. during re-initializing, we might run into issues.
+        // https://issues.apache.org/jira/browse/HUDI-2478
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), partition))
             .withFileId(bucketFileId).overBaseCommit(instantTime)
@@ -438,20 +441,21 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         writer.appendBlock(block);
         writer.close();
       } catch (InterruptedException e) {
-        throw new IOException("Failed to created bucket " + bucketFileId + " for partition " + partition, e);
+        throw new HoodieException("Failed to created bucket " + bucketFileId + " for partition " + partition, e);
       }
     }
   }
 
   /**
    * Interface to assist in converting commit metadata to List of HoodieRecords to be written to metadata table.
+   * Updates of different commit metadata uses the same method to convert to HoodieRecords and hence.
    */
-  interface ConvertMetadataFunction {
+  private interface ConvertMetadataFunction {
     List<HoodieRecord> convertMetadata();
   }
 
   /**
-   * Processes commit metadata and commits to metadata table.
+   * Processes commit metadata from data table and commits to metadata table.
    * @param instantTime instant time of interest.
    * @param convertMetadataFunction converter function to convert the respective metadata to List of HoodieRecords to be written to metadata table.
    * @param <T> type of commit metadata.
@@ -511,7 +515,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       boolean wasSynced = metaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, rollbackInstant));
       if (!wasSynced) {
         // A compaction may have taken place on metadata table which would have included this instant being rolled back.
-        // Revisit this logic if we relax the compaction constraint.
+        // Revisit this logic to relax the compaction fencing : https://issues.apache.org/jira/browse/HUDI-2458
         Option<String> latestCompaction = metadata.getLatestCompactionTime();
         if (latestCompaction.isPresent()) {
           wasSynced = HoodieTimeline.compareTimestamps(rollbackInstant, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCompaction.get());

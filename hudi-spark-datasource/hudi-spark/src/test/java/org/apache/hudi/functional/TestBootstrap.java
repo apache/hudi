@@ -129,7 +129,6 @@ public class TestBootstrap extends HoodieClientTestBase {
   private JobConf rtJobConf;
   private SparkSession spark;
 
-  @Override
   @BeforeEach
   public void setUp() throws Exception {
     bootstrapBasePath = tmpFolder.toAbsolutePath().toString() + "/data";
@@ -141,7 +140,6 @@ public class TestBootstrap extends HoodieClientTestBase {
     reloadInputFormats();
   }
 
-  @Override
   @AfterEach
   public void tearDown() throws IOException {
     cleanupSparkContexts();

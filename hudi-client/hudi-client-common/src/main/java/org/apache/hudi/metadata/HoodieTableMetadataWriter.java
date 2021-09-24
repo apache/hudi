@@ -18,15 +18,10 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.Serializable;
 
@@ -47,19 +42,4 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
   // Update the metadata table due to a ROLLBACK operation
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
 
-  /**
-   * Delete the metadata table for the dataset. This will be invoked during downgrade operation during which no other process should be running.
-   *
-   * @param basePath base path of the dataset
-   * @param context
-   */
-  static void deleteMetadataTable(String basePath, HoodieEngineContext context) {
-    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
-    try {
-      fs.delete(new Path(metadataTablePath), true);
-    } catch (Exception e) {
-      throw new HoodieMetadataException("Failed to remove metadata table from path " + metadataTablePath, e);
-    }
-  }
 }

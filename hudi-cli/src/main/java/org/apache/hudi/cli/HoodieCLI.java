@@ -42,7 +42,6 @@ public class HoodieCLI {
   public static CLIState state = CLIState.INIT;
   public static String basePath;
   protected static HoodieTableMetaClient tableMetadata;
-  public static HoodieTableMetaClient metaClient;
   public static TimelineLayoutVersion layoutVersion;
   public static TempViewProvider tempViewProvider;
 

@@ -142,9 +142,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
-    HoodieWriteConfig.Builder autoCommitCfgBuilder = getConfigBuilder(true, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
-    addConfigsForPopulateMetaFields(cfgBuilder, true);
-    HoodieWriteConfig autoCommitCfg = autoCommitCfgBuilder.build();
 
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
@@ -170,7 +167,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertNoWriteErrors(statuses);
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
-      hoodieTable.getHoodieView().sync();
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -212,7 +208,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
         // Test failed delta commit rollback
         secondClient.rollback(commitTime1);
-        hoodieTable.getHoodieView().sync();
         allFiles = listAllBaseFilesInPath(hoodieTable);
         // After rollback, there should be no base file with the failed commit time
         List<String> remainingFiles = Arrays.stream(allFiles).filter(file -> file.getPath().getName()
@@ -275,13 +270,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         assertNoWriteErrors(statuses);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
-        SparkRDDWriteClient compactClient = getHoodieWriteClient(autoCommitCfg);
 
-        String compactionInstantTime = compactClient.scheduleCompaction(Option.empty()).get().toString();
-        compactClient.compact(compactionInstantTime);
+        String compactionInstantTime = thirdClient.scheduleCompaction(Option.empty()).get().toString();
+        thirdClient.compact(compactionInstantTime);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
-        hoodieTable.getHoodieView().sync();
 
         final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getTimestamp();
         assertTrue(Arrays.stream(listAllBaseFilesInPath(hoodieTable))
@@ -350,7 +343,9 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
        */
       newCommitTime = "002";
       // WriteClient with custom config (disable small file handling)
-      try (SparkRDDWriteClient nClient = getHoodieWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff(populateMetaFields))) {
+      HoodieWriteConfig smallFileWriteConfig = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(populateMetaFields)
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+      try (SparkRDDWriteClient nClient = getHoodieWriteClient(smallFileWriteConfig)) {
         nClient.startCommitWithTime(newCommitTime);
 
         List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
@@ -461,6 +456,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   }
 
   private HoodieWriteConfig getHoodieWriteConfigWithSmallFileHandlingOff(boolean populateMetaFields) {
+    return getHoodieWriteConfigWithSmallFileHandlingOffBuilder(populateMetaFields).build();
+  }
+
+  private HoodieWriteConfig.Builder getHoodieWriteConfigWithSmallFileHandlingOffBuilder(boolean populateMetaFields) {
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withAutoCommit(false)
@@ -472,7 +471,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     if (!populateMetaFields) {
       addConfigsForPopulateMetaFields(cfgBuilder, false);
     }
-    return cfgBuilder.build();
+    return cfgBuilder;
   }
 
   @ParameterizedTest
