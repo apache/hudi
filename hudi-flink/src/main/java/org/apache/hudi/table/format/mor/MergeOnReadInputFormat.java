@@ -132,6 +132,11 @@ public class MergeOnReadInputFormat
    */
   private boolean emitDelete;
 
+  /**
+   * Flag saying whether the input format has been closed.
+   */
+  private boolean closed = true;
+
   private MergeOnReadInputFormat(
       Configuration conf,
       Path[] paths,
@@ -163,6 +168,7 @@ public class MergeOnReadInputFormat
   @Override
   public void open(MergeOnReadInputSplit split) throws IOException {
     this.currentReadCount = 0L;
+    this.closed = false;
     this.hadoopConf = StreamerUtil.getHadoopConf();
     if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
       if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
@@ -208,6 +214,7 @@ public class MergeOnReadInputFormat
           + "spark partition Index: " + split.getSplitNumber()
           + "merge type: " + split.getMergeType());
     }
+    mayShiftInputSplit(split);
   }
 
   @Override
@@ -262,11 +269,31 @@ public class MergeOnReadInputFormat
       this.iterator.close();
     }
     this.iterator = null;
+    this.closed = true;
+  }
+
+  public boolean isClosed() {
+    return this.closed;
   }
 
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  /**
+   * Shifts the input split by its consumed records number.
+   *
+   * <p>Note: This action is time-consuming.
+   */
+  private void mayShiftInputSplit(MergeOnReadInputSplit split) throws IOException {
+    if (split.isConsumed()) {
+      // if the input split has been consumed before,
+      // shift the input split with consumed num of records first
+      for (long i = 0; i < split.getConsumed() && !reachedEnd(); i++) {
+        nextRecord(null);
+      }
+    }
+  }
 
   private ParquetColumnarRowSplitReader getFullSchemaReader(String path) throws IOException {
     return getReader(path, IntStream.range(0, this.tableState.getRowType().getFieldCount()).toArray());

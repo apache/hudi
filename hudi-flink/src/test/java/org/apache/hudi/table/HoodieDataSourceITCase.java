@@ -128,7 +128,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         .setBoolean("table.dynamic-table-options.enabled", true);
     // specify the start commit as earliest
     List<Row> rows3 = execSelectSql(streamTableEnv,
-        "select * from t1/*+options('read.streaming.start-commit'='earliest')*/", 10);
+        "select * from t1/*+options('read.start-commit'='earliest')*/", 10);
     assertRowsEquals(rows3, TestData.DATA_SET_SOURCE_INSERT);
   }
 
