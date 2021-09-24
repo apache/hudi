@@ -66,6 +66,9 @@ public class HoodieFlinkCompactor {
     // set table schema
     CompactionUtil.setAvroSchema(conf, metaClient);
 
+    // infer changelog mode
+    CompactionUtil.inferChangelogMode(conf, metaClient);
+
     HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
