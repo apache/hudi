@@ -50,6 +50,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import scala.Serializable;
+
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
@@ -66,7 +68,10 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_O
  *   <li>use the file paths from #step 3 as the back-up of the filesystem view.</li>
  * </ol>
  */
-public class IncrementalInputSplits {
+public class IncrementalInputSplits implements Serializable {
+
+  private static final long serialVersionUID = 1L;
+
   private static final Logger LOG = LoggerFactory.getLogger(IncrementalInputSplits.class);
   private final Configuration conf;
   private final Path path;

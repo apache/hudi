@@ -149,7 +149,7 @@ public class TableSchemaResolver {
     }
   }
 
-  private Schema getTableAvroSchemaFromDataFile() throws Exception {
+  public Schema getTableAvroSchemaFromDataFile() throws Exception {
     return convertParquetSchemaToAvro(getTableParquetSchemaFromDataFile());
   }
 
