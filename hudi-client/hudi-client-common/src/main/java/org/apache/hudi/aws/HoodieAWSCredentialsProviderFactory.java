@@ -27,11 +27,11 @@ import java.util.List;
 import java.util.Properties;
 
 public class HoodieAWSCredentialsProviderFactory {
-  public AWSCredentialsProvider getAwsCredentialsProvider(Properties props) {
+  public static AWSCredentialsProvider getAwsCredentialsProvider(Properties props) {
     return getAwsCredentialsProviderChain(props);
   }
 
-  private AWSCredentialsProvider getAwsCredentialsProviderChain(Properties props) {
+  private static AWSCredentialsProvider getAwsCredentialsProviderChain(Properties props) {
     List<AWSCredentialsProvider> providers = new ArrayList<>();
     providers.add(new HoodieConfigAWSCredentialsProvider(props));
     providers.add(new DefaultAWSCredentialsProviderChain());

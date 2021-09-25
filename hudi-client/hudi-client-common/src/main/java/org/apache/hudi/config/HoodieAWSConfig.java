@@ -38,12 +38,12 @@ import javax.annotation.concurrent.Immutable;
         description = "Configurations used for AWS credentials to get AWS resources.")
 public class HoodieAWSConfig extends HoodieConfig {
   public static final ConfigProperty<String> AWS_ACCESS_KEY = ConfigProperty
-        .key("hoodie.aws.access-key")
+        .key("hoodie.aws.access.key")
         .noDefaultValue()
         .withDocumentation("AWS access key id");
 
   public static final ConfigProperty<String> AWS_SECRET_KEY = ConfigProperty
-        .key("hoodie.aws.secret-key")
+        .key("hoodie.aws.secret.key")
         .noDefaultValue()
         .withDocumentation("AWS secret key");
 

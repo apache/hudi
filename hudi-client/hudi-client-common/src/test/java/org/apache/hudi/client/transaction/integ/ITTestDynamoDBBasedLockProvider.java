@@ -128,6 +128,6 @@ public class ITTestDynamoDBBasedLockProvider {
   }
 
   private static AWSCredentialsProvider getCredentials() {
-    return new AWSStaticCredentialsProvider(new BasicAWSCredentials(TABLE_NAME, "d"));
+    return new AWSStaticCredentialsProvider(new BasicAWSCredentials("random-access-key", "random-secret-key"));
   }
 }

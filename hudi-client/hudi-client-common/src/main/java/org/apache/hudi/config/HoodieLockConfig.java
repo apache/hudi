@@ -17,9 +17,7 @@
 
 package org.apache.hudi.config;
 
-import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.regions.Regions;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
@@ -188,7 +186,8 @@ public class HoodieLockConfig extends HoodieConfig {
         return Option.empty();
       })
       .withDocumentation("For DynamoDB based lock provider, the partition key for the DynamoDB lock table. "
-          + "Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key.");
+          + "Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key."
+          + " By default we use the Hudi table name specified to be the partition key");
 
   public static final ConfigProperty<String> DYNAMODB_REGION = ConfigProperty
       .key(DYNAMODB_REGION_PROP_KEY)
@@ -198,11 +197,10 @@ public class HoodieLockConfig extends HoodieConfig {
         if (regionFromEnv != null) {
           return Option.of(RegionUtils.getRegion(regionFromEnv).getName());
         }
-        Region currentRegion = Regions.getCurrentRegion();
-        return currentRegion == null ? Option.empty() : Option.of(currentRegion.getName());
+        return Option.empty();
       })
-      .withDocumentation("For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service"
-              + "example: us-east-1");
+      .withDocumentation("For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service."
+              + " Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1");
 
   public static final ConfigProperty<String> DYNAMODB_BILLING_MODE = ConfigProperty
       .key(DYNAMODB_BILLING_MODE_PROP_KEY)
@@ -211,12 +209,12 @@ public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DYNAMODB_READ_CAPACITY = ConfigProperty
           .key(DYNAMODB_READ_CAPACITY_PROP_KEY)
-          .defaultValue("100")
+          .defaultValue("20")
           .withDocumentation("For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode");
 
   public static final ConfigProperty<String> DYNAMODB_WRITE_CAPACITY = ConfigProperty
           .key(DYNAMODB_WRITE_CAPACITY_PROP_KEY)
-          .defaultValue("100")
+          .defaultValue("10")
           .withDocumentation("For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode");
 
   // Pluggable type of lock provider

@@ -86,7 +86,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
         AmazonDynamoDBLockClientOptions.builder(dynamoDB, tableName)
                 .withTimeUnit(TimeUnit.MILLISECONDS)
                 .withLeaseDuration(leaseDuration)
-                .withHeartbeatPeriod(10000L)
+                .withHeartbeatPeriod(leaseDuration / 3)
                 .withCreateHeartbeatBackgroundThread(true)
                 .build());
     if (!client.lockTableExists()) {
@@ -168,7 +168,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
             new AwsClientBuilder.EndpointConfiguration(endpointURL, region);
     return AmazonDynamoDBClientBuilder.standard()
             .withEndpointConfiguration(dynamodbEndpoint)
-            .withCredentials(new HoodieAWSCredentialsProviderFactory().getAwsCredentialsProvider(lockConfiguration.getConfig()))
+            .withCredentials(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(lockConfiguration.getConfig()))
             .build();
   }
 
@@ -176,7 +176,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     createLockTableInDynamoDB(dynamoDB, tableName, "PAY_PER_REQUEST", 0L, 0L);
   }
 
-  public static void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName, String billingMode,
+  private static void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName, String billingMode,
                                                Long readCapacityUnits, Long writeCapacityUnits) {
     KeySchemaElement partitionKeyElement = new KeySchemaElement();
     partitionKeyElement.setAttributeName("key");
