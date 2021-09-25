@@ -157,6 +157,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     // metadata table.
     final String compactionInstantTime = latestDeltacommitTime + "001";
     if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+      LOG.warn(" MDT. triggering inline compaction " + compactionInstantTime);
       writeClient.compact(compactionInstantTime);
     }
   }

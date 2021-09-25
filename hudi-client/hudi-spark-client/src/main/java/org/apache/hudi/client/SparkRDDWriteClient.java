@@ -312,7 +312,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
       table.getMetadataWriter().ifPresent(w -> w.update(metadata, compactionCommitTime));
-      // commit to data table after committing to metadata table.FlinkHoodieBackedTableMetadataWriter
+      LOG.warn(" SparkRDDWriteClient. compaction for. isMetadata " + (config.getBasePath().endsWith("metadata")));
+      // commit to data table after committing to metadata table.
       finalizeWrite(table, compactionCommitTime, writeStats);
       LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
       SparkCompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
@@ -328,9 +329,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
               + config.getBasePath() + " at time " + compactionCommitTime, e);
         }
       }
-      LOG.warn("Compacted successfully on commit " + compactionCommitTime);
+      LOG.warn("Compacted successfully on commit " + compactionCommitTime + " " + config.getBasePath().endsWith("metadata"));
     } finally {
       this.txnManager.endTransaction();
+      LOG.warn(" Ended transaction for compaction commit " + compactionCommitTime + " " + config.getBasePath().endsWith("metadata"));
     }
   }
 

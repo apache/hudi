@@ -185,11 +185,23 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
+    if (!config.getBasePath().endsWith("metadata")) {
+      LOG.warn(" ABWC. Going to start transaction " + instantTime);
+    }
     this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, table.getMetaClient().getCommitActionType(), instantTime)),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
       preCommit(instantTime, metadata);
       table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime));
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn(" ABWC. committing " + instantTime);
+        metadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
+          LOG.warn("  for partition " + partitionStatName);
+          for (HoodieWriteStat stat : writeStats) {
+            LOG.warn("     file info " + stat.getFileId() + ", path " + stat.getPath() + ", total bytes written " + stat.getTotalWriteBytes());
+          }
+        });
+      }
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
@@ -198,6 +210,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
       this.txnManager.endTransaction();
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn(" AHWC transaction completed for " + instantTime);
+      }
     }
     // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
     runTableServicesInline(table, metadata, extraMetadata);

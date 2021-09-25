@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -114,7 +115,6 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.DELETE;
@@ -398,7 +398,11 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     Properties properties = new Properties();
-    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
+    properties.setProperty("hoodie.write.lock.filesystem.path", basePath);
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,"3");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,"5000");
+    //properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
@@ -571,8 +575,9 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Test sync of table operations.
    */
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
+  //@ParameterizedTest
+  //@EnumSource(HoodieTableType.class)
+  @Disabled
   public void testSync(HoodieTableType tableType) throws Exception {
     init(tableType, false, true);
     // Initial commits without metadata table enabled

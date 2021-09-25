@@ -18,10 +18,6 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import java.io.Serializable;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
@@ -30,8 +26,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Serializable;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
@@ -56,7 +58,7 @@ public class LockManager implements Serializable, AutoCloseable {
     this.lockConfiguration = new LockConfiguration(writeConfig.getProps());
   }
 
-  public void lock() {
+  public void lock(String currentOwner) {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       LockProvider lockProvider = getLockProvider();
       int retryCount = 0;
@@ -67,25 +69,31 @@ public class LockManager implements Serializable, AutoCloseable {
         try {
           acquired = lockProvider.tryLock(writeConfig.getLockAcquireWaitTimeoutInMs(), TimeUnit.MILLISECONDS);
           if (acquired) {
+            LOG.warn("Acquiring lock succeeded for " + currentOwner);
             break;
           }
-          LOG.info("Retrying to acquire lock...");
+          LOG.warn("Retrying to acquire lock... " + currentOwner + " sleeping for " + waitTimeInMs
+              + ", cur count " + retryCount + ", max retries " + retries);
           Thread.sleep(waitTimeInMs);
           retryCount++;
+          LOG.warn("Going into next loop to acquire lock... " + currentOwner);
         } catch (InterruptedException e) {
           if (retryCount >= retries) {
+            LOG.warn(" Interrupted exception thrown. retry count exceeded for " + currentOwner);
             throw new HoodieLockException("Unable to acquire lock, lock object ", e);
           }
         }
       }
       if (!acquired) {
-        throw new HoodieLockException("Unable to acquire lock, lock object " + lockProvider.getLock());
+        LOG.warn(" Failed to acquire lock " + currentOwner);
+        throw new HoodieLockException("Unable to acquire lock, lock object " + lockProvider.getLock() + " owner : " + currentOwner);
       }
     }
   }
 
-  public void unlock() {
+  public void unlock(String currentOwner) {
     if (writeConfig.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      LOG.warn("Unlocking " + currentOwner);
       getLockProvider().unlock();
     }
   }

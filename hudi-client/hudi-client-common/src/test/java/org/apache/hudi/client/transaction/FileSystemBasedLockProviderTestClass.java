@@ -18,17 +18,22 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
 
+import com.esotericsoftware.minlog.Log;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
@@ -42,11 +47,14 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY
  */
 public class FileSystemBasedLockProviderTestClass implements LockProvider<String>, Serializable {
 
+  private static final Logger LOG = LogManager.getLogger(FileSystemBasedLockProviderTestClass.class);
+
   private static final String LOCK_NAME = "acquired";
 
   private String lockPath;
   private transient FileSystem fs;
   protected LockConfiguration lockConfiguration;
+  private static final Random RANDOM = new Random();
 
   public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final Configuration configuration) {
     this.lockConfiguration = lockConfiguration;
@@ -58,6 +66,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
     try {
       fs.create(new Path(lockPath + "/" + LOCK_NAME), false).close();
     } catch (IOException e) {
+      Log.warn("****************** two processes tried creating lock file at the same time ************************* ");
       throw new HoodieIOException("Failed to acquire lock", e);
     }
   }
@@ -79,9 +88,14 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
           && (numRetries <= lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY))) {
         Thread.sleep(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY));
       }
+      Thread.sleep(RANDOM.nextInt(5));
+      if (fs.exists(new Path(lockPath + "/" + LOCK_NAME))) {
+        return false;
+      }
       acquireLock();
       return true;
     } catch (IOException | InterruptedException e) {
+      LOG.error("FAILED to ACQUIRE lock. throwed Exception ", e);
       throw new HoodieLockException("Failed to acquire lock", e);
     }
   }

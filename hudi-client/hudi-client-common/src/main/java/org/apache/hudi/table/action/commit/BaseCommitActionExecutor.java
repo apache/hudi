@@ -147,14 +147,19 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   }
 
   protected void autoCommit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result) {
+    LOG.warn("Beginning transaction for " + instantTime + " " + config.getBasePath().endsWith("metadata"));
     this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime)),
         lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
     try {
+      LOG.warn("REsolving conflict for " + instantTime + " " + config.getBasePath().endsWith("metadata"));
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
           result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner());
+      LOG.warn("Going to commit for " + instantTime + " " + config.getBasePath().endsWith("metadata"));
       commit(extraMetadata, result);
+      LOG.warn("Commit complete for " + instantTime + " " + config.getBasePath().endsWith("metadata"));
     } finally {
       this.txnManager.endTransaction();
+      LOG.warn("Ended transaction for " + instantTime + " " + config.getBasePath().endsWith("metadata"));
     }
   }
 

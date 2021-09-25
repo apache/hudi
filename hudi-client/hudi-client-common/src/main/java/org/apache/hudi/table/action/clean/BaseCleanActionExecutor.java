@@ -117,7 +117,20 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
           Option.of(timer.endTimer()),
           cleanStats
       );
+      LOG.warn("BaseClean Action Executor. Acquiring lock by " + instantTime);
       writeToMetadata(metadata);
+      LOG.warn("BaseClean Action Executor. Releasing lock by " + instantTime);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn(" BaseClean ActionEeecutor. Clean commit " + instantTime);
+        metadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
+          // Files deleted from a partition
+          List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+          LOG.warn("  for partition " + partition);
+          for (String str : deletedFiles) {
+            LOG.warn("    cleaned up file " + str);
+          }
+        });
+      }
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");

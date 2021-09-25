@@ -47,6 +47,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -252,6 +253,28 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
     try {
       writeToMetadata(rollbackMetadata);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn("  BaseRollbackAction Executor. rolling back " + instantToRollback.getTimestamp());
+        rollbackMetadata.getPartitionMetadata().values().forEach(pm -> {
+          LOG.warn("  for partition " + pm.getPartitionPath());
+          LOG.warn("    success delete files " + pm.getSuccessDeleteFiles().size());
+          for (String str: pm.getSuccessDeleteFiles()) {
+            LOG.warn("     " + str);
+          }
+          LOG.warn("    failed delete files " + pm.getFailedDeleteFiles().size());
+          for (String str: pm.getFailedDeleteFiles()) {
+            LOG.warn("     " + str);
+          }
+          LOG.warn("    rollback log files " + pm.getRollbackLogFiles().size());
+          for (Map.Entry<String, Long> entry: pm.getRollbackLogFiles().entrySet()) {
+            LOG.warn("      " + entry.getKey() + " -> " + entry.getValue());
+          }
+          LOG.warn("    written log files " + pm.getWrittenLogFiles().size());
+          for (Map.Entry<String, Long> entry: pm.getWrittenLogFiles().entrySet()) {
+            LOG.warn("      " + entry.getKey() + " -> " + entry.getValue());
+          }
+        });
+      }
       table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
       LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");

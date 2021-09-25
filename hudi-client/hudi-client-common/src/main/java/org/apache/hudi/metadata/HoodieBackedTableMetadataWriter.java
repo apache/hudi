@@ -85,7 +85,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
   private static final Integer MAX_BUCKET_COUNT = 9999;
-  private static final  String BUCKET_PREFIX = "bucket-";
+  private static final String BUCKET_PREFIX = "bucket-";
 
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig datasetWriteConfig;

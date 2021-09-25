@@ -49,7 +49,7 @@ public class TransactionManager implements Serializable {
   public synchronized void beginTransaction() {
     if (supportsOptimisticConcurrency) {
       LOG.info("Transaction starting without a transaction owner");
-      lockManager.lock();
+      lockManager.lock("empty");
       LOG.info("Transaction started");
     }
   }
@@ -61,7 +61,7 @@ public class TransactionManager implements Serializable {
       LOG.info("Latest completed transaction instant " + lastCompletedTxnOwnerInstant);
       this.currentTxnOwnerInstant = currentTxnOwnerInstant;
       LOG.info("Transaction starting with transaction owner " + currentTxnOwnerInstant);
-      lockManager.lock();
+      lockManager.lock(currentTxnOwnerInstant.isPresent() ? currentTxnOwnerInstant.get().getTimestamp() : "");
       LOG.info("Transaction started");
     }
   }
@@ -69,8 +69,8 @@ public class TransactionManager implements Serializable {
   public synchronized void endTransaction() {
     if (supportsOptimisticConcurrency) {
       LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
-      lockManager.unlock();
-      LOG.info("Transaction ended");
+      lockManager.unlock(currentTxnOwnerInstant.isPresent() ? currentTxnOwnerInstant.get().getTimestamp() : "");
+      LOG.info("Transaction ended ");
       this.lastCompletedTxnOwnerInstant = Option.empty();
       lockManager.resetLatestCompletedWriteInstant();
     }

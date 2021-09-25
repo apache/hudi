@@ -39,6 +39,8 @@ public class HoodiePrompt extends DefaultPromptProvider {
           return "hudi->";
         case TABLE:
           return "hudi:" + tableName + "->";
+        case SYNC:
+          return "hudi:" + tableName + " <==> " + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
         default:
           return "hudi:" + tableName + "->";
       }

@@ -25,6 +25,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -294,7 +295,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     static void assertAtleastNCompactionCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      LOG.warn("Timeline Instants (assertAtleastNCompactionCommits)=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numCompactionCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
@@ -302,7 +303,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     static void assertAtleastNDeltaCommits(int minExpected, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      LOG.warn("TEST_LOG. Timeline Instants(assertAtleastNDeltaCommits)=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numDeltaCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
@@ -310,7 +311,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     static void assertAtleastNCompactionCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      LOG.warn("TEST_LOG. Timeline Instants(assertAtleastNCompactionCommitsAfterCommit)=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numCompactionCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numCompactionCommits, "Got=" + numCompactionCommits + ", exp >=" + minExpected);
     }
@@ -318,7 +319,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     static void assertAtleastNDeltaCommitsAfterCommit(int minExpected, String lastSuccessfulCommit, String tablePath, FileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().findInstantsAfter(lastSuccessfulCommit).filterCompletedInstants();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      LOG.warn("TEST_LOG. Timeline Instants(assertAtleastNDeltaCommitsAfterCommit)=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numDeltaCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
@@ -738,6 +739,8 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     TypedProperties props = prepareMultiWriterProps(PROPS_FILENAME_TEST_MULTI_WRITER);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,"3");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,"5000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -763,6 +766,8 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       return true;
     });
 
+    LOG.warn("TEST_LOG. Step 111 complete ====================================== ");
+
     // create a backfill job
     HoodieDeltaStreamer.Config cfgBackfillJob = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
         Arrays.asList(TripsWithDistanceTransformer.class.getName()), PROPS_FILENAME_TEST_MULTI_WRITER, false);
@@ -780,9 +785,13 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     // re-init ingestion job to start sync service
     HoodieDeltaStreamer ingestionJob2 = new HoodieDeltaStreamer(cfgIngestionJob, jsc);
 
+    LOG.warn("TEST_LOG. Step 222. going to run ingestion and backfill in parallel. should result in conflict and fail one ");
+
     // run ingestion & backfill in parallel, create conflict and fail one
     runJobsInParallel(tableBasePath, tableType, totalRecords, ingestionJob2,
         cfgIngestionJob, backfillJob, cfgBackfillJob, true);
+
+    LOG.warn("TEST_LOG. Step 333. going to run ingestion and backfill in parallel. should not result in conflict and both should succeed ");
 
     // create new ingestion & backfill job config to generate only INSERTS to avoid conflict
     props = prepareMultiWriterProps(PROPS_FILENAME_TEST_MULTI_WRITER);
@@ -816,6 +825,8 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     // run ingestion & backfill in parallel, avoid conflict and succeed both
     runJobsInParallel(tableBasePath, tableType, totalRecords, ingestionJob3,
         cfgIngestionJob, backfillJob2, cfgBackfillJob, false);
+
+    LOG.warn("TEST_LOG. Step 444. complete ");
   }
 
   private void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType, String tempDir) throws Exception {
@@ -895,6 +906,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(dfs.getConf()).setBasePath(tableBasePath).build();
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String lastSuccessfulCommit = timeline.lastInstant().get().getTimestamp();
+    LOG.warn("TEST_LOG. going to run jobs in parallel. last successfull commit " + lastSuccessfulCommit);
     // Condition for parallel ingestion job
     Function<Boolean, Boolean> conditionForRegularIngestion = (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
