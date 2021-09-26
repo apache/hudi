@@ -1295,7 +1295,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(lastInstantForUpstreamTable,
         hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
-        "The last commit that was sycned should be updated in the TBLPROPERTIES");
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
   }
 
   @Test
