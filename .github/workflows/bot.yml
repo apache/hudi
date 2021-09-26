@@ -31,5 +31,5 @@ jobs:
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scala }}
-          SPAKR_PROFILE: ${{ matrix.spark }}
-        run: mvn install -P "$SCALA_PROFILE,$SPAKR_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+          SPARK_PROFILE: ${{ matrix.spark }}
+        run: mvn install -P "$SCALA_PROFILE,$SPARK_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
