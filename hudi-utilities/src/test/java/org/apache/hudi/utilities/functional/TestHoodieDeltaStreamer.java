@@ -1514,8 +1514,8 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
 
     prepareParquetDFSSource(true, false, "source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false);
-    // delta streamer w/ parquest source
-    String tableBasePath = dfsBasePath + "/test_dfs_to_kakfa" + testNum;
+    // delta streamer w/ parquet source
+    String tableBasePath = dfsBasePath + "/test_dfs_to_kafka" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
             Collections.EMPTY_LIST, PROPS_FILENAME_TEST_PARQUET, false,
