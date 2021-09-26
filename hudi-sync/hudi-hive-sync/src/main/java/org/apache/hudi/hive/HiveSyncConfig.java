@@ -40,14 +40,17 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
   public String baseFileFormat = "PARQUET";
 
-  @Parameter(names = {"--user"}, description = "Hive username", required = true)
+  @Parameter(names = {"--user"}, description = "Hive username")
   public String hiveUser;
 
-  @Parameter(names = {"--pass"}, description = "Hive password", required = true)
+  @Parameter(names = {"--pass"}, description = "Hive password")
   public String hivePass;
 
-  @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url", required = true)
+  @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url")
   public String jdbcUrl;
+
+  @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
+  public String metastoreUris;
 
   @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
   public String basePath;
@@ -134,6 +137,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.partitionFields = cfg.partitionFields;
     newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
     newConfig.jdbcUrl = cfg.jdbcUrl;
+    newConfig.metastoreUris = cfg.metastoreUris;
     newConfig.tableName = cfg.tableName;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
@@ -159,6 +163,7 @@ public class HiveSyncConfig implements Serializable {
       + ", hiveUser='" + hiveUser + '\''
       + ", hivePass='" + hivePass + '\''
       + ", jdbcUrl='" + jdbcUrl + '\''
+      + ", metastoreUris='" + metastoreUris + '\''
       + ", basePath='" + basePath + '\''
       + ", partitionFields=" + partitionFields
       + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
