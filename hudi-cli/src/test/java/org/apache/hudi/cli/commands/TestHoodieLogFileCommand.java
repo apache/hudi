@@ -53,7 +53,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -174,7 +173,7 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
 
     // write to path '2015/03/16'.
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    partitionPath = tablePath + File.separator + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+    partitionPath = tablePath + Path.SEPARATOR + HoodieTestCommitMetadataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     Files.createDirectories(Paths.get(partitionPath));
 
     HoodieLogFormat.Writer writer = null;

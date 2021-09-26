@@ -27,8 +27,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 
-import java.io.File;
-
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -51,7 +49,7 @@ public class TestUtils {
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
     assertTrue(split.getLogPaths().isPresent());
     final String logPath = split.getLogPaths().get().get(0);
-    String[] paths = logPath.split(File.separator);
+    String[] paths = logPath.split(Path.SEPARATOR);
     return paths[paths.length - 2];
   }
 
