@@ -19,9 +19,6 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils
@@ -29,7 +26,6 @@ import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -54,7 +50,7 @@ import scala.collection.mutable
  * Command for create hoodie table.
  */
 case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean)
-  extends RunnableCommand with HoodieCommand with SparkAdapterSupport {
+  extends RunnableCommand with SparkAdapterSupport {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableName = table.identifier.unquotedString

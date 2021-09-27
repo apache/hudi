@@ -20,12 +20,12 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
-import org.apache.spark.sql.hudi.HoodieSqlUtils
+import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.types.StringType
 
 /**
@@ -34,7 +34,7 @@ import org.apache.spark.sql.types.StringType
 case class ShowHoodieTablePartitionsCommand(
     tableName: TableIdentifier,
     specOpt: Option[TablePartitionSpec])
-extends RunnableCommand with HoodieCommand {
+extends RunnableCommand {
 
   override val output: Seq[Attribute] = {
     AttributeReference("partition", StringType, nullable = false)() :: Nil
@@ -44,12 +44,12 @@ extends RunnableCommand with HoodieCommand {
     val catalog = sparkSession.sessionState.catalog
     val resolver = sparkSession.sessionState.conf.resolver
     val catalogTable = catalog.getTableMetadata(tableName)
-    val tablePath = HoodieSqlUtils.getTableLocation(catalogTable, sparkSession)
+    val tablePath = getTableLocation(catalogTable, sparkSession)
 
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
       .setConf(hadoopConf).build()
-    val schemaOpt = HoodieSqlUtils.getTableSqlSchema(metaClient)
+    val schemaOpt = getTableSqlSchema(metaClient)
     val partitionColumnNamesOpt = metaClient.getTableConfig.getPartitionFields
     if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty
         && schemaOpt.isDefined && schemaOpt.nonEmpty) {
