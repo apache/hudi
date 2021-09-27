@@ -50,8 +50,8 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitActionExecutor;
-import org.apache.hudi.table.action.clean.SparkCleanActionExecutor;
-import org.apache.hudi.table.action.clean.SparkCleanPlanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.SparkClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.SparkExecuteClusteringCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
@@ -65,7 +65,7 @@ import org.apache.hudi.table.action.commit.SparkInsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.commit.SparkMergeHelper;
 import org.apache.hudi.table.action.commit.SparkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkUpsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.restore.SparkCopyOnWriteRestoreActionExecutor;
+import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
@@ -181,12 +181,12 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
-    new SparkCopyOnWriteRestoreActionExecutor((HoodieSparkEngineContext) context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
+    new CopyOnWriteRestoreActionExecutor(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
   }
 
   @Override
   public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new SparkCleanPlanActionExecutor<>(context, config,this, instantTime, extraMetadata).execute();
+    return new CleanPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override
@@ -197,7 +197,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
+                                                  Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, instantTime, fileId);
@@ -242,7 +242,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+                                                  Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
     HoodieCreateHandle<?,?,?,?> createHandle =
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
@@ -251,7 +251,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
-    return new SparkCleanActionExecutor((HoodieSparkEngineContext)context, config, this, cleanInstantTime).execute();
+    return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
@@ -266,7 +266,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
-    return new SparkCopyOnWriteRestoreActionExecutor((HoodieSparkEngineContext) context, config, this, restoreInstantTime, instantToRestore).execute();
+    return new CopyOnWriteRestoreActionExecutor(context, config, this, restoreInstantTime, instantToRestore).execute();
   }
 
 }

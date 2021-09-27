@@ -43,22 +43,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class BaseCleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
+public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
   private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
 
   private final Option<Map<String, String>> extraMetadata;
 
-  public BaseCleanPlanActionExecutor(HoodieEngineContext context,
-                                     HoodieWriteConfig config,
-                                     HoodieTable<T, I, K, O> table,
-                                     String instantTime,
-                                     Option<Map<String, String>> extraMetadata) {
+  public CleanPlanActionExecutor(HoodieEngineContext context,
+                                 HoodieWriteConfig config,
+                                 HoodieTable<T, I, K, O> table,
+                                 String instantTime,
+                                 Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
   }
 
-  protected abstract Option<HoodieCleanerPlan> createCleanerPlan();
+  protected Option<HoodieCleanerPlan> createCleanerPlan() {
+    return execute();
+  }
 
   /**
    * Generates List of files to be cleaned.

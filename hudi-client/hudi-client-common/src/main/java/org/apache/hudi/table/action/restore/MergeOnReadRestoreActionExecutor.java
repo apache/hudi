@@ -7,22 +7,20 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -31,17 +29,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 
-import org.apache.spark.api.java.JavaRDD;
-
-@SuppressWarnings("checkstyle:LineLength")
-public class SparkMergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload> extends
-    BaseRestoreActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-
-  public SparkMergeOnReadRestoreActionExecutor(HoodieSparkEngineContext context,
-                                               HoodieWriteConfig config,
-                                               HoodieTable table,
-                                               String instantTime,
-                                               String restoreInstantTime) {
+public class MergeOnReadRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O>
+    extends BaseRestoreActionExecutor<T, I, K, O> {
+  public MergeOnReadRestoreActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table,
+                                          String instantTime, String restoreInstantTime) {
     super(context, config, table, instantTime, restoreInstantTime);
   }
 
