@@ -78,8 +78,6 @@ public class HiveSchemaProvider extends SchemaProvider {
                 targetSchema,
                 targetSchemaTableName,
                 "hoodie." + targetSchemaDBName);
-        LOG.warn(this.targetSchema.toString(true));
-
       }
     } catch (NoSuchTableException | NoSuchDatabaseException e) {
       List<String> tables = new ArrayList<String>() {
