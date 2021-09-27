@@ -19,21 +19,22 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.BaseActionExecutor;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -45,45 +46,59 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@SuppressWarnings("checkstyle:LineLength")
-public class FlinkScheduleCompactionActionExecutor<T extends HoodieRecordPayload> extends
-    BaseScheduleCompactionActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
 
-  private static final Logger LOG = LogManager.getLogger(FlinkScheduleCompactionActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(ScheduleCompactionActionExecutor.class);
 
   private final Option<Map<String, String>> extraMetadata;
+  private final HoodieCompactor compactor;
 
-  public FlinkScheduleCompactionActionExecutor(HoodieEngineContext context,
-                                               HoodieWriteConfig config,
-                                               HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
-                                               String instantTime,
-                                               Option<Map<String, String>> extraMetadata) {
-    super(context, config, table, instantTime, extraMetadata);
+  public ScheduleCompactionActionExecutor(HoodieEngineContext context,
+                                          HoodieWriteConfig config,
+                                          HoodieTable<T, I, K, O> table,
+                                          String instantTime,
+                                          Option<Map<String, String>> extraMetadata,
+                                          HoodieCompactor compactor) {
+    super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
+    this.compactor = compactor;
   }
 
   @Override
-  protected HoodieCompactionPlan scheduleCompaction() {
-    LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
-    // judge if we need to compact according to num delta commits and time elapsed
-    boolean compactable = needCompact(config.getInlineCompactTriggerStrategy());
-    if (compactable) {
-      LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
-      HoodieFlinkMergeOnReadTableCompactor compactor = new HoodieFlinkMergeOnReadTableCompactor();
-      try {
-        SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
-        Set<HoodieFileGroupId> fgInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
-            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
-            .collect(Collectors.toSet());
-        // exclude files in pending clustering from compaction.
-        fgInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
-        return compactor.generateCompactionPlan(context, table, config, instantTime, fgInPendingCompactionAndClustering);
-      } catch (IOException e) {
-        throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
-      }
+  public Option<HoodieCompactionPlan> execute() {
+    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
+        && !config.getFailedWritesCleanPolicy().isLazy()) {
+      // if there are inflight writes, their instantTime must not be less than that of compaction instant time
+      table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
+          .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
+              HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
+              "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
+                  + ", Compaction scheduled at " + instantTime));
+      // Committed and pending compaction instants should have strictly lower timestamps
+      List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
+          .getWriteTimeline().filterCompletedAndCompactionInstants().getInstants()
+          .filter(instant -> HoodieTimeline.compareTimestamps(
+              instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime))
+          .collect(Collectors.toList());
+      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
+          "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
+              + conflictingInstants);
     }
 
-    return new HoodieCompactionPlan();
+    HoodieCompactionPlan plan = scheduleCompaction();
+    if (plan != null && (plan.getOperations() != null) && (!plan.getOperations().isEmpty())) {
+      extraMetadata.ifPresent(plan::setExtraMetadata);
+      HoodieInstant compactionInstant =
+          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
+      try {
+        table.getActiveTimeline().saveToCompactionRequested(compactionInstant,
+            TimelineMetadataUtils.serializeCompactionPlan(plan));
+      } catch (IOException ioe) {
+        throw new HoodieIOException("Exception scheduling compaction", ioe);
+      }
+      return Option.of(plan);
+    }
+    return Option.empty();
   }
 
   public Pair<Integer, String> getLatestDeltaCommitInfo(CompactionTriggerStrategy compactionTriggerStrategy) {
@@ -152,5 +167,27 @@ public class FlinkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
       throw new HoodieCompactionException(e.getMessage(), e);
     }
     return timestamp;
+  }
+
+  protected HoodieCompactionPlan scheduleCompaction() {
+    LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
+    // judge if we need to compact according to num delta commits and time elapsed
+    boolean compactable = needCompact(config.getInlineCompactTriggerStrategy());
+    if (compactable) {
+      LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
+      try {
+        SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
+        Set<HoodieFileGroupId> fgInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
+            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
+            .collect(Collectors.toSet());
+        // exclude files in pending clustering from compaction.
+        fgInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
+        return compactor.generateCompactionPlan(context, table, config, instantTime, fgInPendingCompactionAndClustering);
+      } catch (IOException e) {
+        throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
+      }
+    }
+
+    return new HoodieCompactionPlan();
   }
 }

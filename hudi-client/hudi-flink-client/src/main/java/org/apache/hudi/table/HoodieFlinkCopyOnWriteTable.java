@@ -44,8 +44,8 @@ import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
-import org.apache.hudi.table.action.clean.FlinkCleanActionExecutor;
-import org.apache.hudi.table.action.clean.FlinkScheduleCleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
@@ -74,7 +74,8 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieFlinkTable<T> {
+public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
+    extends HoodieFlinkTable<T> implements HoodieCopyOnWriteTableOperation<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCopyOnWriteTable.class);
 
@@ -297,7 +298,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
    */
   @Override
   public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new FlinkScheduleCleanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
+    return new CleanPlanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override
@@ -308,7 +309,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
-    return new FlinkCleanActionExecutor(context, config, this, cleanInstantTime).execute();
+    return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
@@ -329,7 +330,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   // -------------------------------------------------------------------------
   //  Used for compaction
   // -------------------------------------------------------------------------
-
+  @Override
   public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
                                                   Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
@@ -366,6 +367,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
     }
   }
 
+  @Override
   public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
                                                   Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
     HoodieCreateHandle<?,?,?,?> createHandle =
