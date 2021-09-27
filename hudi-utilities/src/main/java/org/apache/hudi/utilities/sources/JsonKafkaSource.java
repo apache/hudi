@@ -72,10 +72,7 @@ public class JsonKafkaSource extends JsonSource {
             LocationStrategies.PreferConsistent()).filter(x -> {
               String msgValue = (String) x.value();
               //Filter null messages from Kafka to prevent Exceptions
-              if (msgValue == null) {
-                return false;
-              }
-              return true;
+              return msgValue != null;
             }).map(x -> (String) x.value());
   }
 
