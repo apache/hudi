@@ -49,7 +49,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
 
   @BeforeAll
   public static void init() {
-    Pair<String, String> dbAndTableName = getDBandTableName(SOURCE_SCHEMA_TABLE_NAME);
+    Pair<String, String> dbAndTableName = getDBAndTableName(SOURCE_SCHEMA_TABLE_NAME);
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.hive.database", dbAndTableName.getLeft());
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.hive.table", dbAndTableName.getRight());
   }
@@ -72,7 +72,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
   @Test
   public void testTargetSchema() throws Exception {
     try {
-      Pair<String, String> dbAndTableName = getDBandTableName(TARGET_SCHEMA_TABLE_NAME);
+      Pair<String, String> dbAndTableName = getDBAndTableName(TARGET_SCHEMA_TABLE_NAME);
       PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.hive.database", dbAndTableName.getLeft());
       PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.hive.table", dbAndTableName.getRight());
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
@@ -104,7 +104,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
     });
   }
 
-  private static Pair<String, String> getDBandTableName(String fullName) {
+  private static Pair<String, String> getDBAndTableName(String fullName) {
     String[] dbAndTableName = fullName.split("\\.");
     if (dbAndTableName.length > 1) {
       return new ImmutablePair<>(dbAndTableName[0], dbAndTableName[1]);
@@ -116,7 +116,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
   private void createSchemaTable(String fullName) throws IOException {
     String createTableSQL = UtilitiesTestBase.Helpers.readFile(String.format("delta-streamer-config/%s.sql", fullName));
     SparkSession spark = spark();
-    Pair<String, String> dbAndTableName = getDBandTableName(fullName);
+    Pair<String, String> dbAndTableName = getDBAndTableName(fullName);
     spark.sql(String.format("CREATE DATABASE IF NOT EXISTS %s", dbAndTableName.getLeft()));
     spark.sql(createTableSQL);
     spark.sql(String.format("SHOW CREATE TABLE %s.%s", dbAndTableName.getLeft(), dbAndTableName.getRight())).show(false);
