@@ -82,9 +82,11 @@ public class HiveSchemaProvider extends SchemaProvider {
 
       }
     } catch (NoSuchTableException | NoSuchDatabaseException e) {
-      List<String> tables = new ArrayList<String>() {{
-        add(sourceSchemaTableName);
-      }};
+      List<String> tables = new ArrayList<String>() {
+        {
+          add(sourceSchemaTableName);
+        }
+      };
       if (props.containsKey(Config.TARGET_SCHEMA_TABLE_PROP)) {
         tables.add(props.getString(Config.SOURCE_SCHEMA_TABLE_PROP));
       }

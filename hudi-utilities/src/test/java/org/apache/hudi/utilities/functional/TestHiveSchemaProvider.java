@@ -19,11 +19,11 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.avro.Schema;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.FunctionalTestHarness;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.HiveSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -41,7 +41,7 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-public class TestHiveSchemaProvider extends FunctionalTestHarness {
+public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
   private static final Logger LOG = LogManager.getLogger(TestJdbcbasedSchemaProvider.class);
   private static final TypedProperties PROPS = new TypedProperties();
   private static final String SOURCE_SCHEMA_TABLE_NAME = "schema_registry.source_schema_tab";
@@ -68,7 +68,6 @@ public class TestHiveSchemaProvider extends FunctionalTestHarness {
       LOG.error("Failed to get source schema. ", e);
     }
   }
-
 
   @Test
   public void testTargetSchema() throws Exception {
