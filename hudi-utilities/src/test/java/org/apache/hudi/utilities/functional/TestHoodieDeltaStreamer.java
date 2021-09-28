@@ -123,6 +123,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
  * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
@@ -1651,14 +1652,10 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     testParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
-  @Test
-  public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
-    testORCDFSSource(false, null);
-  }
-
-  @Test
-  public void testORCDFSSourceWithSchemaFilesAndTransformer() throws Exception {
-    testORCDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
+    testORCDFSSource(useSchemaProvider, transformerClassNames);
   }
 
   private void prepareCsvDFSSource(
@@ -1973,6 +1970,14 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     public Schema getTargetSchema() {
       return null;
     }
+  }
+
+  private static Stream<Arguments> testArguments() {
+    // arg1 boolean useSchemaProvider, arg2 List<String> transformerClassNames
+    return Stream.of(
+            arguments(false, null),
+            arguments(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()))
+    );
   }
 
 }

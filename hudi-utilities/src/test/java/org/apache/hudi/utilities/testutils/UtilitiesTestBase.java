@@ -321,7 +321,7 @@ public class UtilitiesTestBase {
     }
 
     public static void saveORCToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
-      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.AVRO_SCHEMA);
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.ORC_SCHEMA);
       saveORCToDFS(records, targetFile, orcSchema);
     }
 

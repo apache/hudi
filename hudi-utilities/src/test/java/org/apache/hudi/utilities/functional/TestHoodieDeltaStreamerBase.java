@@ -270,7 +270,7 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     if (useCustomSchema) {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
               dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
-              schema), new Path(path), AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.AVRO_TRIP_SCHEMA));
+              schema), new Path(path), AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.ORC_TRIP_SCHEMA));
     } else {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
               dataGenerator.generateInserts("000", numRecords)), new Path(path));
