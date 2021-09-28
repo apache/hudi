@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 5
 title: "Team"
 toc: true
 last_modified_at: 2020-09-01T15:59:57-04:00

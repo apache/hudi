@@ -1,6 +1,6 @@
 ---
 title: Report Security Issues
-sidebar_position: 5
+sidebar_position: 6
 keywords: [ hudi, security]
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00

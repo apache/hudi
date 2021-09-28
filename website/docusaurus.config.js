@@ -156,6 +156,10 @@ module.exports = {
               to: '/contribute/developer-setup',
             },
             {
+              label: 'RFC Process',
+              to: '/contribute/rfc-process',
+            },
+            {
               label: 'Report Security Issues',
               to: '/contribute/report-security-issues',
             },

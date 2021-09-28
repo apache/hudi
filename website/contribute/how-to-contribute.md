@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 2
 title: "How to Contribute"
 toc: true
 last_modified_at: 2020-09-01T15:59:57-04:00
