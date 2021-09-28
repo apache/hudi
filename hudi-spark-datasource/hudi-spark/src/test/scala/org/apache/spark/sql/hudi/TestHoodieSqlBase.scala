@@ -23,9 +23,9 @@ import org.apache.log4j.Level
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.scalactic.source
-import org.scalatest.{BeforeAndAfterAll, Tag}
+import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
-class TestHoodieSqlBase extends HoodieSparkFunSuite with BeforeAndAfterAll {
+class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(Level.WARN)
 
   private lazy val sparkWareHouse = {
@@ -77,7 +77,7 @@ class TestHoodieSqlBase extends HoodieSparkFunSuite with BeforeAndAfterAll {
   }
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
-    assertResult(expects.map(row => Row(row: _*)).toArray)(spark.sql(sql).collect())
+    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
   }
 
   protected def checkException(sql: String)(errorMsg: String): Unit = {

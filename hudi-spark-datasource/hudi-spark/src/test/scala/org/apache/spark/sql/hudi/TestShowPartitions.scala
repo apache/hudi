@@ -43,7 +43,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
          | insert into $tableName
          | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
         """.stripMargin)
-    checkAnswer(spark.sql(s"show partitions $tableName"), Seq.empty)
+    checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
   }
 
   test("Test Show Partitioned Table's Partitions") {
@@ -65,7 +65,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
          | )
        """.stripMargin)
     // Empty partitions
-    checkAnswer(spark.sql(s"show partitions $tableName"), Seq.empty)
+    checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
 
     // Insert into dynamic partition
     spark.sql(
@@ -73,7 +73,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
          | insert into $tableName
          | values (1, 'a1', 10, 1000, '2021-01-01')
         """.stripMargin)
-    checkAnswer(spark.sql(s"show partitions $tableName"), Seq(Row("dt=2021-01-01")))
+    checkAnswer(s"show partitions $tableName")(Seq("dt=2021-01-01"))
 
     // Insert into static partition
     spark.sql(
@@ -81,8 +81,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
          | insert into $tableName partition(dt = '2021-01-02')
          | select 2 as id, 'a2' as name, 10 as price, 1000 as ts
         """.stripMargin)
-    checkAnswer(spark.sql(s"show partitions $tableName partition(dt='2021-01-02')"),
-      Seq(Row("dt=2021-01-02")))
+    checkAnswer(s"show partitions $tableName partition(dt='2021-01-02')")(Seq("dt=2021-01-02"))
 
     // Insert into null partition
     spark.sql(
@@ -90,8 +89,8 @@ class TestShowPartitions extends TestHoodieSqlBase {
          | insert into $tableName
          | select 3 as id, 'a3' as name, 10 as price, 1000 as ts, null as dt
         """.stripMargin)
-    checkAnswer(spark.sql(s"show partitions $tableName"),
-      Seq(Row("dt=2021-01-01"), Row("dt=2021-01-02"), Row("dt=default"))
+    checkAnswer(s"show partitions $tableName")(
+      Seq("dt=2021-01-01"), Seq("dt=2021-01-02"), Seq("dt=default")
     )
   }
 
@@ -116,7 +115,7 @@ class TestShowPartitions extends TestHoodieSqlBase {
          | )
        """.stripMargin)
     // Empty partitions
-    checkAnswer(spark.sql(s"show partitions $tableName"), Seq.empty)
+    checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
 
     // Insert into dynamic partition
     spark.sql(
@@ -135,31 +134,31 @@ class TestShowPartitions extends TestHoodieSqlBase {
         """.stripMargin)
 
     // check all partitions
-    checkAnswer(spark.sql(s"show partitions $tableName"), Seq(
-      Row("year=2021/month=01/day=01"),
-      Row("year=2021/month=01/day=02"),
-      Row("year=2021/month=02/day=01"),
-      Row("year=2021/month=02/day=default"),
-      Row("year=2021/month=default/day=01"),
-      Row("year=default/month=01/day=default"),
-      Row("year=default/month=01/day=02"),
-      Row("year=default/month=default/day=01"),
-      Row("year=2022/month=default/day=default")
-    ))
+    checkAnswer(s"show partitions $tableName")(
+      Seq("year=2021/month=01/day=01"),
+      Seq("year=2021/month=01/day=02"),
+      Seq("year=2021/month=02/day=01"),
+      Seq("year=2021/month=02/day=default"),
+      Seq("year=2021/month=default/day=01"),
+      Seq("year=default/month=01/day=default"),
+      Seq("year=default/month=01/day=02"),
+      Seq("year=default/month=default/day=01"),
+      Seq("year=2022/month=default/day=default")
+    )
 
     // check partial partitions
-    checkAnswer(spark.sql(s"show partitions $tableName partition(year='2021', month='01', day='01')"),
-      Seq(Row("year=2021/month=01/day=01"))
+    checkAnswer(s"show partitions $tableName partition(year='2021', month='01', day='01')")(
+      Seq("year=2021/month=01/day=01")
     )
-    checkAnswer(spark.sql(s"show partitions $tableName partition(year='2021', month='02')"), Seq(
-      Row("year=2021/month=02/day=default"),
-      Row("year=2021/month=02/day=01")
-    ))
-    checkAnswer(spark.sql(s"show partitions $tableName partition(day=01)"), Seq(
-      Row("year=2021/month=02/day=01"),
-      Row("year=2021/month=default/day=01"),
-      Row("year=2021/month=01/day=01"),
-      Row("year=default/month=default/day=01")
-    ))
+    checkAnswer(s"show partitions $tableName partition(year='2021', month='02')")(
+      Seq("year=2021/month=02/day=default"),
+      Seq("year=2021/month=02/day=01")
+    )
+    checkAnswer(s"show partitions $tableName partition(day=01)")(
+      Seq("year=2021/month=02/day=01"),
+      Seq("year=2021/month=default/day=01"),
+      Seq("year=2021/month=01/day=01"),
+      Seq("year=default/month=default/day=01")
+    )
   }
 }
