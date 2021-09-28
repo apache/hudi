@@ -66,13 +66,10 @@ public class PartitionPathEncodeUtils {
    * @return An escaped path name.
    */
   public static String escapePathName(String path, String defaultPath) {
-
-    // __HIVE_DEFAULT_NULL__ is the system default value for null and empty string.
-    // TODO: we should allow user to specify default partition or HDFS file location.
     if (path == null || path.length() == 0) {
       if (defaultPath == null) {
-        //previously, when path is empty or null and no default path is specified,
-        // __HIVE_DEFAULT_PARTITION__ was the return value for escapePathName
+        // previously, when path is empty or null and no default path is specified,
+        // "default" was the return value for escapePathName
         return DEFAULT_PARTITION_PATH;
       } else {
         return defaultPath;
