@@ -47,13 +47,14 @@ public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, 
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }
     table.getMetaClient().reloadActiveTimeline();
-    table.scheduleRollback(context, instantTime, instantToRollback, false);
+    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    table.scheduleRollback(context, newInstantTime, instantToRollback, false);
     table.getMetaClient().reloadActiveTimeline();
     CopyOnWriteRollbackActionExecutor rollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(
         context,
         config,
         table,
-        HoodieActiveTimeline.createNewInstantTime(),
+        newInstantTime,
         instantToRollback,
         true,
         true,
