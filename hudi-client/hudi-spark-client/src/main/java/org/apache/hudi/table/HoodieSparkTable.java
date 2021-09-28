@@ -42,24 +42,43 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
   }
 
   public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+    return create(config, context, false);
+  }
+
+  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context,
+                                                                           boolean refreshTimeline) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
-    return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient);
+    return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient, refreshTimeline);
   }
 
   public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieSparkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
+    return create(config, context, metaClient, false);
+  }
+
+  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
+                                                                           HoodieSparkEngineContext context,
+                                                                           HoodieTableMetaClient metaClient,
+                                                                           boolean refreshTimeline) {
+    HoodieSparkTable hoodieSparkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
+        hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
+        break;
       case MERGE_ON_READ:
-        return new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
+        hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
+        break;
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
+    if (refreshTimeline) {
+      hoodieSparkTable.getHoodieView().sync();
+    }
+    return hoodieSparkTable;
   }
 
   @Override
