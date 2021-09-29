@@ -30,6 +30,7 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.orc.TypeDescription;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -84,6 +85,7 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
   protected static String topicName;
   protected static String defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
   protected static int testNum = 1;
+  private static TypeDescription orc_trip_schema;
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -154,6 +156,7 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
 
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
     prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
+    orc_trip_schema = AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.ORC_TRIP_SCHEMA);
   }
 
   protected static void writeCommonPropsToFile() throws IOException {
@@ -270,7 +273,7 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     if (useCustomSchema) {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
               dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
-              schema), new Path(path), AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.ORC_TRIP_SCHEMA));
+              schema), new Path(path), orc_trip_schema);
     } else {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
               dataGenerator.generateInserts("000", numRecords)), new Path(path));

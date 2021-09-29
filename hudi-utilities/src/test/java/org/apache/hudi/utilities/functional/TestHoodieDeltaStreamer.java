@@ -1653,7 +1653,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
   }
 
   @ParameterizedTest
-  @MethodSource("testArguments")
+  @MethodSource("testORCDFSSource")
   public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
     testORCDFSSource(useSchemaProvider, transformerClassNames);
   }
@@ -1972,7 +1972,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     }
   }
 
-  private static Stream<Arguments> testArguments() {
+  private static Stream<Arguments> testORCDFSSource() {
     // arg1 boolean useSchemaProvider, arg2 List<String> transformerClassNames
     return Stream.of(
             arguments(false, null),

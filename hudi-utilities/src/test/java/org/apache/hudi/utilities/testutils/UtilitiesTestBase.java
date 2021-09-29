@@ -101,6 +101,7 @@ public class UtilitiesTestBase {
   protected static HiveTestService hiveTestService;
   protected static ZookeeperTestService zookeeperTestService;
   private static ObjectMapper mapper = new ObjectMapper();
+  private static TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.ORC_SCHEMA);
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -321,7 +322,6 @@ public class UtilitiesTestBase {
     }
 
     public static void saveORCToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
-      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.ORC_SCHEMA);
       saveORCToDFS(records, targetFile, orcSchema);
     }
 
