@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.functional;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -270,7 +269,7 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     if (useCustomSchema) {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
               dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
-              schema), new Path(path), AvroOrcUtils.createOrcSchema(HoodieTestDataGenerator.ORC_TRIP_SCHEMA));
+              schema), new Path(path), HoodieTestDataGenerator.ORC_TRIP_SCHEMA);
     } else {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
               dataGenerator.generateInserts("000", numRecords)), new Path(path));
