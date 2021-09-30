@@ -101,7 +101,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   private static final Logger LOG = LogManager.getLogger(AbstractHoodieWriteClient.class);
 
   protected final transient HoodieMetrics metrics;
-  private final transient HoodieIndex<T, I, K, O> index;
+  private final transient HoodieIndex index;
 
   protected transient Timer.Context writeTimer = null;
   protected transient Timer.Context compactionTimer;
@@ -138,7 +138,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     this.txnManager = new TransactionManager(config, fs);
   }
 
-  protected abstract HoodieIndex<T, I, K, O> createIndex(HoodieWriteConfig writeConfig);
+  protected abstract HoodieIndex createIndex(HoodieWriteConfig writeConfig);
 
   public void setOperationType(WriteOperationType operationType) {
     this.operationType = operationType;
@@ -1006,7 +1006,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     return metrics;
   }
 
-  public HoodieIndex<T, I, K, O> getIndex() {
+  public HoodieIndex getIndex() {
     return index;
   }
 

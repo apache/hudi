@@ -18,25 +18,18 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.ApiMaturityLevel;
-import org.apache.hudi.PublicAPIMethod;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.index.bloom.HoodieBloomIndex;
+import org.apache.hudi.index.bloom.HoodieBloomIndexHelper;
+import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 
-import java.util.List;
-
-public abstract class JavaHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
-  protected JavaHoodieIndex(HoodieWriteConfig config) {
-    super(config);
-  }
+/**
+ * A factory to generate Java {@link HoodieIndex}.
+ */
+public final class JavaHoodieIndexFactory {
 
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
     // first use index class config to create index.
@@ -45,29 +38,17 @@ public abstract class JavaHoodieIndex<T extends HoodieRecordPayload> extends Hoo
       if (!(instance instanceof HoodieIndex)) {
         throw new HoodieIndexException(config.getIndexClass() + " is not a subclass of HoodieIndex");
       }
-      return (JavaHoodieIndex) instance;
+      return (HoodieIndex) instance;
     }
 
     // TODO more indexes to be added
     switch (config.getIndexType()) {
       case INMEMORY:
-        return new JavaInMemoryHashIndex(config);
+        return new HoodieInMemoryHashIndex<>(config);
       case BLOOM:
-        return new JavaHoodieBloomIndex(config);
+        return new HoodieBloomIndex<>(config, HoodieBloomIndexHelper.getInstance());
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }
   }
-
-  @Override
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public abstract List<WriteStatus> updateLocation(List<WriteStatus> writeStatuses,
-                                                   HoodieEngineContext context,
-                                                   HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) throws HoodieIndexException;
-
-  @Override
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public abstract List<HoodieRecord<T>> tagLocation(List<HoodieRecord<T>> records,
-                                                    HoodieEngineContext context,
-                                                    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) throws HoodieIndexException;
 }

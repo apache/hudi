@@ -41,6 +41,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -188,6 +189,18 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       spark.close();
       spark = null;
     }
+  }
+
+  protected JavaRDD<HoodieRecord> tagLocation(
+      HoodieIndex index, JavaRDD<HoodieRecord> records, HoodieTable table) {
+    return HoodieJavaRDD.getJavaRDD(
+        index.tagLocation(HoodieJavaRDD.of(records), context, table));
+  }
+
+  protected JavaRDD<WriteStatus> updateLocation(
+      HoodieIndex index, JavaRDD<WriteStatus> writeStatus, HoodieTable table) {
+    return HoodieJavaRDD.getJavaRDD(
+        index.tagLocation(HoodieJavaRDD.of(writeStatus), context, table));
   }
 
   protected void insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {

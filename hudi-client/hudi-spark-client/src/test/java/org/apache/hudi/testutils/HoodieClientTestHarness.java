@@ -43,6 +43,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -411,6 +412,12 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       tableView.init(metaClient, visibleActiveTimeline, fileStatuses);
     }
     return tableView;
+  }
+
+  public JavaRDD<HoodieRecord> tagLocation(
+      HoodieIndex index, JavaRDD<HoodieRecord> records, HoodieTable table) {
+    return HoodieJavaRDD.getJavaRDD(
+        index.tagLocation(HoodieJavaRDD.of(records), context, table));
   }
 
   public static Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(JavaRDD<HoodieRecord> inputRecordsRDD) {

@@ -20,6 +20,7 @@
 package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFunction;
 
 import java.io.Serializable;
 import java.util.Iterator;
@@ -43,6 +44,11 @@ public abstract class HoodieData<T> implements Serializable {
   public abstract boolean isEmpty();
 
   /**
+   * @return the number of objects.
+   */
+  public abstract long count();
+
+  /**
    * @param func serializable map function.
    * @param <O>  output object type.
    * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
@@ -50,11 +56,34 @@ public abstract class HoodieData<T> implements Serializable {
   public abstract <O> HoodieData<O> map(SerializableFunction<T, O> func);
 
   /**
+   * @param func                  serializable map function by taking a partition of objects
+   *                              and generating an iterator.
+   * @param preservesPartitioning whether to preserve partitions in the result.
+   * @param <O>                   output object type.
+   * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
+   */
+  public abstract <O> HoodieData<O> mapPartitions(
+      SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning);
+
+  /**
    * @param func serializable flatmap function.
    * @param <O>  output object type.
    * @return {@link HoodieData<O>} containing the result. Actual execution may be deferred.
    */
   public abstract <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func);
+
+  /**
+   * @param mapToPairFunc serializable map function to generate a pair.
+   * @param <K>           key type of the pair.
+   * @param <V>           value type of the pair.
+   * @return {@link HoodiePairData<K, V>} containing the result. Actual execution may be deferred.
+   */
+  public abstract <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> mapToPairFunc);
+
+  /**
+   * @return distinct objects in {@link HoodieData}.
+   */
+  public abstract HoodieData<T> distinct();
 
   /**
    * @return collected results in {@link List<T>}.
