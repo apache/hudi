@@ -19,15 +19,19 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hadoop.conf.Configuration;
+
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,6 +39,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingForeachWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
@@ -66,6 +71,17 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
         .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
         .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).get())
         .collect(Collectors.toList());
+  }
+
+  @Override
+  public <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
+      Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
+      SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    return throwingFlatMapToPairWrapper(flatMapToPairFunc).apply(data.parallel().iterator())
+        .collect(Collectors.groupingBy(Pair::getKey)).entrySet().stream()
+        .map(entry -> new ImmutablePair<>(entry.getKey(), entry.getValue().stream().map(
+            Pair::getValue).reduce(throwingReduceWrapper(reduceFunc)).orElse(null)))
+        .filter(Objects::nonNull);
   }
 
   @Override
