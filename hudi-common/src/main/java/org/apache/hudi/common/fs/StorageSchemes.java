@@ -62,6 +62,8 @@ public enum StorageSchemes {
   OBS("obs", false),
   // Kingsoft Standard Storage ks3
   KS3("ks3", false),
+  // JuiceFileSystem
+  JFS("jfs", true),
   // Baidu Object Storage
   BOS("bos", false);
 
