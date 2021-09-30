@@ -91,7 +91,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
         deletedFileResult = deleteFileAndGetResult(fs, deletePathStr);
 
       } catch (IOException e) {
-        LOG.error("Delete file failed");
+        LOG.error("Delete file failed: " + deletePathStr);
       }
       final PartitionCleanStat partitionCleanStat =
           partitionCleanStatMap.computeIfAbsent(partitionPath, k -> new PartitionCleanStat(partitionPath));
