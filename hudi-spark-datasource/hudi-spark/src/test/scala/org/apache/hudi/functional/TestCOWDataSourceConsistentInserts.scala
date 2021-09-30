@@ -33,7 +33,7 @@ import org.junit.jupiter.api.{Tag, Test}
 @Tag("functional")
 class TestCOWDataSourceConsistentInserts extends SparkClientFunctionalTestHarness {
 
-  val opts = Map(
+  val baseOpts = Map(
     DataSourceWriteOptions.TABLE_NAME.key() -> "language",
     DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
     DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -44,7 +44,6 @@ class TestCOWDataSourceConsistentInserts extends SparkClientFunctionalTestHarnes
     DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key() -> "true",
     DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "false",
     HoodieWriteConfig.TBL_NAME.key() -> "language",
-    HoodieWriteConfig.COMBINE_BEFORE_INSERT.key() -> "false",
     HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key() -> "true",
     HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key() -> "1",
     HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key() -> "1",
@@ -57,17 +56,31 @@ class TestCOWDataSourceConsistentInserts extends SparkClientFunctionalTestHarnes
 
   @Test
   def insertsWithDuplicatesShouldBeConsistent(): Unit = {
+    val opts = baseOpts ++ Map(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key() -> "false")
     val inserts1 = spark.createDataFrame(("python", 1) :: ("scala", 5) :: ("scala", 4) :: ("haskell", 5) :: Nil).toDF("lang", "score")
     inserts1.write.format("hudi").options(opts).mode(Append).save(basePath)
     val tableData1 = spark.read.format("hudi").load(basePath)
-    tableData1.show()
     assertEquals(2, tableData1.where(col("_hoodie_record_key") === "scala").count())
 
     val inserts2 = spark.createDataFrame(("scala", 5) ::  ("java", 3) :: ("java", 4) :: Nil).toDF("lang", "score")
     inserts2.write.format("hudi").options(opts).mode(Append).save(basePath)
     val tableData2 = spark.read.format("hudi").load(basePath)
-    tableData2.show()
     assertEquals(3, tableData2.where(col("_hoodie_record_key") === "scala").count())
     assertEquals(2, tableData2.where(col("_hoodie_record_key") === "java").count())
+  }
+
+  @Test
+  def insertsWithPreCombineEnabledShouldDeduplicateInput(): Unit = {
+    val opts = baseOpts ++ Map(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key() -> "true")
+    val inserts1 = spark.createDataFrame(("python", 1) :: ("scala", 5) :: ("scala", 4) :: ("haskell", 5) :: Nil).toDF("lang", "score")
+    inserts1.write.format("hudi").options(opts).mode(Append).save(basePath)
+    val tableData1 = spark.read.format("hudi").load(basePath)
+    assertEquals(1, tableData1.where(col("_hoodie_record_key") === "scala").count())
+
+    val inserts2 = spark.createDataFrame(("scala", 5) ::  ("java", 3) :: ("java", 4) :: Nil).toDF("lang", "score")
+    inserts2.write.format("hudi").options(opts).mode(Append).save(basePath)
+    val tableData2 = spark.read.format("hudi").load(basePath)
+    assertEquals(2, tableData2.where(col("_hoodie_record_key") === "scala").count())
+    assertEquals(1, tableData2.where(col("_hoodie_record_key") === "java").count())
   }
 }
