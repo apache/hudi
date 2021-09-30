@@ -76,7 +76,7 @@ public abstract class AbstractSyncHoodieClient {
    * @param inputFormatClass The input format class of this table.
    * @param outputFormatClass The output format class of this table.
    * @param serdeClass The serde class of this table.
-   * @param serdeProperties The serde properites of this table.
+   * @param serdeProperties The serde properties of this table.
    * @param tableProperties The table properties for this table.
    */
   public abstract void createTable(String tableName, MessageType storageSchema,
