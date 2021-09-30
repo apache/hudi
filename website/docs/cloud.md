@@ -25,3 +25,5 @@ to cloud stores.
    Configurations required for IBM Cloud Object Storage and Hudi co-operability.   
 * [Baidu Cloud Object Storage](bos_hoodie) <br/>
    Configurations required for BOS and Hudi co-operability.
+* [JuiceFS](/docs/jfs_hoodie) <br/>
+  Configurations required for JuiceFS and Hudi co-operability.
