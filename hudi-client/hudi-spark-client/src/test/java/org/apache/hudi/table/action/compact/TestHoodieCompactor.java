@@ -111,7 +111,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
     assertThrows(HoodieNotSupportedException.class, () -> {
       table.scheduleCompaction(context, compactionInstantTime, Option.empty());
-      table.compact(context, compactionInstantTime);
+      table.compact(context, compactionInstantTime, new SparkRDDWriteClient(context, getConfig()));
     });
   }
 
@@ -208,7 +208,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       String compactionInstantTime = "102";
       table.scheduleCompaction(context, compactionInstantTime, Option.empty());
       table.getMetaClient().reloadActiveTimeline();
-      JavaRDD<WriteStatus> result = (JavaRDD<WriteStatus>) table.compact(context, compactionInstantTime).getWriteStatuses();
+      JavaRDD<WriteStatus> result = (JavaRDD<WriteStatus>) table.compact(
+          context, compactionInstantTime, writeClient).getWriteStatuses();
 
       // Verify that all partition paths are present in the WriteStatus result
       for (String partitionPath : dataGen.getPartitionPaths()) {

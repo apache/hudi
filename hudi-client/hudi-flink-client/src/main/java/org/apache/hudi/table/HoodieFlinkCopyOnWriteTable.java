@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -74,7 +75,8 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieFlinkTable<T> {
+public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
+    extends HoodieFlinkTable<T> implements HoodieCopyOnWriteTableOperation<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCopyOnWriteTable.class);
 
@@ -265,7 +267,8 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
+  public HoodieWriteMetadata<List<WriteStatus>> compact(
+      HoodieEngineContext context, String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 
@@ -329,9 +332,10 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   // -------------------------------------------------------------------------
   //  Used for compaction
   // -------------------------------------------------------------------------
-  
-  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
-                                                  Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdate(
+      String instantTime, String partitionPath, String fileId,
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, instantTime, fileId);
@@ -366,9 +370,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
     }
   }
 
-  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
-                                                  Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
-    HoodieCreateHandle<?,?,?,?> createHandle =
+  @Override
+  public Iterator<List<WriteStatus>> handleInsert(
+      String instantTime, String partitionPath, String fileId,
+      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+    HoodieCreateHandle<?, ?, ?, ?> createHandle =
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();

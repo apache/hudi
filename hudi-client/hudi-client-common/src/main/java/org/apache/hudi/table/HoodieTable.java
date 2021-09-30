@@ -27,6 +27,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -365,12 +366,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access.
    *
-   * @param context HoodieEngineContext
+   * @param context               HoodieEngineContext
    * @param compactionInstantTime Instant Time
+   * @param writeClient           Write client
    */
   public abstract HoodieWriteMetadata<O> compact(HoodieEngineContext context,
-                                              String compactionInstantTime);
-
+                                                 String compactionInstantTime,
+                                                 AbstractHoodieWriteClient writeClient);
 
   /**
    * Schedule clustering for the instant time.

@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -39,9 +40,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
-import org.apache.hudi.table.action.compact.BaseScheduleCompactionActionExecutor;
-import org.apache.hudi.table.action.compact.SparkRunCompactionActionExecutor;
-import org.apache.hudi.table.action.compact.SparkScheduleCompactionActionExecutor;
+import org.apache.hudi.table.action.compact.HoodieSparkMergeOnReadTableCompactor;
+import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
+import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkDeleteDeltaCommitActionExecutor;
@@ -123,15 +124,20 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    BaseScheduleCompactionActionExecutor scheduleCompactionExecutor = new SparkScheduleCompactionActionExecutor(
-        context, config, this, instantTime, extraMetadata);
+    ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
+        context, config, this, instantTime, extraMetadata,
+        new HoodieSparkMergeOnReadTableCompactor());
     return scheduleCompactionExecutor.execute();
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
-    SparkRunCompactionActionExecutor compactionExecutor = new SparkRunCompactionActionExecutor((HoodieSparkEngineContext) context, config, this, compactionInstantTime);
-    return compactionExecutor.execute();
+  public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(
+      HoodieEngineContext context, String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
+    RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
+        context, config, this, compactionInstantTime, writeClient,
+        new HoodieSparkMergeOnReadTableCompactor(),
+        new HoodieSparkCopyOnWriteTable(config, context, getMetaClient()));
+    return convertMetadata(compactionExecutor.execute());
   }
 
   @Override

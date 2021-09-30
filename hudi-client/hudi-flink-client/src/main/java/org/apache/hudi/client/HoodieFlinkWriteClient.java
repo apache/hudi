@@ -19,6 +19,9 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -54,11 +57,14 @@ import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.FlinkCompactHelpers;
+import org.apache.hudi.table.action.compact.CompactHelpers;
+import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
+import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
@@ -346,8 +352,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       List<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) throws IOException {
     HoodieFlinkTable<T> table = getHoodieTable();
-    HoodieCommitMetadata metadata = FlinkCompactHelpers.newInstance().createCompactionMetadata(
-        table, compactionInstantTime, writeStatuses, config.getSchema());
+    HoodieCommitMetadata metadata = CompactHelpers.newInstance().createCompactionMetadata(
+        table, compactionInstantTime, HoodieListData.of(writeStatuses), config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeCompaction(metadata, writeStatuses, table, compactionInstantTime);
   }
@@ -364,7 +370,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // commit to data table after committing to metadata table.
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
-    FlinkCompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+    CompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
 
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
@@ -383,7 +389,13 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   protected List<WriteStatus> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     try {
-      List<WriteStatus> writeStatuses = FlinkCompactHelpers.compact(compactionInstantTime, this);
+      RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
+          context, config, getHoodieTable(), compactionInstantTime, this,
+          new HoodieFlinkMergeOnReadTableCompactor(),
+          new HoodieFlinkCopyOnWriteTable(config, context, getHoodieTable().getMetaClient()));
+      HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = compactionExecutor.execute();
+      List<WriteStatus> writeStatuses =
+          ((HoodieListData<WriteStatus>) writeMetadata.getWriteStatuses()).get();
       commitCompaction(compactionInstantTime, writeStatuses, Option.empty());
       return writeStatuses;
     } catch (IOException e) {

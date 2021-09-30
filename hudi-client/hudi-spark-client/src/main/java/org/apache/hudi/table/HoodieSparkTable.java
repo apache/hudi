@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,11 +36,14 @@ import org.apache.hudi.index.SparkHoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
+
+import static org.apache.hudi.data.HoodieJavaRDDData.getJavaRDD;
 
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
@@ -89,6 +93,11 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       hoodieSparkTable.getHoodieView().sync();
     }
     return hoodieSparkTable;
+  }
+
+  public static HoodieWriteMetadata<JavaRDD<WriteStatus>> convertMetadata(
+      HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
+    return metadata.clone(getJavaRDD(metadata.getWriteStatuses()));
   }
 
   @Override

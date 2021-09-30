@@ -20,49 +20,51 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.spark.api.java.JavaRDD;
-
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * A spark implementation of {@link AbstractCompactHelpers}.
+ * Base class helps to perform compact.
  *
- * @param <T>
+ * @param <T> Type of payload in {@link org.apache.hudi.common.model.HoodieRecord}
+ * @param <I> Type of inputs
+ * @param <K> Type of keys
+ * @param <O> Type of outputs
  */
-public class SparkCompactHelpers<T extends HoodieRecordPayload> extends
-    AbstractCompactHelpers<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+public class CompactHelpers<T extends HoodieRecordPayload, I, K, O> {
 
-  private SparkCompactHelpers() {
+  protected CompactHelpers() {
   }
 
   private static class CompactHelperHolder {
-    private static final SparkCompactHelpers SPARK_COMPACT_HELPERS = new SparkCompactHelpers();
+    private static final CompactHelpers COMPACT_HELPERS = new CompactHelpers();
   }
 
-  public static SparkCompactHelpers newInstance() {
-    return CompactHelperHolder.SPARK_COMPACT_HELPERS;
+  public static CompactHelpers newInstance() {
+    return CompactHelperHolder.COMPACT_HELPERS;
   }
 
-  @Override
-  public HoodieCommitMetadata createCompactionMetadata(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
-                                                       String compactionInstantTime,
-                                                       JavaRDD<WriteStatus> writeStatuses,
-                                                       String schema) throws IOException {
+  public HoodieCommitMetadata createCompactionMetadata(
+      HoodieTable table, String compactionInstantTime, HoodieData<WriteStatus> writeStatuses,
+      String schema) throws IOException {
     byte[] planBytes = table.getActiveTimeline().readCompactionPlanAsBytes(
         HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get();
     HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(planBytes);
-    List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat).collect();
-    org.apache.hudi.common.model.HoodieCommitMetadata metadata = new org.apache.hudi.common.model.HoodieCommitMetadata(true);
+    List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat).collectAsList();
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
     for (HoodieWriteStat stat : updateStatusMap) {
       metadata.addWriteStat(stat.getPartitionPath(), stat);
     }
@@ -71,5 +73,17 @@ public class SparkCompactHelpers<T extends HoodieRecordPayload> extends
       compactionPlan.getExtraMetadata().forEach(metadata::addMetadata);
     }
     return metadata;
+  }
+
+  public void completeInflightCompaction(HoodieTable table, String compactionCommitTime, HoodieCommitMetadata commitMetadata) {
+    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    try {
+      activeTimeline.transitionCompactionInflightToComplete(
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime),
+          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      throw new HoodieCompactionException(
+          "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
+    }
   }
 }
