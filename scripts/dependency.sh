@@ -30,17 +30,21 @@ function printUsage() {
 }
 
 function build_classpath() {
-  mvn dependency:build-classpath -pl :${PL} |\
+  mvn dependency:build-classpath -pl :${PL} -Dmdep.localRepoProperty=EMPTY_REPO |\
     grep -E -v "INFO|WARNING" | \
     tr ":" "\n" | \
     awk -F '/' '{
       artifact_id=$(NF-2);
       version=$(NF-1);
       jar_name=$NF;
+      group_start_index=length("EMPTY_REPO/") + 1;
+      group_end_index=length($0) - (length(jar_name) + length(version) + length(artifact_id) + 3);
+      group=substr($0, group_start_index, group_end_index - group_start_index + 1);
+      gsub(/\//, ".", group);
       classifier_start_index=length(artifact_id"-"version"-") + 1;
       classifier_end_index=index(jar_name, ".jar") - 1;
       classifier=substr(jar_name, classifier_start_index, classifier_end_index - classifier_start_index + 1);
-      print artifact_id"/"version"/"classifier"/"jar_name
+      print artifact_id"/"group"/"version"/"classifier"/"jar_name
     }' | grep -v "hudi" | sort >> "${DEP_PR}"
 }
 
@@ -87,8 +91,8 @@ if [ -z "$PL" ]; then
   exit 1
 fi
 
-DEP_PR="${PWD}"/dev/dependencyList"${PL}".tmp
-DEP="${PWD}"/dev/dependencyList_"${PL}"
+DEP_PR="${PWD}"/dev/dependencyList"${PL}".txt.tmp
+DEP="${PWD}"/dev/dependencyList_"${PL}".txt
 
 rm -rf "${DEP_PR}"
 
