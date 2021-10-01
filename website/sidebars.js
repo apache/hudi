@@ -36,7 +36,8 @@ module.exports = {
                 'azure_hoodie',
                 'cos_hoodie',
                 'ibm_cos_hoodie',
-                'bos_hoodie'
+                'bos_hoodie',
+                'jfs_hoodie'
             ],
         },
         {
