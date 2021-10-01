@@ -610,9 +610,12 @@ object HoodieSparkSqlWriter {
       log.info("Proceeding to commit the write.")
       val metaMap = parameters.filter(kv =>
         kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX.key)))
+      val latestExtraMetadataMap = DataSourceUtils.getExtraMetadataFromLatestCommitMetadata(spark.sparkContext.hadoopConfiguration, tableInstantInfo.basePath.toString)
+      val extraMetadataMap = latestExtraMetadataMap.filter(kv =>
+        kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX.key))) ++ metaMap
       val commitSuccess =
         client.commit(tableInstantInfo.instantTime, writeResult.getWriteStatuses,
-          common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))),
+          common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(extraMetadataMap))),
           tableInstantInfo.commitActionType,
           writeResult.getPartitionToReplaceFileIds)
 
@@ -626,7 +629,7 @@ object HoodieSparkSqlWriter {
       val asyncCompactionEnabled = isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())
       val compactionInstant: common.util.Option[java.lang.String] =
         if (asyncCompactionEnabled) {
-          client.scheduleCompaction(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
+          client.scheduleCompaction(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(extraMetadataMap))))
         } else {
           common.util.Option.empty()
         }
@@ -636,7 +639,7 @@ object HoodieSparkSqlWriter {
       val asyncClusteringEnabled = isAsyncClusteringEnabled(client, parameters)
       val clusteringInstant: common.util.Option[java.lang.String] =
         if (asyncClusteringEnabled) {
-          client.scheduleClustering(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
+          client.scheduleClustering(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(extraMetadataMap))))
         } else {
           common.util.Option.empty()
         }
