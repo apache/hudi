@@ -46,6 +46,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -457,6 +458,10 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       return;
     }
 
+    if (!tableMetadata.getSyncedInstantTime().isPresent() || tableMetadata instanceof FileSystemBackedTableMetadata) {
+      throw new IllegalStateException("Metadata should have synced some commits or tableMetadata should not be an instance "
+          + "of FileSystemBackedTableMetadata");
+    }
     assertEquals(inflightCommits, testTable.inflightCommits());
 
     HoodieTimer timer = new HoodieTimer().startTimer();
@@ -518,8 +523,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
         clientConfig.getSpillableMapBasePath());
   }
 
-  private void validateFilesPerPartition(HoodieTestTable testTable, HoodieTableMetadata tableMetadata, TableFileSystemView tableView,
-                                         Map<String, FileStatus[]> partitionToFilesMap, String partition) throws IOException {
+  protected void validateFilesPerPartition(HoodieTestTable testTable, HoodieTableMetadata tableMetadata, TableFileSystemView tableView,
+                                           Map<String, FileStatus[]> partitionToFilesMap, String partition) throws IOException {
     Path partitionPath;
     if (partition.equals("")) {
       // Should be the non-partitioned case
@@ -553,7 +558,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       }
     }
     assertEquals(fsStatuses.length, partitionToFilesMap.get(basePath + "/" + partition).length);
-    
+
     // Block sizes should be valid
     Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));
     List<Long> fsBlockSizes = Arrays.stream(fsStatuses).map(FileStatus::getBlockSize).sorted().collect(Collectors.toList());

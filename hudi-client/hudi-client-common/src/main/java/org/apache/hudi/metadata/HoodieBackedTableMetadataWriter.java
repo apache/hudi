@@ -161,7 +161,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
             .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
             // we will trigger compaction manually, to control the instant times
@@ -278,11 +278,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     ValidationUtils.checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
 
     // We can only bootstrap if there are no pending operations on the dataset
-    Option<HoodieInstant> pendingDataInstantOption = Option.fromJavaOptional(dataMetaClient.getActiveTimeline()
+    Option<HoodieInstant> pendingDataInstant = Option.fromJavaOptional(dataMetaClient.getActiveTimeline()
         .getReverseOrderedInstants().filter(i -> !i.isCompleted()).findFirst());
-    if (pendingDataInstantOption.isPresent()) {
+    if (pendingDataInstant.isPresent()) {
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-      LOG.warn("Cannot bootstrap metadata table as operation is in progress in dataset: " + pendingDataInstantOption.get());
+      LOG.warn("Cannot bootstrap metadata table as operation is in progress in dataset: " + pendingDataInstant.get());
       return false;
     }
 
@@ -397,15 +397,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Initialize file groups for a partition. For file listing, we just have one file group.
    *
    * All FileGroups for a given metadata partition has a fixed prefix as per the {@link MetadataPartitionType#getFileIdPrefix()}.
-   * Each file group is suffixed with 4 digits with increments of 1 starting with 0.
+   * Each file group is suffixed with 4 digits with increments of 1 starting with 0000.
    *
-   * For instance, for FILES, there is only one file group named as "files-0000"
-   * Lets say we configure 10 file groups for record level index, and prefix as "record-index-bucket-"
-   * Filegroups will be named as :
-   *    record-index-bucket-0000
-   *    record-index-bucket-0001
-   *    ...
-   *    record-index-bucket-0009
+   * Lets say we configure 10 file groups for record level index partittion, and prefix as "record-index-bucket-"
+   * File groups will be named as :
+   *    record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
@@ -455,7 +451,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param <T> type of commit metadata.
    */
   private <T> void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction) {
-    if (enabled) {
+    if (enabled && metadata != null) {
       List<HoodieRecord> records = convertMetadataFunction.convertMetadata();
       commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
     }
@@ -503,7 +499,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
-    if (enabled) {
+    if (enabled && metadata != null) {
       // Is this rollback of an instant that has been synced to the metadata table?
       String rollbackInstant = rollbackMetadata.getCommitsRollback().get(0);
       boolean wasSynced = metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, rollbackInstant));
@@ -527,10 +523,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (metadata != null) {
       metadata.close();
     }
-  }
-
-  public HoodieBackedTableMetadata getMetadataReader() {
-    return metadata;
   }
 
   /**

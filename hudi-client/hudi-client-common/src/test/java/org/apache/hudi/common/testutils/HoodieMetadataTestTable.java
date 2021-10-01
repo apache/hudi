@@ -20,6 +20,7 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -75,6 +76,23 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable moveInflightCommitToComplete(String instantTime, HoodieCommitMetadata metadata, boolean ignoreWriter) throws IOException {
+    super.moveInflightCommitToComplete(instantTime, metadata);
+    if (!ignoreWriter && writer != null) {
+      writer.update(metadata, instantTime);
+    }
+    return this;
+  }
+
+  @Override
+  public HoodieTestTable moveInflightCompactionToComplete(String instantTime, HoodieCommitMetadata metadata) throws IOException {
+    super.moveInflightCompactionToComplete(instantTime, metadata);
+    if (writer != null) {
+      writer.update(metadata, instantTime);
+    }
+    return this;
+  }
+
   @Override
   public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete) throws IOException {
     HoodieCleanMetadata cleanMetadata = super.doClean(commitTime, partitionFileCountsToDelete);
@@ -97,6 +115,15 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     super.addRollback(instantTime, rollbackMetadata);
     if (writer != null) {
       writer.update(rollbackMetadata, instantTime);
+    }
+    return this;
+  }
+
+  @Override
+  public HoodieTestTable addRestore(String instantTime, HoodieRestoreMetadata restoreMetadata) throws IOException {
+    super.addRestore(instantTime, restoreMetadata);
+    if (writer != null) {
+      writer.update(restoreMetadata, instantTime);
     }
     return this;
   }

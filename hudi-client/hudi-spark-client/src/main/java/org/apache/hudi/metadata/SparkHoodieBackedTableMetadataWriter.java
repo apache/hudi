@@ -22,11 +22,11 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -101,7 +101,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // if this is a new commit being applied to metadata for the first time
         writeClient.startCommitWithTime(instantTime);
       } else {
-        // this code path refers to a re-attempted commit that got committed to metadata, but failed in dataset.
+        // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
         // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
         // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
         // are upserts to metadata table and so only a new delta commit will be created.
@@ -109,7 +109,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         // already part of completed commit. So, we have to manually remove the completed instant and proceed.
         // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
         HoodieInstant alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
-        FSUtils.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
+        HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
         metadataMetaClient.reloadActiveTimeline();
       }
       List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
@@ -121,7 +121,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       // reload timeline
       metadataMetaClient.reloadActiveTimeline();
-
       compactIfNecessary(writeClient, instantTime);
       doClean(writeClient, instantTime);
     }

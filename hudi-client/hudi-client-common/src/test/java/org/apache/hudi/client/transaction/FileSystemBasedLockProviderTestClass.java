@@ -29,7 +29,6 @@ import org.apache.hudi.exception.HoodieLockException;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
@@ -48,7 +47,6 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
   private String lockPath;
   private transient FileSystem fs;
   protected LockConfiguration lockConfiguration;
-  private static final Random RANDOM = new Random();
 
   public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final Configuration configuration) {
     this.lockConfiguration = lockConfiguration;
@@ -81,14 +79,12 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
           && (numRetries <= lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY))) {
         Thread.sleep(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY));
       }
-      // if two processes tries to acquire lock at the same time, above while loop will be bypassed and both will proceed on to acquire lock.
-      // locally, fs.create(lockFile) succeeds for both even though only one should succeed.
-      // hence adding this random sleep to guard against two processes acquiring same lock by mistake.
-      Thread.sleep(RANDOM.nextInt(10));
-      if (fs.exists(new Path(lockPath + "/" + LOCK_NAME))) {
-        return false;
+      synchronized (LOCK_NAME) {
+        if (fs.exists(new Path(lockPath + "/" + LOCK_NAME))) {
+          return false;
+        }
+        acquireLock();
       }
-      acquireLock();
       return true;
     } catch (IOException | InterruptedException e) {
       throw new HoodieLockException("Failed to acquire lock", e);

@@ -40,12 +40,11 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
-  private final AtomicBoolean isMetadataInfoUpdated = new AtomicBoolean(false);
+  private boolean isMetadataAvailabilityUpdated = false;
   private boolean isMetadataTableAvailable;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -105,7 +104,7 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
   @Override
   public Option<HoodieTableMetadataWriter> getMetadataWriter() {
     synchronized (this) {
-      if (!isMetadataInfoUpdated.getAndSet(true)) {
+      if (!isMetadataAvailabilityUpdated) {
         // this code assumes that if metadata availability is updated once it will not change. please revisit this logic if that's not the case.
         // this is done to avoid repeated calls to fs.exists().
         try {
@@ -114,6 +113,7 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
         } catch (IOException e) {
           throw new HoodieMetadataException("Checking existence of metadata table failed", e);
         }
+        isMetadataAvailabilityUpdated = true;
       }
     }
     if (isMetadataTableAvailable) {
