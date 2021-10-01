@@ -20,6 +20,7 @@
 package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
@@ -52,13 +53,15 @@ public class MarkerBasedRollbackUtils {
    */
   public static List<String> getAllMarkerPaths(HoodieTable table, HoodieEngineContext context,
                                                String instant, int parallelism) throws IOException {
-    String markerDir = table.getMetaClient().getMarkerFolderPath(instant);
-    FileSystem fileSystem = table.getMetaClient().getFs();
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    String markerDir = metaClient.getMarkerFolderPath(instant);
+    FileSystem fileSystem = metaClient.getFs();
     Option<MarkerType> markerTypeOption = MarkerUtils.readMarkerType(fileSystem, markerDir);
 
     // If there is no marker type file "MARKERS.type", we assume "DIRECT" markers are used
     if (!markerTypeOption.isPresent()) {
-      WriteMarkers writeMarkers = WriteMarkersFactory.get(MarkerType.DIRECT, table, instant);
+      WriteMarkers writeMarkers = WriteMarkersFactory.get(
+          MarkerType.DIRECT, metaClient, table.getConfig(), table.getContext(), instant);
       return new ArrayList<>(writeMarkers.allMarkerFilePaths());
     }
 

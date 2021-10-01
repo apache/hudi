@@ -2223,7 +2223,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
 
     Option<Path> markerFilePath = WriteMarkersFactory.get(
-        cfg.getMarkersType(), getHoodieTable(metaClient, cfg), instantTime)
+        cfg.getMarkersType(), metaClient, cfg, context, instantTime)
         .create(partitionPath,
             FSUtils.makeDataFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
             IOType.MERGE);

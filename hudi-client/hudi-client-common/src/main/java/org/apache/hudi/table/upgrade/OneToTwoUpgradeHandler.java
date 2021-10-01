@@ -21,22 +21,23 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public abstract class BaseOneToTwoUpgradeHandler implements UpgradeHandler {
+public class OneToTwoUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
+  public Map<ConfigProperty, String> upgrade(
+      HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
-    tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, getPartitionColumns(config));
+    tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS,
+        context.getTaskContextSupplier().getPartitionColumns(config.getProps()));
     tablePropsToAdd.put(HoodieTableConfig.RECORDKEY_FIELDS, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     tablePropsToAdd.put(HoodieTableConfig.BASE_FILE_FORMAT, config.getString(HoodieTableConfig.BASE_FILE_FORMAT));
     return tablePropsToAdd;
   }
-
-  abstract String getPartitionColumns(HoodieWriteConfig config);
 }

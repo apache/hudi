@@ -207,6 +207,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(secondPartitionCommit2FileSlices.get(0).getBaseFile().get().getPath(),
         this.fs.getScheme() + ":" + rollbackMetadata.get(DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles().get(0));
 
-    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, commitInstant.getTimestamp()).doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), metaClient, cfg,
+        context, commitInstant.getTimestamp()).doesMarkerDirExist());
   }
 }

@@ -18,11 +18,13 @@
 
 package org.apache.hudi.table.marker;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -34,24 +36,28 @@ public class WriteMarkersFactory {
   private static final Logger LOG = LogManager.getLogger(WriteMarkersFactory.class);
 
   /**
-   * @param markerType the type of markers to use
-   * @param table {@code HoodieTable} instance
+   * @param markerType  the type of markers to use
+   * @param metaClient  {@link HoodieTableMetaClient} instance to use
+   * @param config      Write config
+   * @param context     {@link HoodieEngineContext} instance to use
    * @param instantTime current instant time
-   * @return  {@code WriteMarkers} instance based on the {@code MarkerType}
+   * @return {@code WriteMarkers} instance based on the {@code MarkerType}
    */
-  public static WriteMarkers get(MarkerType markerType, HoodieTable table, String instantTime) {
+  public static WriteMarkers get(
+      MarkerType markerType, HoodieTableMetaClient metaClient, HoodieWriteConfig config,
+      HoodieEngineContext context, String instantTime) {
     LOG.debug("Instantiated MarkerFiles with marker type: " + markerType.toString());
     switch (markerType) {
       case DIRECT:
-        return new DirectWriteMarkers(table, instantTime);
+        return new DirectWriteMarkers(metaClient, instantTime);
       case TIMELINE_SERVER_BASED:
-        String basePath = table.getMetaClient().getBasePath();
+        String basePath = metaClient.getBasePath();
         if (StorageSchemes.HDFS.getScheme().equals(
-            FSUtils.getFs(basePath, table.getContext().getHadoopConf().newCopy()).getScheme())) {
+            FSUtils.getFs(basePath, context.getHadoopConf().newCopy()).getScheme())) {
           throw new HoodieException("Timeline-server-based markers are not supported for HDFS: "
               + "base path " + basePath);
         }
-        return new TimelineServerBasedWriteMarkers(table, instantTime);
+        return new TimelineServerBasedWriteMarkers(metaClient, config, instantTime);
       default:
         throw new HoodieException("The marker type \"" + markerType.name() + "\" is not supported.");
     }

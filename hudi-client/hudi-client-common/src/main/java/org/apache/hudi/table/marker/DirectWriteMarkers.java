@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -58,17 +57,17 @@ public class DirectWriteMarkers extends WriteMarkers {
     this.fs = fs;
   }
 
-  public DirectWriteMarkers(HoodieTable table, String instantTime) {
-    this(table.getMetaClient().getFs(),
-        table.getMetaClient().getBasePath(),
-        table.getMetaClient().getMarkerFolderPath(instantTime),
+  public DirectWriteMarkers(HoodieTableMetaClient metaClient, String instantTime) {
+    this(metaClient.getFs(),
+        metaClient.getBasePath(),
+        metaClient.getMarkerFolderPath(instantTime),
         instantTime);
   }
 
   /**
    * Deletes Marker directory corresponding to an instant.
    *
-   * @param context HoodieEngineContext.
+   * @param context     HoodieEngineContext.
    * @param parallelism parallelism for deletion.
    */
   public boolean deleteMarkerDir(HoodieEngineContext context, int parallelism) {

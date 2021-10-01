@@ -431,7 +431,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   protected void postCommit(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
       // Delete the marker directory for the instant.
-      WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
+      WriteMarkersFactory.get(config.getMarkersType(), table.getMetaClient(),
+          table.getConfig(), table.getContext(), instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       autoCleanOnCommit();
       // We cannot have unbounded commit files. Archive commits if we have to archive

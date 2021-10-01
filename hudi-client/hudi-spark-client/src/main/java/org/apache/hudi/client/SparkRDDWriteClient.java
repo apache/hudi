@@ -53,8 +53,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.SparkCompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.table.upgrade.AbstractUpgradeDowngrade;
-import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
@@ -308,7 +307,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
     SparkCompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
-    WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
+    WriteMarkersFactory.get(config.getMarkersType(),
+        table.getMetaClient(), table.getConfig(), table.getContext(), compactionCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
@@ -384,7 +384,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     } catch (IOException e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     }
-    WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
+    WriteMarkersFactory.get(config.getMarkersType(),
+        table.getMetaClient(), table.getConfig(), table.getContext(), clusteringCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
@@ -414,20 +415,20 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    AbstractUpgradeDowngrade upgradeDowngrade = new SparkUpgradeDowngrade(metaClient, config, context);
+    UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context);
     if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
       if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
         this.txnManager.beginTransaction();
         try {
           // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
           this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER));
-          new SparkUpgradeDowngrade(metaClient, config, context)
-              .run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
+          new UpgradeDowngrade(metaClient, config, context)
+              .run(HoodieTableVersion.current(), instantTime);
         } finally {
           this.txnManager.endTransaction();
         }
       } else {
-        upgradeDowngrade.run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
+        upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
       }
     }
     metaClient.validateTableProperties(config.getProps(), operationType);

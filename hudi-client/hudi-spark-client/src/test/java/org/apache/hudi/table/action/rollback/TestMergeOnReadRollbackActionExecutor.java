@@ -135,7 +135,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     secondPartitionRollBackLogFiles.removeAll(secondPartitionCommit2LogFiles);
     assertEquals(1, secondPartitionRollBackLogFiles.size());
 
-    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(
+        cfg.getMarkersType(), metaClient, cfg, context, "002").doesMarkerDirExist());
   }
 
   @Test

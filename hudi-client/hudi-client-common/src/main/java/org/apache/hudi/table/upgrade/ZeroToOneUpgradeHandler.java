@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,6 +34,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
+import org.apache.hudi.table.action.rollback.ListingBasedRollbackHelper;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackRequest;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -46,14 +49,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class BaseZeroToOneUpgradeHandler implements UpgradeHandler {
+public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
+  public Map<ConfigProperty, String> upgrade(
+      HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
     // fetch pending commit info
-    //HoodieSparkTable table = HoodieSparkTable.create(config, context);
-    HoodieTable table = getTable(config, context);
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
+    HoodieTimeline inflightTimeline = metaClient.getCommitsTimeline().filterPendingExcludingCompaction();
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     if (commits.size() > 0 && instantTime != null) {
@@ -62,12 +64,10 @@ public abstract class BaseZeroToOneUpgradeHandler implements UpgradeHandler {
     }
     for (String commit : commits) {
       // for every pending commit, delete old markers and re-create markers in new format
-      recreateMarkers(commit, table, context, config.getMarkersDeleteParallelism());
+      recreateMarkers(commit, metaClient, config, context, config.getMarkersDeleteParallelism());
     }
     return Collections.EMPTY_MAP;
   }
-
-  abstract HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context);
 
   /**
    * Recreate markers in new format.
@@ -76,33 +76,38 @@ public abstract class BaseZeroToOneUpgradeHandler implements UpgradeHandler {
    * Step3: recreate markers for all interested files.
    *
    * @param commitInstantTime instant of interest for which markers need to be recreated.
-   * @param table instance of {@link HoodieTable} to use
-   * @param context instance of {@link HoodieEngineContext} to use
+   * @param metaClient        instance of {@link HoodieTableMetaClient} to use
+   * @param config            Write config
+   * @param context           instance of {@link HoodieEngineContext} to use
    * @throws HoodieRollbackException on any exception during upgrade.
    */
   protected void recreateMarkers(final String commitInstantTime,
-                                      HoodieTable table,
-                                      HoodieEngineContext context,
-                                      int parallelism) throws HoodieRollbackException {
+                                 HoodieTableMetaClient metaClient,
+                                 HoodieWriteConfig config,
+                                 HoodieEngineContext context,
+                                 int parallelism) throws HoodieRollbackException {
     try {
       // fetch hoodie instant
-      Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
+      Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(metaClient.getActiveTimeline().getCommitsTimeline().getInstants()
           .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
           .findFirst());
       if (commitInstantOpt.isPresent()) {
         // delete existing markers
-        WriteMarkers writeMarkers = WriteMarkersFactory.get(MarkerType.DIRECT, table, commitInstantTime);
+        WriteMarkers writeMarkers = WriteMarkersFactory.get(
+            MarkerType.DIRECT, metaClient, config, context, commitInstantTime);
         writeMarkers.quietDeleteMarkerDir(context, parallelism);
 
         // generate rollback stats
         List<ListingBasedRollbackRequest> rollbackRequests;
-        if (table.getMetaClient().getTableType() == HoodieTableType.COPY_ON_WRITE) {
-          rollbackRequests = RollbackUtils.generateRollbackRequestsByListingCOW(context, table.getMetaClient().getBasePath(), table.getConfig());
+        if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+          rollbackRequests = RollbackUtils.generateRollbackRequestsByListingCOW(context, metaClient.getBasePath(), config);
         } else {
-          rollbackRequests = RollbackUtils.generateRollbackRequestsUsingFileListingMOR(commitInstantOpt.get(), table, context);
+          rollbackRequests = RollbackUtils.generateRollbackRequestsUsingFileListingMOR(
+              commitInstantOpt.get(), metaClient, config, context,
+              HoodieTable.createViewManager(context, config).getFileSystemView(metaClient));
         }
-        List<HoodieRollbackStat> rollbackStats = getListBasedRollBackStats(table.getMetaClient(), table.getConfig(),
-            context, commitInstantOpt, rollbackRequests);
+        List<HoodieRollbackStat> rollbackStats = getListBasedRollBackStats(
+            metaClient, config, context, commitInstantOpt, rollbackRequests);
 
         // recreate markers adhering to marker based rollback
         for (HoodieRollbackStat rollbackStat : rollbackStats) {
@@ -112,7 +117,8 @@ public abstract class BaseZeroToOneUpgradeHandler implements UpgradeHandler {
             writeMarkers.create(rollbackStat.getPartitionPath(), dataFileName, IOType.MERGE);
           }
           for (FileStatus fileStatus : rollbackStat.getCommandBlocksCount().keySet()) {
-            writeMarkers.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(fileStatus.getPath().toString(), table), IOType.APPEND);
+            writeMarkers.create(rollbackStat.getPartitionPath(), getFileNameForMarkerFromLogFile(
+                fileStatus.getPath().toString(), metaClient), IOType.APPEND);
           }
         }
       }
@@ -121,9 +127,13 @@ public abstract class BaseZeroToOneUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  abstract List<HoodieRollbackStat> getListBasedRollBackStats(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
-                                                                            HoodieEngineContext context, Option<HoodieInstant> commitInstantOpt,
-                                                                            List<ListingBasedRollbackRequest> rollbackRequests);
+  List<HoodieRollbackStat> getListBasedRollBackStats(
+      HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
+      Option<HoodieInstant> commitInstantOpt, List<ListingBasedRollbackRequest> rollbackRequests) {
+    List<HoodieRollbackRequest> hoodieRollbackRequests = new ListingBasedRollbackHelper(metaClient, config)
+        .getRollbackRequestsForRollbackPlan(context, commitInstantOpt.get(), rollbackRequests);
+    return new BaseRollbackHelper(metaClient, config).collectRollbackStats(context, commitInstantOpt.get(), hoodieRollbackRequests);
+  }
 
   /**
    * Curates file name for marker from existing log file path.
@@ -131,14 +141,17 @@ public abstract class BaseZeroToOneUpgradeHandler implements UpgradeHandler {
    * marker file format  : partitionpath/fileId_writetoken_baseinstant.basefileExtn.marker.APPEND
    *
    * @param logFilePath log file path for which marker file name needs to be generated.
+   * @param metaClient  {@link HoodieTableMetaClient} instance to use
    * @return the marker file name thus curated.
    */
-  private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable table) {
-    Path logPath = new Path(table.getMetaClient().getBasePath(), logFilePath);
+  private static String getFileNameForMarkerFromLogFile(
+      String logFilePath, HoodieTableMetaClient metaClient) {
+    Path logPath = new Path(metaClient.getBasePath(), logFilePath);
     String fileId = FSUtils.getFileIdFromLogPath(logPath);
     String baseInstant = FSUtils.getBaseCommitTimeFromLogPath(logPath);
     String writeToken = FSUtils.getWriteTokenFromLogPath(logPath);
 
-    return FSUtils.makeDataFileName(baseInstant, writeToken, fileId, table.getBaseFileFormat().getFileExtension());
+    return FSUtils.makeDataFileName(baseInstant, writeToken, fileId,
+        metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
   }
 }

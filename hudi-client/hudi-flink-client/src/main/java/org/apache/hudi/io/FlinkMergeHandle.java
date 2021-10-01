@@ -117,7 +117,8 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
+        hoodieTable.getMetaClient(), hoodieTable.getConfig(), hoodieTable.getContext(), instantTime);
     writeMarkers.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 

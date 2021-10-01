@@ -119,7 +119,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
         FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+    this.viewManager = createViewManager(context, config, metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.taskContextSupplier = context.getTaskContextSupplier();
@@ -127,9 +127,24 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   protected abstract HoodieIndex<T, I, K, O> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
+  public static FileSystemViewManager createViewManager(
+      HoodieEngineContext context, HoodieWriteConfig config) {
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
+        .build();
+    HoodieTableMetadata metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
+    return createViewManager(context, config, metadata);
+  }
+
+  public static FileSystemViewManager createViewManager(
+      HoodieEngineContext context, HoodieWriteConfig config, HoodieTableMetadata metadata) {
+    return FileSystemViewManager.createViewManager(context, config.getMetadataConfig(),
+        config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+  }
+
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
+      viewManager = createViewManager(getContext(), config, metadata);
     }
     return viewManager;
   }
@@ -530,7 +545,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
-      WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
+      WriteMarkers markers = WriteMarkersFactory.get(
+          config.getMarkersType(), getMetaClient(), getConfig(), getContext(), instantTs);
 
       if (!markers.doesMarkerDirExist()) {
         // can happen if it was an empty write say.
