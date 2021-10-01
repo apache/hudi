@@ -16,10 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -29,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
@@ -73,7 +70,7 @@ import java.util.Map;
 public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConcatHandle.class);
-  // a representation of incoming records that tolerates duplicate keys.
+  // a representation of incoming records that tolerates duplicate keys
   private final Iterator<HoodieRecord<T>> recordItr;
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -83,12 +80,12 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
     this.recordItr = recordItr;
   }
 
-  public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, Map keyToNewRecords, String partitionPath, String fileId,
-      HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
-    // if incoming data is a Map, fallback to Map representation of incoming records
-    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier,
+  public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
+                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
+    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, dataFileToBeMerged, taskContextSupplier,
         Option.empty());
-    this.recordItr = Collections.emptyIterator();
+    this.recordItr = keyToNewRecords.values().iterator();
   }
 
   /**
@@ -108,29 +105,17 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
     recordsWritten++;
   }
 
-  boolean needsUpdateLocation() {
-    return true;
-  }
-
   @Override
   public List<WriteStatus> close() {
     try {
       while (recordItr.hasNext()) {
         HoodieRecord<T> record = recordItr.next();
-
         if (needsUpdateLocation()) {
           record.unseal();
           record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
           record.seal();
         }
-        Schema schema = useWriterSchema ? tableSchemaWithMetaFields : tableSchema;
-        Option<IndexedRecord> insertRecord = record.getData().getInsertValue(schema, config.getProps());
-        // just skip the ignored record
-        if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
-          continue;
-        }
-        writeRecord(record, insertRecord);
-        insertRecordsWritten++;
+        writeInsertRecord(record);
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
