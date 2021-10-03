@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -44,6 +45,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,7 +96,7 @@ public class FileCreateUtils {
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Path parentPath = getPath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Files.createDirectories(parentPath);
     Path metaFilePath = parentPath.resolve(instantTime + suffix);
     if (Files.notExists(metaFilePath)) {
@@ -114,19 +116,11 @@ public class FileCreateUtils {
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Path parentPath = getPath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Files.createDirectories(parentPath);
     Path metaFilePath = parentPath.resolve(instantTime + suffix);
     if (Files.notExists(metaFilePath)) {
       Files.write(metaFilePath, content);
-    }
-  }
-
-  private static void deleteMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
-    org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
-    if (fs.exists(metaFilePath)) {
-      fs.delete(metaFilePath, true);
     }
   }
 
@@ -211,7 +205,7 @@ public class FileCreateUtils {
   }
 
   private static void createAuxiliaryMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
+    Path parentPath = getPath(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
     Files.createDirectories(parentPath);
     Path metaFilePath = parentPath.resolve(instantTime + suffix);
     if (Files.notExists(metaFilePath)) {
@@ -228,7 +222,7 @@ public class FileCreateUtils {
   }
 
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
-    Path parentPath = Paths.get(basePath, partitionPath);
+    Path parentPath = getPath(basePath, partitionPath);
     Files.createDirectories(parentPath);
     Path metaFilePath = parentPath.resolve(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
     if (Files.notExists(metaFilePath)) {
@@ -248,7 +242,7 @@ public class FileCreateUtils {
 
   public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length, long lastModificationTimeMilli)
       throws Exception {
-    Path parentPath = Paths.get(basePath, partitionPath);
+    Path parentPath = getPath(basePath, partitionPath);
     Files.createDirectories(parentPath);
     Path baseFilePath = parentPath.resolve(baseFileName(instantTime, fileId));
     if (Files.notExists(baseFilePath)) {
@@ -265,7 +259,7 @@ public class FileCreateUtils {
 
   public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version, int length)
       throws Exception {
-    Path parentPath = Paths.get(basePath, partitionPath);
+    Path parentPath = getPath(basePath, partitionPath);
     Files.createDirectories(parentPath);
     Path logFilePath = parentPath.resolve(logFileName(instantTime, fileId, version));
     if (Files.notExists(logFilePath)) {
@@ -276,7 +270,7 @@ public class FileCreateUtils {
 
   public static String createMarkerFile(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType)
       throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Path parentPath = getPath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
     Files.createDirectories(parentPath);
     Path markerFilePath = parentPath.resolve(markerFileName(instantTime, fileId, ioType));
     if (Files.notExists(markerFilePath)) {
@@ -285,32 +279,44 @@ public class FileCreateUtils {
     return markerFilePath.toAbsolutePath().toString();
   }
 
-  private static void removeMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+  private static void deleteMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+    Path parentPath = getPath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Path metaFilePath = parentPath.resolve(instantTime + suffix);
     if (Files.exists(metaFilePath)) {
       Files.delete(metaFilePath);
     }
   }
 
+  private static void deleteMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
+    org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
+    if (fs.exists(metaFilePath)) {
+      fs.delete(metaFilePath, true);
+    }
+  }
+
   public static void deleteCommit(String basePath, String instantTime) throws IOException {
-    removeMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
   public static void deleteRequestedCommit(String basePath, String instantTime) throws IOException {
-    removeMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
   }
 
   public static void deleteInflightCommit(String basePath, String instantTime) throws IOException {
-    removeMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
   }
 
   public static void deleteDeltaCommit(String basePath, String instantTime) throws IOException {
-    removeMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
+  }
+
+  public static void deleteDeltaCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, fs);
   }
 
   public static long getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime, IOType ioType) throws IOException {
-    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
+    Path parentPath = getPath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
     if (Files.notExists(parentPath)) {
       return 0;
     }
@@ -343,7 +349,9 @@ public class FileCreateUtils {
     }
   }
 
-  public static void deleteDeltaCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
-    deleteMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, fs);
+  private static Path getPath(String basePath, String... segments) {
+    String scheme = URI.create(basePath).getScheme();
+    ValidationUtils.checkArgument(scheme == null || scheme.equals("file"));
+    return Paths.get(URI.create(basePath).getPath(), segments);
   }
 }

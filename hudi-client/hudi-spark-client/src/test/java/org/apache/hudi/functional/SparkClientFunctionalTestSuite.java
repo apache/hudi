@@ -25,7 +25,7 @@ import org.junit.platform.suite.api.Suite;
 
 @Suite
 @SelectPackages({"org.apache.hudi.client.functional", "org.apache.hudi.table.functional"})
-@IncludeTags("functional")
+@IncludeTags("flaky")
 public class SparkClientFunctionalTestSuite {
 
 }

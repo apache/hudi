@@ -51,6 +51,7 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -82,7 +83,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   private static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;
-  private static transient HoodieSparkEngineContext context;
+  private static transient HoodieSparkEngineContext engineContext;
 
   /**
    * An indicator of the initialization status.
@@ -92,7 +93,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected java.nio.file.Path tempDir;
 
   public String basePath() {
-    return tempDir.toAbsolutePath().toUri().toString();
+    return tempDir.toAbsolutePath().toUri().toString().replaceAll("/$", "");
   }
 
   @Override
@@ -114,9 +115,13 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return jsc.hadoopConfiguration();
   }
 
+  public FileSystem fs() {
+    return FSUtils.getFs(basePath(), hadoopConf());
+  }
+
   @Override
   public HoodieSparkEngineContext context() {
-    return context;
+    return engineContext;
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(HoodieTableType tableType) throws IOException {
@@ -167,7 +172,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
       jsc = new JavaSparkContext(spark.sparkContext());
-      context = new HoodieSparkEngineContext(jsc);
+      engineContext = new HoodieSparkEngineContext(jsc);
     }
   }
 

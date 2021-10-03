@@ -59,6 +59,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -125,7 +126,10 @@ public class HoodieTestTable {
   protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
     ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
-    this.basePath = basePath;
+    URI basePathUri = URI.create(basePath);
+    String scheme = basePathUri.getScheme();
+    ValidationUtils.checkArgument(scheme == null || scheme.equals("file"));
+    this.basePath = basePathUri.getPath();
     this.fs = fs;
     this.metaClient = metaClient;
   }
