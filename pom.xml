@@ -74,8 +74,8 @@
 
   <properties>
     <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
-    <maven-surefire-plugin.version>3.0.0-M4</maven-surefire-plugin.version>
-    <maven-failsafe-plugin.version>3.0.0-M4</maven-failsafe-plugin.version>
+    <maven-surefire-plugin.version>3.0.0-M5</maven-surefire-plugin.version>
+    <maven-failsafe-plugin.version>3.0.0-M5</maven-failsafe-plugin.version>
     <maven-shade-plugin.version>3.1.1</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
     <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
@@ -94,9 +94,9 @@
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.7.0-M1</junit.jupiter.version>
-    <junit.vintage.version>5.7.0-M1</junit.vintage.version>
-    <junit.platform.version>1.7.0-M1</junit.platform.version>
+    <junit.jupiter.version>5.8.1</junit.jupiter.version>
+    <junit.vintage.version>5.8.1</junit.vintage.version>
+    <junit.platform.version>1.8.1</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
     <log4j.version>1.2.17</log4j.version>
     <slf4j.version>1.7.15</slf4j.version>
