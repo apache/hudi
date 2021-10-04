@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.jupiter.api.Test;
@@ -30,6 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestParquetReaderIterator {
@@ -59,6 +61,7 @@ public class TestParquetReaderIterator {
     assertEquals(1, iterator.next());
     // no more entries to iterate on
     assertFalse(iterator.hasNext());
-    assertThrows(HoodieIOException.class, iterator::next, "should throw an exception since there is only 1 record");
+    assertThrows(HoodieException.class, iterator::next, "should throw an exception since there is only 1 record");
+    verify(reader, times(1)).close();
   }
 }
