@@ -30,7 +30,6 @@
     <properties>
         <checkstyle.skip>true</checkstyle.skip>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <proto.version>3.17.3</proto.version>
     </properties>
 
     <build>

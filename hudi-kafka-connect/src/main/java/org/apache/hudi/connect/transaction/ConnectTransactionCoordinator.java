@@ -379,6 +379,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   private ControlMessage buildControlMessage(ControlMessage.EventType eventType) {
     return ControlMessage.newBuilder()
+        .setProtocolVersion(KafkaConnectConfigs.CURRENT_PROTOCOL_VERSION)
         .setType(eventType)
         .setTopicName(partition.topic())
         .setSenderType(ControlMessage.EntityType.COORDINATOR)

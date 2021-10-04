@@ -177,6 +177,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       List<WriteStatus> writeStatuses = ongoingTransactionInfo.getWriter().close();
 
       ControlMessage writeStatusEvent = ControlMessage.newBuilder()
+          .setProtocolVersion(KafkaConnectConfigs.CURRENT_PROTOCOL_VERSION)
           .setType(ControlMessage.EventType.WRITE_STATUS)
           .setTopicName(partition.topic())
           .setSenderType(ControlMessage.EntityType.PARTICIPANT)

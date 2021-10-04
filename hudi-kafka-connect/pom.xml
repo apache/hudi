@@ -31,7 +31,6 @@
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
         <connect.api.version>2.5.0</connect.api.version>
-        <proto.version>3.17.3</proto.version>
     </properties>
 
     <build>
@@ -75,7 +74,7 @@
                             <goal>run</goal>
                         </goals>
                         <configuration>
-                            <protocVersion>3.1.0</protocVersion>
+                            <protocVersion>${protoc.version}</protocVersion>
                             <inputDirectories>
                                 <include>src/main/resources</include>
                             </inputDirectories>
