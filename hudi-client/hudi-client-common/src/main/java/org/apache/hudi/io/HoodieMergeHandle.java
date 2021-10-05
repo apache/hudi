@@ -355,18 +355,22 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
   }
 
+  protected void writeIncomingRecords() throws IOException {
+    // write out any pending records (this can happen when inserts are turned into updates)
+    Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
+        ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
+    while (newRecordsItr.hasNext()) {
+      HoodieRecord<T> hoodieRecord = newRecordsItr.next();
+      if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
+        writeInsertRecord(hoodieRecord);
+      }
+    }
+  }
+
   @Override
   public List<WriteStatus> close() {
     try {
-      // write out any pending records (this can happen when inserts are turned into updates)
-      Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
-          ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
-      while (newRecordsItr.hasNext()) {
-        HoodieRecord<T> hoodieRecord = newRecordsItr.next();
-        if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-          writeInsertRecord(hoodieRecord);
-        }
-      }
+      writeIncomingRecords();
 
       if (keyToNewRecords instanceof ExternalSpillableMap) {
         ((ExternalSpillableMap) keyToNewRecords).close();

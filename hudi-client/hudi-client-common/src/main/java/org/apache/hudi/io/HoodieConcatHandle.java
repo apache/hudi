@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,7 +37,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -106,20 +104,15 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   @Override
-  public List<WriteStatus> close() {
-    try {
-      while (recordItr.hasNext()) {
-        HoodieRecord<T> record = recordItr.next();
-        if (needsUpdateLocation()) {
-          record.unseal();
-          record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
-          record.seal();
-        }
-        writeInsertRecord(record);
+  protected void writeIncomingRecords() throws IOException {
+    while (recordItr.hasNext()) {
+      HoodieRecord<T> record = recordItr.next();
+      if (needsUpdateLocation()) {
+        record.unseal();
+        record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+        record.seal();
       }
-    } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+      writeInsertRecord(record);
     }
-    return super.close();
   }
 }
