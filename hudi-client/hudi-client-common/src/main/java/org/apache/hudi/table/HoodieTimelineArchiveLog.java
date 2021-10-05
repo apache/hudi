@@ -319,8 +319,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   }
 
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, HoodieInstant instant) {
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
-        table.getMetaClient(), table.getConfig(), table.getContext(), instant.getTimestamp());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instant.getTimestamp());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
       LOG.info("Cleaned up left over marker directory for instant :" + instant);
     }

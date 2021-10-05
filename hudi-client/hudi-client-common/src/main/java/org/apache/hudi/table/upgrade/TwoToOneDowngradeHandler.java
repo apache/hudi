@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.DirectWriteMarkers;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -45,20 +46,26 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
-
+/**
+ * Downgrade handler to assist in downgrading hoodie table from version 2 to 1.
+ */
 public class TwoToOneDowngradeHandler implements DowngradeHandler {
 
   @Override
   public Map<ConfigProperty, String> downgrade(
-      HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
-      String instantTime) {
+      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
+      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+
     // re-create marker files if any partial timeline server based markers are found
     HoodieTimeline inflightTimeline = metaClient.getCommitsTimeline().filterPendingExcludingCompaction();
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant inflightInstant : commits) {
       // Converts the markers in new format to old format of direct markers
       try {
-        convertToDirectMarkers(inflightInstant.getTimestamp(), metaClient, config, context);
+        convertToDirectMarkers(
+            inflightInstant.getTimestamp(), table, context, config.getMarkersDeleteParallelism());
       } catch (IOException e) {
         throw new HoodieException("Converting marker files to DIRECT style failed during downgrade", e);
       }
@@ -76,15 +83,15 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
    * 4. delete timeline server based marker files
    *
    * @param commitInstantTime instant of interest for marker conversion.
-   * @param metaClient        instance of {@link HoodieTableMetaClient} to use
-   * @param config            Write config
+   * @param table             instance of {@link HoodieTable} to use
    * @param context           instance of {@link HoodieEngineContext} to use
+   * @param parallelism       parallelism to use
    */
   private void convertToDirectMarkers(final String commitInstantTime,
-                                      HoodieTableMetaClient metaClient,
-                                      HoodieWriteConfig config,
-                                      HoodieEngineContext context) throws IOException {
-    String markerDir = metaClient.getMarkerFolderPath(commitInstantTime);
+                                      HoodieTable table,
+                                      HoodieEngineContext context,
+                                      int parallelism) throws IOException {
+    String markerDir = table.getMetaClient().getMarkerFolderPath(commitInstantTime);
     FileSystem fileSystem = FSUtils.getFs(markerDir, context.getHadoopConf().newCopy());
     Option<MarkerType> markerTypeOption = MarkerUtils.readMarkerType(fileSystem, markerDir);
     if (markerTypeOption.isPresent()) {
@@ -93,16 +100,15 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
           // Reads all markers written by the timeline server
           Map<String, Set<String>> markersMap =
               MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
-                  markerDir, fileSystem, context, config.getMarkersDeleteParallelism());
-          DirectWriteMarkers directWriteMarkers = new DirectWriteMarkers(metaClient, commitInstantTime);
+                  markerDir, fileSystem, context, parallelism);
+          DirectWriteMarkers directWriteMarkers = new DirectWriteMarkers(table, commitInstantTime);
           // Recreates the markers in the direct format
           markersMap.values().stream().flatMap(Collection::stream)
               .forEach(directWriteMarkers::create);
           // Deletes marker type file
           MarkerUtils.deleteMarkerTypeFile(fileSystem, markerDir);
           // Deletes timeline server based markers
-          deleteTimelineBasedMarkerFiles(
-              context, markerDir, fileSystem, config.getMarkersDeleteParallelism());
+          deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
           break;
         default:
           throw new HoodieException("The marker type \"" + markerTypeOption.get().name()
@@ -111,8 +117,7 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
     } else {
       // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
       // but timeline server based marker files are left.  So deletes them if any
-      deleteTimelineBasedMarkerFiles(
-          context, markerDir, fileSystem, config.getMarkersDeleteParallelism());
+      deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
     }
   }
 

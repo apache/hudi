@@ -160,8 +160,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieInstant commitInstant = table.getPendingCommitTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(
-        getConfig().getMarkersType(), metaClient, cfg, context, commitInstant.getTimestamp());
+    WriteMarkers writeMarkers =
+        WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
@@ -177,7 +177,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     }
 
     // should re-create marker files for 2nd commit since its pending.
-    new UpgradeDowngrade(metaClient, cfg, context).run(HoodieTableVersion.ONE, null);
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.ONE, null);
 
     // assert marker files
     assertMarkerFilesForUpgrade(table, commitInstant, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
@@ -218,7 +219,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     downgradeTableConfigsFromTwoToOne(cfg);
 
     // perform upgrade
-    new UpgradeDowngrade(metaClient, cfg, context).run(HoodieTableVersion.TWO, null);
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.TWO, null);
 
     // verify hoodie.table.version got upgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
@@ -303,8 +305,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieInstant commitInstant = table.getPendingCommitTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(
-        markerType, metaClient, cfg, context, commitInstant.getTimestamp());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(markerType, table, commitInstant.getTimestamp());
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
@@ -322,7 +323,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     }
 
     // downgrade should be performed. all marker files should be deleted
-    new UpgradeDowngrade(metaClient, cfg, context).run(toVersion, null);
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(toVersion, null);
 
     // assert marker files
     assertMarkerFilesForDowngrade(table, commitInstant, toVersion == HoodieTableVersion.ONE);
@@ -344,8 +346,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists) throws IOException {
     // Verify recreated marker files are as expected
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(
-        getConfig().getMarkersType(), metaClient, getConfig(), context, commitInstant.getTimestamp());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
     if (assertExists) {
       assertTrue(writeMarkers.doesMarkerDirExist());
       assertEquals(0, getTimelineServerBasedMarkerFileCount(table.getMetaClient().getMarkerFolderPath(commitInstant.getTimestamp()),
@@ -367,8 +368,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   private void assertMarkerFilesForUpgrade(HoodieTable table, HoodieInstant commitInstant, List<FileSlice> firstPartitionCommit2FileSlices,
                                            List<FileSlice> secondPartitionCommit2FileSlices) throws IOException {
     // Verify recreated marker files are as expected
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(
-        getConfig().getMarkersType(), metaClient, getConfig(), context, commitInstant.getTimestamp());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
     assertTrue(writeMarkers.doesMarkerDirExist());
     Set<String> files = writeMarkers.allMarkerFilePaths();
 

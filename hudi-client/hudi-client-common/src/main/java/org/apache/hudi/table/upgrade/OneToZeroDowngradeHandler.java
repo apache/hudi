@@ -20,10 +20,10 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -32,18 +32,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Downgrade handle to assist in downgrading hoodie table from version 1 to 0.
+ */
 public class OneToZeroDowngradeHandler implements DowngradeHandler {
 
   @Override
   public Map<ConfigProperty, String> downgrade(
-      HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
+      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
+      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     // fetch pending commit info
-    HoodieTimeline inflightTimeline = metaClient.getCommitsTimeline().filterPendingExcludingCompaction();
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant inflightInstant : commits) {
       // delete existing markers
-      WriteMarkers writeMarkers = WriteMarkersFactory.get(
-          config.getMarkersType(), metaClient, config, context, inflightInstant.getTimestamp());
+      WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, inflightInstant.getTimestamp());
       writeMarkers.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     }
     return Collections.EMPTY_MAP;

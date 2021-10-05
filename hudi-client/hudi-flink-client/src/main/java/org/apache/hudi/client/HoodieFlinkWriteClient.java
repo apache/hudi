@@ -58,6 +58,7 @@ import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.FlinkCompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.util.FlinkClientUtil;
 
@@ -314,9 +315,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
                             Option<Map<String, String>> extraMetadata) {
     try {
       // Delete the marker directory for the instant.
-      HoodieTable newTable = createTable(config, hadoopConf);
-      WriteMarkersFactory.get(config.getMarkersType(),
-          newTable.getMetaClient(), newTable.getConfig(), context, instantTime)
+      WriteMarkersFactory.get(config.getMarkersType(), createTable(config, hadoopConf), instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
@@ -385,7 +384,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    new UpgradeDowngrade(metaClient, config, context).run(HoodieTableVersion.current(), instantTime);
+    new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.current(), instantTime);
     return getTableAndInitCtx(metaClient, operationType);
   }
 
@@ -397,7 +397,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    */
   public void upgradeDowngrade(String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    new UpgradeDowngrade(metaClient, config, context).run(HoodieTableVersion.current(), instantTime);
+    new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.current(), instantTime);
   }
 
   /**

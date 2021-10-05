@@ -21,11 +21,9 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
 
-import java.util.Properties;
 import java.util.function.Supplier;
 
 /**
@@ -63,10 +61,5 @@ public class FlinkTaskContextSupplier extends TaskContextSupplier {
     // no operation for now
     return Option.empty();
   }
-
-  @Override
-  public String getPartitionColumns(Properties props) {
-    return props.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
-  }
-
+  
 }

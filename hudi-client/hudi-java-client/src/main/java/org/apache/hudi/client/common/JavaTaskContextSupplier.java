@@ -21,9 +21,7 @@ package org.apache.hudi.client.common;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import java.util.Properties;
 import java.util.function.Supplier;
 
 public class JavaTaskContextSupplier extends TaskContextSupplier {
@@ -45,10 +43,5 @@ public class JavaTaskContextSupplier extends TaskContextSupplier {
   @Override
   public Option<String> getProperty(EngineProperty prop) {
     return Option.empty();
-  }
-
-  @Override
-  public String getPartitionColumns(Properties props) {
-    return props.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
   }
 }

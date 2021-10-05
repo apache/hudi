@@ -36,11 +36,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -120,24 +120,21 @@ public class RollbackUtils {
    * Generate all rollback requests that we need to perform for rolling back this action without actually performing rolling back for MOR table type.
    *
    * @param instantToRollback Instant to Rollback
-   * @param metaClient        instance of {@link HoodieTableMetaClient} to use.
-   * @param config            Write config.
-   * @param context           instance of {@link HoodieEngineContext} to use.
-   * @param fileSystemView    File system view.
+   * @param table instance of {@link HoodieTable} to use.
+   * @param context instance of {@link HoodieEngineContext} to use.
    * @return list of rollback requests
    */
-  public static List<ListingBasedRollbackRequest> generateRollbackRequestsUsingFileListingMOR(
-      HoodieInstant instantToRollback, HoodieTableMetaClient metaClient, HoodieWriteConfig config,
-      HoodieEngineContext context, TableFileSystemView.SliceView fileSystemView) throws IOException {
+  public static List<ListingBasedRollbackRequest> generateRollbackRequestsUsingFileListingMOR(HoodieInstant instantToRollback, HoodieTable table, HoodieEngineContext context) throws IOException {
     String commit = instantToRollback.getTimestamp();
-    List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
+    HoodieWriteConfig config = table.getConfig();
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
     if (partitions.isEmpty()) {
       return new ArrayList<>();
     }
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(RollbackUtils.class.getSimpleName(), "Generate all rollback requests");
     return context.flatMap(partitions, partitionPath -> {
-      HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
+      HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
       List<ListingBasedRollbackRequest> partitionRollbackRequests = new ArrayList<>();
       switch (instantToRollback.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
@@ -196,7 +193,7 @@ public class RollbackUtils {
           // as well if the base base file gets deleted.
           try {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                metaClient.getCommitTimeline()
+                table.getMetaClient().getCommitTimeline()
                     .getInstantDetails(new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()))
                     .get(),
                 HoodieCommitMetadata.class);
@@ -209,8 +206,8 @@ public class RollbackUtils {
 
             // append rollback blocks for updates
             if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
-              partitionRollbackRequests.addAll(generateAppendRollbackBlocksAction(partitionPath,
-                  instantToRollback, commitMetadata, fileSystemView));
+              partitionRollbackRequests
+                  .addAll(generateAppendRollbackBlocksAction(partitionPath, instantToRollback, commitMetadata, table));
             }
             break;
           } catch (IOException io) {
@@ -223,9 +220,8 @@ public class RollbackUtils {
     }, Math.min(partitions.size(), sparkPartitions)).stream().filter(Objects::nonNull).collect(Collectors.toList());
   }
 
-  private static List<ListingBasedRollbackRequest> generateAppendRollbackBlocksAction(
-      String partitionPath, HoodieInstant rollbackInstant,
-      HoodieCommitMetadata commitMetadata, TableFileSystemView.SliceView sliceView) {
+  private static List<ListingBasedRollbackRequest> generateAppendRollbackBlocksAction(String partitionPath, HoodieInstant rollbackInstant,
+      HoodieCommitMetadata commitMetadata, HoodieTable table) {
     ValidationUtils.checkArgument(rollbackInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
 
     // wStat.getPrevCommit() might not give the right commit time in the following
@@ -233,7 +229,7 @@ public class RollbackUtils {
     // used to write the new log files. In this case, the commit time for the log file is the compaction requested time.
     // But the index (global) might store the baseCommit of the base and not the requested, hence get the
     // baseCommit always by listing the file slice
-    Map<String, String> fileIdToBaseCommitTimeForLogMap = sliceView.getLatestFileSlices(partitionPath)
+    Map<String, String> fileIdToBaseCommitTimeForLogMap = table.getSliceView().getLatestFileSlices(partitionPath)
         .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
     return commitMetadata.getPartitionToWriteStats().get(partitionPath).stream().filter(wStat -> {
 

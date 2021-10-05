@@ -20,11 +20,10 @@ package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.table.HoodieTable;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -63,13 +62,12 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   private final int timelineServerPort;
   private final int timeoutSecs;
 
-  public TimelineServerBasedWriteMarkers(
-      HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, String instantTime) {
-    this(metaClient.getBasePath(),
-        metaClient.getMarkerFolderPath(instantTime), instantTime,
-        writeConfig.getViewStorageConfig().getRemoteViewServerHost(),
-        writeConfig.getViewStorageConfig().getRemoteViewServerPort(),
-        writeConfig.getViewStorageConfig().getRemoteTimelineClientTimeoutSecs());
+  public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
+    this(table.getMetaClient().getBasePath(),
+        table.getMetaClient().getMarkerFolderPath(instantTime), instantTime,
+        table.getConfig().getViewStorageConfig().getRemoteViewServerHost(),
+        table.getConfig().getViewStorageConfig().getRemoteViewServerPort(),
+        table.getConfig().getViewStorageConfig().getRemoteTimelineClientTimeoutSecs());
   }
 
   TimelineServerBasedWriteMarkers(String basePath, String markerFolderPath, String instantTime,

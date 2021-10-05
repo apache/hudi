@@ -63,9 +63,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
             table.getMetaClient().getBasePath(), config);
       } else {
         rollbackRequests = RollbackUtils
-            .generateRollbackRequestsUsingFileListingMOR(
-                instantToRollback, table.getMetaClient(), table.getConfig(),
-                table.getContext(), table.getSliceView());
+            .generateRollbackRequestsUsingFileListingMOR(instantToRollback, table, context);
       }
       List<HoodieRollbackRequest> listingBasedRollbackRequests = new ListingBasedRollbackHelper(table.getMetaClient(), config)
           .getRollbackRequestsForRollbackPlan(context, instantToRollback, rollbackRequests);

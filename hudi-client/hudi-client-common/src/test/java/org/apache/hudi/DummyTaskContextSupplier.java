@@ -22,7 +22,6 @@ import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
 
-import java.util.Properties;
 import java.util.function.Supplier;
 
 public class DummyTaskContextSupplier extends TaskContextSupplier {
@@ -44,11 +43,6 @@ public class DummyTaskContextSupplier extends TaskContextSupplier {
 
   @Override
   public Option<String> getProperty(EngineProperty prop) {
-    return null;
-  }
-
-  @Override
-  public String getPartitionColumns(Properties props) {
     return null;
   }
 }

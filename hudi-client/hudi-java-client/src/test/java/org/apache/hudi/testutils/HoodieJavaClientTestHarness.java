@@ -30,7 +30,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -44,7 +43,6 @@ import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
 
@@ -119,11 +117,6 @@ public abstract class HoodieJavaClientTestHarness extends HoodieCommonTestHarnes
     @Override
     public Option<String> getProperty(EngineProperty prop) {
       return Option.empty();
-    }
-
-    @Override
-    public String getPartitionColumns(Properties props) {
-      return props.getProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
     }
   }
 

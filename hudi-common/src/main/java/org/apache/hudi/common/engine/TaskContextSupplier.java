@@ -21,7 +21,6 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
-import java.util.Properties;
 import java.util.function.Supplier;
 
 /**
@@ -36,6 +35,4 @@ public abstract class TaskContextSupplier implements Serializable {
   public abstract Supplier<Long> getAttemptIdSupplier();
 
   public abstract Option<String> getProperty(EngineProperty prop);
-
-  public abstract String getPartitionColumns(Properties props);
 }

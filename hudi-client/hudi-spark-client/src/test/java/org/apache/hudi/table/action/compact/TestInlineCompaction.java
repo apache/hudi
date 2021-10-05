@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.junit.jupiter.api.Test;
 
@@ -87,7 +88,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       assertEquals(4, metaClient.getActiveTimeline().getWriteTimeline().countInstants());
       assertEquals(HoodieTimeline.COMMIT_ACTION, metaClient.getActiveTimeline().lastInstant().get().getAction());
       String compactionTime = metaClient.getActiveTimeline().lastInstant().get().getTimestamp();
-      assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), metaClient, cfg, context, compactionTime).doesMarkerDirExist());
+      assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), HoodieSparkTable.create(cfg, context), compactionTime).doesMarkerDirExist());
     }
   }
 

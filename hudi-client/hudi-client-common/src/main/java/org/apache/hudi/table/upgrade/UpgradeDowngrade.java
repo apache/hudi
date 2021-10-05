@@ -23,9 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 
@@ -49,6 +47,7 @@ public class UpgradeDowngrade {
   private static final Logger LOG = LogManager.getLogger(UpgradeDowngrade.class);
   public static final String HOODIE_UPDATED_PROPERTY_FILE = "hoodie.properties.updated";
 
+  private final BaseUpgradeDowngradeHelper upgradeDowngradeHelper;
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
@@ -56,13 +55,16 @@ public class UpgradeDowngrade {
   private Path updatedPropsFilePath;
   private Path propsFilePath;
 
-  public UpgradeDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context) {
+  public UpgradeDowngrade(
+      HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
+      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
     this.metaClient = metaClient;
     this.config = config;
     this.context = context;
     this.fs = metaClient.getFs();
     this.updatedPropsFilePath = new Path(metaClient.getMetaPath(), HOODIE_UPDATED_PROPERTY_FILE);
     this.propsFilePath = new Path(metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toVersion) {
@@ -161,9 +163,11 @@ public class UpgradeDowngrade {
 
   protected Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
     if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
-      return new ZeroToOneUpgradeHandler().upgrade(metaClient, config, context, instantTime);
+      return new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
-      return new OneToTwoUpgradeHandler().upgrade(metaClient, config, context, instantTime);
+      return new OneToTwoUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.THREE) {
+      return new TwoToThreeUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
     }
@@ -171,9 +175,11 @@ public class UpgradeDowngrade {
 
   protected Map<ConfigProperty, String> downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
     if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.ZERO) {
-      return new OneToZeroDowngradeHandler().downgrade(metaClient, config, context, instantTime);
+      return new OneToZeroDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {
-      return new TwoToOneDowngradeHandler().downgrade(metaClient, config, context, instantTime);
+      return new TwoToOneDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.THREE && toVersion == HoodieTableVersion.TWO) {
+      return new ThreeToTwoDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }

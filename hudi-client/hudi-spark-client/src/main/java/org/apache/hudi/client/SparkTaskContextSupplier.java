@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
@@ -29,7 +28,6 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.util.Utils;
 
 import java.io.Serializable;
-import java.util.Properties;
 import java.util.function.Supplier;
 
 /**
@@ -82,10 +80,5 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
       return Option.empty();
     }
     throw new HoodieException("Unknown engine property :" + prop);
-  }
-
-  @Override
-  public String getPartitionColumns(Properties props) {
-    return HoodieSparkUtils.getPartitionColumns(props);
   }
 }

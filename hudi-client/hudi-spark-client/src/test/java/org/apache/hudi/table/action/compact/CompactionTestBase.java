@@ -176,8 +176,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
                                  HoodieWriteConfig cfg, int expectedNumRecs, boolean hasDeltaCommitAfterPendingCompaction) throws IOException {
 
     client.compact(compactionInstantTime);
-    assertFalse(WriteMarkersFactory.get(
-        cfg.getMarkersType(), metaClient, cfg, context, compactionInstantTime).doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, compactionInstantTime).doesMarkerDirExist());
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
     assertFalse(fileSliceList.stream()

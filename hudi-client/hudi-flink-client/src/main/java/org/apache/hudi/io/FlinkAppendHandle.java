@@ -61,8 +61,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
-    this.writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
-        hoodieTable.getMetaClient(), hoodieTable.getConfig(), hoodieTable.getContext(), instantTime);
+    this.writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
   }
 
   @Override
