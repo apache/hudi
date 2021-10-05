@@ -48,6 +48,9 @@ public class CompactHelpers<T extends HoodieRecordPayload, I, K, O> {
 
   private static final CompactHelpers SINGLETON_INSTANCE = new CompactHelpers();
 
+  private CompactHelpers() {
+  }
+
   public static CompactHelpers getInstance() {
     return SINGLETON_INSTANCE;
   }
