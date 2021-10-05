@@ -119,7 +119,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return schema;
   }
 
-  private void createRecordsFromContentBytes() throws IOException {
+  protected void createRecordsFromContentBytes() throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();

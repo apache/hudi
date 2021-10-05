@@ -19,14 +19,14 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -34,6 +34,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -41,6 +42,10 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.util.Pair;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import javax.annotation.Nonnull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -50,8 +55,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
-
-import javax.annotation.Nonnull;
 
 /**
  * HoodieHFileDataBlock contains a list of records stored inside an HFile format. It is used with the HFile
@@ -139,6 +142,40 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     ostream.close();
 
     return baos.toByteArray();
+  }
+
+  @Override
+  protected void createRecordsFromContentBytes() throws IOException {
+    //if (inline enabled){
+      readContentsWithInlineFS();
+    /*} else {
+      super.createRecordsFromContentBytes();
+    }*/
+  }
+
+  private void readContentsWithInlineFS() throws IOException {
+    // Get schema from the header
+    Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+
+    // If readerSchema was not present, use writerSchema
+    if (schema == null) {
+      schema = writerSchema;
+    }
+
+    Configuration conf = new Configuration();
+    CacheConfig cacheConf = new CacheConfig(conf);
+    Configuration inlineConf = new Configuration();
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+
+    Path inlinePath = InLineFSUtils.getInlineFilePath(
+        getBlockContentLocation().get().getLogFile().getPath(),
+        getBlockContentLocation().get().getLogFile().getPath().getFileSystem(conf).getScheme(),
+        getBlockContentLocation().get().getContentPositionInLogFile(),
+        getBlockContentLocation().get().getBlockSize());
+
+    HoodieHFileReader reader = new HoodieHFileReader(inlineConf, inlinePath, cacheConf, inlinePath.getFileSystem(inlineConf));
+    List<Pair<String, IndexedRecord>> records = reader.readAllRecords(writerSchema, schema);
+    this.records = records.stream().map(t -> t.getSecond()).collect(Collectors.toList());
   }
 
   @Override

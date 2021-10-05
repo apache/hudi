@@ -47,7 +47,7 @@ public class InLineFSUtils {
   public static Path getInlineFilePath(Path outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
     String subPath = outerPath.toString().substring(outerPath.toString().indexOf(":") + 1);
     return new Path(
-        InLineFileSystem.SCHEME + "://" + subPath + "/" + origScheme
+        InLineFileSystem.SCHEME + ":" + subPath + "/" + origScheme
             + "/" + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset
             + "&" + LENGTH_STR + EQUALS_STR + inLineLength
     );
