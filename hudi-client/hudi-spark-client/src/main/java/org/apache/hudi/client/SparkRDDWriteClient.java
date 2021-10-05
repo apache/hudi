@@ -292,7 +292,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public void commitCompaction(String compactionInstantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata) throws IOException {
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
-    HoodieCommitMetadata metadata = CompactHelpers.newInstance().createCompactionMetadata(
+    HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
         table, compactionInstantTime, HoodieJavaRDDData.of(writeStatuses), config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeCompaction(metadata, writeStatuses, table, compactionInstantTime);
@@ -308,7 +308,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     // commit to data table after committing to metadata table.
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
-    CompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+    CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (compactionTimer != null) {

@@ -46,15 +46,10 @@ import java.util.List;
  */
 public class CompactHelpers<T extends HoodieRecordPayload, I, K, O> {
 
-  protected CompactHelpers() {
-  }
+  private static final CompactHelpers SINGLETON_INSTANCE = new CompactHelpers();
 
-  private static class CompactHelperHolder {
-    private static final CompactHelpers COMPACT_HELPERS = new CompactHelpers();
-  }
-
-  public static CompactHelpers newInstance() {
-    return CompactHelperHolder.COMPACT_HELPERS;
+  public static CompactHelpers getInstance() {
+    return SINGLETON_INSTANCE;
   }
 
   public HoodieCommitMetadata createCompactionMetadata(

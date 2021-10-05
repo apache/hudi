@@ -56,9 +56,9 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void checkCompactionTimeline(
-      HoodieTable table, String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
-    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
+  public void handleCompactionTimeline(
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline,
+      String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       writeClient.rollbackInflightCompaction(inflightInstant, table);

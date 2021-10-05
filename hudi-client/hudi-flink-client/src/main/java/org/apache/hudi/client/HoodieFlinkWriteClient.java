@@ -352,7 +352,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       List<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) throws IOException {
     HoodieFlinkTable<T> table = getHoodieTable();
-    HoodieCommitMetadata metadata = CompactHelpers.newInstance().createCompactionMetadata(
+    HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
         table, compactionInstantTime, HoodieListData.of(writeStatuses), config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeCompaction(metadata, writeStatuses, table, compactionInstantTime);
@@ -370,7 +370,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // commit to data table after committing to metadata table.
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
-    CompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+    CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
 
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());

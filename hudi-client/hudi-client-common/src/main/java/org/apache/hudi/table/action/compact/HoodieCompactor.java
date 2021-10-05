@@ -75,12 +75,31 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
 
   private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
 
+  /**
+   * @param config Write config.
+   * @return the reader schema for {@link HoodieMergedLogRecordScanner}.
+   */
   public abstract Schema getReaderSchema(HoodieWriteConfig config);
 
+  /**
+   * Updates the reader schema for actual compaction operations.
+   *
+   * @param config     Write config.
+   * @param metaClient {@link HoodieTableMetaClient} instance to use.
+   */
   public abstract void updateReaderSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient);
 
-  public abstract void checkCompactionTimeline(
-      HoodieTable table, String compactionInstantTime, AbstractHoodieWriteClient writeClient);
+  /**
+   * Handles the compaction timeline based on the compaction instant.
+   *
+   * @param table                     {@link HoodieTable} instance to use.
+   * @param pendingCompactionTimeline pending compaction timeline.
+   * @param compactionInstantTime     compaction instant
+   * @param writeClient               Write client.
+   */
+  public abstract void handleCompactionTimeline(
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline,
+      String compactionInstantTime, AbstractHoodieWriteClient writeClient);
 
   /**
    * Execute compaction operations and report back status.

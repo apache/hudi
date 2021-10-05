@@ -63,10 +63,10 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void checkCompactionTimeline(
-      HoodieTable table, String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
+  public void handleCompactionTimeline(
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline,
+      String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
     HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
-    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     if (!pendingCompactionTimeline.containsInstant(instant)) {
       throw new IllegalStateException(
           "No Compaction request available at " + compactionInstantTime + " to run compaction");
