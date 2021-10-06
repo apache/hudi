@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -170,6 +171,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void deletePending(HoodieInstant instant) {
     ValidationUtils.checkArgument(!instant.isCompleted());
     deleteInstantFile(instant);
+  }
+
+  public static void deleteInstantFile(FileSystem fs, String metaPath, HoodieInstant instant) {
+    try {
+      fs.delete(new Path(metaPath, instant.getFileName()), false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not delete instant file" + instant.getFileName(), e);
+    }
   }
 
   public void deletePendingIfExists(HoodieInstant.State state, String action, String instantStr) {

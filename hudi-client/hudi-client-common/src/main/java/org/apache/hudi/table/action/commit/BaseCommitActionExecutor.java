@@ -175,10 +175,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     }
   }
 
-  protected void syncTableMetadata() {
-    // No Op
-  }
-
   /**
    * By default, return the writer schema in Write Config for storing in commit.
    */

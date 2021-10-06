@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -193,7 +194,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   @ValueSource(booleans = {true, false})
   public void testLogFileCountsAfterCompaction(boolean populateMetaFields) throws Exception {
     // insert 100 records
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig config = cfgBuilder.build();
 
@@ -524,6 +525,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       JavaRDD<HoodieRecord> deleteRDD = jsc().parallelize(fewRecordsForDelete, 1);
 
       // initialize partitioner
+      hoodieTable.getHoodieView().sync();
       AbstractSparkDeltaCommitActionExecutor actionExecutor = new SparkDeleteDeltaCommitActionExecutor(context(), cfg, hoodieTable,
           newDeleteTime, deleteRDD);
       actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));

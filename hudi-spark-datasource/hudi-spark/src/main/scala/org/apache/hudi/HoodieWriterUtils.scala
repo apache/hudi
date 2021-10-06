@@ -18,13 +18,14 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.HoodieMetadataConfig.{ENABLE, VALIDATE_ENABLE}
+import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 
 import java.util.Properties
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.{mapAsScalaMapConverter, _}
+import scala.collection.JavaConverters.mapAsScalaMapConverter
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 
 /**
  * WriterUtils to assist in write path in Datasource and tests.
@@ -50,7 +51,6 @@ object HoodieWriterUtils {
       PARTITIONPATH_FIELD.key -> PARTITIONPATH_FIELD.defaultValue,
       KEYGENERATOR_CLASS_NAME.key -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,
       ENABLE.key -> ENABLE.defaultValue.toString,
-      VALIDATE_ENABLE.key -> VALIDATE_ENABLE.defaultValue.toString,
       COMMIT_METADATA_KEYPREFIX.key -> COMMIT_METADATA_KEYPREFIX.defaultValue,
       INSERT_DROP_DUPS.key -> INSERT_DROP_DUPS.defaultValue,
       STREAMING_RETRY_CNT.key -> STREAMING_RETRY_CNT.defaultValue,

@@ -266,6 +266,7 @@ public class TestCleaner extends HoodieClientTestBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(maxVersions).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
@@ -298,7 +299,7 @@ public class TestCleaner extends HoodieClientTestBase {
           .map(e -> Pair.of(e.getKey().getPartitionPath(), e.getValue())).collect(Collectors.toList());
       HoodieCompactionPlan compactionPlan =
           CompactionUtils.buildFromFileSlices(partitionFileSlicePairs, Option.empty(), Option.empty());
-      List<String> instantTimes = makeIncrementalCommitTimes(9);
+      List<String> instantTimes = makeIncrementalCommitTimes(9, 1, 10);
       String compactionTime = instantTimes.get(0);
       table.getActiveTimeline().saveToCompactionRequested(
           new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionTime),
@@ -435,6 +436,7 @@ public class TestCleaner extends HoodieClientTestBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
@@ -511,6 +513,7 @@ public class TestCleaner extends HoodieClientTestBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
@@ -639,7 +642,7 @@ public class TestCleaner extends HoodieClientTestBase {
   public void testKeepLatestFileVersions(Boolean enableBootstrapSourceClean) throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
@@ -731,7 +734,7 @@ public class TestCleaner extends HoodieClientTestBase {
 
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
@@ -769,7 +772,7 @@ public class TestCleaner extends HoodieClientTestBase {
 
     HoodieWriteConfig config =
             HoodieWriteConfig.newBuilder().withPath(basePath)
-                .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+                .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build())
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build())
                     .build();
@@ -809,7 +812,7 @@ public class TestCleaner extends HoodieClientTestBase {
   @Test
   public void testCleanWithReplaceCommits() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -1116,7 +1119,7 @@ public class TestCleaner extends HoodieClientTestBase {
   @MethodSource("argumentsForTestKeepLatestCommits")
   public void testKeepLatestCommits(boolean simulateFailureRetry, boolean enableIncrementalClean, boolean enableBootstrapSourceClean) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withIncrementalCleaningMode(enableIncrementalClean)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
@@ -1295,7 +1298,7 @@ public class TestCleaner extends HoodieClientTestBase {
   @Test
   public void testCleaningWithZeroPartitionPaths() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -1317,7 +1320,7 @@ public class TestCleaner extends HoodieClientTestBase {
   @Test
   public void testKeepLatestCommitsWithPendingCompactions() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(false).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
