@@ -19,9 +19,6 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils
@@ -29,7 +26,6 @@ import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -129,9 +125,9 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
         (addMetaFields(tableSchema.get), options)
       } else if (userSpecifiedSchema.nonEmpty) {
         (addMetaFields(userSpecifiedSchema), options)
-    } else {
+      } else {
         throw new IllegalArgumentException(s"Missing schema for Create Table: $tableName")
-     }
+      }
     } else {
       assert(table.schema.nonEmpty, s"Missing schema for Create Table: $tableName")
       // SPARK-19724: the default location of a managed table should be non-existent or empty.
@@ -317,16 +313,6 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
         s"'type' must be '${HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_COW}' or " +
           s"'${HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_MOR}'")
     }
-  }
-
-  private def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
-    val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-    val metadataConfig = {
-      val properties = new Properties()
-      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties).asJava)
-      HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
-    }
-    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
   }
 
   /**

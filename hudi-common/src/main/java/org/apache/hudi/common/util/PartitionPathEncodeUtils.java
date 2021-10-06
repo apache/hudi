@@ -25,6 +25,8 @@ import java.util.BitSet;
  */
 public class PartitionPathEncodeUtils {
 
+  public static final String DEFAULT_PARTITION_PATH = "default";
+
   static BitSet charToEscape = new BitSet(128);
   static {
     for (char c = 0; c < ' '; c++) {
@@ -64,14 +66,11 @@ public class PartitionPathEncodeUtils {
    * @return An escaped path name.
    */
   public static String escapePathName(String path, String defaultPath) {
-
-    // __HIVE_DEFAULT_NULL__ is the system default value for null and empty string.
-    // TODO: we should allow user to specify default partition or HDFS file location.
     if (path == null || path.length() == 0) {
       if (defaultPath == null) {
-        //previously, when path is empty or null and no default path is specified,
-        // __HIVE_DEFAULT_PARTITION__ was the return value for escapePathName
-        return "__HIVE_DEFAULT_PARTITION__";
+        // previously, when path is empty or null and no default path is specified,
+        // "default" was the return value for escapePathName
+        return DEFAULT_PARTITION_PATH;
       } else {
         return defaultPath;
       }
@@ -110,5 +109,13 @@ public class PartitionPathEncodeUtils {
       sb.append(c);
     }
     return sb.toString();
+  }
+
+  public static String escapePartitionValue(String value) {
+    if (value == null || value.isEmpty()) {
+      return DEFAULT_PARTITION_PATH;
+    } else {
+      return escapePathName(value);
+    }
   }
 }
