@@ -1,5 +1,5 @@
 ---
-id: quickstart.html
+id: quickstart
 title: quickstart
 ---
 
