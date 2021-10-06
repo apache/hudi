@@ -54,17 +54,15 @@ public abstract class AbstractSyncHoodieClient {
   private final String basePath;
   private final boolean assumeDatePartitioning;
   private final boolean useFileListingFromMetadata;
-  private final boolean verifyMetadataFileListing;
   private final boolean withOperationField;
 
   public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
-                                  boolean verifyMetadataFileListing, boolean withOperationField, FileSystem fs) {
+                                  boolean withOperationField, FileSystem fs) {
     this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.tableType = metaClient.getTableType();
     this.basePath = basePath;
     this.assumeDatePartitioning = assumeDatePartitioning;
     this.useFileListingFromMetadata = useFileListingFromMetadata;
-    this.verifyMetadataFileListing = verifyMetadataFileListing;
     this.withOperationField = withOperationField;
     this.fs = fs;
   }
@@ -156,8 +154,7 @@ public abstract class AbstractSyncHoodieClient {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in " + basePath + ",FS :" + fs);
       HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
-      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, verifyMetadataFileListing,
-          assumeDatePartitioning);
+      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, assumeDatePartitioning);
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()

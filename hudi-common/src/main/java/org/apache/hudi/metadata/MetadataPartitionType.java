@@ -18,16 +18,31 @@
 
 package org.apache.hudi.metadata;
 
+import java.util.Arrays;
+import java.util.List;
+
 public enum MetadataPartitionType {
-  FILES("files");
+  FILES("files", "files-");
 
+  // refers to partition path in metadata table.
   private final String partitionPath;
+  // refers to fileId prefix used for all file groups in this partition.
+  private final String fileIdPrefix;
 
-  MetadataPartitionType(String partitionPath) {
+  MetadataPartitionType(String partitionPath, String fileIdPrefix) {
     this.partitionPath = partitionPath;
+    this.fileIdPrefix = fileIdPrefix;
   }
 
   public String partitionPath() {
     return partitionPath;
+  }
+
+  public String getFileIdPrefix() {
+    return fileIdPrefix;
+  }
+
+  public static List<String> all() {
+    return Arrays.asList(MetadataPartitionType.FILES.partitionPath());
   }
 }

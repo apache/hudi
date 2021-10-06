@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -97,6 +98,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   private HoodieWriteConfig config;
 
   private void setUp(IndexType indexType, boolean populateMetaFields) throws Exception {
+    setUp(indexType, populateMetaFields, true);
+  }
+
+  private void setUp(IndexType indexType, boolean populateMetaFields, boolean enableMetadata) throws Exception {
     this.indexType = indexType;
     initPath();
     initSparkContexts();
@@ -107,7 +112,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
-            .build()).withAutoCommit(false).build();
+            .build()).withAutoCommit(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build()).build();
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
   }
@@ -220,7 +225,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   @ParameterizedTest
   @MethodSource("indexTypeParams")
   public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType, boolean populateMetaFields) throws Exception {
-    setUp(indexType, populateMetaFields);
+    setUp(indexType, populateMetaFields, false);
     String newCommitTime = writeClient.startCommit();
     int totalRecords = 20 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -367,7 +372,8 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .withBloomIndexUpdatePartitionPath(true)
-            .build()).build();
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);

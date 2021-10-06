@@ -49,7 +49,9 @@ public class FlinkUpgradeDowngrade extends AbstractUpgradeDowngrade {
       return new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime);
     } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
       return new OneToTwoUpgradeHandler().upgrade(config, context, instantTime);
-    } else {
+    }  else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.THREE) {
+      return new TwoToThreeUpgradeHandler().upgrade(config, context, instantTime);
+    }  else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
     }
   }
@@ -60,6 +62,8 @@ public class FlinkUpgradeDowngrade extends AbstractUpgradeDowngrade {
       return new OneToZeroDowngradeHandler().downgrade(config, context, instantTime);
     } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {
       return new TwoToOneDowngradeHandler().downgrade(config, context, instantTime);
+    } else if (fromVersion == HoodieTableVersion.THREE && toVersion == HoodieTableVersion.TWO) {
+      return new ThreeToTwoDowngradeHandler().downgrade(config, context, instantTime);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }
