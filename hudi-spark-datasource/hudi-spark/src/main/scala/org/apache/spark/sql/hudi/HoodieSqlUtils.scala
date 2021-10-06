@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.spark.SPARK_VERSION
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -92,7 +93,45 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, HoodieSqlUtils.getTableLocation(table, spark)).asScala
+    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala
+  }
+
+  /**
+   * This method is used to compatible with the old non-hive-styled partition table.
+   * By default we enable the "hoodie.datasource.write.hive_style_partitioning"
+   * when writing data to hudi table by spark sql by default.
+   * If the exist table is a non-hive-styled partitioned table, we should
+   * disable the "hoodie.datasource.write.hive_style_partitioning" when
+   * merge or update the table. Or else, we will get an incorrect merge result
+   * as the partition path mismatch.
+   */
+  def isNotHiveStyledPartitionTable(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
+    if (table.partitionColumnNames.nonEmpty) {
+      val isHiveStylePartitionPath = (path: String) => {
+        val fragments = path.split("/")
+        if (fragments.size != table.partitionColumnNames.size) {
+          false
+        } else {
+          fragments.zip(table.partitionColumnNames).forall {
+            case (pathFragment, partitionColumn) => pathFragment.startsWith(s"$partitionColumn=")
+          }
+        }
+      }
+      !partitionPaths.forall(isHiveStylePartitionPath)
+    } else {
+      false
+    }
+  }
+
+  /**
+   * If this table has disable the url encode, spark sql should also disable it when writing to the table.
+   */
+  def isUrlEncodeDisable(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
+    if (table.partitionColumnNames.nonEmpty) {
+      !partitionPaths.forall(partitionPath => partitionPath.split("/").length == table.partitionColumnNames.size)
+    } else {
+      false
+    }
   }
 
   private def tripAlias(plan: LogicalPlan): LogicalPlan = {
