@@ -69,7 +69,7 @@ public class UpgradeDowngrade {
 
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toVersion) {
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
-    // Ensure no inflight commits & versions are same
+    // Ensure versions are same
     return toVersion.versionCode() != fromVersion.versionCode();
   }
 
@@ -78,10 +78,21 @@ public class UpgradeDowngrade {
    * <p>
    * Starting from version 0.6.0, this upgrade/downgrade step will be added in all write paths.
    * <p>
-   * Essentially, if a dataset was created using any pre 0.6.0(for eg 0.5.3), and Hoodie version was upgraded to 0.6.0,
-   * Hoodie table version gets bumped to 1 and there are some upgrade steps need to be executed before doing any writes.
-   * Similarly, if a dataset was created using Hoodie version 0.6.0 or Hoodie table version 1 and then hoodie was downgraded
-   * to pre 0.6.0 or to Hoodie table version 0, then some downgrade steps need to be executed before proceeding w/ any writes.
+   * Essentially, if a dataset was created using an previous table version in an older release,
+   * and Hoodie version was upgraded to a new release with new table version supported,
+   * Hoodie table version gets bumped to the new version and there are some upgrade steps need
+   * to be executed before doing any writes.
+   * <p>
+   * Similarly, if a dataset was created using an newer table version in an newer release,
+   * and then hoodie was downgraded to an older release or to older Hoodie table version,
+   * then some downgrade steps need to be executed before proceeding w/ any writes.
+   * <p>
+   * Below shows the table version corresponding to the Hudi release:
+   * Hudi release -> table version
+   * pre 0.6.0 -> v0
+   * 0.6.0 to 0.8.0 -> v1
+   * 0.9.0 -> v2
+   * 0.10.0 to current -> v3
    * <p>
    * On a high level, these are the steps performed
    * <p>
