@@ -287,7 +287,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
           // Create the path if it does not exist already
           Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
-          FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
+
+          if (getAllPartitions().noneMatch(entry -> entry.equals(partitionPathStr))) {
+            FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
+          }
           long beginLsTs = System.currentTimeMillis();
           FileStatus[] statuses = listPartition(partitionPath);
           long endLsTs = System.currentTimeMillis();
@@ -316,7 +319,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param partitionPath The absolute path of the partition
    * @throws IOException
    */
-  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
+  public FileStatus[] listPartition(Path partitionPath) throws IOException {
     return metaClient.getFs().listStatus(partitionPath);
   }
 

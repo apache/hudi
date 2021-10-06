@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -61,8 +62,22 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
    * @throws IOException
    */
   @Override
-  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
+  public FileStatus[] listPartition(Path partitionPath) throws IOException {
     return tableMetadata.getAllFilesInPartition(partitionPath);
+  }
+
+  /**
+   * Check if a partition exists using metadata table.
+   * @param partitionPath partition path that needs to be checked for existance.
+   * @return true if present, else false.
+   */
+  @Override
+  protected boolean isPartitionAvailableInStore(String partitionPath) {
+    try {
+      return tableMetadata.getAllPartitionPaths().contains(partitionPath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Fetching all partitions failed with metadata table ", e);
+    }
   }
 
   @Override
