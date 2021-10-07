@@ -32,12 +32,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class BaseOneToZeroDowngradeHandler implements DowngradeHandler {
+/**
+ * Downgrade handle to assist in downgrading hoodie table from version 1 to 0.
+ */
+public class OneToZeroDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
+  public Map<ConfigProperty, String> downgrade(
+      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
+      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     // fetch pending commit info
-    HoodieTable table = getTable(config, context);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
     List<HoodieInstant> commits = inflightTimeline.getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant inflightInstant : commits) {
@@ -47,6 +52,4 @@ public abstract class BaseOneToZeroDowngradeHandler implements DowngradeHandler 
     }
     return Collections.EMPTY_MAP;
   }
-
-  abstract HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context);
 }

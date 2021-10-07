@@ -53,8 +53,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.SparkCompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.table.upgrade.AbstractUpgradeDowngrade;
-import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
+import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
@@ -414,20 +414,22 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    AbstractUpgradeDowngrade upgradeDowngrade = new SparkUpgradeDowngrade(metaClient, config, context);
+    UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
+        metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
     if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
       if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
         this.txnManager.beginTransaction();
         try {
           // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
           this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER));
-          new SparkUpgradeDowngrade(metaClient, config, context)
-              .run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
+          new UpgradeDowngrade(
+              metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+              .run(HoodieTableVersion.current(), instantTime);
         } finally {
           this.txnManager.endTransaction();
         }
       } else {
-        upgradeDowngrade.run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
+        upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
       }
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
