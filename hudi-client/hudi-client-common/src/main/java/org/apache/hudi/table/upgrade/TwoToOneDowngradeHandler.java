@@ -46,12 +46,16 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
-
-public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
+/**
+ * Downgrade handler to assist in downgrading hoodie table from version 2 to 1.
+ */
+public class TwoToOneDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime) {
-    HoodieTable table = getTable(config, context);
+  public Map<ConfigProperty, String> downgrade(
+      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
+      BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
+    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
 
     // re-create marker files if any partial timeline server based markers are found
@@ -68,8 +72,6 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
     }
     return Collections.EMPTY_MAP;
   }
-
-  abstract HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context);
 
   /**
    * Converts the markers in new format(timeline server based) to old format of direct markers,
@@ -106,8 +108,7 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
           // Deletes marker type file
           MarkerUtils.deleteMarkerTypeFile(fileSystem, markerDir);
           // Deletes timeline server based markers
-          deleteTimelineBasedMarkerFiles(
-              context, markerDir, fileSystem, table.getConfig().getMarkersDeleteParallelism());
+          deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
           break;
         default:
           throw new HoodieException("The marker type \"" + markerTypeOption.get().name()
@@ -116,8 +117,7 @@ public abstract class BaseTwoToOneDowngradeHandler implements DowngradeHandler {
     } else {
       // In case of partial failures during downgrade, there is a chance that marker type file was deleted,
       // but timeline server based marker files are left.  So deletes them if any
-      deleteTimelineBasedMarkerFiles(
-          context, markerDir, fileSystem, table.getConfig().getMarkersDeleteParallelism());
+      deleteTimelineBasedMarkerFiles(context, markerDir, fileSystem, parallelism);
     }
   }
 
