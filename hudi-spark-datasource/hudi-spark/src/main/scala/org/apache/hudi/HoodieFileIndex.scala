@@ -106,7 +106,7 @@ case class HoodieFileIndex(
         nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
           s"$column' in the schema[${schema.fields.mkString(",")}]")))
       new StructType(partitionFields)
-    } else { // If the partition columns have not stored in hoodie.properites(the table that was
+    } else { // If the partition columns have not stored in hoodie.properties(the table that was
       // created earlier), we trait it as a non-partitioned table.
       logWarning("No partition columns available from hoodie.properties." +
         " Partition pruning will not work")
