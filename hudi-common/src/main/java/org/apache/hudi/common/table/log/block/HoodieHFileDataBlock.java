@@ -19,12 +19,16 @@
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -44,6 +48,7 @@ import org.apache.hadoop.hbase.util.Pair;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -61,6 +66,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final Logger LOG = LogManager.getLogger(HoodieHFileDataBlock.class);
   private static Compression.Algorithm compressionAlgorithm = Compression.Algorithm.GZ;
   private static int blockSize = 1 * 1024 * 1024;
+  private boolean enableInlineReading = false;
 
   public HoodieHFileDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
        @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
@@ -71,10 +77,11 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   public HoodieHFileDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
        boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
-       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer, boolean enableInlineReading) {
     super(content, inputStream, readBlockLazily,
           Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
           footer);
+    this.enableInlineReading = enableInlineReading;
   }
 
   public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header) {
@@ -139,6 +146,50 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     ostream.close();
 
     return baos.toByteArray();
+  }
+
+  @Override
+  protected void createRecordsFromContentBytes() throws IOException {
+    if (enableInlineReading) {
+      getRecords(Collections.emptyList());
+    } else {
+      super.createRecordsFromContentBytes();
+    }
+  }
+
+  @Override
+  public List<IndexedRecord> getRecords(List<String> keys) throws IOException {
+    readWithInlineFS(keys);
+    return records;
+  }
+
+  private void readWithInlineFS(List<String> keys) throws IOException {
+    boolean enableFullScan = keys.isEmpty();
+    // Get schema from the header
+    Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    // If readerSchema was not present, use writerSchema
+    if (schema == null) {
+      schema = writerSchema;
+    }
+    Configuration conf = new Configuration();
+    CacheConfig cacheConf = new CacheConfig(conf);
+    Configuration inlineConf = new Configuration();
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+
+    Path inlinePath = InLineFSUtils.getInlineFilePath(
+        getBlockContentLocation().get().getLogFile().getPath(),
+        getBlockContentLocation().get().getLogFile().getPath().getFileSystem(conf).getScheme(),
+        getBlockContentLocation().get().getContentPositionInLogFile(),
+        getBlockContentLocation().get().getBlockSize());
+    if (!enableFullScan) {
+      // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
+      Collections.sort(keys);
+    }
+    HoodieHFileReader reader = new HoodieHFileReader(inlineConf, inlinePath, cacheConf, inlinePath.getFileSystem(inlineConf));
+    List<org.apache.hadoop.hbase.util.Pair<String, IndexedRecord>> logRecords = enableFullScan ? reader.readAllRecords(writerSchema, schema) :
+        reader.readRecordsByKey(keys, schema);
+    reader.close();
+    this.records = logRecords.stream().map(t -> t.getSecond()).collect(Collectors.toList());
   }
 
   @Override

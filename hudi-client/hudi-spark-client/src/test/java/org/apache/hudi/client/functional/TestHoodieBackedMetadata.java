@@ -136,6 +136,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     );
   }
 
+  public static List<Arguments> tableOperationTestArgs() {
+    return asList(
+        Arguments.of(COPY_ON_WRITE, true, false),
+        Arguments.of(COPY_ON_WRITE, true, true),
+        Arguments.of(COPY_ON_WRITE, false, true),
+        Arguments.of(MERGE_ON_READ, true, false)
+    );
+  }
+
   /**
    * Metadata Table bootstrap scenarios.
    */
@@ -222,9 +231,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Test various table operations sync to Metadata Table correctly.
    */
   @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testTableOperations(HoodieTableType tableType) throws Exception {
-    init(tableType);
+  @MethodSource("tableOperationTestArgs")
+  public void testTableOperations(HoodieTableType tableType, boolean enableFullScan, boolean enableInlineReading) throws Exception {
+    init(tableType, true, enableFullScan, enableInlineReading);
     doWriteInsertAndUpsert(testTable);
 
     // trigger an upsert
