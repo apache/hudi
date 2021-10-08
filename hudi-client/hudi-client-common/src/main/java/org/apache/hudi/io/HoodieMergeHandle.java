@@ -257,18 +257,15 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     return writeRecord(hoodieRecord, indexedRecord);
   }
 
-  protected boolean writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
+  protected void writeInsertRecord(HoodieRecord<T> hoodieRecord) throws IOException {
     Schema schema = useWriterSchema ? tableSchemaWithMetaFields : tableSchema;
     Option<IndexedRecord> insertRecord = hoodieRecord.getData().getInsertValue(schema, config.getProps());
     // just skip the ignored record
     if (insertRecord.isPresent() && insertRecord.get().equals(IGNORE_RECORD)) {
-      return false;
+      return;
     }
     if (writeRecord(hoodieRecord, insertRecord)) {
       insertRecordsWritten++;
-      return true;
-    } else {
-      return false;
     }
   }
 

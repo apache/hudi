@@ -713,22 +713,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Insert API for HoodieConcatHandle when incoming entries contain duplicate keys.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testInsertsWithHoodieConcatHandleOnDuplicateIncomingKeys(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testInsertsWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testHoodieConcatHandleOnDupInserts(cfgBuilder.build(), false);
   }
 
   /**
    * Test InsertPrepped API for HoodieConcatHandle when incoming entries contain duplicate keys.
    */
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testInsertsPreppedWithHoodieConcatHandleOnDuplicateIncomingKeys(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testInsertsPreppedWithHoodieConcatHandleOnDuplicateIncomingKeys() throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testHoodieConcatHandleOnDupInserts(cfgBuilder.build(), true);
   }
 
@@ -757,7 +753,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         generateWrapRecordsFn(isPrepped, hoodieWriteConfig, dataGen::generateUpdates);
 
     writeBatch(client, newCommitTime, prevCommitTime, Option.of(commitTimesBetweenPrevAndNew), initCommitTime,
-        secondInsertRecords, recordGenFunction, SparkRDDWriteClient::insert,true, secondInsertRecords,
+        secondInsertRecords, recordGenFunction, SparkRDDWriteClient::insert, true, secondInsertRecords,
         firstInsertRecords + secondInsertRecords, 2, false, config.populateMetaFields());
   }
 
