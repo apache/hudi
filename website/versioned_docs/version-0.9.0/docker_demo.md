@@ -15,7 +15,7 @@ The steps have been tested on a Mac laptop
 ### Prerequisites
 
   * Docker Setup :  For Mac, Please follow the steps as defined in [https://docs.docker.com/v17.12/docker-for-mac/install/]. For running Spark-SQL queries, please ensure atleast 6 GB and 4 CPUs are allocated to Docker (See Docker -> Preferences -> Advanced). Otherwise, spark-SQL queries could be killed because of memory issues.
-  * kafkacat : A command-line utility to publish/consume from kafka topics. Use `brew install kafkacat` to install kafkacat.
+  * kcat : A command-line utility to publish/consume from kafka topics. Use `brew install kcat` to install kcat.
   * /etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
 
     ```java
@@ -107,11 +107,11 @@ The batches are windowed intentionally so that the second batch contains updates
 
 ### Step 1 : Publish the first batch to Kafka
 
-Upload the first batch to Kafka topic 'stock ticks' `cat docker/demo/data/batch_1.json | kafkacat -b kafkabroker -t stock_ticks -P`
+Upload the first batch to Kafka topic 'stock ticks' `cat docker/demo/data/batch_1.json | kcat -b kafkabroker -t stock_ticks -P`
 
 To check if the new topic shows up, use
 ```java
-kafkacat -b kafkabroker -L -J | jq .
+kcat -b kafkabroker -L -J | jq .
 {
   "originating_broker": {
     "id": 1001,
@@ -552,7 +552,7 @@ Upload the second batch of data and ingest this batch using delta-streamer. As t
 partitions, there is no need to run hive-sync
 
 ```java
-cat docker/demo/data/batch_2.json | kafkacat -b kafkabroker -t stock_ticks -P
+cat docker/demo/data/batch_2.json | kcat -b kafkabroker -t stock_ticks -P
 
 # Within Docker container, run the ingestion command
 docker exec -it adhoc-2 /bin/bash
