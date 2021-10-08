@@ -93,9 +93,9 @@ public class HoodieClusteringJob {
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
     public Boolean runSchedule = false;
 
-    @Parameter(names = {"--retry-failed-clustering", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
+    @Parameter(names = {"--retry-last-failed-clustering-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
             + "check, rollback and execute last failed clustering plan instead of planing a new clustering job directly.", required = false)
-    public Boolean retryFailedClustering = false;
+    public Boolean retryLastFailedClusteringJob = false;
 
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a cluster plan; "
             + "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; "
@@ -227,7 +227,7 @@ public class HoodieClusteringJob {
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       Option<String> instantTime;
 
-      if (cfg.retryFailedClustering) {
+      if (cfg.retryLastFailedClusteringJob) {
         HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
         HoodieTimeline inflightHoodieTimeline = table.getActiveTimeline().filterPendingReplaceTimeline().filterInflights();
         if (inflightHoodieTimeline.empty()) {
