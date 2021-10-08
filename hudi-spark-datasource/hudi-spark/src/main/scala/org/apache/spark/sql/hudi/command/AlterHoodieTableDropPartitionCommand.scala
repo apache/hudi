@@ -69,29 +69,28 @@ extends RunnableCommand {
       normalizedSpecs: Seq[Map[String, String]]): Map[String, String] = {
     val table = sparkSession.sessionState.catalog.getTableMetadata(tableIdentifier)
     val allPartitionPaths = getAllPartitionPaths(sparkSession, table)
-    val notHiveStylePartitioning = isNotHiveStyledPartitionTable(allPartitionPaths, table)
-    val notEncodeUrl = isUrlEncodeDisable(allPartitionPaths, table)
+    val enableHiveStylePartitioning = isHiveStylePartitionPartitioning(allPartitionPaths, table)
+    val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
+    val partitionsToDelete = normalizedSpecs.map { spec =>
+      partitionColumns.map{ partitionColumn =>
+        val encodedPartitionValue = if (enableEncodeUrl) {
+          PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
+        } else {
+          spec(partitionColumn)
+        }
+        if (enableHiveStylePartitioning) {
+          partitionColumn + "=" + encodedPartitionValue
+        } else {
+          encodedPartitionValue
+        }
+      }.mkString("/")
+    }.mkString(",")
 
     val metaClient = HoodieTableMetaClient.builder()
       .setBasePath(path)
       .setConf(sparkSession.sessionState.newHadoopConf)
       .build()
     val tableConfig = metaClient.getTableConfig
-
-    val partitionsToDelete = normalizedSpecs.map { spec =>
-      partitionColumns.map{ partitionColumn =>
-        val encodedPartitionValue = if (notEncodeUrl) {
-          spec(partitionColumn)
-        } else {
-          PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
-        }
-        if (notHiveStylePartitioning) {
-          encodedPartitionValue
-        } else {
-          partitionColumn + "=" + encodedPartitionValue
-        }
-      }.mkString("/")
-    }.mkString(",")
 
     val optParams = withSparkConf(sparkSession, table.storage.properties) {
       Map(

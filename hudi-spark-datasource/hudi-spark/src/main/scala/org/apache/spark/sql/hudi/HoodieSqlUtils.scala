@@ -105,7 +105,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
    * merge or update the table. Or else, we will get an incorrect merge result
    * as the partition path mismatch.
    */
-  def isNotHiveStyledPartitionTable(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
+  def isHiveStylePartitionPartitioning(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
     if (table.partitionColumnNames.nonEmpty) {
       val isHiveStylePartitionPath = (path: String) => {
         val fragments = path.split("/")
@@ -117,18 +117,18 @@ object HoodieSqlUtils extends SparkAdapterSupport {
           }
         }
       }
-      !partitionPaths.forall(isHiveStylePartitionPath)
+      partitionPaths.forall(isHiveStylePartitionPath)
     } else {
-      false
+      true
     }
   }
 
   /**
-   * If this table has disable the url encode, spark sql should also disable it when writing to the table.
+   * Determine whether URL encoding is enabled
    */
-  def isUrlEncodeDisable(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
+  def isUrlEncodeEnabled(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
     if (table.partitionColumnNames.nonEmpty) {
-      !partitionPaths.forall(partitionPath => partitionPath.split("/").length == table.partitionColumnNames.size)
+      partitionPaths.forall(partitionPath => partitionPath.split("/").length == table.partitionColumnNames.size)
     } else {
       false
     }
