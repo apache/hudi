@@ -181,11 +181,14 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          fsView = hoodieTableFileSystemViewCache.get(baseDir.toString());
-          if (null == fsView) {
-            fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext, metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
-            hoodieTableFileSystemViewCache.put(baseDir.toString(), fsView);
-          }
+          HoodieTableMetaClient finalMetaClient = metaClient;
+          fsView = hoodieTableFileSystemViewCache.computeIfAbsent(baseDir.toString(), key ->
+                  FileSystemViewManager.createInMemoryFileSystemView(
+                          engineContext,
+                          finalMetaClient,
+                          HoodieInputFormatUtils.buildMetadataConfig(getConf())
+                  )
+          );
 
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
