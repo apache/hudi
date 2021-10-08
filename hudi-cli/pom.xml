@@ -190,6 +190,10 @@
           <groupId>org.apache.parquet</groupId>
           <artifactId>parquet-hadoop-bundle</artifactId>
         </exclusion>
+        <exclusion>
+          <artifactId>*</artifactId>
+          <groupId>org.apache.hbase</groupId>
+        </exclusion>
       </exclusions>
     </dependency>
 
@@ -197,6 +201,12 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-utilities-bundle_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>*</artifactId>
+          <groupId>org.apache.hbase</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Logging -->
