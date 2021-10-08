@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -33,32 +34,32 @@ import org.apache.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class BaseCopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
+public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseCopyOnWriteRollbackActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(CopyOnWriteRollbackActionExecutor.class);
 
-  public BaseCopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
-                                               HoodieWriteConfig config,
-                                               HoodieTable<T, I, K, O> table,
-                                               String instantTime,
-                                               HoodieInstant commitInstant,
-                                               boolean deleteInstants) {
+  public CopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
+                                           HoodieWriteConfig config,
+                                           HoodieTable<T, I, K, O> table,
+                                           String instantTime,
+                                           HoodieInstant commitInstant,
+                                           boolean deleteInstants) {
     super(context, config, table, instantTime, commitInstant, deleteInstants);
   }
 
-  public BaseCopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
-                                               HoodieWriteConfig config,
-                                               HoodieTable<T, I, K, O> table,
-                                               String instantTime,
-                                               HoodieInstant commitInstant,
-                                               boolean deleteInstants,
-                                               boolean skipTimelinePublish,
-                                               boolean useMarkerBasedStrategy) {
+  public CopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
+                                           HoodieWriteConfig config,
+                                           HoodieTable<T, I, K, O> table,
+                                           String instantTime,
+                                           HoodieInstant commitInstant,
+                                           boolean deleteInstants,
+                                           boolean skipTimelinePublish,
+                                           boolean useMarkerBasedStrategy) {
     super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy);
   }
 
   @Override
-  protected List<HoodieRollbackStat> executeRollback() {
+  protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
     HoodieTimer rollbackTimer = new HoodieTimer();
     rollbackTimer.startTimer();
 
@@ -78,7 +79,7 @@ public abstract class BaseCopyOnWriteRollbackActionExecutor<T extends HoodieReco
     if (!resolvedInstant.isRequested()) {
       // delete all the data files for this commit
       LOG.info("Clean out all base files generated for commit: " + resolvedInstant);
-      stats = getRollbackStrategy().execute(resolvedInstant);
+      stats = executeRollback(resolvedInstant, hoodieRollbackPlan);
     }
 
     dropBootstrapIndexIfNeeded(instantToRollback);

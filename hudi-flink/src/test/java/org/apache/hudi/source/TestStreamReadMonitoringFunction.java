@@ -144,7 +144,7 @@ public class TestStreamReadMonitoringFunction {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
     String specifiedCommit = TestUtils.getLatestCommit(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.READ_STREAMING_START_COMMIT, specifiedCommit);
+    conf.setString(FlinkOptions.READ_START_COMMIT, specifiedCommit);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
       harness.setup();
@@ -175,7 +175,7 @@ public class TestStreamReadMonitoringFunction {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
     String specifiedCommit = TestUtils.getLatestCommit(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.READ_STREAMING_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
       harness.setup();

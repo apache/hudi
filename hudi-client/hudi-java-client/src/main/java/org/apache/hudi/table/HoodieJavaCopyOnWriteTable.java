@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
@@ -50,7 +51,8 @@ import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor
 import org.apache.hudi.table.action.commit.JavaUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.restore.JavaCopyOnWriteRestoreActionExecutor;
-import org.apache.hudi.table.action.rollback.JavaCopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
+import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
 import java.util.List;
@@ -178,6 +180,12 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   }
 
   @Override
+  public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
+                                                     boolean skipTimelinePublish) {
+    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
+  }
+
+  @Override
   public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     return new JavaScheduleCleanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
   }
@@ -193,7 +201,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                          String rollbackInstantTime,
                                          HoodieInstant commitInstant,
                                          boolean deleteInstants) {
-    return new JavaCopyOnWriteRollbackActionExecutor(
+    return new CopyOnWriteRollbackActionExecutor(
         context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 

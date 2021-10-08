@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -49,7 +50,9 @@ import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitActionExec
 import org.apache.hudi.table.action.deltacommit.SparkUpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.compact.BaseScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.restore.SparkMergeOnReadRestoreActionExecutor;
-import org.apache.hudi.table.action.rollback.SparkMergeOnReadRollbackActionExecutor;
+import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
+import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
+
 import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
@@ -142,11 +145,18 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
+                                                     String instantTime,
+                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish) {
+    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
+  }
+
+  @Override
   public HoodieRollbackMetadata rollback(HoodieEngineContext context,
                                          String rollbackInstantTime,
                                          HoodieInstant commitInstant,
                                          boolean deleteInstants) {
-    return new SparkMergeOnReadRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
+    return new MergeOnReadRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 
   @Override

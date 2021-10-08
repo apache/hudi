@@ -70,9 +70,9 @@ Wait until the kafka cluster is up and running.
 
 ### 2 - Set up the schema registry
 
-Hudi leverages schema registry to obtain the latest schema when writing records. While it supports most popular schema registries, 
-we use Confluent schema registry. Download the latest confluent schema registry code from https://github.com/confluentinc/schema-registry
-and start the schema registry service.
+Hudi leverages schema registry to obtain the latest schema when writing records. While it supports most popular schema
+registries, we use Confluent schema registry. Download the latest confluent platform and run the schema registry
+service.
 
 ```bash
 cd $CONFLUENT_DIR
@@ -120,7 +120,7 @@ that can be changed based on the desired properties.
 
 ```bash
 curl -X DELETE http://localhost:8083/connectors/hudi-sink
-curl -X POST -H "Content-Type:application/json" -d @$HUDI-DIR/hudi-kafka-connect/demo/config-sink.json http://localhost:8083/connectors
+curl -X POST -H "Content-Type:application/json" -d @${HUDI_DIR}/hudi-kafka-connect/demo/config-sink.json http://localhost:8083/connectors
 ```
 
 Now, you should see that the connector is created and tasks are running.

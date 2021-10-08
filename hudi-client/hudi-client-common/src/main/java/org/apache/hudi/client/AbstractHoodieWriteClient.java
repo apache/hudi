@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
@@ -434,10 +435,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      autoCleanOnCommit();
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
-      autoCleanOnCommit();
       if (operationType != null && operationType != WriteOperationType.CLUSTER && operationType != WriteOperationType.COMPACT) {
         syncTableMetadata();
       }
@@ -590,12 +591,19 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
           .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
           .findFirst());
       if (commitInstantOpt.isPresent()) {
-        HoodieRollbackMetadata rollbackMetadata = table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true);
-        if (timerContext != null) {
-          long durationInMs = metrics.getDurationInMs(timerContext.stop());
-          metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
+        LOG.info("Scheduling Rollback at instant time :" + rollbackInstantTime);
+        Option<HoodieRollbackPlan> rollbackPlanOption = table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false);
+        if (rollbackPlanOption.isPresent()) {
+          // execute rollback
+          HoodieRollbackMetadata rollbackMetadata = table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true);
+          if (timerContext != null) {
+            long durationInMs = metrics.getDurationInMs(timerContext.stop());
+            metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
+          }
+          return true;
+        } else {
+          throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
         }
-        return true;
       } else {
         LOG.warn("Cannot find instant " + commitInstantTime + " in the timeline, for rollback");
         return false;
@@ -776,7 +784,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param table Hoodie Table
    */
   public void rollbackInflightCompaction(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
-    table.rollback(context, HoodieActiveTimeline.createNewInstantTime(), inflightInstant, false);
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    table.scheduleRollback(context, commitTime, inflightInstant, false);
+    table.rollback(context, commitTime, inflightInstant, false);
     table.getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }
 
@@ -978,7 +988,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   protected void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
-    table.rollback(context, HoodieActiveTimeline.createNewInstantTime(), inflightInstant, false);
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    table.scheduleRollback(context, commitTime, inflightInstant, false);
+    table.rollback(context, commitTime, inflightInstant, false);
     table.getActiveTimeline().revertReplaceCommitInflightToRequested(inflightInstant);
   }
 

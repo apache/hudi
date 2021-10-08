@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -74,6 +75,21 @@ public class CompactionUtil {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchema(false);
     conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, tableAvroSchema.toString());
+  }
+
+  /**
+   * Infers the changelog mode based on the data file schema(including metadata fields).
+   *
+   * <p>We can improve the code if the changelog mode is set up as table config.
+   *
+   * @param conf The configuration
+   */
+  public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+    Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
+    if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
+      conf.setBoolean(FlinkOptions.CHANGELOG_ENABLED, true);
+    }
   }
 
   /**

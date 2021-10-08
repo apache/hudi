@@ -20,6 +20,7 @@ package org.apache.hudi.common.engine;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -37,6 +39,7 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWra
 import static org.apache.hudi.common.function.FunctionWrapper.throwingForeachWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrapper;
 
 /**
  * A java based engine context, use this implementation on the query engine integrations if needed.
@@ -54,6 +57,25 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
     return data.stream().parallel().map(throwingMapWrapper(func)).collect(toList());
+  }
+
+  @Override
+  public <I, K, V> List<V> mapToPairAndReduceByKey(
+      List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    return data.stream().parallel().map(throwingMapToPairWrapper(mapToPairFunc))
+        .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
+        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).get())
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  public <I, K, V> List<V> reduceByKey(
+      List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+    return data.stream().parallel()
+        .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
+        .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).orElse(null))
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList());
   }
 
   @Override

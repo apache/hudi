@@ -19,6 +19,8 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -44,6 +46,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -71,12 +74,7 @@ public class TestInputFormat {
     options.forEach((key, value) -> conf.setString(key, value));
 
     StreamerUtil.initTableIfNotExists(conf);
-    this.tableSource = new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getAbsolutePath()),
-        Collections.singletonList("partition"),
-        "default",
-        conf);
+    this.tableSource = getTableSource(conf);
   }
 
   @ParameterizedTest
@@ -385,9 +383,80 @@ public class TestInputFormat {
     assertThat(actual, is(expected));
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testReadIncrementally(HoodieTableType tableType) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    beforeEach(tableType, options);
+
+    // write another commit to read again
+    for (int i = 0; i < 6; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath());
+    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstants()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+    assertThat(commits.size(), is(3));
+
+    // only the start commit
+    conf.setString(FlinkOptions.READ_START_COMMIT, commits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat1 = this.tableSource.getInputFormat();
+    assertThat(inputFormat1, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual1 = readData(inputFormat1);
+    final List<RowData> expected1 = TestData.dataSetInsert(3, 4, 5, 6);
+    TestData.assertRowDataEquals(actual1, expected1);
+
+    // only the start commit: earliest
+    conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat2 = this.tableSource.getInputFormat();
+    assertThat(inputFormat2, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual2 = readData(inputFormat2);
+    final List<RowData> expected2 = TestData.dataSetInsert(1, 2, 3, 4, 5, 6);
+    TestData.assertRowDataEquals(actual2, expected2);
+
+    // start and end commit: [start commit, end commit]
+    conf.setString(FlinkOptions.READ_START_COMMIT, commits.get(0));
+    conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat3 = this.tableSource.getInputFormat();
+    assertThat(inputFormat3, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual3 = readData(inputFormat3);
+    final List<RowData> expected3 = TestData.dataSetInsert(1, 2, 3, 4);
+    TestData.assertRowDataEquals(actual3, expected3);
+
+    // only the end commit: point in time query
+    conf.removeConfig(FlinkOptions.READ_START_COMMIT);
+    conf.setString(FlinkOptions.READ_END_COMMIT, commits.get(1));
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat4 = this.tableSource.getInputFormat();
+    assertThat(inputFormat4, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual4 = readData(inputFormat4);
+    final List<RowData> expected4 = TestData.dataSetInsert(3, 4);
+    TestData.assertRowDataEquals(actual4, expected4);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  private HoodieTableSource getTableSource(Configuration conf) {
+    return new HoodieTableSource(
+        TestConfigurations.TABLE_SCHEMA,
+        new Path(tempFile.getAbsolutePath()),
+        Collections.singletonList("partition"),
+        "default",
+        conf);
+  }
 
   @SuppressWarnings("unchecked, rawtypes")
   private static List<RowData> readData(InputFormat inputFormat) throws IOException {

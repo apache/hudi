@@ -65,7 +65,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, cfg.withOperationField, fs);
     this.syncConfig = cfg;
 
-    // Support JDBC, HiveQL and metastore based implementations for backwards compatiblity. Future users should
+    // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     try {
       if (!StringUtils.isNullOrEmpty(cfg.syncMode)) {
@@ -295,7 +295,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     try {
       ddlExecutor.close();
       if (client != null) {
-        client.close();
+        Hive.closeCurrent();
         client = null;
       }
     } catch (Exception e) {
