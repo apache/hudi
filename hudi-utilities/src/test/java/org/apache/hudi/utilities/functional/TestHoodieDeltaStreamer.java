@@ -1176,6 +1176,21 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     });
   }
 
+  @Test
+  public void testAsyncClusteringJobWithRetry() throws Exception {
+    String tableBasePath = dfsBasePath + "/asyncClustering3";
+
+    int totalRecords = 3000;
+
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
+    cfg.continuousMode = false;
+    cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
+    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "", "", "true", "2"));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    ds.sync();
+    TestHelpers.assertAtLeastNCommits(1, tableBasePath, dfs);
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"schedule", "execute", "scheduleAndExecute"})
   public void testHoodieAsyncClusteringJobWithScheduleAndExecute(String runningMode) throws Exception {
