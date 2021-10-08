@@ -115,6 +115,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
 
+  public static final ConfigProperty<Boolean> ENABLE_INLINE_READING_LOG_FILES = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.inline.reading.log.files")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable inline reading of Log files");
+
+  public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.full.scan.log.files")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable full scanning of log files while reading log records");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -141,6 +153,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getDirectoryFilterRegex() {
     return getString(DIR_FILTER_REGEX);
+  }
+
+  public boolean enableFullScan() {
+    return getBoolean(ENABLE_FULL_SCAN_LOG_FILES);
+  }
+
+  public boolean enableInlineReading() {
+    return getBoolean(ENABLE_INLINE_READING_LOG_FILES);
   }
 
   public static class Builder {
@@ -207,6 +227,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withDirectoryFilterRegex(String regex) {
       metadataConfig.setValue(DIR_FILTER_REGEX, regex);
+      return this;
+    }
+
+    public Builder enableFullScan(boolean enableFullScan) {
+      metadataConfig.setValue(ENABLE_FULL_SCAN_LOG_FILES, String.valueOf(enableFullScan));
+      return this;
+    }
+
+    public Builder enableInlineReading(boolean enableInlineReading) {
+      metadataConfig.setValue(ENABLE_INLINE_READING_LOG_FILES, String.valueOf(enableInlineReading));
       return this;
     }
 

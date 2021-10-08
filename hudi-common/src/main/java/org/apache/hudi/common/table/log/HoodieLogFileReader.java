@@ -70,17 +70,24 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
   private boolean reverseReader;
+  private boolean enableInlineReading;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
+    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, false);
+  }
+
+  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
+                             boolean readBlockLazily, boolean reverseReader, boolean enableInlineReading) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     this.logFile = logFile;
     this.inputStream = getFSDataInputStream(fsDataInputStream, fs, bufferSize);
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
     this.reverseReader = reverseReader;
+    this.enableInlineReading = enableInlineReading;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = fs.getFileStatus(logFile.getPath()).getLen();
     }
@@ -248,7 +255,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         }
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
-              contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
+              contentPosition, contentLength, blockEndPos, readerSchema, header, footer, enableInlineReading);
       case DELETE_BLOCK:
         return HoodieDeleteBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, header, footer);
