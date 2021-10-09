@@ -127,11 +127,6 @@ public class StreamWriteOperatorCoordinator
   private HiveSyncContext hiveSyncContext;
 
   /**
-   * A single-thread executor to handle metadata table sync.
-   */
-  private NonThrownExecutor metadataSyncExecutor;
-
-  /**
    * The table state.
    */
   private transient TableState tableState;
@@ -294,7 +289,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void initMetadataSync() {
-    this.metadataSyncExecutor = new NonThrownExecutor(LOG, true);
+    this.writeClient.initMetadataWriter();
   }
 
   private void reset() {
@@ -496,14 +491,6 @@ public class StreamWriteOperatorCoordinator
       this.executor.close();
     }
     this.executor = executor;
-  }
-
-  @VisibleForTesting
-  public void setMetadataSyncExecutor(NonThrownExecutor executor) throws Exception {
-    if (this.metadataSyncExecutor != null) {
-      this.metadataSyncExecutor.close();
-    }
-    this.metadataSyncExecutor = executor;
   }
 
   // -------------------------------------------------------------------------
