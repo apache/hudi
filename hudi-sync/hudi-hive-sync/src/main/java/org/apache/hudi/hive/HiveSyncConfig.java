@@ -49,9 +49,6 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url")
   public String jdbcUrl;
 
-  @Parameter(names = {"--metastore-uris"}, description = "Hive metastore uris")
-  public String metastoreUris;
-
   @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
   public String basePath;
 
@@ -72,9 +69,6 @@ public class HiveSyncConfig implements Serializable {
           + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
           + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
-
-  @Parameter(names = {"--bucket-spec"}, description = "bucket spec stored in metastore", required = false)
-  public String bucketSpec;
 
   @Deprecated
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
@@ -126,12 +120,6 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
   public Boolean withOperationField = false;
 
-  @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
-  public Boolean isConditionalSync = false;
-
-  @Parameter(names = {"--spark-version"}, description = "The spark version", required = false)
-  public String sparkVersion;
-
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -143,9 +131,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.partitionFields = cfg.partitionFields;
     newConfig.partitionValueExtractorClass = cfg.partitionValueExtractorClass;
     newConfig.jdbcUrl = cfg.jdbcUrl;
-    newConfig.metastoreUris = cfg.metastoreUris;
     newConfig.tableName = cfg.tableName;
-    newConfig.bucketSpec = cfg.bucketSpec;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
     newConfig.supportTimestamp = cfg.supportTimestamp;
@@ -157,8 +143,6 @@ public class HiveSyncConfig implements Serializable {
     newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
     newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
     newConfig.withOperationField = cfg.withOperationField;
-    newConfig.isConditionalSync = cfg.isConditionalSync;
-    newConfig.sparkVersion = cfg.sparkVersion;
     return newConfig;
   }
 
@@ -167,12 +151,10 @@ public class HiveSyncConfig implements Serializable {
     return "HiveSyncConfig{"
       + "databaseName='" + databaseName + '\''
       + ", tableName='" + tableName + '\''
-      + ", bucketSpec='" + bucketSpec + '\''
       + ", baseFileFormat='" + baseFileFormat + '\''
       + ", hiveUser='" + hiveUser + '\''
       + ", hivePass='" + hivePass + '\''
       + ", jdbcUrl='" + jdbcUrl + '\''
-      + ", metastoreUris='" + metastoreUris + '\''
       + ", basePath='" + basePath + '\''
       + ", partitionFields=" + partitionFields
       + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
@@ -192,11 +174,6 @@ public class HiveSyncConfig implements Serializable {
       + ", syncAsSparkDataSourceTable=" + syncAsSparkDataSourceTable
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
-      + ", isConditionalSync=" + isConditionalSync
       + '}';
-  }
-
-  public static String getBucketSpec(String bucketCols, int bucketNum) {
-    return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
   }
 }

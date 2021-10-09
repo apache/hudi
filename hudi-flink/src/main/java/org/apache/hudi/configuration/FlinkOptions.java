@@ -601,6 +601,18 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("jdbc")
       .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'");
 
+  public static final ConfigOption<Boolean> HIVE_SYNC_USE_KERBEROS = ConfigOptions
+          .key("hive_sync.use_kerberos")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to use Kerberos authentication.");
+
+  public static final ConfigOption<String> HIVE_SYNC_KERBEROS_PRINCIPAL = ConfigOptions
+          .key("hive_sync.kerberos_principal")
+          .stringType()
+          .defaultValue("")
+          .withDescription("Hive metastore principal.");
+
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
       .key("hive_sync.username")
       .stringType()
