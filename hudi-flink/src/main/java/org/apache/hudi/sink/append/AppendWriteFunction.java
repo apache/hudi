@@ -72,8 +72,6 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
     flushData(false);
-    // nullify the write helper for next ckp
-    this.writerHelper = null;
   }
 
   @Override
@@ -133,5 +131,10 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .endInput(endInput)
         .build();
     this.eventGateway.sendEventToCoordinator(event);
+    // nullify the write helper for next ckp
+    this.writerHelper = null;
+    this.writeStatuses.addAll(writeStatus);
+    // blocks flushing until the coordinator starts a new instant
+    this.confirming = true;
   }
 }

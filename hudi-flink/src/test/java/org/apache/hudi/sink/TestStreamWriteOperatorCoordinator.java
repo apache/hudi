@@ -41,7 +41,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -181,7 +180,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1));
   }
 
-  @Disabled
+  @Test
   void testSyncMetadataTable() throws Exception {
     // reset
     reset();
@@ -193,7 +192,6 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
-    coordinator.setMetadataSyncExecutor(new MockCoordinatorExecutor(context));
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -209,7 +207,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is("0000000000000"));
 
     // test metadata table compaction
-    // write another 4 commits
+    // write another 3 commits
     for (int i = 1; i < 4; i++) {
       instant = mockWriteWithMetadata();
       metadataTableMetaClient.reloadActiveTimeline();
@@ -247,7 +245,13 @@ public class TestStreamWriteOperatorCoordinator {
       double failureFraction) {
     final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction);
     writeStatus.setPartitionPath(partitionPath);
-    writeStatus.setStat(new HoodieWriteStat());
+
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partitionPath);
+    writeStat.setFileId("fileId123");
+    writeStat.setPath("path123");
+
+    writeStatus.setStat(writeStat);
 
     return WriteMetadataEvent.builder()
         .taskID(taskId)
