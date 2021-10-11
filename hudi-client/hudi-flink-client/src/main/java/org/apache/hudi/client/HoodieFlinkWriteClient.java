@@ -19,10 +19,12 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -207,7 +209,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    */
   public List<WriteStatus> insertOverwriteTable(
       List<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable table = getTableAndInitCtx(WriteOperationType.INSERT_OVERWRITE_TABLE, instantTime);
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        getTableAndInitCtx(WriteOperationType.INSERT_OVERWRITE_TABLE, instantTime);
     table.validateInsertSchema();
     preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
     // create the write handle if not exists
@@ -257,6 +260,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected void preCommit(String instantTime, HoodieCommitMetadata metadata) {
+    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
+    // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table = createTable(config, hadoopConf);
+    TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
+        Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner());
     this.metadataWriterOption.ifPresent(w -> {
       w.initTableMetadata(); // refresh the timeline
       w.update(metadata, instantTime);
@@ -346,6 +354,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       List<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) throws IOException {
     HoodieFlinkTable<T> table = getHoodieTable();
+    preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
     HoodieCommitMetadata metadata = FlinkCompactHelpers.newInstance().createCompactionMetadata(
         table, compactionInstantTime, writeStatuses, config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
@@ -412,8 +421,21 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
-        .run(HoodieTableVersion.current(), instantTime);
+    UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance());
+    if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
+      if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+        this.txnManager.beginTransaction();
+        try {
+          this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER));
+          new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
+              .run(HoodieTableVersion.current(), instantTime);
+        } finally {
+          this.txnManager.endTransaction();
+        }
+      } else {
+        upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
+      }
+    }
     return getTableAndInitCtx(metaClient, operationType);
   }
 
