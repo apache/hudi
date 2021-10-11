@@ -46,7 +46,7 @@ import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
-import org.apache.hudi.io.storage.HoodieConcatHandle;
+import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
