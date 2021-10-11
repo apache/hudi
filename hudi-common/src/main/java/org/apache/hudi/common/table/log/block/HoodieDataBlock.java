@@ -79,6 +79,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         return new HoodieAvroDataBlock(recordList, header);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(recordList, header);
+      case PARQUET_DATA_BLOCK:
+        return new HoodieParquetDataBlock(recordList, header);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }

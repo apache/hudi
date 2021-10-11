@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -119,6 +120,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .withAlternatives("hoodie.table.rt.file.format")
       .withDocumentation("Log format used for the delta logs.");
 
+  public static final ConfigProperty<String> LOG_BLOCK_TYPE = ConfigProperty
+      .key("hoodie.table.log.block.type")
+      .noDefaultValue()
+      .withDocumentation("Log block type used for the delta logs.");
+
   public static final ConfigProperty<String> TIMELINE_LAYOUT_VERSION = ConfigProperty
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
@@ -187,7 +193,6 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * For serializing and de-serializing.
-   *
    */
   public HoodieTableConfig() {
     super();
@@ -340,6 +345,20 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public HoodieFileFormat getLogFileFormat() {
     return HoodieFileFormat.valueOf(getStringOrDefault(LOG_FILE_FORMAT));
+  }
+
+  /**
+   * Get the log block Format.
+   *
+   * @return HoodieBlockFormat for the log block
+   */
+  public HoodieLogBlock.HoodieLogBlockType getLogBlockFormat() {
+    String logBlockTypeConfig = getString(LOG_BLOCK_TYPE);
+    if (logBlockTypeConfig != null) {
+      return HoodieLogBlock.HoodieLogBlockType.valueOf(getStringOrDefault(LOG_BLOCK_TYPE));
+    } else {
+      return null;
+    }
   }
 
   /**

@@ -147,6 +147,12 @@ public class TestHoodieRealtimeRecordReader {
         HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK);
   }
 
+  @Test
+  public void testParquetInlineReader() throws Exception {
+    testReaderInternal(ExternalSpillableMap.DiskMapType.BITCASK, false, false,
+        HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK);
+  }
+
   private void testReaderInternal(ExternalSpillableMap.DiskMapType diskMapType,
                                   boolean isCompressionEnabled,
                                   boolean partitioned) throws Exception {
