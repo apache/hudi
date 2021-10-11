@@ -122,6 +122,10 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   private void flushData(boolean endInput) {
+    if (this.writerHelper == null) {
+      // does not process any inputs, returns early.
+      return;
+    }
     final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
