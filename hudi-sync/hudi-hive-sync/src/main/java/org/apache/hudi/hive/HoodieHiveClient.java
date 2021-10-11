@@ -34,6 +34,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.metastore.api.EnvironmentContext;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
@@ -56,12 +57,16 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
  */
 public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
 
+  public static final String SKIP_AWS_GLUE_ARCHIVE = "skipAWSGlueArchive";
+
   private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
+  final EnvironmentContext envContext = new EnvironmentContext();
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(cfg, configuration, fs);
+    envContext.putToProperties(SKIP_AWS_GLUE_ARCHIVE, String.valueOf(cfg.skipAWSGlueArchive));
 
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
@@ -127,7 +132,11 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
       for (Map.Entry<String, String> entry : tableProperties.entrySet()) {
         table.putToParameters(entry.getKey(), entry.getValue());
       }
-      client.alter_table(syncConfig.databaseName, tableName, table);
+      if (syncConfig.skipAWSGlueArchive) {
+        client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, envContext);
+      } else {
+        client.alter_table(syncConfig.databaseName, tableName, table);
+      }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to update table properties for table: "
           + tableName, e);
@@ -251,7 +260,11 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
     try {
       Table table = client.getTable(syncConfig.databaseName, tableName);
       table.putToParameters(GLOBALLY_CONSISTENT_READ_TIMESTAMP, timeStamp);
-      client.alter_table(syncConfig.databaseName, tableName, table);
+      if (syncConfig.skipAWSGlueArchive) {
+        client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, envContext);
+      } else {
+        client.alter_table(syncConfig.databaseName, tableName, table);
+      }
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
           "Failed to update last replicated time to " + timeStamp + " for " + tableName, e);
@@ -262,7 +275,11 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
     try {
       Table table = client.getTable(syncConfig.databaseName, tableName);
       String timestamp = table.getParameters().remove(GLOBALLY_CONSISTENT_READ_TIMESTAMP);
-      client.alter_table(syncConfig.databaseName, tableName, table);
+      if (syncConfig.skipAWSGlueArchive) {
+        client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, envContext);
+      } else {
+        client.alter_table(syncConfig.databaseName, tableName, table);
+      }
       if (timestamp != null) {
         LOG.info("deleted last replicated timestamp " + timestamp + " for table " + tableName);
       }
@@ -295,7 +312,11 @@ public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
       try {
         Table table = client.getTable(syncConfig.databaseName, tableName);
         table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
-        client.alter_table(syncConfig.databaseName, tableName, table);
+        if (syncConfig.skipAWSGlueArchive) {
+          client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, envContext);
+        } else {
+          client.alter_table(syncConfig.databaseName, tableName, table);
+        }
       } catch (Exception e) {
         throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
       }

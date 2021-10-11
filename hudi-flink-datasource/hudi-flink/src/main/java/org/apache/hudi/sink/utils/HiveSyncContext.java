@@ -98,6 +98,7 @@ public class HiveSyncContext {
     hiveSyncConfig.skipROSuffix = conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX);
     hiveSyncConfig.assumeDatePartitioning = conf.getBoolean(FlinkOptions.HIVE_SYNC_ASSUME_DATE_PARTITION);
     hiveSyncConfig.withOperationField = conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+    hiveSyncConfig.skipAWSGlueArchive = conf.getBoolean(FlinkOptions.HIVE_SYNC_AWS_GLUE_SKIP_ARCHIVE);
     return hiveSyncConfig;
   }
 }

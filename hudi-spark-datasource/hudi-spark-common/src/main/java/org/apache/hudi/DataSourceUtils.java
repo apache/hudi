@@ -324,6 +324,8 @@ public class DataSourceUtils {
     }
     hiveSyncConfig.syncComment = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SYNC_COMMENT().key(),
             DataSourceWriteOptions.HIVE_SYNC_COMMENT().defaultValue()));
+    hiveSyncConfig.skipAWSGlueArchive = Boolean.valueOf(props.getString(DataSourceWriteOptions.AWS_GLUE_SKIP_ARCHIVE().key(),
+        DataSourceWriteOptions.AWS_GLUE_SKIP_ARCHIVE().defaultValue()));
     return hiveSyncConfig;
   }
 

@@ -98,6 +98,9 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   @Parameter(names = {"--sync-comment"}, description = "synchronize table comments to hive")
   public boolean syncComment = false;
 
+  @Parameter(names = {"--skip-aws-glue-archive"}, description = "When using AWS Glue as the data catalog, decide whether to archive old versions of the Hudi table")
+  public Boolean skipAWSGlueArchive = false;
+
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset
@@ -127,6 +130,11 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
           + "Use this when you are in the process of migrating from "
           + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format");
+
+  public static final ConfigProperty<String> HIVE_SKIP_AWS_GLUE_ARCHIVE = ConfigProperty
+      .key("hoodie.datasource.hive_sync.skip_aws_glue_archive")
+      .defaultValue("false")
+      .withDocumentation("When using AWS Glue as the data catalog, decide whether to archive old versions of the Hudi table");
 
   /**
    * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
@@ -242,6 +250,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.createManagedTable = getBooleanOrDefault(HIVE_CREATE_MANAGED_TABLE);
     this.bucketSpec = getStringOrDefault(HIVE_SYNC_BUCKET_SYNC_SPEC);
     this.syncComment = getBooleanOrDefault(HIVE_SYNC_COMMENT);
+    this.skipAWSGlueArchive = getBooleanOrDefault(HIVE_SKIP_AWS_GLUE_ARCHIVE);
   }
 
   @Override
@@ -277,6 +286,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       + ", isConditionalSync=" + isConditionalSync
       + ", sparkVersion=" + sparkVersion
       + ", syncComment=" + syncComment
+      + ", skipAWSGlueArchive=" + skipAWSGlueArchive
       + '}';
   }
 

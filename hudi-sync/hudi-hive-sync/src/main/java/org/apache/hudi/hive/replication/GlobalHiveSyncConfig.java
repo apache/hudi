@@ -51,6 +51,7 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
     newConfig.decodePartition = cfg.decodePartition;
     newConfig.batchSyncNum = cfg.batchSyncNum;
     newConfig.globallyReplicatedTimeStamp = cfg.globallyReplicatedTimeStamp;
+    newConfig.skipAWSGlueArchive = cfg.skipAWSGlueArchive;
     return newConfig;
   }
 

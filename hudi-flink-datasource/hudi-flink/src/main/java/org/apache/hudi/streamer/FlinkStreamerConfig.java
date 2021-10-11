@@ -336,6 +336,9 @@ public class FlinkStreamerConfig extends Configuration {
       + "Disabled by default for backward compatibility.")
   public Boolean hiveSyncSupportTimestamp = false;
 
+  @Parameter(names = {"--hive-sync-skip-aws-glue-archive"}, description = "When using AWS Glue as the data catalog, decide whether to archive old "
+      + "versions of the Hudi table, default false.")
+  public Boolean hiveSyncSkipAWSGlueArchive = false;
 
   /**
    * Transforms a {@code HoodieFlinkStreamer.Config} into {@code Configuration}.
@@ -424,6 +427,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, config.hiveSyncIgnoreExceptions);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX, config.hiveSyncSkipRoSuffix);
     conf.setBoolean(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP, config.hiveSyncSupportTimestamp);
+    conf.setBoolean(FlinkOptions.HIVE_SYNC_AWS_GLUE_SKIP_ARCHIVE, config.hiveSyncSkipAWSGlueArchive);
     return conf;
   }
 }

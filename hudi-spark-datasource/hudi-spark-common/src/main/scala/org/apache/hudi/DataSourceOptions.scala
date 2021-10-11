@@ -483,6 +483,8 @@ object DataSourceWriteOptions {
   @Deprecated
   val HIVE_SYNC_COMMENT: ConfigProperty[String] = HiveSyncConfig.HIVE_SYNC_COMMENT;
 
+  val AWS_GLUE_SKIP_ARCHIVE: ConfigProperty[String] = HiveSyncConfig.HIVE_SKIP_AWS_GLUE_ARCHIVE;
+
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.compaction.async.enable")

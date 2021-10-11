@@ -82,6 +82,7 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_USE_JDBC)
     hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE)
     hoodieConfig.setDefaultValue(HiveSyncConfig.HIVE_SYNC_AS_DATA_SOURCE_TABLE)
+    hoodieConfig.setDefaultValue(AWS_GLUE_SKIP_ARCHIVE)
     hoodieConfig.setDefaultValue(ASYNC_COMPACT_ENABLE)
     hoodieConfig.setDefaultValue(INLINE_CLUSTERING_ENABLE)
     hoodieConfig.setDefaultValue(ASYNC_CLUSTERING_ENABLE)

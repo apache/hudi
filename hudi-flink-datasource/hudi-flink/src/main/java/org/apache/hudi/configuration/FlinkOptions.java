@@ -775,6 +775,13 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("The hive configuration directory, where the hive-site.xml lies in, the file should be put on the client machine");
 
+  public static final ConfigOption<Boolean> HIVE_SYNC_AWS_GLUE_SKIP_ARCHIVE = ConfigOptions
+      .key("hive_sync.skip_aws_glue_archive")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("When using AWS Glue as the data catalog, decide whether to archive old versions of the Hudi table,"
+          + " default false. Note that this option won't work for AWS EMR 5.x clusters");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
