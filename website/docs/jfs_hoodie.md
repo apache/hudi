@@ -2,7 +2,7 @@
 title: JuiceFS
 keywords: [ hudi, hive, juicefs, jfs, spark, flink ]
 summary: In this page, we go over how to configure Hudi with JuiceFS file system.
-last_modified_at: 2021-10-11T15:50:00+08:00
+last_modified_at: 2021-10-12T10:50:00+08:00
 ---
 
 In this page, we explain how to use Hudi with JuiceFS.
