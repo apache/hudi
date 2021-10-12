@@ -19,9 +19,9 @@ There are three configurations required for Hudi-JuiceFS compatibility:
 
 ### Creating JuiceFS file system
 
-JuiceFS supports multiple metadata engines such as Redis, MySQL, SQLite, and TiKV.
+JuiceFS supports multiple [metadata engines](https://github.com/juicedata/juicefs/blob/main/docs/en/databases_for_metadata.md) such as Redis, MySQL, SQLite, and TiKV. And supports almost all [object storage](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_setup_object_storage.md#supported-object-storage) as data storage, e.g. Amazon S3, Google Cloud Storage, Azure Blob Storage.
 
-This example uses Redis as "Metadata Engine" and Amazon S3 as "Data Storage" in Linux environment.
+The following example uses Redis as "Metadata Engine" and Amazon S3 as "Data Storage" in Linux environment.
 
 #### Download JuiceFS client
 
