@@ -119,8 +119,10 @@ Options:
       overriding the schemaprovider returned by Source.
     --source-class
       Subclass of org.apache.hudi.utilities.sources to read data. Built-in
-      options: org.apache.hudi.utilities.sources.{JsonDFSSource (default),
-      AvroDFSSource, JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}
+      options: org.apache.hudi.utilities.sources.{JsonDFSSource (default), 
+      AvroDFSSource, AvroKafkaSource, CsvDFSSource, HiveIncrPullSource, 
+      JdbcSource, JsonKafkaSource, ORCDFSSource, ParquetDFSSource, 
+      S3EventsHoodieIncrSource, S3EventsSource, SqlSource}
       Default: org.apache.hudi.utilities.sources.JsonDFSSource
     --source-limit
       Maximum amount of data to read from source. Default: No limit For e.g:
