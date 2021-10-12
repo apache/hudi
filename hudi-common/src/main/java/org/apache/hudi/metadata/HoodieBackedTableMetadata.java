@@ -181,6 +181,88 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
   }
 
+  protected List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeysFromMetadata(List<String> keys, String partitionName) {
+    Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers = openReadersIfNeeded(keys.get(0), partitionName);
+    try {
+      List<Long> timings = new ArrayList<>();
+      HoodieTimer timer = new HoodieTimer().startTimer();
+      HoodieFileReader baseFileReader = readers.getKey();
+      HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
+
+      List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
+      // local map to assist in merging with base file records
+      Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords = new HashMap<>();
+
+      // Retrieve records from log file
+      timer.startTimer();
+      if (logRecordScanner != null) {
+        if (metadataConfig.enableFullScan()) {
+          // path which does full scan of log files
+          for (String key : keys) {
+            logRecords.put(key, logRecordScanner.getRecordByKey(key));
+          }
+        } else {
+          // this path will do seeks pertaining to the keys passed in
+          List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> logRecordsList = logRecordScanner.getRecordsByKeys(keys);
+          for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : logRecordsList) {
+            logRecords.put(entry.getKey(), entry.getValue());
+          }
+        }
+      }
+      timings.add(timer.endTimer());
+
+      // merge with base records
+      timer.startTimer();
+      // Retrieve record from base file
+      HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
+      if (baseFileReader != null) {
+        HoodieTimer readTimer = new HoodieTimer().startTimer();
+        for (String key : keys) {
+          Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
+          if (baseRecord.isPresent()) {
+            hoodieRecord = metadataTableConfig.populateMetaFields()
+                ? SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(), metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(), false)
+                : SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(), metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
+                Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()), false);
+            metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
+            // merge base file record w/ log record if present
+            if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {
+              HoodieRecordPayload mergedPayload = logRecords.get(key).get().getData().preCombine(hoodieRecord.getData());
+              result.add(Pair.of(key, Option.of(new HoodieRecord(hoodieRecord.getKey(), mergedPayload))));
+            } else {
+              // only base record
+              result.add(Pair.of(key, Option.of(hoodieRecord)));
+            }
+          } else {
+            // only log record
+            if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {
+              HoodieRecordPayload mergedPayload = logRecords.get(key).get().getData().preCombine(hoodieRecord.getData());
+              result.add(Pair.of(key, Option.of(new HoodieRecord(hoodieRecord.getKey(), mergedPayload))));
+            } else { // not found in both base file and log files
+              result.add(Pair.of(key, Option.empty()));
+            }
+          }
+        }
+        timings.add(timer.endTimer());
+      } else {
+        // no base file at all
+        timings.add(timer.endTimer());
+        for (Map.Entry<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : logRecords.entrySet()) {
+          result.add(Pair.of(entry.getKey(), entry.getValue()));
+        }
+      }
+
+      LOG.info(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms", keys.size(), timings));
+      return result;
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " key : ", ioe);
+    } finally {
+      if (!reuse) {
+        close(partitionName);
+      }
+    }
+  }
+
   /**
    * Returns a new pair of readers to the base and log files.
    */

@@ -169,9 +169,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       doRollbackAndValidate(testTable, "0000003", "0000004");
     }
 
-    doWriteOperationAndValidate(testTable, "0000005");
-
-    // trigger an upsert and validate
+    // trigger couple of upserts
+    doWriteOperation(testTable, "0000005");
     doWriteOperation(testTable, "0000006");
     validateMetadata(testTable, true);
   }
@@ -245,7 +244,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     // trigger an upsert
-    doWriteOperationAndValidate(testTable, "0000005");
+    doWriteOperation(testTable, "0000005");
 
     // trigger clean
     doCleanAndValidate(testTable, "0000006", singletonList("0000001"));
@@ -264,7 +263,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000002");
     doCleanAndValidate(testTable, "0000003", Arrays.asList("0000001"));
     if (tableType == MERGE_ON_READ) {
-      doCompactionAndValidate(testTable, "0000004");
+      doCompaction(testTable, "0000004");
     }
     doWriteOperation(testTable, "0000005");
     validateMetadata(testTable, emptyList(), true);
@@ -297,7 +296,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperationAndValidate(testTable, "0000003");
 
     // trigger a commit and rollback
-    doWriteOperationAndValidate(testTable, "0000004");
+    doWriteOperation(testTable, "0000004");
     doRollbackAndValidate(testTable, "0000004", "0000005");
 
     // trigger few upserts and validate
@@ -306,7 +305,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     validateMetadata(testTable);
 
-    doWriteOperationAndValidate(testTable, "0000010");
+    doWriteOperation(testTable, "0000010");
 
     // rollback last commit. and validate.
     doRollbackAndValidate(testTable, "0000010", "0000011");
@@ -318,7 +317,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     // roll back of delete
-    doWriteOperationAndValidate(testTable, "0000014", DELETE);
+    doWriteOperation(testTable, "0000014", DELETE);
     doRollbackAndValidate(testTable, "0000014", "0000015");
 
     // rollback partial commit
@@ -403,9 +402,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     syncTableMetadata(writeConfig);
     validateMetadata(testTable);
 
-    doWriteOperationAndValidate(testTable, "00000003", INSERT);
-    doWriteOperationAndValidate(testTable, "00000004", UPSERT);
-    doWriteOperationAndValidate(testTable, "00000005", UPSERT);
+    doWriteOperation(testTable, "00000003", INSERT);
+    doWriteOperation(testTable, "00000004", UPSERT);
+    doWriteOperation(testTable, "00000005", UPSERT);
 
     // trigger compaction
     if (MERGE_ON_READ.equals(tableType)) {
@@ -413,13 +412,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     // trigger an upsert
-    doWriteOperationAndValidate(testTable, "00000008");
+    doWriteOperation(testTable, "00000008");
     // trigger delete
-    doWriteOperationAndValidate(testTable, "00000009", DELETE);
+    doWriteOperation(testTable, "00000009", DELETE);
     // trigger clean
     doCleanAndValidate(testTable, "00000010", asList("00000003", "00000004"));
     // trigger another upsert
-    doWriteOperationAndValidate(testTable, "00000011");
+    doWriteOperation(testTable, "00000011");
     // trigger clustering
     doClusterAndValidate(testTable, "00000012");
 
@@ -537,7 +536,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       records = dataGen.generateUniqueUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client);
 
       // Write 4 (updates and inserts)
       newCommitTime = "0000004";
@@ -561,7 +559,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       records = dataGen.generateUpdates(newCommitTime, 5);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client);
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
@@ -577,7 +574,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(records, 1).map(r -> r.getKey());
       client.startCommitWithTime(newCommitTime);
       client.delete(deleteKeys, newCommitTime);
-      validateMetadata(client);
 
       // Clean
       newCommitTime = "0000009";
@@ -1137,7 +1133,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         Collections.sort(fsFileNames);
         Collections.sort(metadataFilenames);
 
-        assertEquals(fsStatuses.length, partitionToFilesMap.get(basePath + "/" + partition).length);
+        assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).length);
 
         // File sizes should be valid
         Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getLen() > 0));
