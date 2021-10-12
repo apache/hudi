@@ -419,7 +419,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
   @Test def testSparkPartitonByWithCustomKeyGenerator(): Unit = {
     // Without fieldType, the default is SIMPLE
-    var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, false)
+    var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("current_ts")
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -428,7 +428,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_ts").cast("string")).count() == 0)
 
     // Specify fieldType as TIMESTAMP
-    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, false)
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("current_ts:TIMESTAMP")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
@@ -504,7 +504,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
   }
 
   @Test def testSparkPartitonByWithTimestampBasedKeyGenerator() {
-    val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName, false)
+    val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName)
     writer.partitionBy("current_ts")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
