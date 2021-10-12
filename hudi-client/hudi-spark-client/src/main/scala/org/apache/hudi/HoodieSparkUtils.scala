@@ -19,13 +19,13 @@
 package org.apache.hudi
 
 import java.util.Properties
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
@@ -60,12 +60,28 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   }
 
   /**
-   * This method copied from [[org.apache.spark.deploy.SparkHadoopUtil]].
-   * [[org.apache.spark.deploy.SparkHadoopUtil]] becomes private since Spark 3.0.0 and hence we had to copy it locally.
+   * This method is inspired from [[org.apache.spark.deploy.SparkHadoopUtil]] with some modifications like
+   * skipping meta paths.
    */
   def globPath(fs: FileSystem, pattern: Path): Seq[Path] = {
-    Option(fs.globStatus(pattern)).map { statuses =>
-      statuses.map(_.getPath.makeQualified(fs.getUri, fs.getWorkingDirectory)).toSeq
+    // find base path to assist in skipping meta paths
+    var basePath = pattern.getParent
+    while (basePath.getName.equals("*")) {
+      basePath = basePath.getParent
+    }
+
+    Option(fs.globStatus(pattern)).map { statuses => {
+      val nonMetaStatuses = statuses.filterNot(entry => {
+        // skip all entries in meta path
+        var leafPath = entry.getPath
+        // walk through every parent until we reach base path. if .hoodie is found anywhere, path needs to be skipped
+        while (!leafPath.equals(basePath) && !leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+            leafPath = leafPath.getParent
+        }
+        leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)
+      })
+      nonMetaStatuses.map(_.getPath.makeQualified(fs.getUri, fs.getWorkingDirectory)).toSeq
+    }
     }.getOrElse(Seq.empty[Path])
   }
 
@@ -88,8 +104,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   def checkAndGlobPathIfNecessary(paths: Seq[String], fs: FileSystem): Seq[Path] = {
     paths.flatMap(path => {
       val qualified = new Path(path).makeQualified(fs.getUri, fs.getWorkingDirectory)
-      val globPaths = globPathIfNecessary(fs, qualified)
-      globPaths
+      globPathIfNecessary(fs, qualified)
     })
   }
 
