@@ -94,6 +94,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    */
   private Option<HoodieBackedTableMetadataWriter> metadataWriterOption = Option.empty();
 
+  /**
+   * Whether to need a embedded server for lazily start.
+   */
+  private transient boolean needEmbeddedServer = false;
+
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig);
     this.bucketToHandles = new HashMap<>();
@@ -249,6 +254,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
+    // starts a embedded timeline server lazily.
+    needEmbeddedServer = true;
+    startEmbeddedServerView();
     // Note: the code to read the commit metadata is not thread safe for JSON deserialization,
     // remove the table metadata sync
 
@@ -415,6 +423,20 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
         .run(HoodieTableVersion.current(), instantTime);
     return getTableAndInitCtx(metaClient, operationType);
+  }
+
+  @Override
+  protected synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
+    if (needEmbeddedServer) {
+      super.stopEmbeddedServerView(resetViewStorageConfig);
+    }
+  }
+
+  @Override
+  protected synchronized void startEmbeddedServerView() {
+    if (needEmbeddedServer) {
+      super.startEmbeddedServerView();
+    }
   }
 
   /**

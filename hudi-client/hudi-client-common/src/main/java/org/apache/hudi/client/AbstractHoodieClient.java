@@ -87,7 +87,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     this.context.setJobStatus("", "");
   }
 
-  private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
+  protected synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
     if (timelineServer.isPresent() && shouldStopTimelineServer) {
       // Stop only if owner
       LOG.info("Stopping Timeline service !!");
@@ -101,7 +101,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     }
   }
 
-  private synchronized void startEmbeddedServerView() {
+  protected synchronized void startEmbeddedServerView() {
     if (config.isEmbeddedTimelineServerEnabled()) {
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server

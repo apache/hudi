@@ -808,11 +808,11 @@ public class TestWriteCopyOnWrite {
     HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
     FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 
-    assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+    assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.MEMORY);
 
     // get another write client
     writeClient = StreamerUtil.createWriteClient(conf, null);
-    assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
+    assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.MEMORY);
     assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
   }
 
