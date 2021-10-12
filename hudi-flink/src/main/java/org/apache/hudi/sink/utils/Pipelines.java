@@ -83,7 +83,8 @@ public class Pipelines {
             operatorFactory)
         // follow the parallelism of upstream operators to avoid shuffle
         .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS))
-        .addSink(DummySink.INSTANCE);
+        .addSink(DummySink.INSTANCE)
+        .name("dummy");
   }
 
   public static DataStreamSink<Object> append(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
@@ -93,7 +94,8 @@ public class Pipelines {
         .transform("hoodie_append_write", TypeInformation.of(Object.class), operatorFactory)
         .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
         .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS))
-        .addSink(DummySink.INSTANCE);
+        .addSink(DummySink.INSTANCE)
+        .name("dummy");
   }
 
   public static DataStream<HoodieRecord> bootstrap(
