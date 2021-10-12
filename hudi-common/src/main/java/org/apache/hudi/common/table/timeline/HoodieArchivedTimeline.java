@@ -41,6 +41,7 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -208,9 +209,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       List<HoodieInstant> instantsInRange = new ArrayList<>();
       for (FileStatus fs : fsStatuses) {
         //read the archived file
-        HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
-                new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
-        try {
+        try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
+            new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
           int instantsInPreviousFile = instantsInRange.size();
           //read the avro blocks
           while (reader.hasNext()) {
@@ -220,8 +220,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
             List<IndexedRecord> records = blk.getRecords();
             // filter blocks in desired time window
             Stream<HoodieInstant> instantsInBlkStream = records.stream()
-                    .filter(r -> commitsFilter.apply((GenericRecord) r))
-                    .map(r -> readCommit((GenericRecord) r, loadInstantDetails));
+                .filter(r -> commitsFilter.apply((GenericRecord) r))
+                .map(r -> readCommit((GenericRecord) r, loadInstantDetails));
 
             if (filter != null) {
               instantsInBlkStream = instantsInBlkStream.filter(filter::isInRange);
@@ -238,11 +238,10 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
               break;
             }
           }
-        } finally {
-          reader.close();
         }
       }
 
+      Collections.sort(instantsInRange);
       return instantsInRange;
     } catch (IOException e) {
       throw new HoodieIOException(

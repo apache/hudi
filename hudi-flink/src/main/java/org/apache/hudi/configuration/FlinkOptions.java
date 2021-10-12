@@ -371,8 +371,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size")
       .doubleType()
-      .defaultValue(64D) // 64MB
-      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem, default 64MB");
+      .defaultValue(256D) // 256MB
+      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem, default 256MB");
 
   public static final ConfigOption<Integer> WRITE_LOG_BLOCK_SIZE = ConfigOptions
       .key("write.log_block.size")

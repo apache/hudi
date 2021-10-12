@@ -184,8 +184,8 @@ public class FlinkStreamerConfig extends Configuration {
   public Double writeTaskMaxSize = 1024D;
 
   @Parameter(names = {"--write-batch-size"},
-      description = "Batch buffer size in MB to flush data into the underneath filesystem, default 64MB")
-  public Double writeBatchSize = 64D;
+      description = "Batch buffer size in MB to flush data into the underneath filesystem, default 256MB")
+  public Double writeBatchSize = 256D;
 
   @Parameter(names = {"--write-log-block-size"}, description = "Max log block size in MB for log file, default 128MB")
   public Integer writeLogBlockSize = 128;
