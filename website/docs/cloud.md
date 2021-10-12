@@ -1,9 +1,9 @@
 ---
 title: Cloud Storage
-keywords: [hudi, aws, gcp, oss, azure, cloud]
+keywords: [hudi, aws, gcp, oss, azure, cloud, juicefs]
 summary: "In this page, we introduce how Hudi work with different Cloud providers."
 toc: true
-last_modified_at: 2019-06-16T21:59:57-04:00
+last_modified_at: 2021-10-12T10:50:00+08:00
 ---
 
 ## Talking to Cloud Storage
