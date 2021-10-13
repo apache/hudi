@@ -79,8 +79,11 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     streamTableEnv = TableEnvironmentImpl.create(settings);
     streamTableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
-    streamTableEnv.getConfig().getConfiguration()
-        .setString("execution.checkpointing.interval", "2s");
+    Configuration execConf = streamTableEnv.getConfig().getConfiguration();
+    execConf.setString("execution.checkpointing.interval", "2s");
+    // configure not to retry after failure
+    execConf.setString("restart-strategy", "fixed-delay");
+    execConf.setString("restart-strategy.fixed-delay.attempts", "0");
 
     settings = EnvironmentSettings.newInstance().inBatchMode().build();
     batchTableEnv = TableEnvironmentImpl.create(settings);
@@ -349,7 +352,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, false)
         // generate compaction plan for each commit
         .option(FlinkOptions.COMPACTION_DELTA_COMMITS, "1")
-        .withPartition(false)
+        .noPartition()
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
@@ -399,7 +402,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_NAME, tableType.name())
-        .withPartition(false)
+        .noPartition()
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -529,12 +532,37 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = ExecMode.class)
-  void testUpsertWithMiniBatches(ExecMode execMode) {
+  @EnumSource(value = HoodieTableType.class)
+  void testStreamWriteAndReadWithMiniBatches(HoodieTableType tableType) throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source", 4);
+    streamTableEnv.executeSql(createSource);
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_STREAMING_START_COMMIT, "earliest")
+        .option(FlinkOptions.WRITE_BATCH_SIZE, 0.00001)
+        .noPartition()
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    // reading from the earliest commit instance.
+    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 20);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  @ParameterizedTest
+  @MethodSource("executionModeAndTableTypeParams")
+  void testBatchUpsertWithMiniBatches(ExecMode execMode, HoodieTableType tableType) {
     TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.WRITE_BATCH_SIZE, "0.001")
+        .option(FlinkOptions.TABLE_TYPE, tableType)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -562,7 +590,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .withPartition(false)
+        .noPartition()
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -767,7 +795,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, "bulk_insert")
-        .withPartition(false)
+        .noPartition()
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -802,6 +830,19 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   /**
+   * Return test params => (execution mode, table type).
+   */
+  private static Stream<Arguments> executionModeAndTableTypeParams() {
+    Object[][] data =
+        new Object[][] {
+            {ExecMode.BATCH, HoodieTableType.MERGE_ON_READ},
+            {ExecMode.BATCH, HoodieTableType.COPY_ON_WRITE},
+            {ExecMode.STREAM, HoodieTableType.MERGE_ON_READ},
+            {ExecMode.STREAM, HoodieTableType.COPY_ON_WRITE}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
    * Return test params => (execution mode, hive style partitioning).
    */
   private static Stream<Arguments> executionModeAndPartitioningParams() {
@@ -833,7 +874,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     try {
       tableResult.getJobClient().get().getJobExecutionResult().get();
     } catch (InterruptedException | ExecutionException ex) {
-      throw new RuntimeException(ex);
+      // ignore
     }
   }
 

@@ -177,7 +177,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       writeStatus.setPartitionPath(partitionPath);
       writeStatus.getStat().setPartitionPath(partitionPath);
       writeStatus.getStat().setFileId(fileId);
-      writeStatus.getStat().setPath(new Path(config.getBasePath()), newFilePath);
+      setWriteStatusPath();
 
       // Create Marker file
       createMarkerFile(partitionPath, newFileName);

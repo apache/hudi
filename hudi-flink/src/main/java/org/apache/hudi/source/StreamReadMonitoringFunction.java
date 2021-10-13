@@ -258,7 +258,7 @@ public class StreamReadMonitoringFunction
       writePartitions = writePartitions.stream()
           .filter(this.requiredPartitionPaths::contains).collect(Collectors.toSet());
     }
-    FileStatus[] fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList);
+    FileStatus[] fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
     if (fileStatuses.length == 0) {
       LOG.warn("No files found for reading in user provided path.");
       return;

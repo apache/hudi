@@ -237,7 +237,7 @@ public class StreamWriteFunction<K, I, O>
   public void close() {
     if (this.writeClient != null) {
       this.writeClient.cleanHandlesGracefully();
-      this.writeClient.close();
+      // this.writeClient.close();
     }
   }
 
@@ -534,6 +534,8 @@ public class StreamWriteFunction<K, I, O>
         k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
     final DataItem item = DataItem.fromHoodieRecord(value);
 
+    bucket.records.add(item);
+
     boolean flushBucket = bucket.detector.detect(item);
     boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
     if (flushBucket) {
@@ -554,7 +556,6 @@ public class StreamWriteFunction<K, I, O>
         LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
     }
-    bucket.records.add(item);
   }
 
   private boolean hasData() {

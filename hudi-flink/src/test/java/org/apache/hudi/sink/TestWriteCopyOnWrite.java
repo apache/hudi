@@ -419,9 +419,9 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("3 records expect to flush out as a mini-batch",
+    assertThat("2 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(3));
+        is(2));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -482,9 +482,9 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("3 records expect to flush out as a mini-batch",
+    assertThat("2 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(3));
+        is(2));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -623,9 +623,9 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("3 records expect to flush out as a mini-batch",
+    assertThat("2 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(3));
+        is(2));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -673,6 +673,7 @@ public class TestWriteCopyOnWrite {
     Map<String, String> expected = new HashMap<>();
     // the last 2 lines are merged
     expected.put("par1", "["
+        + "id1,par1,id1,Danny,23,1,par1, "
         + "id1,par1,id1,Danny,23,1,par1, "
         + "id1,par1,id1,Danny,23,1,par1" + "]");
     return expected;

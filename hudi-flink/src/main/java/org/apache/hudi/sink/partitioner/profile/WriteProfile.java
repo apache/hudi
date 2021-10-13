@@ -225,7 +225,7 @@ public class WriteProfile {
                       .orElse(null)))
           .filter(Objects::nonNull)
           .collect(Collectors.toList());
-      FileStatus[] commitFiles = WriteProfiles.getWritePathsOfInstants(basePath, hadoopConf, metadataList);
+      FileStatus[] commitFiles = WriteProfiles.getWritePathsOfInstants(basePath, hadoopConf, metadataList, table.getMetaClient().getTableType());
       fsView = new HoodieTableFileSystemView(table.getMetaClient(), commitTimeline, commitFiles);
     }
   }

@@ -41,6 +41,7 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -243,6 +244,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         }
       }
 
+      Collections.sort(instantsInRange);
       return instantsInRange;
     } catch (IOException e) {
       throw new HoodieIOException(
