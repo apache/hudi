@@ -105,7 +105,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
 
   /**
    * Update metadata table if available. Any update to metadata table happens within data table lock.
-   * @param restoreMetadata intance of {@link HoodieRestoreMetadata} to be applied to metadata.
+   * @param restoreMetadata instance of {@link HoodieRestoreMetadata} to be applied to metadata.
    */
   private void writeToMetadata(HoodieRestoreMetadata restoreMetadata) {
     try {
