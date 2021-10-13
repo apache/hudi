@@ -448,8 +448,8 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   }
 
   // Visible for testing
-  protected JavaRDD<WriteStatus> partitionWriteStatusByInserts(JavaRDD<WriteStatus> writeStatusRDD,
-                                                               int writeStatusWithInserts) {
+  public JavaRDD<WriteStatus> partitionWriteStatusByInserts(JavaRDD<WriteStatus> writeStatusRDD,
+                                                            int writeStatusWithInserts) {
     if (writeStatusWithInserts == 0) {
       return writeStatusRDD;
     }

@@ -384,6 +384,11 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " but for the case the write schema is not equal to the specified table schema, we can"
           + " specify the write schema by this parameter. Used by MergeIntoHoodieTableCommand");
 
+  public static final ConfigProperty<String> BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT = ConfigProperty
+      .key("hoodie.bloom.filter.support.preapache.key")
+      .defaultValue("true")
+      .withDocumentation("Support older key for bloom filter before migration to org.apache");
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
@@ -1015,7 +1020,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isBloomFilterPreApacheKeyEnabled() {
-    return Boolean.parseBoolean(props.getProperty(BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT));
+    return getBoolean(BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT);
   }
 
   public int getMaxConsistencyChecks() {

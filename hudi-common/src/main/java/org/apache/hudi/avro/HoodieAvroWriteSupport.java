@@ -39,12 +39,16 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   private String maxRecordKey;
   private Boolean bfPreApacheCompatible;
 
-  public static final String HOODIE_AVRO_BLOOM_FILTER_PRE_APACHE_METADATA_KEY = "com.uber.hoodie.bloomfilter";
+  public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
   public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
   public static final String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
   public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
   public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
   public static final String HOODIE_AVRO_SCHEMA_METADATA_KEY = "orc.avro.schema";
+
+  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt) {
+    this(schema, avroSchema, bloomFilterOpt, false);
+  }
 
   public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt,
                                 Boolean bfPreApacheCompatible) {
@@ -59,7 +63,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
     if (bloomFilterOpt.isPresent()) {
       extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilterOpt.get().serializeToString());
       if (bfPreApacheCompatible) {
-        extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_PRE_APACHE_METADATA_KEY, bloomFilter.serializeToString());
+        extraMetaData.put(OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilterOpt.get().serializeToString());
       }
       if (minRecordKey != null && maxRecordKey != null) {
         extraMetaData.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
