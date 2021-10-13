@@ -34,7 +34,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 
 public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
   private TypedProperties getCommonProps() {
@@ -108,9 +108,9 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
   public void testWrongPartitionPathField() {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getWrongPartitionPathFieldProps());
     GenericRecord record = getRecord();
-    Assertions.assertEquals(keyGenerator.getPartitionPath(record), KeyGenUtils.DEFAULT_PARTITION_PATH);
+    Assertions.assertEquals(keyGenerator.getPartitionPath(record), KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH);
     Assertions.assertEquals(keyGenerator.getPartitionPath(KeyGeneratorTestUtilities.getRow(record)),
-        KeyGenUtils.DEFAULT_PARTITION_PATH);
+        KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH);
   }
 
   @Test
@@ -151,7 +151,7 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
       partitionPathFieldValue = (String) nestedColRecord.get("prop1");
     }
     String expectedPartitionPath = "nested_col.prop1="
-        + (partitionPathFieldValue != null && !partitionPathFieldValue.isEmpty() ? partitionPathFieldValue : DEFAULT_PARTITION_PATH);
+        + (partitionPathFieldValue != null && !partitionPathFieldValue.isEmpty() ? partitionPathFieldValue : HUDI_DEFAULT_PARTITION_PATH);
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals("key1", key.getRecordKey());
     Assertions.assertEquals(expectedPartitionPath, key.getPartitionPath());

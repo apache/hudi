@@ -88,7 +88,7 @@ public class TestBufferedConnectWriter {
     Mockito.verify(mockHoodieJavaWriteClient, times(0))
         .bulkInsertPreppedRecords(anyList(), eq(COMMIT_TIME), eq(Option.empty()));
 
-    writer.flushHudiRecords();
+    writer.flushRecords();
     final ArgumentCaptor<List<HoodieRecord>> actualRecords = ArgumentCaptor.forClass(List.class);
     Mockito.verify(mockHoodieJavaWriteClient, times(1))
         .bulkInsertPreppedRecords(actualRecords.capture(), eq(COMMIT_TIME), eq(Option.empty()));

@@ -135,7 +135,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   }
 
   /**
-   * Setup the config options based on the table definition, for e.g the table name, primary key.
+   * Sets up the config options based on the table definition, for e.g the table name, primary key.
    *
    * @param conf      The configuration to setup
    * @param tableName The table name
@@ -155,6 +155,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupCompactionOptions(conf);
     // hive options
     setupHiveOptions(conf);
+    // read options
+    setupReadOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toPhysicalRowDataType().notNull().getLogicalType());
   }
@@ -267,6 +269,16 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING)
         && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME)) {
       conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME, MultiPartKeysValueExtractor.class.getName());
+    }
+  }
+
+  /**
+   * Sets up the read options from the table definition.
+   */
+  private static void setupReadOptions(Configuration conf) {
+    if (!conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
+        && (conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent())) {
+      conf.setString(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
     }
   }
 

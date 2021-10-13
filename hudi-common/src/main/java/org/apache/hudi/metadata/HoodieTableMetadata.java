@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
@@ -105,11 +104,12 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
 
   /**
-   * Get the instant time at which Metadata Table was last updated.
-   *
-   * This is the timestamp of the Instant on the dataset which was last synced to the Metadata Table.
+   * Get the instant time to which the metadata is synced w.r.t data timeline.
    */
-  Option<String> getUpdateTime();
+  Option<String> getSyncedInstantTime();
 
-  boolean isInSync();
+  /**
+   * Returns the timestamp of the latest compaction.
+   */
+  Option<String> getLatestCompactionTime();
 }

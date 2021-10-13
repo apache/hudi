@@ -18,17 +18,13 @@
 
 package org.apache.hudi.connect;
 
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.FileIdPrefixProvider;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Objects;
 import java.util.Properties;
 
 public class KafkaConnectFileIdPrefixProvider extends FileIdPrefixProvider {
@@ -52,18 +48,9 @@ public class KafkaConnectFileIdPrefixProvider extends FileIdPrefixProvider {
     // We use a combination of kafka partition and partition path as the file id, and then hash it
     // to generate a fixed sized hash.
     String rawFileIdPrefix = kafkaPartition + partitionPath;
-    MessageDigest md;
-    try {
-      md = MessageDigest.getInstance("MD5");
-    } catch (NoSuchAlgorithmException e) {
-      LOG.error("Fatal error selecting hash algorithm", e);
-      throw new HoodieException(e);
-    }
-
-    byte[] digest = Objects.requireNonNull(md).digest(rawFileIdPrefix.getBytes(StandardCharsets.UTF_8));
-
+    String hashedPrefix = KafkaConnectUtils.hashDigest(rawFileIdPrefix);
     LOG.info("CreateFileId for Kafka Partition " + kafkaPartition + " : " + partitionPath + " = " + rawFileIdPrefix
-        + " === " + StringUtils.toHexString(digest).toUpperCase());
-    return StringUtils.toHexString(digest).toUpperCase();
+        + " === " + hashedPrefix);
+    return hashedPrefix;
   }
 }

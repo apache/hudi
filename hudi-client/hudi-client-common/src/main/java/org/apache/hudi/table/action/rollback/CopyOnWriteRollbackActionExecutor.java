@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -58,16 +59,7 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
   }
 
   @Override
-  protected RollbackStrategy getRollbackStrategy() {
-    if (useMarkerBasedStrategy) {
-      return new MarkerBasedRollbackStrategy(table, context, config, instantTime);
-    } else {
-      return this::executeRollbackUsingFileListing;
-    }
-  }
-
-  @Override
-  protected List<HoodieRollbackStat> executeRollback() {
+  protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
     HoodieTimer rollbackTimer = new HoodieTimer();
     rollbackTimer.startTimer();
 
@@ -87,7 +79,7 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
     if (!resolvedInstant.isRequested()) {
       // delete all the data files for this commit
       LOG.info("Clean out all base files generated for commit: " + resolvedInstant);
-      stats = getRollbackStrategy().execute(resolvedInstant);
+      stats = executeRollback(resolvedInstant, hoodieRollbackPlan);
     }
 
     dropBootstrapIndexIfNeeded(instantToRollback);
@@ -96,12 +88,5 @@ public class CopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I,
     deleteInflightAndRequestedInstant(deleteInstants, activeTimeline, resolvedInstant);
     LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return stats;
-  }
-
-  @Override
-  protected List<HoodieRollbackStat> executeRollbackUsingFileListing(HoodieInstant instantToRollback) {
-    List<ListingBasedRollbackRequest> rollbackRequests = RollbackUtils.generateRollbackRequestsByListingCOW(
-        context, table.getMetaClient().getBasePath(), config);
-    return new ListingBasedRollbackHelper(table.getMetaClient(), config).performRollback(context, instantToRollback, rollbackRequests);
   }
 }

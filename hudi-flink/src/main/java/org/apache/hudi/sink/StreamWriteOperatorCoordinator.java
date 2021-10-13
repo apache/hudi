@@ -127,11 +127,6 @@ public class StreamWriteOperatorCoordinator
   private HiveSyncContext hiveSyncContext;
 
   /**
-   * A single-thread executor to handle metadata table sync.
-   */
-  private NonThrownExecutor metadataSyncExecutor;
-
-  /**
    * The table state.
    */
   private transient TableState tableState;
@@ -225,8 +220,6 @@ public class StreamWriteOperatorCoordinator
             startInstant();
             // sync Hive if is enabled
             syncHiveIfEnabled();
-            // sync metadata if is enabled
-            syncMetadataIfEnabled();
           }
         }, "commits the instant %s", this.instant
     );
@@ -296,24 +289,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void initMetadataSync() {
-    this.metadataSyncExecutor = new NonThrownExecutor(LOG, true);
-  }
-
-  /**
-   * Sync the write metadata to the metadata table.
-   */
-  private void syncMetadataIfEnabled() {
-    if (tableState.syncMetadata) {
-      this.metadataSyncExecutor.execute(this::syncMetadata,
-          "sync metadata table for instant %s", this.instant);
-    }
-  }
-
-  /**
-   * Sync the write metadata to the metadata table.
-   */
-  private void syncMetadata() {
-    this.writeClient.syncTableMetadata();
+    this.writeClient.initMetadataWriter();
   }
 
   private void reset() {
@@ -366,11 +342,6 @@ public class StreamWriteOperatorCoordinator
         LOG.info("Recommit instant {}", instant);
         commitInstant(instant);
       }
-      if (tableState.syncMetadata) {
-        // initialize metadata table first if enabled
-        // condition: the data set timeline has committed instants
-        syncMetadata();
-      }
       // starts a new instant
       startInstant();
     }, "initialize instant %s", instant);
@@ -391,8 +362,6 @@ public class StreamWriteOperatorCoordinator
       commitInstant(this.instant);
       // sync Hive if is enabled in batch mode.
       syncHiveIfEnabled();
-      // sync metadata if is enabled in batch mode.
-      syncMetadataIfEnabled();
     }
   }
 
@@ -522,14 +491,6 @@ public class StreamWriteOperatorCoordinator
       this.executor.close();
     }
     this.executor = executor;
-  }
-
-  @VisibleForTesting
-  public void setMetadataSyncExecutor(NonThrownExecutor executor) throws Exception {
-    if (this.metadataSyncExecutor != null) {
-      this.metadataSyncExecutor.close();
-    }
-    this.metadataSyncExecutor = executor;
   }
 
   // -------------------------------------------------------------------------

@@ -33,6 +33,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * This class offers DDL executor backed by the jdbc This class preserves the old useJDBC = true way of doing things.
@@ -44,6 +45,9 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   public JDBCExecutor(HiveSyncConfig config, FileSystem fs) {
     super(config, fs);
+    Objects.requireNonNull(config.jdbcUrl, "--jdbc-url option is required for jdbc sync mode");
+    Objects.requireNonNull(config.hiveUser, "--user option is required for jdbc sync mode");
+    Objects.requireNonNull(config.hivePass, "--pass option is required for jdbc sync mode");
     this.config = config;
     createHiveConnection(config.jdbcUrl, config.hiveUser, config.hivePass);
   }

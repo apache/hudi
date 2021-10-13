@@ -850,7 +850,7 @@ public class TestHiveSyncTool {
         "Hive Schema should match the table schema + partition field");
     assertEquals(1, hiveClient.scanTablePartitions(HiveTestUtil.hiveSyncConfig.tableName).size(),"Table partitions should match the number of partitions we wrote");
     assertEquals(emptyCommitTime,
-        hiveClient.getLastCommitTimeSynced(HiveTestUtil.hiveSyncConfig.tableName).get(),"The last commit that was sycned should be updated in the TBLPROPERTIES");
+        hiveClient.getLastCommitTimeSynced(HiveTestUtil.hiveSyncConfig.tableName).get(),"The last commit that was synced should be updated in the TBLPROPERTIES");
 
     // make sure correct schema is picked
     Schema schema = SchemaTestUtil.getSimpleSchema();

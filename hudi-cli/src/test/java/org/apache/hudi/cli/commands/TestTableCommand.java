@@ -142,7 +142,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertTrue(cr.isSuccess());
     assertEquals("Metadata for table " + tableName + " loaded", cr.getResult().toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    assertEquals(metaPath + File.separator + "archive", client.getArchivePath());
+    assertEquals(metaPath + Path.SEPARATOR + "archive", client.getArchivePath());
     assertEquals(tablePath, client.getBasePath());
     assertEquals(metaPath, client.getMetaPath());
     assertEquals(HoodieTableType.MERGE_ON_READ, client.getTableType());
@@ -181,7 +181,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   private void testRefreshCommand(String command) throws IOException {
     // clean table matedata
     FileSystem fs = FileSystem.get(hadoopConf());
-    fs.delete(new Path(tablePath + File.separator + HoodieTableMetaClient.METAFOLDER_NAME), true);
+    fs.delete(new Path(tablePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME), true);
 
     // Create table
     assertTrue(prepareTable());

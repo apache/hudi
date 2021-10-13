@@ -56,7 +56,7 @@ import scala.collection.mutable
  *
  * 2、If the partition columns size is not equal to the partition path level, but the partition
  * column size is "1" (e.g. partition column is "dt", but the partition path is "2021/03/10"
- * who'es directory level is 3).We can still read it as a partitioned table. We will mapping the
+ * who's directory level is 3).We can still read it as a partitioned table. We will mapping the
  * partition path (e.g. 2021/03/10) to the only partition column (e.g. "dt").
  *
  * 3、Else the the partition columns size is not equal to the partition directory level and the
@@ -106,7 +106,7 @@ case class HoodieFileIndex(
         nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
           s"$column' in the schema[${schema.fields.mkString(",")}]")))
       new StructType(partitionFields)
-    } else { // If the partition columns have not stored in hoodie.properites(the table that was
+    } else { // If the partition columns have not stored in hoodie.properties(the table that was
       // created earlier), we trait it as a non-partitioned table.
       logWarning("No partition columns available from hoodie.properties." +
         " Partition pruning will not work")
@@ -125,9 +125,6 @@ case class HoodieFileIndex(
     properties.put(HoodieMetadataConfig.ENABLE,
       sqlConf.getConfString(HoodieMetadataConfig.ENABLE.key(),
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
-    properties.put(HoodieMetadataConfig.VALIDATE_ENABLE,
-      sqlConf.getConfString(HoodieMetadataConfig.VALIDATE_ENABLE.key(),
-        HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue().toString))
     properties.putAll(options.asJava)
     properties
   }
@@ -256,7 +253,7 @@ case class HoodieFileIndex(
             .iterator().asScala.toSeq
           (p._1, fileSlices)
         })
-        cachedFileSize = cachedAllInputFileSlices.values.flatten.map(_.getBaseFile.get().getFileLen).sum
+        cachedFileSize = cachedAllInputFileSlices.values.flatten.map(fileSliceSize).sum
     }
 
     // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
@@ -264,6 +261,15 @@ case class HoodieFileIndex(
     val flushSpend = System.currentTimeMillis() - startTime
     logInfo(s"Refresh table ${metaClient.getTableConfig.getTableName}," +
       s" spend: $flushSpend ms")
+  }
+
+  private def fileSliceSize(fileSlice: FileSlice): Long = {
+    val logFileSize = fileSlice.getLogFiles.iterator().asScala.map(_.getFileSize).filter(_ > 0).sum
+    if (fileSlice.getBaseFile.isPresent) {
+      fileSlice.getBaseFile.get().getFileLen + logFileSize
+    } else {
+      logFileSize
+    }
   }
 
   override def sizeInBytes: Long = {

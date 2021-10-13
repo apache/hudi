@@ -192,7 +192,6 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
-    coordinator.setMetadataSyncExecutor(new MockCoordinatorExecutor(context));
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -208,7 +207,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is("0000000000000"));
 
     // test metadata table compaction
-    // write another 4 commits
+    // write another 3 commits
     for (int i = 1; i < 4; i++) {
       instant = mockWriteWithMetadata();
       metadataTableMetaClient.reloadActiveTimeline();
@@ -246,7 +245,13 @@ public class TestStreamWriteOperatorCoordinator {
       double failureFraction) {
     final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction);
     writeStatus.setPartitionPath(partitionPath);
-    writeStatus.setStat(new HoodieWriteStat());
+
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partitionPath);
+    writeStat.setFileId("fileId123");
+    writeStat.setPath("path123");
+
+    writeStatus.setStat(writeStat);
 
     return WriteMetadataEvent.builder()
         .taskID(taskId)

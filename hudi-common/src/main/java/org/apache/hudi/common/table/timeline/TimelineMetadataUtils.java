@@ -28,6 +28,7 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
@@ -107,6 +108,10 @@ public class TimelineMetadataUtils {
 
   public static Option<byte[]> serializeCleanerPlan(HoodieCleanerPlan cleanPlan) throws IOException {
     return serializeAvroMetadata(cleanPlan, HoodieCleanerPlan.class);
+  }
+
+  public static Option<byte[]> serializeRollbackPlan(HoodieRollbackPlan rollbackPlan) throws IOException {
+    return serializeAvroMetadata(rollbackPlan, HoodieRollbackPlan.class);
   }
 
   public static Option<byte[]> serializeCleanMetadata(HoodieCleanMetadata metadata) throws IOException {

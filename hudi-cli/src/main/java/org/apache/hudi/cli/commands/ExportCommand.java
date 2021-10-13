@@ -181,7 +181,7 @@ public class ExportCommand implements CommandMarker {
     final HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     final HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     for (HoodieInstant instant : instants) {
-      String localPath = localFolder + File.separator + instant.getFileName();
+      String localPath = localFolder + Path.SEPARATOR + instant.getFileName();
 
       byte[] data = null;
       switch (instant.getAction()) {

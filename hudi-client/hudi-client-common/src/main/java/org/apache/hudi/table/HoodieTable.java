@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -54,6 +55,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -62,6 +64,7 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -317,6 +320,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * Get rollback timeline.
+   */
+  public HoodieTimeline getRollbackTimeline() {
+    return getActiveTimeline().getRollbackTimeline();
+  }
+
+  /**
    * Get only the completed (no-inflights) savepoint timeline.
    */
   public HoodieTimeline getCompletedSavepointTimeline() {
@@ -417,6 +427,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime);
 
+  /**
+   * Schedule rollback for the instant time.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for scheduling rollback
+   * @param instantToRollback instant to be rolled back
+   * @return HoodieRollbackPlan containing info on rollback.
+   */
+  public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
+                                                              String instantTime,
+                                                              HoodieInstant instantToRollback,
+                                                              boolean skipTimelinePublish);
+  
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
    * <pre>
@@ -681,5 +704,14 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // This is to handle scenarios where this is called at the executor tasks which do not have access
     // to engine context, and it ends up being null (as its not serializable and marked transient here).
     return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
+  }
+
+  /**
+   * Fetch instance of {@link HoodieTableMetadataWriter}.
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  public Option<HoodieTableMetadataWriter> getMetadataWriter() {
+    ValidationUtils.checkArgument(config.isMetadataTableEnabled(), "Metadata Table support not enabled in this Table");
+    return Option.empty();
   }
 }

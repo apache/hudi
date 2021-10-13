@@ -1403,16 +1403,20 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE);
   }
 
-  public long getLogFileMaxSize() {
-    return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
-  }
-
   public double getParquetCompressionRatio() {
     return getDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION);
   }
 
   public CompressionCodecName getParquetCompressionCodec() {
     return CompressionCodecName.fromConf(getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME));
+  }
+
+  public boolean parquetDictionaryEnabled() {
+    return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
+  }
+
+  public long getLogFileMaxSize() {
+    return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
   }
 
   public double getLogFileToParquetCompressionRatio() {
@@ -1473,6 +1477,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getGraphiteMetricPrefix() {
     return getString(HoodieMetricsGraphiteConfig.GRAPHITE_METRIC_PREFIX_VALUE);
+  }
+
+  public int getGraphiteReportPeriodSeconds() {
+    return getInt(HoodieMetricsGraphiteConfig.GRAPHITE_REPORT_PERIOD_IN_SECONDS);
   }
 
   public String getJmxHost() {
@@ -1669,10 +1677,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public boolean isMetadataTableEnabled() {
     return metadataConfig.enabled();
-  }
-
-  public boolean getFileListingMetadataVerify() {
-    return metadataConfig.validateFileListingMetadata();
   }
 
   public int getMetadataInsertParallelism() {

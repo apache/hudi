@@ -36,7 +36,7 @@ import java.util.Properties;
 @Immutable
 @ConfigClassProperty(name = "Kafka Sink Connect Configurations",
     groupName = ConfigGroups.Names.KAFKA_CONNECT,
-    description = "Configurations for Kakfa Connect Sink Connector for Hudi.")
+    description = "Configurations for Kafka Connect Sink Connector for Hudi.")
 public class KafkaConnectConfigs extends HoodieConfig {
 
   public static final String KAFKA_VALUE_CONVERTER = "value.converter";
@@ -67,7 +67,7 @@ public class KafkaConnectConfigs extends HoodieConfig {
 
   public static final ConfigProperty<String> COORDINATOR_WRITE_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.kafka.coordinator.write.timeout.secs")
-      .defaultValue("60")
+      .defaultValue("300")
       .withDocumentation("The timeout after sending an END_COMMIT until when "
           + "the coordinator will wait for the write statuses from all the partitions"
           + "to ignore the current commit and start a new commit.");

@@ -19,10 +19,10 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -32,12 +32,17 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -51,7 +56,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -83,11 +87,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
 
   protected HoodieWriteConfig metadataWriteConfig;
-  protected HoodieWriteConfig datasetWriteConfig;
+  protected HoodieWriteConfig dataWriteConfig;
   protected String tableName;
 
   protected HoodieBackedTableMetadata metadata;
-  protected HoodieTableMetaClient metaClient;
+  protected HoodieTableMetaClient metadataMetaClient;
+  protected HoodieTableMetaClient dataMetaClient;
   protected Option<HoodieMetadataMetrics> metrics;
   protected boolean enabled;
   protected SerializableConfiguration hadoopConf;
@@ -95,7 +100,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   protected HoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig,
       HoodieEngineContext engineContext) {
-    this.datasetWriteConfig = writeConfig;
+    this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
 
@@ -112,17 +117,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       ValidationUtils.checkArgument(!this.metadataWriteConfig.isMetadataTableEnabled(), "File listing cannot be used for Metadata Table");
 
       initRegistry();
-      HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(datasetWriteConfig.getBasePath()).build();
-      initialize(engineContext, datasetMetaClient);
-      if (enabled) {
-        // This is always called even in case the table was created for the first time. This is because
-        // initFromFilesystem() does file listing and hence may take a long time during which some new updates
-        // may have occurred on the table. Hence, calling this always ensures that the metadata is brought in sync
-        // with the active timeline.
-        HoodieTimer timer = new HoodieTimer().startTimer();
-        syncFromInstants(datasetMetaClient);
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.SYNC_STR, timer.endTimer()));
-      }
+      this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
+      initialize(engineContext);
+      initTableMetadata();
     } else {
       enabled = false;
       this.metrics = Option.empty();
@@ -165,7 +162,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
             .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
             // we will trigger compaction manually, to control the instant times
@@ -174,7 +171,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)
-        .withFinalizeWriteParallelism(parallelism);
+        .withFinalizeWriteParallelism(parallelism)
+        .withAllowMultiWriteOnSameInstant(true);
 
     if (writeConfig.isMetricsOn()) {
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
@@ -216,48 +214,43 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   /**
-   * Initialize the metadata table if it does not exist. Update the metadata to bring it in sync with the file system.
+   * Initialize the metadata table if it does not exist.
    *
-   * This can happen in two ways:
-   * 1. If the metadata table did not exist, then file and partition listing is used
-   * 2. If the metadata table exists, the instants from active timeline are read in order and changes applied
-   *
-   * The above logic has been chosen because it is faster to perform #1 at scale rather than read all the Instants
-   * which are large in size (AVRO or JSON encoded and not compressed) and incur considerable IO for de-serialization
-   * and decoding.
+   * If the metadata table did not exist, then file and partition listing is used to bootstrap the table.
    */
-  protected abstract void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient);
+  protected abstract void initialize(HoodieEngineContext engineContext);
 
-  protected void initTableMetadata() {
+  public void initTableMetadata() {
     try {
       if (this.metadata != null) {
         this.metadata.close();
       }
-      this.metadata = new HoodieBackedTableMetadata(engineContext, datasetWriteConfig.getMetadataConfig(),
-          datasetWriteConfig.getBasePath(), datasetWriteConfig.getSpillableMapBasePath());
-      this.metaClient = metadata.getMetaClient();
+      this.metadata = new HoodieBackedTableMetadata(engineContext, dataWriteConfig.getMetadataConfig(),
+          dataWriteConfig.getBasePath(), dataWriteConfig.getSpillableMapBasePath());
+      this.metadataMetaClient = metadata.getMetadataMetaClient();
     } catch (Exception e) {
       throw new HoodieException("Error initializing metadata table for reads", e);
     }
   }
 
-  protected void bootstrapIfNeeded(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient) throws IOException {
+  protected void bootstrapIfNeeded(HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient) throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    boolean exists = datasetMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
+    boolean exists = dataMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
     boolean rebootstrap = false;
     if (exists) {
       // If the un-synched instants have been archived then the metadata table will need to be bootstrapped again
-      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
+      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
           .setBasePath(metadataWriteConfig.getBasePath()).build();
-      Option<HoodieInstant> latestMetadataInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+      Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
       if (!latestMetadataInstant.isPresent()) {
         LOG.warn("Metadata Table will need to be re-bootstrapped as no instants were found");
         rebootstrap = true;
       } else if (!latestMetadataInstant.get().getTimestamp().equals(SOLO_COMMIT_TIMESTAMP)
-          && datasetMetaClient.getActiveTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
+          && dataMetaClient.getActiveTimeline().getAllCommitsTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
+        // TODO: Revisit this logic and validate that filtering for all commits timeline is the right thing to do
         LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
             + " latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
-            + ", latestDatasetInstant=" + datasetMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
+            + ", latestDataInstant=" + dataMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
         rebootstrap = true;
       }
     }
@@ -265,13 +258,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (rebootstrap) {
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.REBOOTSTRAP_STR, 1));
       LOG.info("Deleting Metadata Table directory so that it can be re-bootstrapped");
-      datasetMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath()), true);
+      dataMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath()), true);
       exists = false;
     }
 
     if (!exists) {
       // Initialize for the first time by listing partitions and files directly from the file system
-      if (bootstrapFromFilesystem(engineContext, datasetMetaClient)) {
+      if (bootstrapFromFilesystem(engineContext, dataMetaClient)) {
         metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       }
     }
@@ -280,23 +273,23 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Initialize the Metadata Table by listing files and partitions from the file system.
    *
-   * @param datasetMetaClient {@code HoodieTableMetaClient} for the dataset
+   * @param dataMetaClient {@code HoodieTableMetaClient} for the dataset.
    */
-  private boolean bootstrapFromFilesystem(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient) throws IOException {
+  private boolean bootstrapFromFilesystem(HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient) throws IOException {
     ValidationUtils.checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
 
     // We can only bootstrap if there are no pending operations on the dataset
-    Option<HoodieInstant> pendingInstantOption = Option.fromJavaOptional(datasetMetaClient.getActiveTimeline()
+    Option<HoodieInstant> pendingDataInstant = Option.fromJavaOptional(dataMetaClient.getActiveTimeline()
         .getReverseOrderedInstants().filter(i -> !i.isCompleted()).findFirst());
-    if (pendingInstantOption.isPresent()) {
+    if (pendingDataInstant.isPresent()) {
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-      LOG.warn("Cannot bootstrap metadata table as operation is in progress: " + pendingInstantOption.get());
+      LOG.warn("Cannot bootstrap metadata table as operation is in progress in dataset: " + pendingDataInstant.get());
       return false;
     }
 
     // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
     // Otherwise, we use the latest commit timestamp.
-    String createInstantTime = datasetMetaClient.getActiveTimeline().getReverseOrderedInstants().findFirst()
+    String createInstantTime = dataMetaClient.getActiveTimeline().getReverseOrderedInstants().findFirst()
         .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
     LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
 
@@ -309,10 +302,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
 
     initTableMetadata();
+    initializeFileGroups(dataMetaClient, MetadataPartitionType.FILES, createInstantTime, 1);
 
     // List all partitions in the basePath of the containing dataset
-    LOG.info("Initializing metadata table by using file listings in " + datasetWriteConfig.getBasePath());
-    Map<String, List<FileStatus>> partitionToFileStatus = getPartitionsToFilesMapping(datasetMetaClient);
+    LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
+    Map<String, List<FileStatus>> partitionToFileStatus = getPartitionsToFilesMapping(dataMetaClient);
 
     // Create a HoodieCommitMetadata with writeStats for all discovered files
     int[] stats = {0};
@@ -349,17 +343,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Function to find hoodie partitions and list files in them in parallel.
    *
-   * @param datasetMetaClient
+   * @param dataMetaClient
    * @return Map of partition names to a list of FileStatus for all the files in the partition
    */
-  private Map<String, List<FileStatus>> getPartitionsToFilesMapping(HoodieTableMetaClient datasetMetaClient) {
+  private Map<String, List<FileStatus>> getPartitionsToFilesMapping(HoodieTableMetaClient dataMetaClient) {
     List<Path> pathsToList = new LinkedList<>();
-    pathsToList.add(new Path(datasetWriteConfig.getBasePath()));
+    pathsToList.add(new Path(dataWriteConfig.getBasePath()));
 
     Map<String, List<FileStatus>> partitionToFileStatus = new HashMap<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
-    SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
-    final String dirFilterRegex = datasetWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
+    SerializableConfiguration conf = new SerializableConfiguration(dataMetaClient.getHadoopConf());
+    final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
 
     while (!pathsToList.isEmpty()) {
       int listingParallelism = Math.min(fileListingParallelism, pathsToList.size());
@@ -383,7 +377,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .collect(Collectors.toList());
 
         if (p.getRight().length > filesInDir.size()) {
-          String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetMetaClient.getBasePath()), p.getLeft());
+          String partitionName = FSUtils.getRelativePartitionPath(new Path(dataMetaClient.getBasePath()), p.getLeft());
           // deal with Non-partition table, we should exclude .hoodie
           partitionToFileStatus.put(partitionName, filesInDir.stream()
               .filter(f -> !f.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)).collect(Collectors.toList()));
@@ -401,35 +395,66 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   /**
-   * Sync the Metadata Table from the instants created on the dataset.
+   * Initialize file groups for a partition. For file listing, we just have one file group.
    *
-   * @param datasetMetaClient {@code HoodieTableMetaClient} for the dataset
+   * All FileGroups for a given metadata partition has a fixed prefix as per the {@link MetadataPartitionType#getFileIdPrefix()}.
+   * Each file group is suffixed with 4 digits with increments of 1 starting with 0000.
+   *
+   * Lets say we configure 10 file groups for record level index partittion, and prefix as "record-index-bucket-"
+   * File groups will be named as :
+   *    record-index-bucket-0000, .... -> ..., record-index-bucket-0009
    */
-  private void syncFromInstants(HoodieTableMetaClient datasetMetaClient) {
-    ValidationUtils.checkState(enabled, "Metadata table cannot be synced as it is not enabled");
-    // (re) init the metadata for reading.
-    initTableMetadata();
-    try {
-      List<HoodieInstant> instantsToSync = metadata.findInstantsToSyncForWriter();
-      if (instantsToSync.isEmpty()) {
-        return;
+  private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
+                                    int fileGroupCount) throws IOException {
+
+    final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
+    blockHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+    // Archival of data table has a dependency on compaction(base files) in metadata table.
+    // It is assumed that as of time Tx of base instant (/compaction time) in metadata table,
+    // all commits in data table is in sync with metadata table. So, we always start with log file for any fileGroup.
+    final HoodieDeleteBlock block = new HoodieDeleteBlock(new HoodieKey[0], blockHeader);
+
+    LOG.info(String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
+        fileGroupCount, metadataPartition.partitionPath(), metadataPartition.getFileIdPrefix(), instantTime));
+    for (int i = 0; i < fileGroupCount; ++i) {
+      final String fileGroupFileId = String.format("%s%04d", metadataPartition.getFileIdPrefix(), i);
+      try {
+        HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
+            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), metadataPartition.partitionPath()))
+            .withFileId(fileGroupFileId).overBaseCommit(instantTime)
+            .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
+            .withFileSize(0L)
+            .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
+            .withFs(dataMetaClient.getFs())
+            .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+        writer.appendBlock(block);
+        writer.close();
+      } catch (InterruptedException e) {
+        throw new HoodieException("Failed to created fileGroup " + fileGroupFileId + " for partition " + metadataPartition.partitionPath(), e);
       }
+    }
+  }
 
-      LOG.info("Syncing " + instantsToSync.size() + " instants to metadata table: " + instantsToSync);
+  /**
+   * Interface to assist in converting commit metadata to List of HoodieRecords to be written to metadata table.
+   * Updates of different commit metadata uses the same method to convert to HoodieRecords and hence.
+   */
+  private interface ConvertMetadataFunction {
+    List<HoodieRecord> convertMetadata();
+  }
 
-      // Read each instant in order and sync it to metadata table
-      for (HoodieInstant instant : instantsToSync) {
-        LOG.info("Syncing instant " + instant + " to metadata table");
-
-        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient,
-            metaClient.getActiveTimeline(), instant, metadata.getUpdateTime());
-        if (records.isPresent()) {
-          commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
-        }
-      }
-      initTableMetadata();
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Unable to sync instants from data to metadata table.", ioe);
+  /**
+   * Processes commit metadata from data table and commits to metadata table.
+   * @param instantTime instant time of interest.
+   * @param convertMetadataFunction converter function to convert the respective metadata to List of HoodieRecords to be written to metadata table.
+   * @param <T> type of commit metadata.
+   */
+  private <T> void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction) {
+    if (enabled && metadata != null) {
+      List<HoodieRecord> records = convertMetadataFunction.convertMetadata();
+      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
     }
   }
 
@@ -441,24 +466,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime) {
-    if (enabled) {
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata, instantTime);
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
-    }
-  }
-
-  /**
-   * Update from {@code HoodieCleanerPlan}.
-   *
-   * @param cleanerPlan {@code HoodieCleanerPlan}
-   * @param instantTime Timestamp at which the clean plan was generated
-   */
-  @Override
-  public void update(HoodieCleanerPlan cleanerPlan, String instantTime) {
-    if (enabled) {
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(cleanerPlan, instantTime);
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
-    }
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata, instantTime));
   }
 
   /**
@@ -469,10 +477,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
-    if (enabled) {
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(cleanMetadata, instantTime);
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
-    }
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(cleanMetadata, instantTime));
   }
 
   /**
@@ -483,11 +488,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
-    if (enabled) {
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metaClient.getActiveTimeline(),
-          restoreMetadata, instantTime, metadata.getUpdateTime());
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
-    }
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(),
+        restoreMetadata, instantTime, metadata.getSyncedInstantTime()));
   }
 
   /**
@@ -498,9 +500,21 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieRollbackMetadata rollbackMetadata, String instantTime) {
-    if (enabled) {
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metaClient.getActiveTimeline(),
-          rollbackMetadata, instantTime, metadata.getUpdateTime());
+    if (enabled && metadata != null) {
+      // Is this rollback of an instant that has been synced to the metadata table?
+      String rollbackInstant = rollbackMetadata.getCommitsRollback().get(0);
+      boolean wasSynced = metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, rollbackInstant));
+      if (!wasSynced) {
+        // A compaction may have taken place on metadata table which would have included this instant being rolled back.
+        // Revisit this logic to relax the compaction fencing : https://issues.apache.org/jira/browse/HUDI-2458
+        Option<String> latestCompaction = metadata.getLatestCompactionTime();
+        if (latestCompaction.isPresent()) {
+          wasSynced = HoodieTimeline.compareTimestamps(rollbackInstant, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCompaction.get());
+        }
+      }
+
+      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(), rollbackMetadata, instantTime,
+          metadata.getSyncedInstantTime(), wasSynced);
       commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
     }
   }
@@ -512,13 +526,50 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
-  public HoodieBackedTableMetadata getMetadataReader() {
-    return metadata;
-  }
-
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
    *
+   * @param records The list of records to be written.
+   * @param partitionName The partition to which the records are to be written.
+   * @param instantTime The timestamp to use for the deltacommit.
    */
   protected abstract void commit(List<HoodieRecord> records, String partitionName, String instantTime);
+
+  /**
+   *  Perform a compaction on the Metadata Table.
+   *
+   * Cases to be handled:
+   *   1. We cannot perform compaction if there are previous inflight operations on the dataset. This is because
+   *      a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx.
+   *
+   *   2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
+   *      deltacommit.
+   */
+  protected void compactIfNecessary(AbstractHoodieWriteClient writeClient, String instantTime) {
+    String latestDeltacommitTime = metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
+        .get().getTimestamp();
+    List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
+        .findInstantsBefore(latestDeltacommitTime).getInstants().collect(Collectors.toList());
+
+    if (!pendingInstants.isEmpty()) {
+      LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
+          pendingInstants.size(), latestDeltacommitTime, Arrays.toString(pendingInstants.toArray())));
+      return;
+    }
+
+    // Trigger compaction with suffixes based on the same instant time. This ensures that any future
+    // delta commits synced over will not have an instant time lesser than the last completed instant on the
+    // metadata table.
+    final String compactionInstantTime = latestDeltacommitTime + "001";
+    if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+      writeClient.compact(compactionInstantTime);
+    }
+  }
+
+  protected void doClean(AbstractHoodieWriteClient writeClient, String instantTime) {
+    // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
+    // delta commits synced over will not have an instant time lesser than the last completed instant on the
+    // metadata table.
+    writeClient.clean(instantTime + "002");
+  }
 }

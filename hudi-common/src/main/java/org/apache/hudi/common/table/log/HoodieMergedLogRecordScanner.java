@@ -181,52 +181,61 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     protected ExternalSpillableMap.DiskMapType diskMapType = HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue();
     protected boolean isBitCaskDiskMapCompressionEnabled = HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue();
     // incremental filtering
-    private Option<InstantRange> instantRange = Option.empty();
+    protected Option<InstantRange> instantRange = Option.empty();
     // auto scan default true
     private boolean autoScan = true;
     // operation field default false
     private boolean withOperationField = false;
 
+    @Override
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
       return this;
     }
 
+    @Override
     public Builder withBasePath(String basePath) {
       this.basePath = basePath;
       return this;
     }
 
+    @Override
     public Builder withLogFilePaths(List<String> logFilePaths) {
       this.logFilePaths = logFilePaths;
       return this;
     }
 
+    @Override
     public Builder withReaderSchema(Schema schema) {
       this.readerSchema = schema;
       return this;
     }
 
+    @Override
     public Builder withLatestInstantTime(String latestInstantTime) {
       this.latestInstantTime = latestInstantTime;
       return this;
     }
 
+    @Override
     public Builder withReadBlocksLazily(boolean readBlocksLazily) {
       this.readBlocksLazily = readBlocksLazily;
       return this;
     }
 
+    @Override
     public Builder withReverseReader(boolean reverseReader) {
       this.reverseReader = reverseReader;
       return this;
     }
 
+    @Override
     public Builder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
       return this;
     }
 
+    @Override
     public Builder withInstantRange(Option<InstantRange> instantRange) {
       this.instantRange = instantRange;
       return this;

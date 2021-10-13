@@ -19,19 +19,18 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,16 +59,7 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
   }
 
   @Override
-  protected RollbackStrategy getRollbackStrategy() {
-    if (useMarkerBasedStrategy) {
-      return new MarkerBasedRollbackStrategy(table, context, config, instantTime);
-    } else {
-      return this::executeRollbackUsingFileListing;
-    }
-  }
-
-  @Override
-  protected List<HoodieRollbackStat> executeRollback() {
+  protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
     HoodieTimer rollbackTimer = new HoodieTimer();
     rollbackTimer.startTimer();
 
@@ -96,7 +86,7 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
     // deleting the timeline file
     if (!resolvedInstant.isRequested()) {
       LOG.info("Unpublished " + resolvedInstant);
-      allRollbackStats = getRollbackStrategy().execute(resolvedInstant);
+      allRollbackStats = executeRollback(instantToRollback, hoodieRollbackPlan);
     }
 
     dropBootstrapIndexIfNeeded(resolvedInstant);
@@ -105,16 +95,5 @@ public class MergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I,
     deleteInflightAndRequestedInstant(deleteInstants, table.getActiveTimeline(), resolvedInstant);
     LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return allRollbackStats;
-  }
-
-  @Override
-  protected List<HoodieRollbackStat> executeRollbackUsingFileListing(HoodieInstant resolvedInstant) {
-    List<ListingBasedRollbackRequest> rollbackRequests;
-    try {
-      rollbackRequests = RollbackUtils.generateRollbackRequestsUsingFileListingMOR(resolvedInstant, table, context);
-    } catch (IOException e) {
-      throw new HoodieIOException("Error generating rollback requests by file listing.", e);
-    }
-    return new ListingBasedRollbackHelper(table.getMetaClient(), config).performRollback(context, resolvedInstant, rollbackRequests);
   }
 }

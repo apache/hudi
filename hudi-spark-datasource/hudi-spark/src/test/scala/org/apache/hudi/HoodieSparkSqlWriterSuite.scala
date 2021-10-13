@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, INSERT_OPERATION_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL, OPERATION, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, INSERT_OPERATION_OPT_VAL, KEYGENERATOR_CLASS_NAME, MOR_TABLE_TYPE_OPT_VAL, OPERATION, PAYLOAD_CLASS_NAME, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
@@ -445,6 +445,7 @@ class HoodieSparkSqlWriterSuite {
     val records = DataSourceTestUtils.generateRandomRows(100)
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+    initializeMetaClientForBootstrap(fooTableParams, tableType, false)
     val client = spy(DataSourceUtils.createHoodieClient(
       new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
       mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
@@ -501,8 +502,9 @@ class HoodieSparkSqlWriterSuite {
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
         HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+      initializeMetaClientForBootstrap(fooTableParams, tableType, true)
 
-      val client = spy(DataSourceUtils.createHoodieClient(
+         val client = spy(DataSourceUtils.createHoodieClient(
         new JavaSparkContext(sc),
         null,
         tempBasePath,
@@ -520,6 +522,27 @@ class HoodieSparkSqlWriterSuite {
     } finally {
       FileUtils.deleteDirectory(srcPath.toFile)
     }
+  }
+
+  def initializeMetaClientForBootstrap(fooTableParams : Map[String, String], tableType: String, addBootstrapPath : Boolean) : Unit = {
+    // when metadata is enabled, directly instantiating write client using DataSourceUtils.createHoodieClient
+    // will hit a code which tries to instantiate meta client for data table. if table does not exist, it fails.
+    // hence doing an explicit instantiation here.
+    val tableMetaClientBuilder = HoodieTableMetaClient.withPropertyBuilder()
+      .setTableType(tableType)
+      .setTableName(hoodieFooTableName)
+      .setRecordKeyFields(fooTableParams(DataSourceWriteOptions.RECORDKEY_FIELD.key))
+      .setBaseFileFormat(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name())
+      .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
+      .setPayloadClassName(fooTableParams(PAYLOAD_CLASS_NAME.key))
+      .setPreCombineField(fooTableParams(PRECOMBINE_FIELD.key))
+      .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
+      .setKeyGeneratorClassProp(fooTableParams(KEYGENERATOR_CLASS_NAME.key))
+      if(addBootstrapPath) {
+        tableMetaClientBuilder
+          .setBootstrapBasePath(fooTableParams(HoodieBootstrapConfig.BASE_PATH.key))
+      }
+    tableMetaClientBuilder.initTable(sc.hadoopConfiguration, tempBasePath)
   }
 
   /**
