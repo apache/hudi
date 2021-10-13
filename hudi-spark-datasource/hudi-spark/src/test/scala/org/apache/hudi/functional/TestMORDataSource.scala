@@ -17,6 +17,8 @@
 
 package org.apache.hudi.functional
 
+import java.util.Properties
+
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -61,6 +63,7 @@ class TestMORDataSource extends HoodieClientTestBase {
   val updatedVerificationVal: String = "driver_update"
 
   @BeforeEach override def setUp() {
+    setTableName("hoodie_test")
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
