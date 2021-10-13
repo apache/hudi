@@ -41,9 +41,8 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.Arrays;
@@ -70,8 +69,9 @@ public class ITTestHoodieFlinkCompactor {
   @TempDir
   File tempFile;
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  //@ParameterizedTest
+  //@ValueSource(booleans = {true, false})
+  @Disabled
   public void testHoodieFlinkCompactor(boolean enableChangelog) throws Exception {
     // Create hoodie table and insert into data.
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
