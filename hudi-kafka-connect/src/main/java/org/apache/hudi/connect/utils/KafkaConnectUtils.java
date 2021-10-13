@@ -87,7 +87,7 @@ public class KafkaConnectUtils {
   /**
    * Extract the record fields.
    * @param keyGenerator key generator Instance of the keygenerator.
-   * @return Returns the record key columns seprarated by comma.
+   * @return Returns the record key columns separated by comma.
    */
   public static String getRecordKeyColumns(KeyGenerator keyGenerator) {
     return String.join(",", keyGenerator.getRecordKeyFieldNames());
@@ -99,7 +99,7 @@ public class KafkaConnectUtils {
    *
    * @param keyGenerator key generator Instance of the keygenerator.
    * @param typedProperties properties from the config.
-   * @return partition columns Returns the partition columns seprarated by comma.
+   * @return partition columns Returns the partition columns separated by comma.
    */
   public static String getPartitionColumns(KeyGenerator keyGenerator, TypedProperties typedProperties) {
 
