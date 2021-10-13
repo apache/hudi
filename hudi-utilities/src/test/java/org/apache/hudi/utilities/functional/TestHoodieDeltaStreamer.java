@@ -171,11 +171,11 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     return new HoodieDeltaStreamer(cfg, jsc);
   }
 
-  protected HoodieClusteringJob initialHoodieClusteringJob(String tableBasePath, String clusteringInstantTime, boolean runSchedule, String scheduleAndExecute) {
-    return initialHoodieClusteringJob(tableBasePath, clusteringInstantTime, runSchedule, scheduleAndExecute, false);
+  protected HoodieClusteringJob initialHoodieClusteringJob(String tableBasePath, String clusteringInstantTime, Boolean runSchedule, String scheduleAndExecute) {
+    return initialHoodieClusteringJob(tableBasePath, clusteringInstantTime, runSchedule, scheduleAndExecute, null);
   }
 
-  protected HoodieClusteringJob initialHoodieClusteringJob(String tableBasePath, String clusteringInstantTime, boolean runSchedule, String scheduleAndExecute, boolean retryLastFailedClusteringJob) {
+  protected HoodieClusteringJob initialHoodieClusteringJob(String tableBasePath, String clusteringInstantTime, Boolean runSchedule, String scheduleAndExecute, Boolean retryLastFailedClusteringJob) {
     HoodieClusteringJob.Config scheduleClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
             clusteringInstantTime, runSchedule, scheduleAndExecute, retryLastFailedClusteringJob);
     return new HoodieClusteringJob(jsc, scheduleClusteringConfig);
@@ -1092,29 +1092,24 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
 
   private HoodieClusteringJob.Config buildHoodieClusteringUtilConfig(String basePath,
                                                                      String clusteringInstantTime,
-                                                                     boolean runSchedule) {
-    return buildHoodieClusteringUtilConfig(basePath, clusteringInstantTime, runSchedule, null);
+                                                                     Boolean runSchedule) {
+    return buildHoodieClusteringUtilConfig(basePath, clusteringInstantTime, runSchedule, null, null);
   }
 
   private HoodieClusteringJob.Config buildHoodieClusteringUtilConfig(String basePath,
                                                                      String clusteringInstantTime,
-                                                                     boolean runSchedule,
-                                                                     String runningMode) {
-    return buildHoodieClusteringUtilConfig(basePath, clusteringInstantTime, runSchedule, runningMode, false);
-  }
-
-  private HoodieClusteringJob.Config buildHoodieClusteringUtilConfig(String basePath,
-                                                                     String clusteringInstantTime,
-                                                                     boolean runSchedule,
+                                                                     Boolean runSchedule,
                                                                      String runningMode,
-                                                                     boolean retryLastFailedClusteringJob) {
+                                                                     Boolean retryLastFailedClusteringJob) {
     HoodieClusteringJob.Config config = new HoodieClusteringJob.Config();
     config.basePath = basePath;
     config.clusteringInstantTime = clusteringInstantTime;
     config.runSchedule = runSchedule;
     config.propsFilePath = dfsBasePath + "/clusteringjob.properties";
     config.runningMode = runningMode;
-    config.retryLastFailedClusteringJob = retryLastFailedClusteringJob;
+    if (retryLastFailedClusteringJob != null) {
+      config.retryLastFailedClusteringJob = retryLastFailedClusteringJob;
+    }
     return config;
   }
 

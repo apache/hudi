@@ -234,7 +234,7 @@ public class HoodieClusteringJob {
           instantTime = doSchedule(client);
         } else {
           // if there has failed clustering, then we will use the failed clustering instant-time to trigger next clustering action which will rollback and clustering.
-          LOG.info("Find failed clustering plan : " + inflightHoodieTimeline.lastInstant().get() + "; Will rollback and re-trigger this failed clustering plan.");
+          LOG.info("Found failed clustering instant at : " + inflightHoodieTimeline.lastInstant().get() + "; Will rollback the failed clustering and re-trigger again.");
           instantTime = Option.of(inflightHoodieTimeline.lastInstant().get().getTimestamp());
         }
       } else {
