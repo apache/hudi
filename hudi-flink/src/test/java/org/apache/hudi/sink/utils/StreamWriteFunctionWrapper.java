@@ -142,9 +142,6 @@ public class StreamWriteFunctionWrapper<I> {
   public void openFunction() throws Exception {
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
-    if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
-      this.coordinator.setMetadataSyncExecutor(new MockCoordinatorExecutor(coordinatorContext));
-    }
     toHoodieFunction = new RowDataToHoodieFunction<>(TestConfigurations.ROW_TYPE, conf);
     toHoodieFunction.setRuntimeContext(runtimeContext);
     toHoodieFunction.open(conf);

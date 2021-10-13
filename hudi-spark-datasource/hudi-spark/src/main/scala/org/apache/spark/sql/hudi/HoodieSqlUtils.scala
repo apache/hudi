@@ -19,10 +19,14 @@ package org.apache.spark.sql.hudi
 
 import scala.collection.JavaConverters._
 import java.net.URI
-import java.util.{Date, Locale}
+import java.util.{Date, Locale, Properties}
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -36,6 +40,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expressi
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 
 import java.text.SimpleDateFormat
@@ -78,6 +83,16 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     }
     avroSchema.map(SchemaConverters.toSqlType(_).dataType
       .asInstanceOf[StructType]).map(removeMetaFields)
+  }
+
+  def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
+    val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
+    val metadataConfig = {
+      val properties = new Properties()
+      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties).asJava)
+      HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
+    }
+    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, HoodieSqlUtils.getTableLocation(table, spark)).asScala
   }
 
   private def tripAlias(plan: LogicalPlan): LogicalPlan = {

@@ -50,12 +50,16 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
   static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   static final String PROPS_FILENAME_TEST_CSV = "test-csv-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
+  static final String PROPS_FILENAME_TEST_ORC = "test-orc-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_JSON_KAFKA = "test-json-kafka-dfs-source.properties";
   static final String PROPS_FILENAME_TEST_MULTI_WRITER = "test-multi-writer.properties";
   static final String FIRST_PARQUET_FILE_NAME = "1.parquet";
+  static final String FIRST_ORC_FILE_NAME = "1.orc";
   static String PARQUET_SOURCE_ROOT;
+  static String ORC_SOURCE_ROOT;
   static String JSON_KAFKA_SOURCE_ROOT;
   static final int PARQUET_NUM_RECORDS = 5;
+  static final int ORC_NUM_RECORDS = 5;
   static final int CSV_NUM_RECORDS = 3;
   static final int JSON_KAFKA_NUM_RECORDS = 5;
   String kafkaCheckpointType = "string";
@@ -84,6 +88,7 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass(true);
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
+    ORC_SOURCE_ROOT = dfsBasePath + "/orcFiles";
     JSON_KAFKA_SOURCE_ROOT = dfsBasePath + "/jsonKafkaFiles";
     testUtils = new KafkaTestUtils();
     testUtils.setup();
@@ -147,6 +152,7 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidHiveSyncProps, dfs, dfsBasePath + "/" + PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1);
 
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
+    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
   }
 
   protected static void writeCommonPropsToFile() throws IOException {
@@ -247,4 +253,27 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
           dataGenerator.generateInserts("000", numRecords)), new Path(path));
     }
   }
+
+  protected static void prepareORCDFSFiles(int numRecords) throws IOException {
+    prepareORCDFSFiles(numRecords, ORC_SOURCE_ROOT);
+  }
+
+  protected static void prepareORCDFSFiles(int numRecords, String baseORCPath) throws IOException {
+    prepareORCDFSFiles(numRecords, baseORCPath, FIRST_ORC_FILE_NAME, false, null, null);
+  }
+
+  protected static void prepareORCDFSFiles(int numRecords, String baseORCPath, String fileName, boolean useCustomSchema,
+                                               String schemaStr, Schema schema) throws IOException {
+    String path = baseORCPath + "/" + fileName;
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    if (useCustomSchema) {
+      Helpers.saveORCToDFS(Helpers.toGenericRecords(
+              dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
+              schema), new Path(path), HoodieTestDataGenerator.ORC_TRIP_SCHEMA);
+    } else {
+      Helpers.saveORCToDFS(Helpers.toGenericRecords(
+              dataGenerator.generateInserts("000", numRecords)), new Path(path));
+    }
+  }
+
 }

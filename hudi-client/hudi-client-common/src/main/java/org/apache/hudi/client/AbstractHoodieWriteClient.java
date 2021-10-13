@@ -61,6 +61,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -220,7 +221,11 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 
-  protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf);
+  protected HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+    return createTable(config, hadoopConf, false);
+  }
+
+  protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf, boolean refreshTimeline);
 
   void emitCommitMetrics(String instantTime, HoodieCommitMetadata metadata, String actionType) {
     try {
@@ -237,13 +242,16 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     }
   }
 
+  /**
+   * Any pre-commit actions like conflict resolution or updating metadata table goes here.
+   * @param instantTime commit instant time.
+   * @param metadata commit metadata for which pre commit is being invoked.
+   */
   protected void preCommit(String instantTime, HoodieCommitMetadata metadata) {
-    // no-op
-    // TODO : Conflict resolution is not supported for Flink & Java engines
-  }
-
-  protected void syncTableMetadata() {
-    // no-op
+    // Create a Hoodie table after starting the transaction which encapsulated the commits and files visible.
+    // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
+    HoodieTable table = createTable(config, hadoopConf);
+    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime));
   }
 
   /**
@@ -272,7 +280,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public void rollbackFailedBootstrap() {
     LOG.info("Rolling back pending bootstrap if present");
-    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
     Option<String> instant = Option.fromJavaOptional(
         inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp).findFirst());
@@ -400,16 +408,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-    this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, metaClient.getCommitActionType(), instantTime)), lastCompletedTxnAndMetadata
-        .isPresent()
-        ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
-    try {
-      if (writeOperationType != WriteOperationType.CLUSTER && writeOperationType != WriteOperationType.COMPACT) {
-        syncTableMetadata();
-      }
-    } finally {
-      this.txnManager.endTransaction();
-    }
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
   }
 
@@ -439,9 +437,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
-      if (operationType != null && operationType != WriteOperationType.CLUSTER && operationType != WriteOperationType.COMPACT) {
-        syncTableMetadata();
-      }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {
@@ -451,6 +446,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   protected void runTableServicesInline(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
     if (config.inlineTableServices()) {
+      if (config.isMetadataTableEnabled()) {
+        table.getHoodieView().sync();
+      }
       // Do an inline compaction if enabled
       if (config.inlineCompactionEnabled()) {
         runAnyPendingCompactions(table);
@@ -515,7 +513,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param comment - Comment for the savepoint
    */
   public void savepoint(String user, String comment) {
-    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
     if (table.getCompletedCommitsTimeline().empty()) {
       throw new HoodieSavepointException("Could not savepoint. Commit timeline is empty");
     }
@@ -539,7 +537,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param comment - Comment for the savepoint
    */
   public void savepoint(String instantTime, String user, String comment) {
-    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
     table.savepoint(context, instantTime, user, comment);
   }
 
@@ -551,7 +549,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @return true if the savepoint was deleted successfully
    */
   public void deleteSavepoint(String savepointTime) {
-    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
     SavepointHelpers.deleteSavepoint(table, savepointTime);
   }
 
@@ -566,7 +564,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @return true if the savepoint was restored to successfully
    */
   public void restoreToSavepoint(String savepointTime) {
-    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
     SavepointHelpers.validateSavepointPresence(table, savepointTime);
     restoreToInstant(savepointTime);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
@@ -624,7 +622,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     final String restoreInstantTime = HoodieActiveTimeline.createNewInstantTime();
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
-      HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+      HoodieTable<T, I, K, O> table = createTable(config, hadoopConf, config.isMetadataTableEnabled());
       HoodieRestoreMetadata restoreMetadata = table.restore(context, restoreInstantTime, instantTime);
       if (timerContext != null) {
         final long durationInMs = metrics.getDurationInMs(timerContext.stop());
@@ -957,17 +955,17 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     switch (tableServiceType) {
       case CLUSTER:
         LOG.info("Scheduling clustering at instant time :" + instantTime);
-        Option<HoodieClusteringPlan> clusteringPlan = createTable(config, hadoopConf)
+        Option<HoodieClusteringPlan> clusteringPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
             .scheduleClustering(context, instantTime, extraMetadata);
         return clusteringPlan.isPresent() ? Option.of(instantTime) : Option.empty();
       case COMPACT:
         LOG.info("Scheduling compaction at instant time :" + instantTime);
-        Option<HoodieCompactionPlan> compactionPlan = createTable(config, hadoopConf)
+        Option<HoodieCompactionPlan> compactionPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
             .scheduleCompaction(context, instantTime, extraMetadata);
         return compactionPlan.isPresent() ? Option.of(instantTime) : Option.empty();
       case CLEAN:
         LOG.info("Scheduling cleaning at instant time :" + instantTime);
-        Option<HoodieCleanerPlan> cleanerPlan = createTable(config, hadoopConf)
+        Option<HoodieCleanerPlan> cleanerPlan = createTable(config, hadoopConf, config.isMetadataTableEnabled())
             .scheduleCleaning(context, instantTime, extraMetadata);
         return cleanerPlan.isPresent() ? Option.of(instantTime) : Option.empty();
       default:

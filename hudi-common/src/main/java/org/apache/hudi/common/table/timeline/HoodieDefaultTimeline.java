@@ -229,7 +229,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    */
   public HoodieTimeline getRollbackTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(ROLLBACK_ACTION),
-            (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get only the rollback and restore action (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getRollbackAndRestoreTimeline() {
+    return  getTimelineOfActions(CollectionUtils.createSet(ROLLBACK_ACTION, RESTORE_ACTION));
   }
 
   /**

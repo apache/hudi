@@ -144,6 +144,10 @@
                   <include>org.apache.flink:flink-sql-connector-hive-2.3.6_${scala.binary.version}</include>
 
                   <include>org.apache.hbase:hbase-common</include>
+                  <include>org.apache.hbase:hbase-client</include>
+                  <include>org.apache.hbase:hbase-server</include>
+                  <include>org.apache.hbase:hbase-protocol</include>
+                  <include>org.apache.htrace:htrace-core</include>
                   <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
@@ -593,6 +597,45 @@
           <groupId>com.google.guava</groupId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-server</artifactId>
+      <version>${hbase.version}</version>
+      <scope>compile</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.mortbay.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>tomcat</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-client</artifactId>
+      <version>${hbase.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-protocol</artifactId>
+      <version>${hbase.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.htrace</groupId>
+      <artifactId>htrace-core</artifactId>
+      <version>${htrace.version}</version>
     </dependency>
   </dependencies>
 

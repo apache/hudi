@@ -44,8 +44,8 @@ import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
-import org.apache.hudi.table.action.clean.FlinkCleanActionExecutor;
-import org.apache.hudi.table.action.clean.FlinkScheduleCleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
@@ -297,7 +297,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
    */
   @Override
   public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new FlinkScheduleCleanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
+    return new CleanPlanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override
@@ -308,7 +308,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
-    return new FlinkCleanActionExecutor(context, config, this, cleanInstantTime).execute();
+    return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
@@ -329,7 +329,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   // -------------------------------------------------------------------------
   //  Used for compaction
   // -------------------------------------------------------------------------
-
+  
   public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
                                                   Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates

@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
@@ -46,6 +48,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
   private static final Logger LOG = LogManager.getLogger(BaseRestoreActionExecutor.class);
 
   private final String restoreInstantTime;
+  private final TransactionManager txnManager;
 
   public BaseRestoreActionExecutor(HoodieEngineContext context,
                                    HoodieWriteConfig config,
@@ -54,6 +57,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
                                    String restoreInstantTime) {
     super(context, config, table, instantTime);
     this.restoreInstantTime = restoreInstantTime;
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
   @Override
@@ -92,9 +96,23 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
 
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
+    writeToMetadata(restoreMetadata);
     table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime),
         TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));
     LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + restoreInstantTime);
     return restoreMetadata;
+  }
+
+  /**
+   * Update metadata table if available. Any update to metadata table happens within data table lock.
+   * @param restoreMetadata intance of {@link HoodieRestoreMetadata} to be applied to metadata.
+   */
+  private void writeToMetadata(HoodieRestoreMetadata restoreMetadata) {
+    try {
+      this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      writeTableMetadata(restoreMetadata);
+    } finally {
+      this.txnManager.endTransaction();
+    }
   }
 }

@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
@@ -37,15 +38,17 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
  * useful in limiting memory usage when only a small subset of updates records are to be read.
  */
 public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordScanner {
+
   // Set of all record keys that are to be read in memory
   private Set<String> mergeKeyFilter;
 
   private HoodieMetadataMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
                                               Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes, int bufferSize,
                                               String spillableMapBasePath, Set<String> mergeKeyFilter,
-                                               ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled) {
+                                              ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
+                                              Option<InstantRange> instantRange) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
-        spillableMapBasePath, Option.empty(), false, diskMapType, isBitCaskDiskMapCompressionEnabled, false);
+        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false);
     this.mergeKeyFilter = mergeKeyFilter;
 
     performScan();
@@ -88,59 +91,71 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
     private Set<String> mergeKeyFilter = Collections.emptySet();
 
+    @Override
     public Builder withFileSystem(FileSystem fs) {
       this.fs = fs;
       return this;
     }
 
+    @Override
     public Builder withBasePath(String basePath) {
       this.basePath = basePath;
       return this;
     }
 
+    @Override
     public Builder withLogFilePaths(List<String> logFilePaths) {
       this.logFilePaths = logFilePaths;
       return this;
     }
 
+    @Override
     public Builder withReaderSchema(Schema schema) {
       this.readerSchema = schema;
       return this;
     }
 
+    @Override
     public Builder withLatestInstantTime(String latestInstantTime) {
       this.latestInstantTime = latestInstantTime;
       return this;
     }
 
+    @Override
     public Builder withReadBlocksLazily(boolean readBlocksLazily) {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public Builder withReverseReader(boolean reverseReader) {
       throw new UnsupportedOperationException();
     }
 
+    @Override
     public Builder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
       return this;
     }
 
+    @Override
     public Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       return this;
     }
 
+    @Override
     public Builder withSpillableMapBasePath(String spillableMapBasePath) {
       this.spillableMapBasePath = spillableMapBasePath;
       return this;
     }
 
+    @Override
     public Builder withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
       this.diskMapType = diskMapType;
       return this;
     }
 
+    @Override
     public Builder withBitCaskDiskMapCompressionEnabled(boolean isBitCaskDiskMapCompressionEnabled) {
       this.isBitCaskDiskMapCompressionEnabled = isBitCaskDiskMapCompressionEnabled;
       return this;
@@ -151,11 +166,33 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
       return this;
     }
 
+    public Builder withLogBlockTimestamps(Set<String> validLogBlockTimestamps) {
+      withInstantRange(Option.of(new ExplicitMatchRange(validLogBlockTimestamps)));
+      return this;
+    }
+
     @Override
     public HoodieMetadataMergedLogRecordScanner build() {
       return new HoodieMetadataMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter,
-          diskMapType, isBitCaskDiskMapCompressionEnabled);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange);
+    }
+  }
+
+  /**
+   * Class to assist in checking if an instant is part of a set of instants.
+   */
+  private static class ExplicitMatchRange extends InstantRange {
+    Set<String> instants;
+
+    public ExplicitMatchRange(Set<String> instants) {
+      super(Collections.min(instants), Collections.max(instants));
+      this.instants = instants;
+    }
+
+    @Override
+    public boolean isInRange(String instant) {
+      return this.instants.contains(instant);
     }
   }
 }

@@ -95,8 +95,7 @@ public class TimelineServerPerf implements Serializable {
   public void run() throws IOException {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath,
-        cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, true);
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath, cfg.useFileListingFromMetadata, true);
     Collections.shuffle(allPartitionPaths);
     List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
         .collect(Collectors.toList());
@@ -307,9 +306,6 @@ public class TimelineServerPerf implements Serializable {
 
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
     public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-
-    @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue();
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;

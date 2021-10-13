@@ -36,7 +36,7 @@ import java.util.Properties;
 @Immutable
 @ConfigClassProperty(name = "Kafka Sink Connect Configurations",
     groupName = ConfigGroups.Names.KAFKA_CONNECT,
-    description = "Configurations for Kakfa Connect Sink Connector for Hudi.")
+    description = "Configurations for Kafka Connect Sink Connector for Hudi.")
 public class KafkaConnectConfigs extends HoodieConfig {
 
   public static final String KAFKA_VALUE_CONVERTER = "value.converter";

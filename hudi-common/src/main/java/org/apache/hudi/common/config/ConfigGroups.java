@@ -74,7 +74,7 @@ public class ConfigGroups {
             + "Hudi stats and metrics.";
         break;
       case KAFKA_CONNECT:
-        description = "These set of configs are used for Kakfa Connect Sink Connector for writing Hudi Tables";
+        description = "These set of configs are used for Kafka Connect Sink Connector for writing Hudi Tables";
         break;
       default:
         description = "Please fill in the description for Config Group Name: " + names.name;

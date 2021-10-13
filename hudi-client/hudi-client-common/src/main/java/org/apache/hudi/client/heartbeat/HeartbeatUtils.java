@@ -29,7 +29,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -53,7 +52,7 @@ public class HeartbeatUtils {
     boolean deleted = false;
     try {
       String heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
-      deleted = fs.delete(new Path(heartbeatFolderPath + File.separator + instantTime), false);
+      deleted = fs.delete(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), false);
       if (!deleted) {
         LOG.error("Failed to delete heartbeat for instant " + instantTime);
       }

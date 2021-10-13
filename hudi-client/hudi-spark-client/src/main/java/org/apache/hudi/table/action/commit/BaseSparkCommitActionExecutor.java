@@ -40,17 +40,14 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
-import org.apache.hudi.io.storage.HoodieConcatHandle;
+import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -239,7 +236,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     result.setWriteStatuses(statuses);
     return statuses;
   }
-  
+
   protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
     updateIndex(writeStatusRDD, result);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
@@ -264,13 +261,11 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     result.setWriteStats(writeStats);
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
-    syncTableMetadata();
     try {
-      LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
-
+      writeTableMetadata(metadata);
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       LOG.info("Committed " + instantTime);
@@ -351,17 +346,6 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       return new HoodieConcatHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     } else {
       return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    }
-  }
-
-  @Override
-  public void syncTableMetadata() {
-    // Open up the metadata table again, for syncing
-    try (HoodieTableMetadataWriter writer =
-             SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
-      LOG.info("Successfully synced to metadata table");
-    } catch (Exception e) {
-      throw new HoodieMetadataException("Error syncing to metadata table.", e);
     }
   }
 
