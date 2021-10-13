@@ -18,18 +18,13 @@
 
 package org.apache.hudi.table.action.compact;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaRDD;
 
@@ -43,27 +38,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
     extends HoodieCompactor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   @Override
-  public Schema getReaderSchema(HoodieWriteConfig config) {
-    return HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-  }
-
-  @Override
-  public void updateReaderSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-
-    // Here we firstly use the table schema as the reader schema to read
-    // log file.That is because in the case of MergeInto, the config.getSchema may not
-    // the same with the table schema.
-    try {
-      Schema readerSchema = schemaUtil.getTableAvroSchema(false);
-      config.setSchema(readerSchema.toString());
-    } catch (Exception e) {
-      // If there is no commit in the table, just ignore the exception.
-    }
-  }
-
-  @Override
-  public void handleCompactionTimeline(
+  public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline,
       String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
     HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);

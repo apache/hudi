@@ -89,7 +89,7 @@ import java.util.Map;
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
 public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
-    extends HoodieSparkTable<T> implements HoodieCopyOnWriteTableOperation<T> {
+    extends HoodieSparkTable<T> implements HoodieDataCompactionHandler<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkCopyOnWriteTable.class);
 

@@ -18,19 +18,14 @@
 
 package org.apache.hudi.table.action.compact;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.Schema;
 
 import java.util.List;
 
@@ -46,17 +41,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
     extends HoodieCompactor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 
   @Override
-  public Schema getReaderSchema(HoodieWriteConfig config) {
-    return HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
-  }
-
-  @Override
-  public void updateReaderSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    // No OP
-  }
-
-  @Override
-  public void handleCompactionTimeline(
+  public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline,
       String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);

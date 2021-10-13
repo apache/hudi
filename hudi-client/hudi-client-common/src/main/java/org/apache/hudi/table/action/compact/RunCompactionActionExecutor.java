@@ -33,7 +33,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
-import org.apache.hudi.table.HoodieCopyOnWriteTableOperation;
+import org.apache.hudi.table.HoodieDataCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -47,7 +47,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
 
   private final AbstractHoodieWriteClient writeClient;
   private final HoodieCompactor compactor;
-  private final HoodieCopyOnWriteTableOperation copyOnWriteTableOperation;
+  private final HoodieDataCompactionHandler copyOnWriteTableOperation;
 
   public RunCompactionActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
@@ -55,7 +55,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
                                      String instantTime,
                                      AbstractHoodieWriteClient writeClient,
                                      HoodieCompactor compactor,
-                                     HoodieCopyOnWriteTableOperation copyOnWriteTableOperation) {
+                                     HoodieDataCompactionHandler copyOnWriteTableOperation) {
     super(context, config, table, instantTime);
     this.writeClient = writeClient;
     this.compactor = compactor;
@@ -65,7 +65,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-    compactor.handleCompactionTimeline(table, pendingCompactionTimeline, instantTime, writeClient);
+    compactor.preCompact(table, pendingCompactionTimeline, instantTime, writeClient);
 
     HoodieWriteMetadata<HoodieData<WriteStatus>> compactionMetadata = new HoodieWriteMetadata<>();
     try {

@@ -76,7 +76,7 @@ import java.util.Map;
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
 public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
-    extends HoodieFlinkTable<T> implements HoodieCopyOnWriteTableOperation<T> {
+    extends HoodieFlinkTable<T> implements HoodieDataCompactionHandler<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCopyOnWriteTable.class);
 

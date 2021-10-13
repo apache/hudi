@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.compact;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
@@ -35,6 +36,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -47,7 +49,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.IOUtils;
-import org.apache.hudi.table.HoodieCopyOnWriteTableOperation;
+import org.apache.hudi.table.HoodieDataCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
@@ -76,28 +78,14 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
   private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
 
   /**
-   * @param config Write config.
-   * @return the reader schema for {@link HoodieMergedLogRecordScanner}.
-   */
-  public abstract Schema getReaderSchema(HoodieWriteConfig config);
-
-  /**
-   * Updates the reader schema for actual compaction operations.
-   *
-   * @param config     Write config.
-   * @param metaClient {@link HoodieTableMetaClient} instance to use.
-   */
-  public abstract void updateReaderSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient);
-
-  /**
-   * Handles the compaction timeline based on the compaction instant.
+   * Handles the compaction timeline based on the compaction instant before actual compaction.
    *
    * @param table                     {@link HoodieTable} instance to use.
    * @param pendingCompactionTimeline pending compaction timeline.
    * @param compactionInstantTime     compaction instant
    * @param writeClient               Write client.
    */
-  public abstract void handleCompactionTimeline(
+  public abstract void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline,
       String compactionInstantTime, AbstractHoodieWriteClient writeClient);
 
@@ -107,7 +95,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
   public HoodieData<WriteStatus> compact(
       HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
       HoodieTable table, HoodieWriteConfig config, String compactionInstantTime,
-      HoodieCopyOnWriteTableOperation copyOnWriteTableOperation) {
+      HoodieDataCompactionHandler copyOnWriteTableOperation) {
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
       return context.createEmptyHoodieData();
@@ -119,7 +107,17 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     table.getMetaClient().reloadActiveTimeline();
 
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    updateReaderSchema(config, metaClient);
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+
+    // Here we firstly use the table schema as the reader schema to read
+    // log file.That is because in the case of MergeInto, the config.getSchema may not
+    // the same with the table schema.
+    try {
+      Schema readerSchema = schemaUtil.getTableAvroSchema(false);
+      config.setSchema(readerSchema.toString());
+    } catch (Exception e) {
+      // If there is no commit in the table, just ignore the exception.
+    }
 
     // Compacting is very similar to applying updates to existing file
     List<CompactionOperation> operations = compactionPlan.getOperations().stream()
@@ -136,7 +134,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
   /**
    * Execute a single compaction operation and report back status.
    */
-  public List<WriteStatus> compact(HoodieCopyOnWriteTableOperation copyOnWriteTableOperation,
+  public List<WriteStatus> compact(HoodieDataCompactionHandler copyOnWriteTableOperation,
                                    HoodieTableMetaClient metaClient,
                                    HoodieWriteConfig config,
                                    CompactionOperation operation,
@@ -144,7 +142,8 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     FileSystem fs = metaClient.getFs();
 
-    Schema readerSchema = getReaderSchema(config);
+    Schema readerSchema = HoodieAvroUtils.addMetadataFields(
+        new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
     // TODO - FIX THIS
