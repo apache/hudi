@@ -24,18 +24,14 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.IntStream;
 
 /**
@@ -54,9 +50,6 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
   private final int maxConcurrentCompaction;
   private transient AbstractCompactor compactor;
   protected transient HoodieEngineContext context;
-  private transient BlockingQueue<HoodieInstant> pendingCompactions = new LinkedBlockingQueue<>();
-  private transient ReentrantLock queueLock = new ReentrantLock();
-  private transient Condition consumed = queueLock.newCondition();
 
   public AsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client) {
     this(context, client, false);
@@ -70,51 +63,6 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
   }
 
   protected abstract AbstractCompactor createCompactor(AbstractHoodieWriteClient client);
-
-  /**
-   * Enqueues new Pending compaction.
-   */
-  public void enqueuePendingCompaction(HoodieInstant instant) {
-    pendingCompactions.add(instant);
-  }
-
-  /**
-   * Wait till outstanding pending compactions reduces to the passed in value.
-   *
-   * @param numPendingCompactions Maximum pending compactions allowed
-   * @throws InterruptedException
-   */
-  public void waitTillPendingCompactionsReducesTo(int numPendingCompactions) throws InterruptedException {
-    try {
-      queueLock.lock();
-      while (!isShutdown() && (pendingCompactions.size() > numPendingCompactions)) {
-        consumed.await();
-      }
-    } finally {
-      queueLock.unlock();
-    }
-  }
-
-  /**
-   * Fetch Next pending compaction if available.
-   *
-   * @return
-   * @throws InterruptedException
-   */
-  private HoodieInstant fetchNextCompactionInstant() throws InterruptedException {
-    LOG.info("Compactor waiting for next instant for compaction upto 60 seconds");
-    HoodieInstant instant = pendingCompactions.poll(10, TimeUnit.SECONDS);
-    if (instant != null) {
-      try {
-        queueLock.lock();
-        // Signal waiting thread
-        consumed.signal();
-      } finally {
-        queueLock.unlock();
-      }
-    }
-    return instant;
-  }
 
   /**
    * Start Compaction Service.
@@ -134,7 +82,7 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
         context.setProperty(EngineProperty.COMPACTION_POOL_NAME, COMPACT_POOL_NAME);
 
         while (!isShutdownRequested()) {
-          final HoodieInstant instant = fetchNextCompactionInstant();
+          final HoodieInstant instant = fetchNextAsyncServiceInstant();
 
           if (null != instant) {
             LOG.info("Starting Compaction for instant " + instant);

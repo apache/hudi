@@ -19,6 +19,8 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -28,7 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -60,7 +62,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     initPath();
     initSparkContexts();
     //just generate tow partitions
-    dataGen = new HoodieTestDataGenerator(new String[]{DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
+    dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
     initFileSystem();
     initMetaClient();
   }
@@ -88,20 +90,16 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     //2. rollback
     HoodieInstant rollBackInstant = new HoodieInstant(isUsingMarkers, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
-    SparkMergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new SparkMergeOnReadRollbackActionExecutor(
+    BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false);
+    mergeOnReadRollbackPlanActionExecutor.execute().get();
+    MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         cfg,
         table,
         "003",
         rollBackInstant,
         true);
-    // assert is filelist mode
-    if (!isUsingMarkers) {
-      assertFalse(mergeOnReadRollbackActionExecutor.getRollbackStrategy() instanceof SparkMarkerBasedRollbackStrategy);
-    } else {
-      assertTrue(mergeOnReadRollbackActionExecutor.getRollbackStrategy() instanceof SparkMarkerBasedRollbackStrategy);
-    }
-
     //3. assert the rollback stat
     Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = mergeOnReadRollbackActionExecutor.execute().getPartitionMetadata();
     assertEquals(2, rollbackMetadata.size());
@@ -137,22 +135,35 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     secondPartitionRollBackLogFiles.removeAll(secondPartitionCommit2LogFiles);
     assertEquals(1, secondPartitionRollBackLogFiles.size());
 
-    assertFalse(new MarkerFiles(table, "002").doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
   }
 
   @Test
   public void testFailForCompletedInstants() {
     Assertions.assertThrows(IllegalArgumentException.class, () -> {
       HoodieInstant rollBackInstant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
-      new SparkMergeOnReadRollbackActionExecutor(
-              context,
-              getConfigBuilder().build(),
-              getHoodieTable(metaClient, getConfigBuilder().build()),
-              "003",
-              rollBackInstant,
-              true,
-              true,
-              true);
+      new MergeOnReadRollbackActionExecutor(context, getConfigBuilder().build(),
+          getHoodieTable(metaClient, getConfigBuilder().build()),
+          "003",
+          rollBackInstant,
+          true,
+          true,
+          true).execute();
     });
+  }
+
+  /**
+   * Test Cases for rollbacking when has not base file.
+   */
+  @Test
+  public void testRollbackWhenFirstCommitFail() throws Exception {
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      client.startCommitWithTime("001");
+      client.insert(jsc.emptyRDD(), "001");
+      client.rollback("001");
+    }
   }
 }

@@ -19,6 +19,7 @@
 package org.apache.hudi.timeline.service.handlers;
 
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -28,12 +29,15 @@ import java.io.IOException;
 public abstract class Handler {
 
   protected final Configuration conf;
+  protected final TimelineService.Config timelineServiceConfig;
   protected final FileSystem fileSystem;
   protected final FileSystemViewManager viewManager;
 
-  public Handler(Configuration conf, FileSystemViewManager viewManager) throws IOException {
+  public Handler(Configuration conf, TimelineService.Config timelineServiceConfig,
+                 FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
     this.conf = conf;
-    this.fileSystem = FileSystem.get(conf);
+    this.timelineServiceConfig = timelineServiceConfig;
+    this.fileSystem = fileSystem;
     this.viewManager = viewManager;
   }
 }

@@ -113,7 +113,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       assertEquals(100, filteredRDD.collect().size());
 
       JavaRDD<HoodieRecord> smallRecordsRDD = jsc.parallelize(records.subList(0, 75), 1);
-      // We create three parquet file, each having one record. (3 different partitions)
+      // We create three base file, each having one record. (3 different partitions)
       List<WriteStatus> statuses = writeFn.apply(writeClient, smallRecordsRDD, newCommitTime).collect();
       // Verify there are no errors
       assertNoWriteErrors(statuses);

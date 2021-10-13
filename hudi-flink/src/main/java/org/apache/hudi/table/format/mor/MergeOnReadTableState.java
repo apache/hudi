@@ -18,9 +18,13 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.model.HoodieRecord;
+
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -35,18 +39,23 @@ public class MergeOnReadTableState implements Serializable {
   private final String avroSchema;
   private final String requiredAvroSchema;
   private final List<MergeOnReadInputSplit> inputSplits;
+  private final String[] pkFields;
+  private final int operationPos;
 
   public MergeOnReadTableState(
       RowType rowType,
       RowType requiredRowType,
       String avroSchema,
       String requiredAvroSchema,
-      List<MergeOnReadInputSplit> inputSplits) {
+      List<MergeOnReadInputSplit> inputSplits,
+      String[] pkFields) {
     this.rowType = rowType;
     this.requiredRowType = requiredRowType;
     this.avroSchema = avroSchema;
     this.requiredAvroSchema = requiredAvroSchema;
     this.inputSplits = inputSplits;
+    this.pkFields = pkFields;
+    this.operationPos = rowType.getFieldIndex(HoodieRecord.OPERATION_METADATA_FIELD);
   }
 
   public RowType getRowType() {
@@ -69,11 +78,40 @@ public class MergeOnReadTableState implements Serializable {
     return inputSplits;
   }
 
+  public int getOperationPos() {
+    return operationPos;
+  }
+
   public int[] getRequiredPositions() {
     final List<String> fieldNames = rowType.getFieldNames();
     return requiredRowType.getFieldNames().stream()
         .map(fieldNames::indexOf)
         .mapToInt(i -> i)
         .toArray();
+  }
+
+  /**
+   * Get the primary key positions in required row type.
+   */
+  public int[] getPkOffsetsInRequired() {
+    final List<String> fieldNames = requiredRowType.getFieldNames();
+    return Arrays.stream(pkFields)
+        .map(fieldNames::indexOf)
+        .mapToInt(i -> i)
+        .toArray();
+  }
+
+  /**
+   * Returns the primary key fields logical type with given offsets.
+   *
+   * @param pkOffsets the pk offsets in required row type
+   * @return pk field logical types
+   * @see #getPkOffsetsInRequired()
+   */
+  public LogicalType[] getPkTypes(int[] pkOffsets) {
+    final LogicalType[] requiredTypes = requiredRowType.getFields().stream()
+        .map(RowType.RowField::getType).toArray(LogicalType[]::new);
+    return Arrays.stream(pkOffsets).mapToObj(offset -> requiredTypes[offset])
+        .toArray(LogicalType[]::new);
   }
 }

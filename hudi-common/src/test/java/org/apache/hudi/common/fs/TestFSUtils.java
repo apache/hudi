@@ -18,13 +18,20 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,16 +42,20 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -56,6 +67,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   private final long minCleanToKeep = 10;
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   @Rule
   public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
@@ -69,14 +81,14 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testMakeDataFileName() {
     String instantTime = COMMIT_FORMATTER.format(new Date());
     String fileName = UUID.randomUUID().toString();
-    assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + ".parquet");
+    assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
   @Test
   public void testMaskFileName() {
     String instantTime = COMMIT_FORMATTER.format(new Date());
     int taskPartitionId = 2;
-    assertEquals(FSUtils.maskWithoutFileId(instantTime, taskPartitionId), "*_" + taskPartitionId + "_" + instantTime + ".parquet");
+    assertEquals(FSUtils.maskWithoutFileId(instantTime, taskPartitionId), "*_" + taskPartitionId + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
   @Test
@@ -100,9 +112,12 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     });
 
     // Files inside partitions and marker directories
-    List<String> files = Arrays.asList("2016/04/15/1_1-0-1_20190528120000.parquet",
-        "2016/05/16/2_1-0-1_20190528120000.parquet", ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000.parquet",
-        ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000.parquet");
+    List<String> files = Stream.of("2016/04/15/1_1-0-1_20190528120000",
+        "2016/05/16/2_1-0-1_20190528120000",
+        ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000",
+        ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000")
+        .map(fileName -> fileName + BASE_FILE_EXTENSION)
+        .collect(Collectors.toList());
 
     files.forEach(f -> {
       try {
@@ -142,6 +157,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String instantTime = COMMIT_FORMATTER.format(new Date());
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName);
+    assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
+    // test log file name
+    fullFileName = FSUtils.makeLogFileName(fileName, HOODIE_LOG.getFileExtension(), instantTime, 1, TEST_WRITE_TOKEN);
     assertEquals(instantTime, FSUtils.getCommitTime(fullFileName));
   }
 
@@ -302,8 +320,139 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     Files.createFile(partitionPath.resolve(log3));
 
     assertEquals(3, (int) FSUtils.getLatestLogVersion(FSUtils.getFs(basePath, new Configuration()),
-        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
+            new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime).get().getLeft());
     assertEquals(4, FSUtils.computeNextLogVersion(FSUtils.getFs(basePath, new Configuration()),
-        new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
+            new Path(partitionPath.toString()), fileId, LOG_EXTENTION, instantTime));
+  }
+
+  private void prepareTestDirectory(FileSystem fileSystem, String rootDir) throws IOException {
+    // Directory structure
+    // .hoodie/.temp/
+    //  - subdir1
+    //    - file1.txt
+    //  - subdir2
+    //    - file2.txt
+    //  - file3
+    Path dirPath = new Path(rootDir);
+    String subDir1 = rootDir + "/subdir1";
+    String file1 = subDir1 + "/file1.txt";
+    String subDir2 = rootDir + "/subdir2";
+    String file2 = subDir2 + "/file2.txt";
+    String file3 = rootDir + "/file3.txt";
+    String[] dirs = new String[]{rootDir, subDir1, subDir2};
+    String[] files = new String[]{file1, file2, file3};
+    // clean up first
+    cleanUpTestDirectory(fileSystem, rootDir);
+    for (String dir : dirs) {
+      fileSystem.mkdirs(new Path(dir));
+    }
+    for (String filename : files) {
+      fileSystem.create(new Path(filename));
+    }
+  }
+
+  private void cleanUpTestDirectory(FileSystem fileSystem, String rootDir) throws IOException {
+    fileSystem.delete(new Path(rootDir), true);
+  }
+
+  @Test
+  public void testDeleteExistingDir() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    FileSystem fileSystem = metaClient.getFs();
+    prepareTestDirectory(fileSystem, rootDir);
+
+    Path rootDirPath = new Path(rootDir);
+    assertTrue(fileSystem.exists(rootDirPath));
+    assertTrue(FSUtils.deleteDir(
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, rootDirPath, 2));
+    assertFalse(fileSystem.exists(rootDirPath));
+  }
+
+  @Test
+  public void testDeleteNonExistingDir() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    FileSystem fileSystem = metaClient.getFs();
+    cleanUpTestDirectory(fileSystem, rootDir);
+
+    assertFalse(FSUtils.deleteDir(
+        new HoodieLocalEngineContext(metaClient.getHadoopConf()), fileSystem, new Path(rootDir), 2));
+  }
+
+  @Test
+  public void testDeleteSubDirectoryRecursively() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    String subPathStr = rootDir + "/subdir1";
+    FileSystem fileSystem = metaClient.getFs();
+    prepareTestDirectory(fileSystem, rootDir);
+
+    assertTrue(FSUtils.deleteSubPath(
+        subPathStr, new SerializableConfiguration(fileSystem.getConf()), true));
+  }
+
+  @Test
+  public void testDeleteSubDirectoryNonRecursively() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    String subPathStr = rootDir + "/subdir1";
+    FileSystem fileSystem = metaClient.getFs();
+    prepareTestDirectory(fileSystem, rootDir);
+
+    assertThrows(
+        HoodieIOException.class,
+        () -> FSUtils.deleteSubPath(
+            subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
+  }
+
+  @Test
+  public void testDeleteSubPathAsFile() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    String subPathStr = rootDir + "/file3.txt";
+    FileSystem fileSystem = metaClient.getFs();
+    prepareTestDirectory(fileSystem, rootDir);
+
+    assertTrue(FSUtils.deleteSubPath(
+        subPathStr, new SerializableConfiguration(fileSystem.getConf()), false));
+  }
+
+  @Test
+  public void testDeleteNonExistingSubDirectory() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    String subPathStr = rootDir + "/subdir10";
+    FileSystem fileSystem = metaClient.getFs();
+    cleanUpTestDirectory(fileSystem, rootDir);
+
+    assertFalse(FSUtils.deleteSubPath(
+        subPathStr, new SerializableConfiguration(fileSystem.getConf()), true));
+  }
+
+  @Test
+  public void testParallelizeSubPathProcessWithExistingDir() throws IOException {
+    String rootDir = basePath + "/.hoodie/.temp";
+    FileSystem fileSystem = metaClient.getFs();
+    prepareTestDirectory(fileSystem, rootDir);
+    Map<String, List<String>> result = FSUtils.parallelizeSubPathProcess(
+        new HoodieLocalEngineContext(fileSystem.getConf()), fileSystem, new Path(rootDir), 2,
+        fileStatus -> !fileStatus.getPath().getName().contains("1"),
+        pairOfSubPathAndConf -> {
+          Path subPath = new Path(pairOfSubPathAndConf.getKey());
+          List<String> listFiles = new ArrayList<>();
+          try {
+            FileSystem fs = subPath.getFileSystem(pairOfSubPathAndConf.getValue().get());
+            FileStatus[] fileStatuses = fs.listStatus(subPath);
+            listFiles = Arrays.stream(fileStatuses)
+                .map(fileStatus -> fileStatus.getPath().getName()).collect(Collectors.toList());
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+          return listFiles;
+        }
+    );
+    assertEquals(2, result.size());
+    for (String subPath : result.keySet()) {
+      if (subPath.contains("subdir2")) {
+        assertEquals(Collections.singletonList("file2.txt"), result.get(subPath));
+      } else if (subPath.contains("file3")) {
+        assertEquals(Collections.singletonList("file3.txt"), result.get(subPath));
+      }
+    }
   }
 }

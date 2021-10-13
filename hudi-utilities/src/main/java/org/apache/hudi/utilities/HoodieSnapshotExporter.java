@@ -68,8 +68,6 @@ import scala.collection.JavaConversions;
 
 /**
  * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
- *
- * @experimental This export is an experimental tool. If you want to export hudi to hudi, please use HoodieSnapshotCopier.
  */
 public class HoodieSnapshotExporter {
 
@@ -85,7 +83,7 @@ public class HoodieSnapshotExporter {
   public static class OutputFormatValidator implements IValueValidator<String> {
 
     public static final String HUDI = "hudi";
-    public static final List<String> FORMATS = CollectionUtils.createImmutableList("json", "parquet", HUDI);
+    public static final List<String> FORMATS = CollectionUtils.createImmutableList("json", "parquet", "orc", HUDI);
 
     @Override
     public void validate(String name, String value) {
@@ -104,7 +102,7 @@ public class HoodieSnapshotExporter {
     @Parameter(names = {"--target-output-path"}, description = "Base path for the target output files (snapshots)", required = true)
     public String targetOutputPath;
 
-    @Parameter(names = {"--output-format"}, description = "Output format for the exported dataset; accept these values: json|parquet|hudi", required = true,
+    @Parameter(names = {"--output-format"}, description = "Output format for the exported dataset; accept these values: json|parquet|orc|hudi", required = true,
         validateValueWith = OutputFormatValidator.class)
     public String outputFormat;
 
@@ -155,7 +153,7 @@ public class HoodieSnapshotExporter {
   }
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg) {
-    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false, false);
+    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {

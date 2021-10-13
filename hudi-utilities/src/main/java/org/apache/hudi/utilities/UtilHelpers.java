@@ -24,6 +24,11 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.Functions.Function1;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -37,12 +42,12 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
-import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -274,8 +279,8 @@ public class UtilHelpers {
    * @param schemaStr   Schema
    * @param parallelism Parallelism
    */
-  public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-                                                             int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
+  public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
+                                                                            int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -288,7 +293,7 @@ public class UtilHelpers {
             .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(properties).build();
-    return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
+    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), config);
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {
@@ -412,7 +417,7 @@ public class UtilHelpers {
     }
 
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
-    boolean enableSparkAvroPostProcessor = Boolean.valueOf(cfg.getString(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE, "true"));
+    boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE, "true"));
 
     if (transformerClassNames != null && !transformerClassNames.isEmpty()
             && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
@@ -424,9 +429,51 @@ public class UtilHelpers {
   }
 
   public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
-      TypedProperties cfg, JavaSparkContext jssc) {
+                                                            TypedProperties cfg, JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
+  }
+
+  /**
+   * Create latest schema provider for Target schema.
+   *
+   * @param structType spark data type of incoming batch.
+   * @param jssc       instance of {@link JavaSparkContext}.
+   * @param fs         instance of {@link FileSystem}.
+   * @param basePath   base path of the table.
+   * @return the schema provider where target schema refers to latest schema(either incoming schema or table schema).
+   */
+  public static SchemaProvider createLatestSchemaProvider(StructType structType,
+                                                          JavaSparkContext jssc, FileSystem fs, String basePath) {
+    SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
+    Schema writeSchema = rowSchemaProvider.getTargetSchema();
+    Schema latestTableSchema = writeSchema;
+
+    try {
+      if (FSUtils.isTableExists(basePath, fs)) {
+        HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder().setConf(jssc.sc().hadoopConfiguration()).setBasePath(basePath).build();
+        TableSchemaResolver
+            tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
+        latestTableSchema = tableSchemaResolver.getLatestSchema(writeSchema, true, (Function1<Schema, Schema>) v1 -> AvroConversionUtils.convertStructTypeToAvroSchema(
+            AvroConversionUtils.convertAvroSchemaToStructType(v1), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME,
+            RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE));
+      }
+    } catch (IOException e) {
+      LOG.warn("Could not fetch table schema. Falling back to writer schema");
+    }
+
+    final Schema finalLatestTableSchema = latestTableSchema;
+    return new SchemaProvider(new TypedProperties()) {
+      @Override
+      public Schema getSourceSchema() {
+        return rowSchemaProvider.getSourceSchema();
+      }
+
+      @Override
+      public Schema getTargetSchema() {
+        return finalLatestTableSchema;
+      }
+    };
   }
 
   @FunctionalInterface

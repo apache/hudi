@@ -18,10 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -29,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -58,6 +55,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -66,8 +64,16 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -111,9 +117,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
     this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
-        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+        FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue());
 
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
+    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.taskContextSupplier = context.getTaskContextSupplier();
@@ -123,7 +129,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), () -> metadata);
     }
     return viewManager;
   }
@@ -314,6 +320,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * Get rollback timeline.
+   */
+  public HoodieTimeline getRollbackTimeline() {
+    return getActiveTimeline().getRollbackTimeline();
+  }
+
+  /**
    * Get only the completed (no-inflights) savepoint timeline.
    */
   public HoodieTimeline getCompletedSavepointTimeline() {
@@ -415,6 +428,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime);
 
   /**
+   * Schedule rollback for the instant time.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for scheduling rollback
+   * @param instantToRollback instant to be rolled back
+   * @return HoodieRollbackPlan containing info on rollback.
+   */
+  public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
+                                                              String instantTime,
+                                                              HoodieInstant instantToRollback,
+                                                              boolean skipTimelinePublish);
+  
+  /**
    * Rollback the (inflight/committed) record changes with the given commit time.
    * <pre>
    *   Three steps:
@@ -480,6 +506,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * Returns the possible invalid data file name with given marker files.
+   */
+  protected Set<String> getInvalidDataPaths(WriteMarkers markers) throws IOException {
+    return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
+  }
+
+  /**
    * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark
    * retries.
    *
@@ -497,7 +530,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
-      MarkerFiles markers = new MarkerFiles(this, instantTs);
+      WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
 
       if (!markers.doesMarkerDirExist()) {
         // can happen if it was an empty write say.
@@ -505,7 +538,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       }
 
       // we are not including log appends here, since they are already fail-safe.
-      Set<String> invalidDataPaths = markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
+      Set<String> invalidDataPaths = getInvalidDataPaths(markers);
       Set<String> validDataPaths = stats.stream()
           .map(HoodieWriteStat::getPath)
           .filter(p -> p.endsWith(this.getBaseFileExtension()))
@@ -649,6 +682,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public HoodieLogBlockType getLogDataBlockFormat() {
     switch (getBaseFileFormat()) {
       case PARQUET:
+      case ORC:
         return HoodieLogBlockType.AVRO_DATA_BLOCK;
       case HFILE:
         return HoodieLogBlockType.HFILE_DATA_BLOCK;
@@ -670,5 +704,14 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // This is to handle scenarios where this is called at the executor tasks which do not have access
     // to engine context, and it ends up being null (as its not serializable and marked transient here).
     return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
+  }
+
+  /**
+   * Fetch instance of {@link HoodieTableMetadataWriter}.
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  public Option<HoodieTableMetadataWriter> getMetadataWriter() {
+    ValidationUtils.checkArgument(config.isMetadataTableEnabled(), "Metadata Table support not enabled in this Table");
+    return Option.empty();
   }
 }

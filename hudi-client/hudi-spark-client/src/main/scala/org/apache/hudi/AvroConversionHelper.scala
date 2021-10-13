@@ -33,6 +33,7 @@ import org.apache.spark.sql.avro.{IncompatibleSchemaException, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
+import org.apache.hudi.AvroConversionUtils._
 
 import scala.collection.JavaConverters._
 
@@ -340,7 +341,7 @@ object AvroConversionHelper {
           }
         }
       case structType: StructType =>
-        val schema: Schema = SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+        val schema: Schema = convertStructTypeToAvroSchema(structType, structName, recordNamespace)
         val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
         val fieldConverters = structType.fields.map(field =>
           createConverterToAvro(
@@ -356,7 +357,7 @@ object AvroConversionHelper {
             val fieldNamesIterator = dataType.asInstanceOf[StructType].fieldNames.iterator
             val rowIterator = item.asInstanceOf[Row].toSeq.iterator
 
-            while (convertersIterator.hasNext) {
+            while (convertersIterator.hasNext && rowIterator.hasNext) {
               val converter = convertersIterator.next()
               record.put(fieldNamesIterator.next(), converter(rowIterator.next()))
             }

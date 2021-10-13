@@ -29,41 +29,58 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
+import java.io.Serializable;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public abstract class AbstractSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
 
+  public static final TypeConverter TYPE_CONVERTOR = new TypeConverter() {};
+
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieTableType tableType;
   protected final FileSystem fs;
-  private String basePath;
-  private boolean assumeDatePartitioning;
-  private boolean useFileListingFromMetadata;
-  private boolean verifyMetadataFileListing;
+  private final String basePath;
+  private final boolean assumeDatePartitioning;
+  private final boolean useFileListingFromMetadata;
+  private final boolean withOperationField;
 
   public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
-                                  boolean verifyMetadataFileListing, FileSystem fs) {
+                                  boolean withOperationField, FileSystem fs) {
     this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.tableType = metaClient.getTableType();
     this.basePath = basePath;
     this.assumeDatePartitioning = assumeDatePartitioning;
     this.useFileListingFromMetadata = useFileListingFromMetadata;
-    this.verifyMetadataFileListing = verifyMetadataFileListing;
+    this.withOperationField = withOperationField;
     this.fs = fs;
   }
 
+  /**
+   * Create the table.
+   * @param tableName The table name.
+   * @param storageSchema The table schema.
+   * @param inputFormatClass The input format class of this table.
+   * @param outputFormatClass The output format class of this table.
+   * @param serdeClass The serde class of this table.
+   * @param serdeProperties The serde properties of this table.
+   * @param tableProperties The table properties for this table.
+   */
   public abstract void createTable(String tableName, MessageType storageSchema,
-                                   String inputFormatClass, String outputFormatClass, String serdeClass);
+                                   String inputFormatClass, String outputFormatClass,
+                                   String serdeClass, Map<String, String> serdeProperties,
+                                   Map<String, String> tableProperties);
 
   public abstract boolean doesTableExist(String tableName);
 
@@ -74,6 +91,8 @@ public abstract class AbstractSyncHoodieClient {
   public abstract void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
   public abstract void updatePartitionsToTable(String tableName, List<String> changedPartitions);
+
+  public  void updateTableProperties(String tableName, Map<String, String> tableProperties) {}
 
   public abstract Map<String, String> getTableSchema(String tableName);
 
@@ -87,6 +106,10 @@ public abstract class AbstractSyncHoodieClient {
 
   public FileSystem getFs() {
     return fs;
+  }
+
+  public boolean isBootstrap() {
+    return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
   }
 
   public void closeQuietly(ResultSet resultSet, Statement stmt) {
@@ -116,7 +139,11 @@ public abstract class AbstractSyncHoodieClient {
    */
   public MessageType getDataSchema() {
     try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema();
+      if (withOperationField) {
+        return new TableSchemaResolver(metaClient, true).getTableParquetSchema();
+      } else {
+        return new TableSchemaResolver(metaClient).getTableParquetSchema();
+      }
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read data schema", e);
     }
@@ -127,12 +154,47 @@ public abstract class AbstractSyncHoodieClient {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in " + basePath + ",FS :" + fs);
       HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
-      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, verifyMetadataFileListing,
-          assumeDatePartitioning);
+      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, assumeDatePartitioning);
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
           .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE));
+    }
+  }
+
+  public abstract static class TypeConverter implements Serializable {
+
+    static final String DEFAULT_TARGET_TYPE = "DECIMAL";
+
+    protected String targetType;
+
+    public TypeConverter() {
+      this.targetType = DEFAULT_TARGET_TYPE;
+    }
+
+    public TypeConverter(String targetType) {
+      ValidationUtils.checkArgument(Objects.nonNull(targetType));
+      this.targetType = targetType;
+    }
+
+    public void doConvert(ResultSet resultSet, Map<String, String> schema) throws SQLException {
+      schema.put(getColumnName(resultSet), targetType.equalsIgnoreCase(getColumnType(resultSet))
+                ? convert(resultSet) : getColumnType(resultSet));
+    }
+
+    public String convert(ResultSet resultSet) throws SQLException {
+      String columnType = getColumnType(resultSet);
+      int columnSize = resultSet.getInt("COLUMN_SIZE");
+      int decimalDigits = resultSet.getInt("DECIMAL_DIGITS");
+      return columnType + String.format("(%s,%s)", columnSize, decimalDigits);
+    }
+
+    public String getColumnName(ResultSet resultSet) throws SQLException {
+      return resultSet.getString(4);
+    }
+
+    public String getColumnType(ResultSet resultSet) throws SQLException {
+      return resultSet.getString(6);
     }
   }
 

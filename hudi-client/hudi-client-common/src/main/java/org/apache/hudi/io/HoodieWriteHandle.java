@@ -28,13 +28,12 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -55,8 +54,44 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
 
-  protected final Schema writerSchema;
-  protected final Schema writerSchemaWithMetafields;
+  /**
+   * A special record returned by {@link HoodieRecordPayload}, which means
+   * {@link HoodieWriteHandle} should just skip this record.
+   * This record is only used for {@link HoodieRecordPayload} currently, so it should not
+   * shuffle though network, we can compare the record locally by the equal method.
+   * The HoodieRecordPayload#combineAndGetUpdateValue and HoodieRecordPayload#getInsertValue
+   * have 3 kind of return:
+   * 1、Option.empty
+   * This means we should delete this record.
+   * 2、IGNORE_RECORD
+   * This means we should not process this record,just skip.
+   * 3、Other non-empty record
+   * This means we should process this record.
+   *
+   * We can see the usage of IGNORE_RECORD in
+   * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
+   */
+  public static IgnoreRecord IGNORE_RECORD = new IgnoreRecord();
+
+  /**
+   * The specified schema of the table. ("specified" denotes that this is configured by the client,
+   * as opposed to being implicitly fetched out of the commit metadata)
+   */
+  protected final Schema tableSchema;
+  protected final Schema tableSchemaWithMetaFields;
+
+  /**
+   * The write schema. In most case the write schema is the same to the
+   * input schema. But if HoodieWriteConfig#WRITE_SCHEMA is specified,
+   * we use the WRITE_SCHEMA as the write schema.
+   *
+   * This is useful for the case of custom HoodieRecordPayload which do some conversion
+   * to the incoming record in it. e.g. the ExpressionPayload do the sql expression conversion
+   * to the input.
+   */
+  protected final Schema writeSchema;
+  protected final Schema writeSchemaWithMetaFields;
+
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
   protected final String partitionPath;
@@ -67,17 +102,19 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
-        getWriterSchemaIncludingAndExcludingMetadataPair(config), taskContextSupplier);
+        Option.empty(), taskContextSupplier);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
-                              HoodieTable<T, I, K, O> hoodieTable, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
+                              HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
                               TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.writerSchema = writerSchemaIncludingAndExcludingMetadataPair.getKey();
-    this.writerSchemaWithMetafields = writerSchemaIncludingAndExcludingMetadataPair.getValue();
+    this.tableSchema = overriddenSchema.orElseGet(() -> getSpecifiedTableSchema(config));
+    this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema, config.allowOperationMetadataField());
+    this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
+    this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
@@ -86,16 +123,22 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   /**
-   * Returns writer schema pairs containing
-   *   (a) Writer Schema from client
-   *   (b) (a) with hoodie metadata fields.
-   * @param config Write Config
+   * Get the specified table schema.
+   * @param config
    * @return
    */
-  protected static Pair<Schema, Schema> getWriterSchemaIncludingAndExcludingMetadataPair(HoodieWriteConfig config) {
-    Schema originalSchema = new Schema.Parser().parse(config.getSchema());
-    Schema hoodieSchema = HoodieAvroUtils.addMetadataFields(originalSchema);
-    return Pair.of(originalSchema, hoodieSchema);
+  private static Schema getSpecifiedTableSchema(HoodieWriteConfig config) {
+    return new Schema.Parser().parse(config.getSchema());
+  }
+
+  /**
+   * Get the schema, of the actual write.
+   *
+   * @param config
+   * @return
+   */
+  private static Schema getWriteSchema(HoodieWriteConfig config) {
+    return new Schema.Parser().parse(config.getWriteSchema());
   }
 
   /**
@@ -120,17 +163,26 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   /**
+   * Make new file path with given file name.
+   */
+  protected Path makeNewFilePath(String partitionPath, String fileName) {
+    String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
+        + fileName).toString();
+    return new Path(config.getBasePath(), relativePath);
+  }
+
+  /**
    * Creates an empty marker file corresponding to storage writer path.
    *
    * @param partitionPath Partition path
    */
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
-    markerFiles.create(partitionPath, dataFileName, getIOType());
+    WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime)
+        .create(partitionPath, dataFileName, getIOType());
   }
 
-  public Schema getWriterSchemaWithMetafields() {
-    return writerSchemaWithMetafields;
+  public Schema getWriterSchemaWithMetaFields() {
+    return writeSchemaWithMetaFields;
   }
 
   /**
@@ -168,7 +220,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
-    return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
+    return HoodieAvroUtils.rewriteRecord(record, writeSchemaWithMetaFields);
   }
 
   public abstract List<WriteStatus> close();
@@ -203,5 +255,33 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
       HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
+  }
+
+  private static class IgnoreRecord implements GenericRecord {
+
+    @Override
+    public void put(int i, Object v) {
+
+    }
+
+    @Override
+    public Object get(int i) {
+      return null;
+    }
+
+    @Override
+    public Schema getSchema() {
+      return null;
+    }
+
+    @Override
+    public void put(String key, Object v) {
+
+    }
+
+    @Override
+    public Object get(String key) {
+      return null;
+    }
   }
 }

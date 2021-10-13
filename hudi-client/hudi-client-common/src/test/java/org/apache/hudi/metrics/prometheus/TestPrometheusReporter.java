@@ -20,24 +20,37 @@ package org.apache.hudi.metrics.prometheus;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 public class TestPrometheusReporter {
 
-  HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+  @Mock
+  HoodieWriteConfig config;
+
+  @AfterEach
+  void shutdownMetrics() {
+    Metrics.shutdown();
+  }
 
   @Test
   public void testRegisterGauge() {
     when(config.isMetricsOn()).thenReturn(true);
+    when(config.getTableName()).thenReturn("foo");
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS);
     when(config.getPrometheusPort()).thenReturn(9090);
     assertDoesNotThrow(() -> {
-      new HoodieMetrics(config, "raw_table");
+      new HoodieMetrics(config);
     });
   }
 }

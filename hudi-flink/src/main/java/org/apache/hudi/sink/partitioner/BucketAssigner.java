@@ -18,29 +18,23 @@
 
 package org.apache.hudi.sink.partitioner;
 
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.sink.partitioner.profile.WriteProfile;
+import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.util.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -57,20 +51,28 @@ import java.util.stream.Collectors;
  * <p>Use {partition}_{fileId} as the bucket identifier, so that the bucket is unique
  * within and among partitions.
  */
-public class BucketAssigner {
+public class BucketAssigner implements AutoCloseable {
   private static final Logger LOG = LogManager.getLogger(BucketAssigner.class);
+
+  /**
+   * Task ID.
+   */
+  private final int taskID;
+
+  /**
+   * The max parallelism.
+   */
+  private final int maxParallelism;
+
+  /**
+   * Number of tasks.
+   */
+  private final int numTasks;
 
   /**
    * Remembers what type each bucket is for later.
    */
   private final HashMap<String, BucketInfo> bucketInfoMap;
-
-  protected HoodieTable<?, ?, ?, ?> table;
-
-  /**
-   * Fink engine context.
-   */
-  private final HoodieFlinkEngineContext context;
 
   /**
    * The write config.
@@ -78,25 +80,14 @@ public class BucketAssigner {
   protected final HoodieWriteConfig config;
 
   /**
-   * The average record size.
+   * Write profile.
    */
-  private final long averageRecordSize;
+  private final WriteProfile writeProfile;
 
   /**
-   * Total records to write for each bucket based on
-   * the config option {@link org.apache.hudi.config.HoodieStorageConfig#PARQUET_FILE_MAX_BYTES}.
+   * Partition path to small file assign mapping.
    */
-  private final long insertRecordsPerBucket;
-
-  /**
-   * Partition path to small files mapping.
-   */
-  private final Map<String, List<SmallFile>> partitionSmallFilesMap;
-
-  /**
-   * Bucket ID(partition + fileId) -> small file assign state.
-   */
-  private final Map<String, SmallFileAssignState> smallFileAssignStates;
+  private final Map<String, SmallFileAssign> smallFileAssignMap;
 
   /**
    * Bucket ID(partition + fileId) -> new file assign state.
@@ -104,23 +95,20 @@ public class BucketAssigner {
   private final Map<String, NewFileAssignState> newFileAssignStates;
 
   public BucketAssigner(
-      HoodieFlinkEngineContext context,
+      int taskID,
+      int maxParallelism,
+      int numTasks,
+      WriteProfile profile,
       HoodieWriteConfig config) {
-    bucketInfoMap = new HashMap<>();
-    partitionSmallFilesMap = new HashMap<>();
-    smallFileAssignStates = new HashMap<>();
-    newFileAssignStates = new HashMap<>();
-    this.context = context;
+    this.taskID = taskID;
+    this.maxParallelism = maxParallelism;
+    this.numTasks = numTasks;
     this.config = config;
-    this.table = HoodieFlinkTable.create(this.config, this.context);
-    averageRecordSize = averageBytesPerRecord(
-        table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
-        config);
-    LOG.info("AvgRecordSize => " + averageRecordSize);
-    insertRecordsPerBucket = config.shouldAutoTuneInsertSplits()
-        ? config.getParquetMaxFileSize() / averageRecordSize
-        : config.getCopyOnWriteInsertSplitSize();
-    LOG.info("InsertRecordsPerBucket => " + insertRecordsPerBucket);
+    this.writeProfile = profile;
+
+    this.bucketInfoMap = new HashMap<>();
+    this.smallFileAssignMap = new HashMap<>();
+    this.newFileAssignStates = new HashMap<>();
   }
 
   /**
@@ -129,8 +117,6 @@ public class BucketAssigner {
    */
   public void reset() {
     bucketInfoMap.clear();
-    partitionSmallFilesMap.clear();
-    smallFileAssignStates.clear();
     newFileAssignStates.clear();
   }
 
@@ -146,25 +132,20 @@ public class BucketAssigner {
 
   public BucketInfo addInsert(String partitionPath) {
     // for new inserts, compute buckets depending on how many records we have for each partition
-    List<SmallFile> smallFiles = getSmallFilesForPartition(partitionPath);
+    SmallFileAssign smallFileAssign = getSmallFileAssign(partitionPath);
 
     // first try packing this into one of the smallFiles
-    for (SmallFile smallFile : smallFiles) {
-      final String key = StreamerUtil.generateBucketKey(partitionPath, smallFile.location.getFileId());
-      SmallFileAssignState assignState = smallFileAssignStates.get(key);
-      assert assignState != null;
-      if (assignState.canAssign()) {
-        assignState.assign();
-        // create a new bucket or re-use an existing bucket
-        BucketInfo bucketInfo;
-        if (bucketInfoMap.containsKey(key)) {
-          // Assigns an inserts to existing update bucket
-          bucketInfo = bucketInfoMap.get(key);
-        } else {
-          bucketInfo = addUpdate(partitionPath, smallFile.location.getFileId());
-        }
-        return bucketInfo;
+    if (smallFileAssign != null && smallFileAssign.assign()) {
+      final String key = StreamerUtil.generateBucketKey(partitionPath, smallFileAssign.getFileId());
+      // create a new bucket or reuse an existing bucket
+      BucketInfo bucketInfo;
+      if (bucketInfoMap.containsKey(key)) {
+        // Assigns an inserts to existing update bucket
+        bucketInfo = bucketInfoMap.get(key);
+      } else {
+        bucketInfo = addUpdate(partitionPath, smallFileAssign.getFileId());
       }
+      return bucketInfo;
     }
 
     // if we have anything more, create new insert buckets, like normal
@@ -172,102 +153,121 @@ public class BucketAssigner {
       NewFileAssignState newFileAssignState = newFileAssignStates.get(partitionPath);
       if (newFileAssignState.canAssign()) {
         newFileAssignState.assign();
+        final String key = StreamerUtil.generateBucketKey(partitionPath, newFileAssignState.fileId);
+        return bucketInfoMap.get(key);
       }
-      final String key = StreamerUtil.generateBucketKey(partitionPath, newFileAssignState.fileId);
-      return bucketInfoMap.get(key);
     }
-    BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath);
+    BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, createFileIdOfThisTask(), partitionPath);
     final String key = StreamerUtil.generateBucketKey(partitionPath, bucketInfo.getFileIdPrefix());
     bucketInfoMap.put(key, bucketInfo);
-    newFileAssignStates.put(partitionPath, new NewFileAssignState(bucketInfo.getFileIdPrefix(), insertRecordsPerBucket));
+    NewFileAssignState newFileAssignState = new NewFileAssignState(bucketInfo.getFileIdPrefix(), writeProfile.getRecordsPerBucket());
+    newFileAssignState.assign();
+    newFileAssignStates.put(partitionPath, newFileAssignState);
     return bucketInfo;
   }
 
-  private List<SmallFile> getSmallFilesForPartition(String partitionPath) {
-    if (partitionSmallFilesMap.containsKey(partitionPath)) {
-      return partitionSmallFilesMap.get(partitionPath);
+  private SmallFileAssign getSmallFileAssign(String partitionPath) {
+    if (smallFileAssignMap.containsKey(partitionPath)) {
+      return smallFileAssignMap.get(partitionPath);
     }
-    List<SmallFile> smallFiles = getSmallFiles(partitionPath);
+    List<SmallFile> smallFiles = smallFilesOfThisTask(writeProfile.getSmallFiles(partitionPath));
     if (smallFiles.size() > 0) {
       LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
-      partitionSmallFilesMap.put(partitionPath, smallFiles);
-      smallFiles.forEach(smallFile ->
-          smallFileAssignStates.put(
-              StreamerUtil.generateBucketKey(partitionPath, smallFile.location.getFileId()),
-              new SmallFileAssignState(config.getParquetMaxFileSize(), smallFile, averageRecordSize)));
-      return smallFiles;
+      SmallFileAssignState[] states = smallFiles.stream()
+          .map(smallFile -> new SmallFileAssignState(config.getParquetMaxFileSize(), smallFile, writeProfile.getAvgSize()))
+          .toArray(SmallFileAssignState[]::new);
+      SmallFileAssign assign = new SmallFileAssign(states);
+      smallFileAssignMap.put(partitionPath, assign);
+      return assign;
     }
-    return Collections.emptyList();
+    return null;
   }
 
   /**
    * Refresh the table state like TableFileSystemView and HoodieTimeline.
    */
-  public void refreshTable() {
-    this.table = HoodieFlinkTable.create(this.config, this.context);
+  public void reload(long checkpointId) {
+    this.smallFileAssignMap.clear();
+    this.writeProfile.reload(checkpointId);
   }
 
   public HoodieTable<?, ?, ?, ?> getTable() {
-    return table;
+    return this.writeProfile.getTable();
+  }
+
+  private boolean fileIdOfThisTask(String fileId) {
+    // the file id can shuffle to this task
+    return KeyGroupRangeAssignment.assignKeyToParallelOperator(fileId, maxParallelism, numTasks) == taskID;
+  }
+
+  @VisibleForTesting
+  public String createFileIdOfThisTask() {
+    String newFileIdPfx = FSUtils.createNewFileIdPfx();
+    while (!fileIdOfThisTask(newFileIdPfx)) {
+      newFileIdPfx = FSUtils.createNewFileIdPfx();
+    }
+    return newFileIdPfx;
+  }
+
+  @VisibleForTesting
+  public List<SmallFile> smallFilesOfThisTask(List<SmallFile> smallFiles) {
+    // computes the small files to write inserts for this task.
+    return smallFiles.stream()
+        .filter(smallFile -> fileIdOfThisTask(smallFile.location.getFileId()))
+        .collect(Collectors.toList());
+  }
+
+  public void close() {
+    reset();
+    WriteProfiles.clean(config.getBasePath());
   }
 
   /**
-   * Returns a list of small files in the given partition path.
+   * Assigns the record to one of the small files under one partition.
+   *
+   * <p> The tool is initialized with an array of {@link SmallFileAssignState}s.
+   * A pointer points to the current small file we are ready to assign,
+   * if the current small file can not be assigned anymore (full assigned), the pointer
+   * move to next small file.
+   * <pre>
+   *       |  ->
+   *       V
+   *   | smallFile_1 | smallFile_2 | smallFile_3 | ... | smallFile_N |
+   * </pre>
+   *
+   * <p>If all the small files are full assigned, a flag {@code noSpace} was marked to true, and
+   * we can return early for future check.
    */
-  protected List<SmallFile> getSmallFiles(String partitionPath) {
+  private static class SmallFileAssign {
+    final SmallFileAssignState[] states;
+    int assignIdx = 0;
+    boolean noSpace = false;
 
-    // smallFiles only for partitionPath
-    List<SmallFile> smallFileLocations = new ArrayList<>();
-
-    HoodieTimeline commitTimeline = table.getMetaClient().getCommitsTimeline().filterCompletedInstants();
-
-    if (!commitTimeline.empty()) { // if we have some commits
-      HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-      List<HoodieBaseFile> allFiles = table.getBaseFileOnlyView()
-          .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
-
-      for (HoodieBaseFile file : allFiles) {
-        if (file.getFileSize() < config.getParquetSmallFileLimit()) {
-          String filename = file.getFileName();
-          SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
-          sf.sizeBytes = file.getFileSize();
-          smallFileLocations.add(sf);
-        }
-      }
+    SmallFileAssign(SmallFileAssignState[] states) {
+      this.states = states;
     }
 
-    return smallFileLocations;
-  }
-
-  /**
-   * Obtains the average record size based on records written during previous commits. Used for estimating how many
-   * records pack into one file.
-   */
-  protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
-    long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
-    long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
-    try {
-      if (!commitTimeline.empty()) {
-        // Go over the reverse ordered commits to get a more recent estimate of average record size.
-        Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
-        while (instants.hasNext()) {
-          HoodieInstant instant = instants.next();
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-          long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
-          long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-          if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
-            avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
-            break;
-          }
-        }
+    public boolean assign() {
+      if (noSpace) {
+        return false;
       }
-    } catch (Throwable t) {
-      // make this fail safe.
-      LOG.error("Error trying to compute average bytes/record ", t);
+      SmallFileAssignState state = states[assignIdx];
+      while (!state.canAssign()) {
+        assignIdx += 1;
+        if (assignIdx >= states.length) {
+          noSpace = true;
+          return false;
+        }
+        // move to next slot if possible
+        state = states[assignIdx];
+      }
+      state.assign();
+      return true;
     }
-    return avgSize;
+
+    public String getFileId() {
+      return states[assignIdx].fileId;
+    }
   }
 
   /**
@@ -277,10 +277,12 @@ public class BucketAssigner {
   private static class SmallFileAssignState {
     long assigned;
     long totalUnassigned;
+    final String fileId;
 
     SmallFileAssignState(long parquetMaxFileSize, SmallFile smallFile, long averageRecordSize) {
       this.assigned = 0;
       this.totalUnassigned = (parquetMaxFileSize - smallFile.sizeBytes) / averageRecordSize;
+      this.fileId = smallFile.location.getFileId();
     }
 
     public boolean canAssign() {

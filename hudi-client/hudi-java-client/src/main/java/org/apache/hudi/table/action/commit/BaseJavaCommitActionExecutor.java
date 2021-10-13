@@ -206,6 +206,8 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
 
+      writeTableMetadata(metadata);
+
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       LOG.info("Committed " + instantTime);
@@ -216,7 +218,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     }
   }
 
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(List<WriteStatus> writeStatuses) {
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
     return Collections.emptyMap();
   }
 
@@ -228,8 +230,8 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
                                                               Partitioner partitioner) {
-    UpsertPartitioner upsertPartitioner = (UpsertPartitioner) partitioner;
-    BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
+    JavaUpsertPartitioner javaUpsertPartitioner = (JavaUpsertPartitioner) partitioner;
+    BucketInfo binfo = javaUpsertPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
       if (btype.equals(BucketType.INSERT)) {
@@ -283,9 +285,9 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     if (table.requireSortedRecords()) {
-      return new HoodieSortedMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
+      return new HoodieSortedMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty());
     } else {
-      return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
+      return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty());
     }
   }
 
@@ -293,7 +295,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
                                               Map<String, HoodieRecord<T>> keyToNewRecords,
                                               HoodieBaseFile dataFileToBeMerged) {
     return new HoodieMergeHandle<>(config, instantTime, table, keyToNewRecords,
-        partitionPath, fileId, dataFileToBeMerged, taskContextSupplier);
+        partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, Option.empty());
   }
 
   @Override
@@ -314,7 +316,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    return new UpsertPartitioner(profile, context, table, config);
+    return new JavaUpsertPartitioner(profile, context, table, config);
   }
 
   /**
@@ -330,7 +332,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     List<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
-    result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));
+    result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
     commitOnAutoCommit(result);
   }
 }

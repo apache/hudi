@@ -20,6 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -52,9 +53,10 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   private byte[] jsonDataCompressed;
   private int dataSize;
   private boolean isDeleted;
+  private Comparable orderingVal;
 
   public RawTripTestPayload(Option<String> jsonData, String rowKey, String partitionPath, String schemaStr,
-      Boolean isDeleted) throws IOException {
+      Boolean isDeleted, Comparable orderingVal) throws IOException {
     if (jsonData.isPresent()) {
       this.jsonDataCompressed = compressData(jsonData.get());
       this.dataSize = jsonData.get().length();
@@ -62,10 +64,11 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.rowKey = rowKey;
     this.partitionPath = partitionPath;
     this.isDeleted = isDeleted;
+    this.orderingVal = orderingVal;
   }
 
   public RawTripTestPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
-    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false);
+    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false, 0L);
   }
 
   public RawTripTestPayload(String jsonData) throws IOException {
@@ -94,13 +97,23 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
+  public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
+    return records.stream().map(record -> "{\"_row_key\": \"" + record.getRecordKey() + "\",\"partition\": \"" + record.getPartitionPath() + "\"}")
+        .collect(Collectors.toList());
+  }
+
   public String getPartitionPath() {
     return partitionPath;
   }
 
   @Override
-  public RawTripTestPayload preCombine(RawTripTestPayload another) {
-    return another;
+  public RawTripTestPayload preCombine(RawTripTestPayload oldValue) {
+    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+      // pick the payload with greatest ordering value
+      return oldValue;
+    } else {
+      return this;
+    }
   }
 
   @Override

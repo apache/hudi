@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -50,12 +51,15 @@ public class FlinkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
 
   private static final Logger LOG = LogManager.getLogger(FlinkScheduleCompactionActionExecutor.class);
 
+  private final Option<Map<String, String>> extraMetadata;
+
   public FlinkScheduleCompactionActionExecutor(HoodieEngineContext context,
                                                HoodieWriteConfig config,
                                                HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                                                String instantTime,
                                                Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, extraMetadata);
+    this.extraMetadata = extraMetadata;
   }
 
   @Override

@@ -18,10 +18,10 @@
 
 package org.apache.hudi.hive;
 
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
-
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 
@@ -37,12 +37,12 @@ public class SlashEncodedHourPartitionValueExtractor implements PartitionValueEx
   private transient DateTimeFormatter dtfOut;
 
   public SlashEncodedHourPartitionValueExtractor() {
-    this.dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd-HH");
+    this.dtfOut = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
   }
 
   private DateTimeFormatter getDtfOut() {
     if (dtfOut == null) {
-      dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd-HH");
+      dtfOut = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH");
     }
     return dtfOut;
   }
@@ -60,8 +60,8 @@ public class SlashEncodedHourPartitionValueExtractor implements PartitionValueEx
     int dd = Integer.parseInt(splits[2].contains("=") ? splits[2].split("=")[1] : splits[2]);
     int hh = Integer.parseInt(splits[3].contains("=") ? splits[3].split("=")[1] : splits[3]);
 
-    DateTime dateTime = new DateTime(year, mm, dd, hh, 0);
+    ZonedDateTime dateTime = ZonedDateTime.of(LocalDateTime.of(year, mm, dd, hh, 0), ZoneId.systemDefault());
 
-    return Collections.singletonList(getDtfOut().print(dateTime));
+    return Collections.singletonList(dateTime.format(getDtfOut()));
   }
 }

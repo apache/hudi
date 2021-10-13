@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
@@ -38,8 +39,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
-import org.apache.hudi.table.action.clean.JavaCleanActionExecutor;
-import org.apache.hudi.table.action.clean.JavaScheduleCleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
@@ -49,8 +50,9 @@ import org.apache.hudi.table.action.commit.JavaInsertOverwriteTableCommitActionE
 import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.restore.JavaCopyOnWriteRestoreActionExecutor;
-import org.apache.hudi.table.action.rollback.JavaCopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
+import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
+import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
 import java.util.List;
@@ -178,14 +180,20 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   }
 
   @Override
+  public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
+                                                     boolean skipTimelinePublish) {
+    return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
+  }
+
+  @Override
   public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new JavaScheduleCleanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
+    return new CleanPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context,
                                    String cleanInstantTime) {
-    return new JavaCleanActionExecutor(context, config, this, cleanInstantTime).execute();
+    return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
@@ -193,7 +201,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                          String rollbackInstantTime,
                                          HoodieInstant commitInstant,
                                          boolean deleteInstants) {
-    return new JavaCopyOnWriteRollbackActionExecutor(
+    return new CopyOnWriteRollbackActionExecutor(
         context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 
@@ -210,7 +218,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   public HoodieRestoreMetadata restore(HoodieEngineContext context,
                                        String restoreInstantTime,
                                        String instantToRestore) {
-    return new JavaCopyOnWriteRestoreActionExecutor((HoodieJavaEngineContext) context,
-        config, this, restoreInstantTime, instantToRestore).execute();
+    return new CopyOnWriteRestoreActionExecutor(
+        context, config, this, restoreInstantTime, instantToRestore).execute();
   }
 }

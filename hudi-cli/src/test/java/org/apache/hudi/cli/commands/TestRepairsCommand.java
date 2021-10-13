@@ -21,17 +21,21 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
@@ -54,19 +58,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test class for {@link RepairsCommand}.
  */
-public class TestRepairsCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
   private String tablePath;
+  private FileSystem fs;
 
   @BeforeEach
   public void init() throws IOException {
-    String tableName = "test_table";
-    tablePath = basePath + File.separator + tableName;
+    String tableName = tableName();
+    tablePath = tablePath(tableName);
+    fs = FSUtils.getFs(tablePath, hadoopConf());
 
     // Create table and connect
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue(), TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+  }
+
+  @AfterEach
+  public void cleanUp() throws IOException {
+    fs.close();
   }
 
   /**
@@ -75,18 +87,18 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
   @Test
   public void testAddPartitionMetaWithDryRun() throws IOException {
     // create commit instant
-    Files.createFile(Paths.get(tablePath + "/.hoodie/100.commit"));
+    Files.createFile(Paths.get(tablePath, ".hoodie", "100.commit"));
 
     // create partition path
-    String partition1 = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-    String partition2 = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
-    String partition3 = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+    String partition1 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
+    String partition2 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).toString();
+    String partition3 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH).toString();
     assertTrue(fs.mkdirs(new Path(partition1)));
     assertTrue(fs.mkdirs(new Path(partition2)));
     assertTrue(fs.mkdirs(new Path(partition3)));
 
     // default is dry run.
-    CommandResult cr = getShell().executeCommand("repair addpartitionmeta");
+    CommandResult cr = shell().executeCommand("repair addpartitionmeta");
     assertTrue(cr.isSuccess());
 
     // expected all 'No'.
@@ -107,17 +119,17 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
   @Test
   public void testAddPartitionMetaWithRealRun() throws IOException {
     // create commit instant
-    Files.createFile(Paths.get(tablePath + "/.hoodie/100.commit"));
+    Files.createFile(Paths.get(tablePath, ".hoodie", "100.commit"));
 
     // create partition path
-    String partition1 = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-    String partition2 = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
-    String partition3 = tablePath + File.separator + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
+    String partition1 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).toString();
+    String partition2 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).toString();
+    String partition3 = Paths.get(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH).toString();
     assertTrue(fs.mkdirs(new Path(partition1)));
     assertTrue(fs.mkdirs(new Path(partition2)));
     assertTrue(fs.mkdirs(new Path(partition3)));
 
-    CommandResult cr = getShell().executeCommand("repair addpartitionmeta --dryrun false");
+    CommandResult cr = shell().executeCommand("repair addpartitionmeta --dryrun false");
     assertTrue(cr.isSuccess());
 
     List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath);
@@ -131,7 +143,7 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);
 
-    cr = getShell().executeCommand("repair addpartitionmeta");
+    cr = shell().executeCommand("repair addpartitionmeta");
 
     // after real run, Metadata is present now.
     rows = paths.stream()
@@ -152,13 +164,13 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     URL newProps = this.getClass().getClassLoader().getResource("table-config.properties");
     assertNotNull(newProps, "New property file must exist");
 
-    CommandResult cr = getShell().executeCommand("repair overwrite-hoodie-props --new-props-file " + newProps.getPath());
+    CommandResult cr = shell().executeCommand("repair overwrite-hoodie-props --new-props-file " + newProps.getPath());
     assertTrue(cr.isSuccess());
 
-    Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().getProps();
+    Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
 
     // after overwrite, the stored value in .hoodie is equals to which read from properties.
-    Map<String, String> result = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().getProps();
+    Map<String, String> result = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().propsMap();
     Properties expectProps = new Properties();
     expectProps.load(new FileInputStream(new File(newProps.getPath())));
 
@@ -184,11 +196,11 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testRemoveCorruptedPendingCleanAction() throws IOException {
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = hadoopConf();
 
     Configuration conf = HoodieCLI.conf;
 
-    metaClient = HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
     // Create four requested files
     for (int i = 100; i < 104; i++) {
@@ -202,7 +214,7 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     // first, there are four instants
     assertEquals(4, metaClient.getActiveTimeline().filterInflightsAndRequested().getInstants().count());
 
-    CommandResult cr = getShell().executeCommand("repair corrupted clean files");
+    CommandResult cr = shell().executeCommand("repair corrupted clean files");
     assertTrue(cr.isSuccess());
 
     // reload meta client

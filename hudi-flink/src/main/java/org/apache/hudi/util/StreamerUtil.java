@@ -22,53 +22,66 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.TablePathUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
+import org.apache.hudi.sink.transform.ChainedTransformer;
+import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Preconditions;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.orc.OrcFile;
+import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Properties;
+
+import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
+import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 
 /**
  * Utilities for Flink stream read and write.
  */
 public class StreamerUtil {
-  private static final String DEFAULT_ARCHIVE_LOG_FOLDER = "archived";
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
@@ -89,19 +102,19 @@ public class StreamerUtil {
   }
 
   public static Schema getSourceSchema(FlinkStreamerConfig cfg) {
-    return new FilebasedSchemaProvider(FlinkOptions.fromStreamerConfig(cfg)).getSourceSchema();
+    return new FilebasedSchemaProvider(FlinkStreamerConfig.toFlinkConfig(cfg)).getSourceSchema();
   }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
-    if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA_PATH).isPresent()) {
+    if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
       return new FilebasedSchemaProvider(conf).getSourceSchema();
-    } else if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA).isPresent()) {
-      final String schemaStr = conf.get(FlinkOptions.READ_AVRO_SCHEMA);
+    } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
+      final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
       return new Schema.Parser().parse(schemaStr);
     } else {
       final String errorMsg = String.format("Either option '%s' or '%s' "
               + "should be specified for avro schema deserialization",
-          FlinkOptions.READ_AVRO_SCHEMA_PATH.key(), FlinkOptions.READ_AVRO_SCHEMA.key());
+          FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), FlinkOptions.SOURCE_AVRO_SCHEMA.key());
       throw new HoodieException(errorMsg);
     }
   }
@@ -130,70 +143,9 @@ public class StreamerUtil {
     return conf;
   }
 
-  // Keep to avoid to much modifications.
+  // Keep the redundant to avoid too many modifications.
   public static org.apache.hadoop.conf.Configuration getHadoopConf() {
     return FlinkClientUtil.getHadoopConf();
-  }
-
-  /**
-   * Create a key generator class via reflection, passing in any configs needed.
-   * <p>
-   * If the class name of key generator is configured through the properties file, i.e., {@code props}, use the corresponding key generator class; otherwise, use the default key generator class
-   * specified in {@code DataSourceWriteOptions}.
-   */
-  public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
-    String keyGeneratorClass = props.getString("hoodie.datasource.write.keygenerator.class",
-        SimpleAvroKeyGenerator.class.getName());
-    try {
-      return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
-    } catch (Throwable e) {
-      throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
-    }
-  }
-
-  /**
-   * Create a key generator class via reflection, passing in any configs needed.
-   * <p>
-   * If the class name of key generator is configured through the properties file, i.e., {@code props}, use the corresponding key generator class; otherwise, use the default key generator class
-   * specified in {@link FlinkOptions}.
-   */
-  public static KeyGenerator createKeyGenerator(Configuration conf) throws IOException {
-    String keyGeneratorClass = conf.getString(FlinkOptions.KEYGEN_CLASS);
-    try {
-      return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, flinkConf2TypedProperties(conf));
-    } catch (Throwable e) {
-      throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
-    }
-  }
-
-  /**
-   * Create a payload class via reflection, passing in an ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
-  }
-
-  /**
-   * Create a payload class via reflection, do not ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {Option.class}, Option.of(record));
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
-  }
-
-  public static HoodieWriteConfig getHoodieClientConfig(FlinkStreamerConfig conf) {
-    return getHoodieClientConfig(FlinkOptions.fromStreamerConfig(conf));
   }
 
   public static HoodieWriteConfig getHoodieClientConfig(Configuration conf) {
@@ -202,9 +154,11 @@ public class StreamerUtil {
             .withEngineType(EngineType.FLINK)
             .withPath(conf.getString(FlinkOptions.PATH))
             .combineInput(conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS), true)
+            .withMergeAllowDuplicateOnInserts(allowDuplicateInserts(conf))
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
-                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
+                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+                    .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
                     .withInlineCompactionTriggerStrategy(
                         CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
                     .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
@@ -214,10 +168,31 @@ public class StreamerUtil {
                     // override and hardcode to 20,
                     // actually Flink cleaning is always with parallelism 1 now
                     .withCleanerParallelism(20)
+                    .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
                     .build())
+            .withMemoryConfig(
+                HoodieMemoryConfig.newBuilder()
+                    .withMaxMemoryMaxSize(
+                        conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
+                        conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
+                    ).build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
+            .withStorageConfig(HoodieStorageConfig.newBuilder()
+                .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
+                .logFileMaxSize(conf.getLong(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .parquetBlockSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE) * 1024 * 1024)
+                .parquetPageSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE) * 1024 * 1024)
+                .parquetMaxFileSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
+                .build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
+                .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
+                .build())
+            .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
-            .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
+            .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
+            .withProps(flinkConf2TypedProperties(conf));
 
     builder = builder.withSchema(getSourceSchema(conf).toString());
     return builder.build();
@@ -231,12 +206,13 @@ public class StreamerUtil {
    * @return a TypedProperties instance
    */
   public static TypedProperties flinkConf2TypedProperties(Configuration conf) {
+    Configuration flatConf = FlinkOptions.flatOptions(conf);
     Properties properties = new Properties();
-    // put all the set up options
-    conf.addAllToProperties(properties);
+    // put all the set options
+    flatConf.addAllToProperties(properties);
     // put all the default options
     for (ConfigOption<?> option : FlinkOptions.optionalOptions()) {
-      if (!conf.contains(option) && option.hasDefaultValue()) {
+      if (!flatConf.contains(option) && option.hasDefaultValue()) {
         properties.put(option.key(), option.defaultValue());
       }
     }
@@ -257,14 +233,15 @@ public class StreamerUtil {
   public static void initTableIfNotExists(Configuration conf) throws IOException {
     final String basePath = conf.getString(FlinkOptions.PATH);
     final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
-    // Hadoop FileSystem
-    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    if (!fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))) {
+    if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
-          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))
-          .setArchiveLogFolder(DEFAULT_ARCHIVE_LOG_FOLDER)
+          .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
+          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
+          .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
+          .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
+          .setPreCombineField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
           .setTimelineLayoutVersion(1)
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
@@ -273,44 +250,91 @@ public class StreamerUtil {
           basePath, conf.getString(FlinkOptions.TABLE_NAME));
     }
     // Do not close the filesystem in order to use the CACHE,
-    // some of the filesystems release the handles in #close method.
+    // some filesystems release the handles in #close method.
   }
 
-  /** Generates the bucket ID using format {partition path}_{fileID}. */
+  /**
+   * Returns whether the hoodie table exists under given path {@code basePath}.
+   */
+  public static boolean tableExists(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    // Hadoop FileSystem
+    FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+    try {
+      return fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
+    } catch (IOException e) {
+      throw new HoodieException("Error while checking whether table exists under path:" + basePath, e);
+    }
+  }
+
+  /**
+   * Generates the bucket ID using format {partition path}_{fileID}.
+   */
   public static String generateBucketKey(String partitionPath, String fileId) {
     return String.format("%s_%s", partitionPath, fileId);
   }
 
-  /** Returns whether the location represents an insert. */
-  public static boolean isInsert(HoodieRecordLocation loc) {
-    return Objects.equals(loc.getInstantTime(), "I");
-  }
-
-  public static String getTablePath(FileSystem fs, Path[] userProvidedPaths) throws IOException {
-    LOG.info("Getting table path..");
-    for (Path path : userProvidedPaths) {
-      try {
-        Option<Path> tablePath = TablePathUtils.getTablePath(fs, path);
-        if (tablePath.isPresent()) {
-          return tablePath.get().toString();
-        }
-      } catch (HoodieException he) {
-        LOG.warn("Error trying to get table path from " + path.toString(), he);
-      }
-    }
-
-    throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
+  /**
+   * Returns whether needs to schedule the async compaction.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsAsyncCompaction(Configuration conf) {
+    return conf.getString(FlinkOptions.TABLE_TYPE)
+        .toUpperCase(Locale.ROOT)
+        .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
   }
 
   /**
-   * Returns whether needs to schedule the async compaction.
+   * Returns whether needs to schedule the compaction plan.
+   *
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleCompaction(Configuration conf) {
     return conf.getString(FlinkOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
-        && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
+  }
+
+  /**
+   * Creates the meta client for reader.
+   *
+   * <p>The streaming pipeline process is long running, so empty table path is allowed,
+   * the reader would then check and refresh the meta client.
+   *
+   * @see org.apache.hudi.source.StreamReadMonitoringFunction
+   */
+  public static HoodieTableMetaClient metaClientForReader(
+      Configuration conf,
+      org.apache.hadoop.conf.Configuration hadoopConf) {
+    final String basePath = conf.getString(FlinkOptions.PATH);
+    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && !tableExists(basePath, hadoopConf)) {
+      return null;
+    } else {
+      return createMetaClient(basePath, hadoopConf);
+    }
+  }
+
+  /**
+   * Creates the meta client.
+   */
+  public static HoodieTableMetaClient createMetaClient(String basePath, org.apache.hadoop.conf.Configuration hadoopConf) {
+    return HoodieTableMetaClient.builder().setBasePath(basePath).setConf(hadoopConf).build();
+  }
+
+  /**
+   * Creates the meta client.
+   */
+  public static HoodieTableMetaClient createMetaClient(String basePath) {
+    return createMetaClient(basePath, FlinkClientUtil.getHadoopConf());
+  }
+
+  /**
+   * Creates the meta client.
+   */
+  public static HoodieTableMetaClient createMetaClient(Configuration conf) {
+    return createMetaClient(conf.getString(FlinkOptions.PATH));
   }
 
   /**
@@ -323,5 +347,93 @@ public class StreamerUtil {
             new FlinkTaskContextSupplier(runtimeContext));
 
     return new HoodieFlinkWriteClient<>(context, getHoodieClientConfig(conf));
+  }
+
+  /**
+   * Creates the Flink write client.
+   *
+   * <p>The task context supplier is a constant: the write token is always '0-1-0'.
+   */
+  public static HoodieFlinkWriteClient createWriteClient(Configuration conf) {
+    return new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, getHoodieClientConfig(conf));
+  }
+
+  /**
+   * Returns the median instant time between the given two instant time.
+   */
+  public static String medianInstantTime(String highVal, String lowVal) {
+    try {
+      long high = HoodieActiveTimeline.COMMIT_FORMATTER.parse(highVal).getTime();
+      long low = HoodieActiveTimeline.COMMIT_FORMATTER.parse(lowVal).getTime();
+      ValidationUtils.checkArgument(high > low,
+          "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
+      long median = low + (high - low) / 2;
+      return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(median));
+    } catch (ParseException e) {
+      throw new HoodieException("Get median instant time with interval [" + lowVal + ", " + highVal + "] error", e);
+    }
+  }
+
+  /**
+   * Returns the time interval in seconds between the given instant time.
+   */
+  public static long instantTimeDiffSeconds(String newInstantTime, String oldInstantTime) {
+    try {
+      long newTimestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(newInstantTime).getTime();
+      long oldTimestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(oldInstantTime).getTime();
+      return (newTimestamp - oldTimestamp) / 1000;
+    } catch (ParseException e) {
+      throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);
+    }
+  }
+
+  public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
+    try {
+      List<Transformer> transformers = new ArrayList<>();
+      for (String className : Option.ofNullable(classNames).orElse(Collections.emptyList())) {
+        transformers.add(ReflectionUtils.loadClass(className));
+      }
+      return transformers.isEmpty() ? Option.empty() : Option.of(new ChainedTransformer(transformers));
+    } catch (Throwable e) {
+      throw new IOException("Could not load transformer class(es) " + classNames, e);
+    }
+  }
+
+  /**
+   * Returns whether the give file is in valid hoodie format.
+   * For example, filtering out the empty or corrupt files.
+   */
+  public static boolean isValidFile(FileStatus fileStatus) {
+    final String extension = FSUtils.getFileExtension(fileStatus.getPath().toString());
+    if (PARQUET.getFileExtension().equals(extension)) {
+      return fileStatus.getLen() > ParquetFileWriter.MAGIC.length;
+    }
+
+    if (ORC.getFileExtension().equals(extension)) {
+      return fileStatus.getLen() > OrcFile.MAGIC.length();
+    }
+
+    if (HOODIE_LOG.getFileExtension().equals(extension)) {
+      return fileStatus.getLen() > HoodieLogFormat.MAGIC.length;
+    }
+
+    return fileStatus.getLen() > 0;
+  }
+
+  /**
+   * Returns whether insert deduplication is allowed with given configuration {@code conf}.
+   */
+  public static boolean allowDuplicateInserts(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkOptions.INSERT_DEDUP);
+  }
+
+  /**
+   * Returns whether there are successful commits on the timeline.
+   * @param metaClient The meta client
+   * @return true if there is any successful commit
+   */
+  public static boolean haveSuccessfulCommits(HoodieTableMetaClient metaClient) {
+    return !metaClient.getCommitsTimeline().filterCompletedInstants().empty();
   }
 }

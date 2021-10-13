@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
-  private static final String SPLIT_REGEX = ":";
+  public static final String SPLIT_REGEX = ":";
 
   /**
    * Used as a part of config in CustomKeyGenerator.java.
@@ -55,8 +55,8 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   public CustomAvroKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY).split(",")).map(String::trim).collect(Collectors.toList());
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY).split(",")).map(String::trim).collect(Collectors.toList());
+    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
   }
 
   @Override
@@ -116,9 +116,5 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   public String getDefaultPartitionPathSeparator() {
     return DEFAULT_PARTITION_PATH_SEPARATOR;
-  }
-
-  public String getSplitRegex() {
-    return SPLIT_REGEX;
   }
 }

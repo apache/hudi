@@ -70,6 +70,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
 
+  public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
+    this(Option.of(record));
+  }
+
   public HoodieMetadataPayload(Option<GenericRecord> record) {
     if (record.isPresent()) {
       // This can be simplified using SpecificData.deepcopy once this bug is fixed

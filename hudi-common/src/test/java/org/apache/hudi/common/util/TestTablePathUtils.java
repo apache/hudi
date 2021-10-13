@@ -17,11 +17,13 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class TestTablePathUtils {
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   @TempDir
   static File tempDir;
@@ -73,9 +76,9 @@ public final class TestTablePathUtils {
     partitionMetadata2.trySave(2);
 
     // Create files
-    URI filePathURI1 = Paths.get(partitionPathURI1.getPath(), "data1.parquet").toUri();
+    URI filePathURI1 = Paths.get(partitionPathURI1.getPath(), "data1" + BASE_FILE_EXTENSION).toUri();
     filePath1 = new Path(filePathURI1);
-    URI filePathURI2 = Paths.get(partitionPathURI2.getPath(), "data2.parquet").toUri();
+    URI filePathURI2 = Paths.get(partitionPathURI2.getPath(), "data2" + BASE_FILE_EXTENSION).toUri();
     filePath2 = new Path(filePathURI2);
 
     assertTrue(new File(filePathURI1).createNewFile());

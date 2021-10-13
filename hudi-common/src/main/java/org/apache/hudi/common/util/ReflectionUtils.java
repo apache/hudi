@@ -45,18 +45,20 @@ public class ReflectionUtils {
 
   private static final Logger LOG = LogManager.getLogger(ReflectionUtils.class);
 
-  private static Map<String, Class<?>> clazzCache = new HashMap<>();
+  private static final Map<String, Class<?>> CLAZZ_CACHE = new HashMap<>();
 
-  private static Class<?> getClass(String clazzName) {
-    if (!clazzCache.containsKey(clazzName)) {
-      try {
-        Class<?> clazz = Class.forName(clazzName);
-        clazzCache.put(clazzName, clazz);
-      } catch (ClassNotFoundException e) {
-        throw new HoodieException("Unable to load class", e);
+  public static Class<?> getClass(String clazzName) {
+    synchronized (CLAZZ_CACHE) {
+      if (!CLAZZ_CACHE.containsKey(clazzName)) {
+        try {
+          Class<?> clazz = Class.forName(clazzName);
+          CLAZZ_CACHE.put(clazzName, clazz);
+        } catch (ClassNotFoundException e) {
+          throw new HoodieException("Unable to load class", e);
+        }
       }
     }
-    return clazzCache.get(clazzName);
+    return CLAZZ_CACHE.get(clazzName);
   }
 
   public static <T> T loadClass(String fqcn) {
@@ -80,13 +82,13 @@ public class ReflectionUtils {
   }
 
   /**
-   * Creates an instnace of the given class. Use this version when dealing with interface types as constructor args.
+   * Creates an instance of the given class. Use this version when dealing with interface types as constructor args.
    */
   public static Object loadClass(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
     try {
       return getClass(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate class ", e);
+      throw new HoodieException("Unable to instantiate class " + clazz, e);
     }
   }
 

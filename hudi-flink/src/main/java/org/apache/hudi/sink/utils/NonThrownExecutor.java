@@ -21,7 +21,6 @@ package org.apache.hudi.sink.utils;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.function.ThrowingRunnable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -31,15 +30,26 @@ import java.util.concurrent.TimeUnit;
  * An executor service that catches all the throwable with logging.
  */
 public class NonThrownExecutor implements AutoCloseable {
-  private static final Logger LOG = LoggerFactory.getLogger(NonThrownExecutor.class);
+  private final Logger logger;
 
   /**
    * A single-thread executor to handle all the asynchronous jobs.
    */
   private final ExecutorService executor;
 
-  public NonThrownExecutor() {
+  /**
+   * Flag saying whether to wait for the tasks finish on #close.
+   */
+  private final boolean waitForTaskFinishOnClose;
+
+  public NonThrownExecutor(Logger logger, boolean waitForTaskFinishOnClose) {
     this.executor = Executors.newSingleThreadExecutor();
+    this.logger = logger;
+    this.waitForTaskFinishOnClose = waitForTaskFinishOnClose;
+  }
+
+  public NonThrownExecutor(Logger logger) {
+    this(logger, false);
   }
 
   /**
@@ -48,28 +58,38 @@ public class NonThrownExecutor implements AutoCloseable {
   public void execute(
       final ThrowingRunnable<Throwable> action,
       final String actionName,
-      final String instant) {
+      final Object... actionParams) {
 
     executor.execute(
         () -> {
+          final String actionString = String.format(actionName, actionParams);
           try {
             action.run();
-            LOG.info("Executor executes action [{}] for instant [{}] success!", actionName, instant);
+            logger.info("Executor executes action [{}] success!", actionString);
           } catch (Throwable t) {
             // if we have a JVM critical error, promote it immediately, there is a good
             // chance the
             // logging or job failing will not succeed any more
             ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
-            final String errMsg = String.format("Executor executes action [%s] error", actionName);
-            LOG.error(errMsg, t);
+            final String errMsg = String.format("Executor executes action [%s] error", actionString);
+            logger.error(errMsg, t);
+            exceptionHook(errMsg, t);
           }
         });
+  }
+
+  protected void exceptionHook(String errMsg, Throwable t) {
+    // for sub-class to override.
   }
 
   @Override
   public void close() throws Exception {
     if (executor != null) {
-      executor.shutdownNow();
+      if (waitForTaskFinishOnClose) {
+        executor.shutdown();
+      } else {
+        executor.shutdownNow();
+      }
       // We do not expect this to actually block for long. At this point, there should
       // be very few task running in the executor, if any.
       executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);

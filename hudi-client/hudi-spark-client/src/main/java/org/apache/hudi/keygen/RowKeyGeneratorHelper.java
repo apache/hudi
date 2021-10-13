@@ -19,10 +19,13 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.exception.HoodieKeyException;
+
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import scala.Option;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,7 +36,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
+import scala.Option;
+
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
@@ -99,11 +104,11 @@ public class RowKeyGeneratorHelper {
         Integer fieldPos = fieldPositions.get(0);
         // for partition path, if field is not found, index will be set to -1
         if (fieldPos == -1 || row.isNullAt(fieldPos)) {
-          val = DEFAULT_PARTITION_PATH;
+          val = HUDI_DEFAULT_PARTITION_PATH;
         } else {
           val = row.getAs(field).toString();
           if (val.isEmpty()) {
-            val = DEFAULT_PARTITION_PATH;
+            val = HUDI_DEFAULT_PARTITION_PATH;
           }
         }
         if (hiveStylePartitioning) {
@@ -112,7 +117,7 @@ public class RowKeyGeneratorHelper {
       } else { // nested
         Object nestedVal = getNestedFieldVal(row, partitionPathPositions.get(field));
         if (nestedVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER) || nestedVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
-          val = hiveStylePartitioning ? field + "=" + DEFAULT_PARTITION_PATH : DEFAULT_PARTITION_PATH;
+          val = hiveStylePartitioning ? field + "=" + HUDI_DEFAULT_PARTITION_PATH : HUDI_DEFAULT_PARTITION_PATH;
         } else {
           val = hiveStylePartitioning ? field + "=" + nestedVal.toString() : nestedVal.toString();
         }
@@ -121,15 +126,78 @@ public class RowKeyGeneratorHelper {
     }).collect(Collectors.joining(DEFAULT_PARTITION_PATH_SEPARATOR));
   }
 
+  public static String getPartitionPathFromInternalRow(InternalRow row, List<String> partitionPathFields, boolean hiveStylePartitioning,
+                                                       Map<String, List<Integer>> partitionPathPositions,
+                                                       Map<String, List<DataType>> partitionPathDataTypes) {
+    return IntStream.range(0, partitionPathFields.size()).mapToObj(idx -> {
+      String field = partitionPathFields.get(idx);
+      String val = null;
+      List<Integer> fieldPositions = partitionPathPositions.get(field);
+      if (fieldPositions.size() == 1) { // simple
+        Integer fieldPos = fieldPositions.get(0);
+        // for partition path, if field is not found, index will be set to -1
+        if (fieldPos == -1 || row.isNullAt(fieldPos)) {
+          val = HUDI_DEFAULT_PARTITION_PATH;
+        } else {
+          Object value = row.get(fieldPos, partitionPathDataTypes.get(field).get(0));
+          if (value == null || value.toString().isEmpty()) {
+            val = HUDI_DEFAULT_PARTITION_PATH;
+          } else {
+            val = value.toString();
+          }
+        }
+        if (hiveStylePartitioning) {
+          val = field + "=" + val;
+        }
+      } else { // nested
+        throw new IllegalArgumentException("Nested partitioning is not supported with disabling meta columns.");
+      }
+      return val;
+    }).collect(Collectors.joining(DEFAULT_PARTITION_PATH_SEPARATOR));
+  }
+
+  public static Object getFieldValFromInternalRow(InternalRow internalRow,
+                                                  Integer partitionPathPosition,
+                                                  DataType partitionPathDataType) {
+    Object val = null;
+    if (internalRow.isNullAt(partitionPathPosition)) {
+      return HUDI_DEFAULT_PARTITION_PATH;
+    } else {
+      Object value = partitionPathDataType == DataTypes.StringType ? internalRow.getString(partitionPathPosition) : internalRow.get(partitionPathPosition, partitionPathDataType);
+      if (value == null || value.toString().isEmpty()) {
+        val = HUDI_DEFAULT_PARTITION_PATH;
+      } else {
+        val = value;
+      }
+    }
+    return val;
+  }
+
+
   /**
    * Fetch the field value located at the positions requested for.
+   *
+   * The fetching logic recursively goes into the nested field based on the position list to get the field value.
+   * For example, given the row [4357686,key1,2020-03-21,pi,[val1,10]] with the following schema, which has the fourth
+   * field as a nested field, and positions list as [4,0],
+   *
+   * 0 = "StructField(timestamp,LongType,false)"
+   * 1 = "StructField(_row_key,StringType,false)"
+   * 2 = "StructField(ts_ms,StringType,false)"
+   * 3 = "StructField(pii_col,StringType,false)"
+   * 4 = "StructField(nested_col,StructType(StructField(prop1,StringType,false), StructField(prop2,LongType,false)),false)"
+   *
+   * the logic fetches the value from field nested_col.prop1.
+   * If any level of the nested field is null, {@link KeyGenUtils#NULL_RECORDKEY_PLACEHOLDER} is returned.
+   * If the field value is an empty String, {@link KeyGenUtils#EMPTY_RECORDKEY_PLACEHOLDER} is returned.
+   *
    * @param row instance of {@link Row} of interest
    * @param positions tree style positions where the leaf node need to be fetched and returned
    * @return the field value as per the positions requested for.
    */
   public static Object getNestedFieldVal(Row row, List<Integer> positions) {
     if (positions.size() == 1 && positions.get(0) == -1) {
-      return DEFAULT_PARTITION_PATH;
+      return HUDI_DEFAULT_PARTITION_PATH;
     }
     int index = 0;
     int totalCount = positions.size();
@@ -137,14 +205,15 @@ public class RowKeyGeneratorHelper {
     Object toReturn = null;
 
     while (index < totalCount) {
+      if (valueToProcess.isNullAt(positions.get(index))) {
+        toReturn = NULL_RECORDKEY_PLACEHOLDER;
+        break;
+      }
+
       if (index < totalCount - 1) {
-        if (valueToProcess.isNullAt(positions.get(index))) {
-          toReturn = NULL_RECORDKEY_PLACEHOLDER;
-          break;
-        }
         valueToProcess = (Row) valueToProcess.get(positions.get(index));
       } else { // last index
-        if (null != valueToProcess.getAs(positions.get(index)) && valueToProcess.getAs(positions.get(index)).toString().isEmpty()) {
+        if (valueToProcess.getAs(positions.get(index)).toString().isEmpty()) {
           toReturn = EMPTY_RECORDKEY_PLACEHOLDER;
           break;
         }

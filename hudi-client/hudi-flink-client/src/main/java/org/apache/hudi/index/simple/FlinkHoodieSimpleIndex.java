@@ -34,8 +34,6 @@ import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
 import org.apache.hudi.table.HoodieTable;
 
-import avro.shaded.com.google.common.collect.Lists;
-
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -132,11 +130,11 @@ public class FlinkHoodieSimpleIndex<T extends HoodieRecordPayload> extends Flink
                                                                     List<Pair<String, HoodieBaseFile>> latestBaseFiles) {
 
     List<HoodieKeyLocationFetchHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>> hoodieKeyLocationFetchHandles =
-        context.map(latestBaseFiles, partitionPathBaseFile -> new HoodieKeyLocationFetchHandle<>(config, hoodieTable, partitionPathBaseFile), parallelism);
+        context.map(latestBaseFiles, partitionPathBaseFile -> new HoodieKeyLocationFetchHandle<>(config, hoodieTable, partitionPathBaseFile, Option.empty()), parallelism);
     Map<HoodieKey, HoodieRecordLocation> recordLocations = new HashMap<>();
     hoodieKeyLocationFetchHandles.stream()
-        .flatMap(handle -> Lists.newArrayList(handle.locations()).stream())
-        .forEach(x -> x.forEach(y -> recordLocations.put(y.getKey(), y.getRight())));
+        .flatMap(handle -> handle.locations())
+        .forEach(x -> recordLocations.put(x.getKey(), x.getRight()));
     return recordLocations;
   }
 }

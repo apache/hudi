@@ -22,7 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -34,10 +34,10 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -52,21 +52,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test class of {@link org.apache.hudi.cli.commands.StatsCommand}.
  */
-public class TestStatsCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestStatsCommand extends CLIFunctionalTestHarness {
 
   private String tablePath;
 
   @BeforeEach
   public void init() throws IOException {
-    String tableName = "test_table";
-    tablePath = basePath + File.separator + tableName;
+    String tableName = tableName();
+    tablePath = tablePath(tableName);
 
-    HoodieCLI.conf = jsc.hadoopConfiguration();
+    HoodieCLI.conf = hadoopConf();
     // Create table and connect
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    metaClient = HoodieCLI.getTableMetaClient();
   }
 
   /**
@@ -83,11 +83,11 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
     for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
       String k = entry.getKey();
       Integer[] v = entry.getValue();
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, k, jsc.hadoopConfiguration(),
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, k, hadoopConf(),
           Option.of(v[0]), Option.of(v[1]));
     }
 
-    CommandResult cr = getShell().executeCommand("stats wa");
+    CommandResult cr = shell().executeCommand("stats wa");
     assertTrue(cr.isSuccess());
 
     // generate expect
@@ -99,7 +99,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
     });
     int totalWrite = data.values().stream().map(integers -> integers[0] * 2).mapToInt(s -> s).sum();
     int totalUpdate = data.values().stream().map(integers -> integers[1] * 2).mapToInt(s -> s).sum();
-    rows.add(new Comparable[]{"Total", totalUpdate, totalWrite, df.format((float) totalWrite / totalUpdate)});
+    rows.add(new Comparable[] {"Total", totalUpdate, totalWrite, df.format((float) totalWrite / totalUpdate)});
 
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_COMMIT_TIME)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPSERTED)
@@ -127,7 +127,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
     String partition2 = HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     String partition3 = HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 
-    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    HoodieTestTable testTable = HoodieTestTable.of(HoodieCLI.getTableMetaClient());
     Integer[] data1 = data.get(commit1);
     assertTrue(3 <= data1.length);
     testTable.addCommit(commit1)
@@ -142,7 +142,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
         .withBaseFilesInPartition(partition2, data2[1], data2[2])
         .withBaseFilesInPartition(partition3, data2[3]);
 
-    CommandResult cr = getShell().executeCommand("stats filesizes");
+    CommandResult cr = shell().executeCommand("stats filesizes");
     assertTrue(cr.isSuccess());
 
     Histogram globalHistogram = new Histogram(new UniformReservoir(StatsCommand.MAX_FILES));

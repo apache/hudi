@@ -30,6 +30,8 @@ import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Sink function that cleans the old commits.
@@ -40,9 +42,11 @@ import org.apache.flink.streaming.api.functions.sink.SinkFunction;
  */
 public class CleanFunction<T> extends AbstractRichFunction
     implements SinkFunction<T>, CheckpointedFunction, CheckpointListener {
+  private static final Logger LOG = LoggerFactory.getLogger(CleanFunction.class);
+
   private final Configuration conf;
 
-  private HoodieFlinkWriteClient writeClient;
+  protected HoodieFlinkWriteClient writeClient;
   private NonThrownExecutor executor;
 
   private volatile boolean isCleaning;
@@ -56,7 +60,7 @@ public class CleanFunction<T> extends AbstractRichFunction
     super.open(parameters);
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
-      this.executor = new NonThrownExecutor();
+      this.executor = new NonThrownExecutor(LOG);
     }
   }
 
@@ -70,15 +74,20 @@ public class CleanFunction<T> extends AbstractRichFunction
           // ensure to switch the isCleaning flag
           this.isCleaning = false;
         }
-      }, "wait for cleaning finish", "");
+      }, "wait for cleaning finish");
     }
   }
 
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
-      this.writeClient.startAsyncCleaning();
-      this.isCleaning = true;
+      try {
+        this.writeClient.startAsyncCleaning();
+        this.isCleaning = true;
+      } catch (Throwable throwable) {
+        // catch the exception to not affect the normal checkpointing
+        LOG.warn("Error while start async cleaning", throwable);
+      }
     }
   }
 

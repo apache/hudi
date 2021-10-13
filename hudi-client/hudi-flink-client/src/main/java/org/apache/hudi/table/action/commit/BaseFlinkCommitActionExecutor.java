@@ -32,11 +32,9 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
-import org.apache.hudi.io.FlinkMergeHandle;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
@@ -143,12 +141,13 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     result.setWriteStats(writeStats);
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
-    syncTableMetadata();
     try {
       LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
+
+      writeTableMetadata(metadata);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -158,10 +157,6 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }
-  }
-
-  protected Map<String, List<String>> getPartitionToReplacedFileIds(List<WriteStatus> writeStatuses) {
-    return Collections.emptyMap();
   }
 
   @Override
@@ -177,26 +172,29 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       BucketType bucketType,
       Iterator recordItr) {
     try {
-      switch (bucketType) {
-        case INSERT:
-          return handleInsert(fileIdHint, recordItr);
-        case UPDATE:
-          if (this.writeHandle instanceof HoodieCreateHandle) {
-            // During one checkpoint interval, an insert record could also be updated,
-            // for example, for an operation sequence of a record:
-            //    I, U,   | U, U
-            // - batch1 - | - batch2 -
-            // the first batch(batch1) operation triggers an INSERT bucket,
-            // the second batch batch2 tries to reuse the same bucket
-            // and append instead of UPDATE.
+      if (this.writeHandle instanceof HoodieCreateHandle) {
+        // During one checkpoint interval, an insert record could also be updated,
+        // for example, for an operation sequence of a record:
+        //    I, U,   | U, U
+        // - batch1 - | - batch2 -
+        // the first batch(batch1) operation triggers an INSERT bucket,
+        // the second batch batch2 tries to reuse the same bucket
+        // and append instead of UPDATE.
+        return handleInsert(fileIdHint, recordItr);
+      } else if (this.writeHandle instanceof HoodieMergeHandle) {
+        return handleUpdate(partitionPath, fileIdHint, recordItr);
+      } else {
+        switch (bucketType) {
+          case INSERT:
             return handleInsert(fileIdHint, recordItr);
-          }
-          return handleUpdate(partitionPath, fileIdHint, recordItr);
-        default:
-          throw new HoodieUpsertException("Unknown bucketType " + bucketType + " for partition :" + partitionPath);
+          case UPDATE:
+            return handleUpdate(partitionPath, fileIdHint, recordItr);
+          default:
+            throw new AssertionError();
+        }
       }
     } catch (Throwable t) {
-      String msg = "Error upserting bucketType " + bucketType + " for partition :" + partitionPath;
+      String msg = "Error upsetting bucketType " + bucketType + " for partition :" + partitionPath;
       LOG.error(msg, t);
       throw new HoodieUpsertException(msg, t);
     }
@@ -212,7 +210,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(recordItr);
+    HoodieMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieMergeHandle<?, ?, ?, ?>) this.writeHandle;
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
@@ -232,19 +230,6 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     }
 
     return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
-  }
-
-  protected FlinkMergeHandle getUpdateHandle(Iterator<HoodieRecord<T>> recordItr) {
-    if (table.requireSortedRecords()) {
-      throw new HoodieNotSupportedException("Sort records are not supported in Flink streaming write");
-    } else {
-      FlinkMergeHandle writeHandle = (FlinkMergeHandle) this.writeHandle;
-      // add the incremental records.
-      if (!writeHandle.isNeedBootStrap()) {
-        writeHandle.rollOver(recordItr);
-      }
-      return writeHandle;
-    }
   }
 
   @Override

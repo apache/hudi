@@ -1,6 +1,6 @@
 ## *Tips*
 - *Thank you very much for contributing to Apache Hudi.*
-- *Please review https://hudi.apache.org/contributing.html before opening a pull request.*
+- *Please review https://hudi.apache.org/contribute/how-to-contribute before opening a pull request.*
 
 ## What is the purpose of the pull request
 

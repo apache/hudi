@@ -23,12 +23,14 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -136,9 +138,9 @@ public class TestInputPathHandler {
   static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
                                              String tableName, HoodieTableType tableType) throws IOException {
     Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
-    properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
+    properties.setProperty(HoodieTableConfig.NAME.key(), tableName);
+    properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
+    properties.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieAvroPayload.class.getName());
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
@@ -160,6 +162,21 @@ public class TestInputPathHandler {
   public void testInputPathHandler() throws IOException {
     inputPathHandler = new InputPathHandler(dfs.getConf(), inputPaths.toArray(
         new Path[0]), incrementalTables);
+    List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream()
+        .flatMap(List::stream).collect(Collectors.toList());
+    assertTrue(actualComparesToExpected(actualPaths, incrementalPaths));
+    actualPaths = inputPathHandler.getSnapshotPaths();
+    assertTrue(actualComparesToExpected(actualPaths, snapshotPaths));
+    actualPaths = inputPathHandler.getNonHoodieInputPaths();
+    assertTrue(actualComparesToExpected(actualPaths, nonHoodiePaths));
+  }
+
+  @Test
+  public void testInputPathHandlerWithGloballyReplicatedTimeStamp() throws IOException {
+    JobConf jobConf = new JobConf();
+    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "1");
+    inputPathHandler = new InputPathHandler(dfs.getConf(), inputPaths.toArray(
+        new Path[inputPaths.size()]), incrementalTables);
     List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream()
         .flatMap(List::stream).collect(Collectors.toList());
     assertTrue(actualComparesToExpected(actualPaths, incrementalPaths));

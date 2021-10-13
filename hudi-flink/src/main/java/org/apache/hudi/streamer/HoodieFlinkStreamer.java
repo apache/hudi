@@ -18,37 +18,32 @@
 
 package org.apache.hudi.streamer;
 
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.CommitSink;
-import org.apache.hudi.sink.InstantGenerateOperator;
-import org.apache.hudi.sink.KeyedWriteProcessFunction;
-import org.apache.hudi.sink.KeyedWriteProcessOperator;
-import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.transform.JsonStringToHoodieRecordMapFunction;
+import org.apache.hudi.sink.transform.Transformer;
+import org.apache.hudi.sink.utils.Pipelines;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.api.common.typeinfo.TypeHint;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.formats.common.TimestampFormat;
+import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
+import org.apache.flink.table.types.logical.RowType;
 
-import java.util.List;
-import java.util.Objects;
+import java.util.Properties;
 
 /**
- * An Utility which can incrementally consume data from Kafka and apply it to the target table.
- * currently, it only support COW table and insert, upsert operation.
+ * A utility which can incrementally consume data from Kafka and apply it to the target table.
+ * It has the similar functionality with SQL data source except that the source is bind to Kafka
+ * and the format is bind to JSON.
  */
 public class HoodieFlinkStreamer {
   public static void main(String[] args) throws Exception {
@@ -70,50 +65,44 @@ public class HoodieFlinkStreamer {
       env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
     }
 
-    Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
-    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASKS);
+    Properties kafkaProps = StreamerUtil.appendKafkaProps(cfg);
 
-    TypedProperties props = StreamerUtil.appendKafkaProps(cfg);
-
-    // add data source config
-    props.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS, cfg.payloadClassName);
-    props.put(HoodieWriteConfig.PRECOMBINE_FIELD_PROP, cfg.sourceOrderingField);
-
-    StreamerUtil.initTableIfNotExists(conf);
     // Read from kafka source
-    DataStream<HoodieRecord> inputRecords =
-        env.addSource(new FlinkKafkaConsumer<>(cfg.kafkaTopic, new SimpleStringSchema(), props))
-            .filter(Objects::nonNull)
-            .map(new JsonStringToHoodieRecordMapFunction(props))
-            .name("kafka_to_hudi_record")
-            .uid("kafka_to_hudi_record_uid");
+    RowType rowType =
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
+            .getLogicalType();
 
-    inputRecords.transform(InstantGenerateOperator.NAME, TypeInformation.of(HoodieRecord.class), new InstantGenerateOperator())
-        .name("instant_generator")
-        .uid("instant_generator_id")
+    Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
+    long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
+    int parallelism = env.getParallelism();
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
-        // Keyby partition path, to avoid multiple subtasks writing to a partition at the same time
-        .keyBy(HoodieRecord::getPartitionPath)
-        // use the bucket assigner to generate bucket IDs
-        .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner")
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
-        // write operator, where the write operation really happens
-        .transform(KeyedWriteProcessOperator.NAME, TypeInformation.of(new TypeHint<Tuple3<String, List<WriteStatus>, Integer>>() {
-        }), new KeyedWriteProcessOperator(new KeyedWriteProcessFunction()))
-        .name("write_process")
-        .uid("write_process_uid")
-        .setParallelism(numWriteTask)
+    DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
+        cfg.kafkaTopic,
+        new JsonRowDataDeserializationSchema(
+            rowType,
+            InternalTypeInfo.of(rowType),
+            false,
+            true,
+            TimestampFormat.ISO_8601
+        ), kafkaProps))
+        .name("kafka_source")
+        .uid("uid_kafka_source");
 
-        // Commit can only be executed once, so make it one parallelism
-        .addSink(new CommitSink())
-        .name("commit_sink")
-        .uid("commit_sink_uid")
-        .setParallelism(1);
+    if (cfg.transformerClassNames != null && !cfg.transformerClassNames.isEmpty()) {
+      Option<Transformer> transformer = StreamerUtil.createTransformer(cfg.transformerClassNames);
+      if (transformer.isPresent()) {
+        dataStream = transformer.get().apply(dataStream);
+      }
+    }
+
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, false);
+    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
+    if (StreamerUtil.needsAsyncCompaction(conf)) {
+      Pipelines.compact(conf, pipeline);
+    } else {
+      Pipelines.clean(conf, pipeline);
+    }
 
     env.execute(cfg.targetTableName);
   }

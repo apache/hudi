@@ -21,6 +21,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -34,9 +35,7 @@ import org.joda.time.format.DateTimeFormatter;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -89,8 +88,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   }
 
   public TimestampBasedAvroKeyGenerator(TypedProperties config) throws IOException {
-    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
-        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
+    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
+        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
@@ -120,8 +119,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       default:
         timeUnit = null;
     }
-    this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY,
-        Boolean.parseBoolean(KeyGeneratorOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL));
+    this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.defaultValue()));
   }
 
   @Override
@@ -192,6 +191,10 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       timeMs = convertLongTimeToMillis(((Float) partitionVal).longValue());
     } else if (partitionVal instanceof Long) {
       timeMs = convertLongTimeToMillis((Long) partitionVal);
+    } else if (partitionVal instanceof Integer) {
+      timeMs = convertLongTimeToMillis(((Integer) partitionVal).longValue());
+    } else if (partitionVal instanceof BigDecimal) {
+      timeMs = convertLongTimeToMillis(((BigDecimal) partitionVal).longValue());
     } else if (partitionVal instanceof CharSequence) {
       if (!inputFormatter.isPresent()) {
         throw new HoodieException("Missing inputformatter. Ensure " + Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");
@@ -210,11 +213,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
     DateTime timestamp = new DateTime(timeMs, outputDateTimeZone);
     String partitionPath = timestamp.toString(partitionFormatter);
     if (encodePartitionPath) {
-      try {
-        partitionPath = URLEncoder.encode(partitionPath, StandardCharsets.UTF_8.toString());
-      } catch (UnsupportedEncodingException uoe) {
-        throw new HoodieException(uoe.getMessage(), uoe);
-      }
+      partitionPath = PartitionPathEncodeUtils.escapePathName(partitionPath);
     }
     return hiveStylePartitioning ? getPartitionPathFields().get(0) + "=" + partitionPath : partitionPath;
   }

@@ -23,18 +23,21 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.common.typeinfo.Types;
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.Row;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Configurations for the test.
@@ -53,36 +56,46 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE = (RowType) ROW_DATA_TYPE.getLogicalType();
 
-  public static final TableSchema TABLE_SCHEMA = TableSchema.builder()
-      .fields(
-          ROW_TYPE.getFieldNames().toArray(new String[0]),
-          ROW_DATA_TYPE.getChildren().toArray(new DataType[0]))
+  public static final ResolvedSchema TABLE_SCHEMA = SchemaBuilder.instance()
+      .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())
       .build();
 
-  public static final TypeInformation<Row> ROW_TYPE_INFO = Types.ROW(
-      Types.STRING,
-      Types.STRING,
-      Types.INT,
-      Types.LOCAL_DATE_TIME,
-      Types.STRING);
+  private static final List<String> FIELDS = ROW_TYPE.getFields().stream()
+      .map(RowType.RowField::asSummaryString).collect(Collectors.toList());
 
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
-    String createTable = "create table " + tableName + "(\n"
-        + "  uuid varchar(20),\n"
-        + "  name varchar(10),\n"
-        + "  age int,\n"
-        + "  ts timestamp(3),\n"
-        + "  `partition` varchar(20),\n"
-        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
-        + ")\n"
-        + "PARTITIONED BY (`partition`)\n"
-        + "with (\n"
-        + "  'connector' = 'hudi'";
-    StringBuilder builder = new StringBuilder(createTable);
-    if (options.size() != 0) {
-      options.forEach((k, v) -> builder.append(",\n")
-          .append("  '").append(k).append("' = '").append(v).append("'"));
+    return getCreateHoodieTableDDL(tableName, options, true, "partition");
+  }
+
+  public static String getCreateHoodieTableDDL(
+      String tableName,
+      Map<String, String> options,
+      boolean havePartition,
+      String partitionField) {
+    return getCreateHoodieTableDDL(tableName, FIELDS, options, havePartition, "uuid", partitionField);
+  }
+
+  public static String getCreateHoodieTableDDL(
+      String tableName,
+      List<String> fields,
+      Map<String, String> options,
+      boolean havePartition,
+      String pkField,
+      String partitionField) {
+    StringBuilder builder = new StringBuilder();
+    builder.append("create table ").append(tableName).append("(\n");
+    for (String field : fields) {
+      builder.append("  ").append(field).append(",\n");
     }
+    builder.append("  PRIMARY KEY(").append(pkField).append(") NOT ENFORCED\n")
+        .append(")\n");
+    if (havePartition) {
+      builder.append("PARTITIONED BY (`").append(partitionField).append("`)\n");
+    }
+    builder.append("with (\n"
+        + "  'connector' = 'hudi'");
+    options.forEach((k, v) -> builder.append(",\n")
+        .append("  '").append(k).append("' = '").append(v).append("'"));
     builder.append("\n)");
     return builder.toString();
   }
@@ -127,12 +140,50 @@ public class TestConfigurations {
         + ")";
   }
 
+  public static String getCollectSinkDDL(String tableName, TableSchema tableSchema) {
+    final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
+    String[] fieldNames = tableSchema.getFieldNames();
+    DataType[] fieldTypes = tableSchema.getFieldDataTypes();
+    for (int i = 0; i < fieldNames.length; i++) {
+      builder.append("  `")
+          .append(fieldNames[i])
+          .append("` ")
+          .append(fieldTypes[i].toString());
+      if (i != fieldNames.length - 1) {
+        builder.append(",");
+      }
+      builder.append("\n");
+    }
+    final String withProps = ""
+        + ") with (\n"
+        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
+        + ")";
+    builder.append(withProps);
+    return builder.toString();
+  }
+
+  public static String getCsvSourceDDL(String tableName, String fileName) {
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource(fileName)).toString();
+    return "create table " + tableName + "(\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  ts timestamp(3),\n"
+        + "  `partition` varchar(20)\n"
+        + ") with (\n"
+        + "  'connector' = 'filesystem',\n"
+        + "  'path' = '" + sourcePath + "',\n"
+        + "  'format' = 'csv'\n"
+        + ")";
+  }
+
   public static final RowDataSerializer SERIALIZER = new RowDataSerializer(ROW_TYPE);
 
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
     conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH,
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
@@ -143,12 +194,73 @@ public class TestConfigurations {
   public static FlinkStreamerConfig getDefaultStreamerConf(String tablePath) {
     FlinkStreamerConfig streamerConf = new FlinkStreamerConfig();
     streamerConf.targetBasePath = tablePath;
-    streamerConf.readSchemaFilePath = Objects.requireNonNull(Thread.currentThread()
+    streamerConf.sourceAvroSchemaPath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_read_schema.avsc")).toString();
     streamerConf.targetTableName = "TestHoodieTable";
     streamerConf.partitionPathField = "partition";
     streamerConf.tableType = "COPY_ON_WRITE";
     streamerConf.checkpointInterval = 4000L;
     return streamerConf;
+  }
+
+  /**
+   * Creates the tool to build hoodie table DDL.
+   */
+  public static Sql sql(String tableName) {
+    return new Sql(tableName);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  /**
+   * Tool to build hoodie table DDL with schema {@link #TABLE_SCHEMA}.
+   */
+  public static class Sql {
+    private final Map<String, String> options;
+    private final String tableName;
+    private List<String> fields = new ArrayList<>();
+    private boolean withPartition = true;
+    private String pkField = "uuid";
+    private String partitionField = "partition";
+
+    public Sql(String tableName) {
+      options = new HashMap<>();
+      this.tableName = tableName;
+    }
+
+    public Sql option(ConfigOption<?> option, Object val) {
+      this.options.put(option.key(), val.toString());
+      return this;
+    }
+
+    public Sql noPartition() {
+      this.withPartition = false;
+      return this;
+    }
+
+    public Sql pkField(String pkField) {
+      this.pkField = pkField;
+      return this;
+    }
+
+    public Sql partitionField(String partitionField) {
+      this.partitionField = partitionField;
+      return this;
+    }
+
+    public Sql field(String fieldSchema) {
+      fields.add(fieldSchema);
+      return this;
+    }
+
+    public String end() {
+      if (this.fields.size() == 0) {
+        this.fields = FIELDS;
+      }
+      return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
+          this.withPartition, this.pkField, this.partitionField);
+    }
   }
 }

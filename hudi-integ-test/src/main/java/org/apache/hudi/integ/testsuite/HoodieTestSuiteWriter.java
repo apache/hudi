@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ.testsuite;
 
+import java.io.IOException;
 import java.io.Serializable;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -126,9 +127,16 @@ public class HoodieTestSuiteWriter implements Serializable {
   public RDD<GenericRecord> getNextBatch() throws Exception {
     Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
     lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-    JavaRDD <HoodieRecord> inputRDD = nextBatch.getRight().getRight();
+    JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
     return inputRDD.map(r -> (GenericRecord) r.getData()
         .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
+  }
+
+  public void getNextBatchForDeletes() throws Exception {
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+    lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+    JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
+    inputRDD.collect();
   }
 
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
@@ -160,6 +168,26 @@ public class HoodieTestSuiteWriter implements Serializable {
       Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
       lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
       return writeClient.insert(nextBatch.getRight().getRight(), instantTime.get());
+    }
+  }
+
+  public JavaRDD<WriteStatus> insertOverwrite(Option<String> instantTime) throws Exception {
+    if (cfg.useDeltaStreamer) {
+      return deltaStreamerWrapper.insertOverwrite();
+    } else {
+      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+      return writeClient.insertOverwrite(nextBatch.getRight().getRight(), instantTime.get()).getWriteStatuses();
+    }
+  }
+
+  public JavaRDD<WriteStatus> insertOverwriteTable(Option<String> instantTime) throws Exception {
+    if (cfg.useDeltaStreamer) {
+      return deltaStreamerWrapper.insertOverwriteTable();
+    } else {
+      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+      return writeClient.insertOverwriteTable(nextBatch.getRight().getRight(), instantTime.get()).getWriteStatuses();
     }
   }
 
@@ -209,7 +237,7 @@ public class HoodieTestSuiteWriter implements Serializable {
 
   public Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws
       Exception {
-    if (!cfg.useDeltaStreamer) {
+    if (cfg.useDeltaStreamer) {
       deltaStreamerWrapper.scheduleCompact();
       return Option.empty();
     } else {
@@ -224,11 +252,26 @@ public class HoodieTestSuiteWriter implements Serializable {
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
       extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
-      if (generatedDataStats != null) {
+      if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
       }
       writeClient.commit(instantTime.get(), records, Option.of(extraMetadata));
+    }
+  }
+
+  public void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
+                     Option<String> instantTime) throws IOException {
+    if (!cfg.useDeltaStreamer) {
+      Map<String, String> extraMetadata = new HashMap<>();
+      /** Store the checkpoint in the commit metadata just like
+       * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
+      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
+      if (generatedDataStats != null && generatedDataStats.count() > 1) {
+        // Just stores the path where this batch of data is generated to
+        extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
+      }
+      writeClient.commitCompaction(instantTime.get(), records, Option.of(extraMetadata));
     }
   }
 

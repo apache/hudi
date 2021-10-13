@@ -284,7 +284,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       HoodieWriteStat stat = new HoodieWriteStat();
       stat.setFileId(i + "");
       stat.setPartitionPath(Paths.get(basePath, partition).toString());
-      stat.setPath(commitTs + "." + i + ".parquet");
+      stat.setPath(commitTs + "." + i + metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
       commit.addWriteStat(partition, stat);
     }
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
@@ -303,7 +303,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       HoodieWriteStat stat = new HoodieWriteStat();
       stat.setFileId(i + "");
       stat.setPartitionPath(Paths.get(basePath, newFilePartition).toString());
-      stat.setPath(commitTs + "." + i + ".parquet");
+      stat.setPath(commitTs + "." + i + metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
       commit.addWriteStat(newFilePartition, stat);
     }
     Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();

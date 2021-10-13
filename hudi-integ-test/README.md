@@ -177,7 +177,7 @@ cd /opt
 Copy the integration tests jar into the docker container
 
 ```
-docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.8.0-SNAPSHOT.jar adhoc-2:/opt
+docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar adhoc-2:/opt
 ```
 
 ```
@@ -214,21 +214,29 @@ spark-submit \
 --conf spark.network.timeout=600s \
 --conf spark.yarn.max.executor.failures=10 \
 --conf spark.sql.catalogImplementation=hive \
+--conf spark.driver.extraClassPath=/var/demo/jars/* \
+--conf spark.executor.extraClassPath=/var/demo/jars/* \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.8.0-SNAPSHOT.jar \
+/opt/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
 --target-table table1 \
 --props file:/var/hoodie/ws/docker/demo/config/test-suite/test.properties \
---schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+--schemaprovider-class org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider \
 --source-class org.apache.hudi.utilities.sources.AvroDFSSource \
 --input-file-size 125829120 \
 --workload-yaml-path file:/var/hoodie/ws/docker/demo/config/test-suite/complex-dag-cow.yaml \
 --workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
 --table-type COPY_ON_WRITE \
---compact-scheduling-minshare 1
+--compact-scheduling-minshare 1 \
+--hoodie-conf hoodie.metrics.on=true \
+--hoodie-conf hoodie.metrics.reporter.type=GRAPHITE \
+--hoodie-conf hoodie.metrics.graphite.host=graphite \
+--hoodie-conf hoodie.metrics.graphite.port=2003 \
+--clean-input \
+--clean-output
 ```
 
 Or a Merge-on-Read job:
@@ -253,22 +261,43 @@ spark-submit \
 --conf spark.network.timeout=600s \
 --conf spark.yarn.max.executor.failures=10 \
 --conf spark.sql.catalogImplementation=hive \
+--conf spark.driver.extraClassPath=/var/demo/jars/* \
+--conf spark.executor.extraClassPath=/var/demo/jars/* \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.8.0-SNAPSHOT.jar \
+/opt/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
 --target-table table1 \
 --props file:/var/hoodie/ws/docker/demo/config/test-suite/test.properties \
---schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+--schemaprovider-class org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider \
 --source-class org.apache.hudi.utilities.sources.AvroDFSSource \
 --input-file-size 125829120 \
 --workload-yaml-path file:/var/hoodie/ws/docker/demo/config/test-suite/complex-dag-mor.yaml \
 --workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
 --table-type MERGE_ON_READ \
---compact-scheduling-minshare 1
+--compact-scheduling-minshare 1 \
+--hoodie-conf hoodie.metrics.on=true \
+--hoodie-conf hoodie.metrics.reporter.type=GRAPHITE \
+--hoodie-conf hoodie.metrics.graphite.host=graphite \
+--hoodie-conf hoodie.metrics.graphite.port=2003 \
+--clean-input \
+--clean-output
 ``` 
+
+## Visualize and inspect the hoodie metrics and performance (local)
+Graphite server is already setup (and up) in ```docker/setup_demo.sh```. 
+
+Open browser and access metrics at
+```
+http://localhost:80
+```
+Dashboard
+```
+http://localhost/dashboard
+
+```
 
 ## Running long running test suite in Local Docker environment
 
@@ -279,12 +308,12 @@ contents both via spark datasource and hive table via spark sql engine. Hive val
 If you have "ValidateDatasetNode" in your dag, do not replace hive jars as instructed above. Spark sql engine does not 
 go well w/ hive2* jars. So, after running docker setup, follow the below steps. 
 ```
-docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.8.0-SNAPSHOT.jar adhoc-2:/opt/
-docker cp demo/config/test-suite/test.properties adhoc-2:/opt/
+docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar adhoc-2:/opt/
+docker cp docker/demo/config/test-suite/test.properties adhoc-2:/opt/
 ```
 Also copy your dag of interest to adhoc-2:/opt/
 ```
-docker cp demo/config/test-suite/complex-dag-cow.yaml adhoc-2:/opt/
+docker cp docker/demo/config/test-suite/complex-dag-cow.yaml adhoc-2:/opt/
 ```
 
 For repeated runs, two additional configs need to be set. "dag_rounds" and "dag_intermittent_delay_mins". 
@@ -428,7 +457,7 @@ spark-submit \
 --conf spark.driver.extraClassPath=/var/demo/jars/* \
 --conf spark.executor.extraClassPath=/var/demo/jars/* \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.8.0-SNAPSHOT.jar \
+/opt/hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
@@ -442,8 +471,16 @@ spark-submit \
 --workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
 --table-type COPY_ON_WRITE \
 --compact-scheduling-minshare 1 \
---clean-input
+--clean-input \
 --clean-output
+```
+
+If you wish to enable metrics add below properties as well
+```
+--hoodie-conf hoodie.metrics.on=true \
+--hoodie-conf hoodie.metrics.reporter.type=GRAPHITE \
+--hoodie-conf hoodie.metrics.graphite.host=graphite \
+--hoodie-conf hoodie.metrics.graphite.port=2003 \
 ```
 
 Few ready to use dags are available under docker/demo/config/test-suite/ that could give you an idea for long running 
@@ -487,4 +524,34 @@ Spark submit with the flag:
 ```
 --saferSchemaEvolution
 ```
+
+## Automated tests for N no of yamls in Local Docker environment
+
+Hudi provides a script to assist you in testing N no of yamls automatically. Checkout the script under 
+hudi_root/docker folder.
+generate_test_suite.sh
+
+Example command : // execute the command from within docker folder. 
+./generate_test_suite.sh --execute_test_suite false --include_medium_test_suite_yaml true --include_long_test_suite_yaml true
+
+By default, generate_test_suite will run sanity test. In addition it supports 3 more yamls. 
+medium_test_suite, long_test_suite and clustering_test_suite. Users can add the required yamls via command line as per thier 
+necessity. 
+
+Also, "--execute_test_suite" false will generate all required files and yamls in a local staging directory if users want to inspect them.
+To go ahead and execute the same, you can give "--execute_test_suite true". 
+staging dir: docker/demo/config/test-suite/staging
+
+Also, there are other additional configs which users can override depending on their needs. 
+Some of the options are
+
+--table_type COPY_ON_WRITE/MERGE_ON_READ // refers to table type. 
+--medium_num_iterations 20 // refers to total iterations medium test suite should run. 
+--long_num_iterations 100 // refers to total iterations long test suite should run.  
+--intermittent_delay_mins 1 // refers to delay between successive runs within a single test suite job.  
+--cluster_num_itr 30 // refers to total iterations for clustering test suite. 
+--cluster_delay_mins 2 // refers to delay between successive runs for clustering test suite job. 
+--cluster_exec_itr_count 15 // refers to the iteration at which clustering needs to be triggered. 
+
+
 

@@ -63,7 +63,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
    * clients to consume.
    *
    * @param split File split
-   * @param jobConf Job Configuration
+   * @param job Job Configuration
    * @param realReader Parquet Reader
    */
   public RealtimeUnmergedRecordReader(RealtimeSplit split, JobConf job,

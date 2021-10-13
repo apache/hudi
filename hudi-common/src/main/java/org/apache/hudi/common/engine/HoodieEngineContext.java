@@ -19,11 +19,16 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -55,6 +60,16 @@ public abstract class HoodieEngineContext {
   }
 
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
+
+  public abstract <I, K, V> List<V> mapToPairAndReduceByKey(
+      List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
+
+  public abstract <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
+      Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
+      SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
+
+  public abstract <I, K, V> List<V> reduceByKey(
+      List<Pair<K, V>> data, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
 
   public abstract <I, O> List<O> flatMap(List<I> data, SerializableFunction<I, Stream<O>> func, int parallelism);
 

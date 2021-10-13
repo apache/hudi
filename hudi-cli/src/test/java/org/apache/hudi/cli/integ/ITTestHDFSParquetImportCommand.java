@@ -36,10 +36,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -54,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test class for {@link org.apache.hudi.cli.commands.HDFSParquetImportCommand}.
  */
+@Disabled("Disable due to flakiness and feature deprecation.")
 public class ITTestHDFSParquetImportCommand extends AbstractShellIntegrationTest {
 
   private Path sourcePath;
@@ -68,7 +69,7 @@ public class ITTestHDFSParquetImportCommand extends AbstractShellIntegrationTest
   @BeforeEach
   public void init() throws IOException, ParseException {
     tableName = "test_table";
-    tablePath = basePath + File.separator + tableName;
+    tablePath = basePath + Path.SEPARATOR + tableName;
     sourcePath = new Path(basePath, "source");
     targetPath = new Path(tablePath);
     schemaFile = new Path(basePath, "file.schema").toString();
@@ -99,7 +100,7 @@ public class ITTestHDFSParquetImportCommand extends AbstractShellIntegrationTest
         () -> assertEquals("Table imported to hoodie format", cr.getResult().toString()));
 
     // Check hudi table exist
-    String metaPath = targetPath + File.separator + HoodieTableMetaClient.METAFOLDER_NAME;
+    String metaPath = targetPath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     assertTrue(Files.exists(Paths.get(metaPath)), "Hoodie table not exist.");
 
     // Load meta data

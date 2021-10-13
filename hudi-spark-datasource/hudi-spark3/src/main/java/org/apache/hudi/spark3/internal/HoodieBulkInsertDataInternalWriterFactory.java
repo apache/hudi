@@ -35,18 +35,23 @@ public class HoodieBulkInsertDataInternalWriterFactory implements DataWriterFact
   private final HoodieTable hoodieTable;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
+  private final boolean populateMetaFields;
+  private final boolean arePartitionRecordsSorted;
 
   public HoodieBulkInsertDataInternalWriterFactory(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-      String instantTime, StructType structType) {
+                                                   String instantTime, StructType structType, boolean populateMetaFields,
+                                                   boolean arePartitionRecordsSorted) {
     this.hoodieTable = hoodieTable;
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
     this.structType = structType;
+    this.populateMetaFields = populateMetaFields;
+    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
   }
 
   @Override
   public DataWriter<InternalRow> createWriter(int partitionId, long taskId) {
     return new HoodieBulkInsertDataInternalWriter(hoodieTable, writeConfig, instantTime, partitionId, taskId,
-        structType);
+        structType, populateMetaFields, arePartitionRecordsSorted);
   }
 }

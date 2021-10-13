@@ -18,9 +18,9 @@
 
 package org.apache.hudi.spark3.internal;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.connector.catalog.SupportsWrite;
 import org.apache.spark.sql.connector.catalog.TableCapability;
@@ -29,6 +29,7 @@ import org.apache.spark.sql.connector.write.WriteBuilder;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -41,14 +42,21 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
   private final StructType structType;
   private final SparkSession jss;
   private final Configuration hadoopConfiguration;
+  private final boolean arePartitionRecordsSorted;
+  private final Map<String, String> properties;
+  private final boolean populateMetaFields;
 
   public HoodieDataSourceInternalTable(String instantTime, HoodieWriteConfig config,
-      StructType schema, SparkSession jss, Configuration hadoopConfiguration) {
+      StructType schema, SparkSession jss, Configuration hadoopConfiguration, Map<String, String> properties,
+                                       boolean populateMetaFields, boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = config;
     this.structType = schema;
     this.jss = jss;
     this.hadoopConfiguration = hadoopConfiguration;
+    this.properties = properties;
+    this.populateMetaFields = populateMetaFields;
+    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
   }
 
   @Override
@@ -63,15 +71,17 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
 
   @Override
   public Set<TableCapability> capabilities() {
-    return new HashSet<TableCapability>() {{
+    return new HashSet<TableCapability>() {
+      {
         add(TableCapability.BATCH_WRITE);
         add(TableCapability.TRUNCATE);
-      }};
+      }
+    };
   }
 
   @Override
   public WriteBuilder newWriteBuilder(LogicalWriteInfo logicalWriteInfo) {
     return new HoodieDataSourceInternalBatchWriteBuilder(instantTime, writeConfig, structType, jss,
-        hadoopConfiguration);
+        hadoopConfiguration, properties, populateMetaFields, arePartitionRecordsSorted);
   }
 }

@@ -28,7 +28,10 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
+
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Assertions;
@@ -36,6 +39,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 
 import scala.Function1;
 
@@ -49,6 +53,7 @@ public class TestTimestampBasedKeyGenerator {
   private Schema schema;
   private StructType structType;
   private Row baseRow;
+  private InternalRow internalRow;
 
   @BeforeEach
   public void initialize() throws IOException {
@@ -57,10 +62,11 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord = SchemaTestUtil
         .generateAvroRecordFromJson(schema, 1, "001", "f1");
     baseRow = genericRecordToRow(baseRecord);
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
 
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "field1");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "createTime");
-    properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "false");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "field1");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "createTime");
+    properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
   }
 
   private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone, String scalarType) {
@@ -76,7 +82,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   private Row genericRecordToRow(GenericRecord baseRecord) {
-    Function1<Object, Object> convertor = AvroConversionHelper.createConverterToRow(schema, structType);
+    Function1<Object, Object> convertor = AvroConversionHelper.createConverterToRow(baseRecord.getSchema(), structType);
     Row row = (Row) convertor.apply(baseRecord);
     int fieldCount = structType.fieldNames().length;
     Object[] values = new Object[fieldCount];
@@ -116,6 +122,17 @@ public class TestTimestampBasedKeyGenerator {
     TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", hk1.getPartitionPath());
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+    assertEquals("2020-01-06 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
+
+    // timezone is GMT+8:00, createTime is BigDecimal
+    baseRecord.put("createTime", new BigDecimal(1578283932000.00001));
+    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey bigDecimalKey = keyGen.getKey(baseRecord);
+    assertEquals("2020-01-06 12", bigDecimalKey.getPartitionPath());
 
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
@@ -161,6 +178,8 @@ public class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-01 08", keyGen.getPartitionPath(baseRow));
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+    assertEquals("1970-01-01 08", keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timestamp is DATE_STRING, timezone is GMT, createTime is null
     baseRecord.put("createTime", null);
@@ -173,6 +192,8 @@ public class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-01 12:00:00", keyGen.getPartitionPath(baseRow));
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+    assertEquals("1970-01-01 12:00:00", keyGen.getPartitionPath(internalRow, baseRow.schema()));
   }
 
   @Test
@@ -189,6 +210,8 @@ public class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2024-10-04 12", keyGen.getPartitionPath(baseRow));
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+    assertEquals("2024-10-04 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
     // timezone is GMT, createTime is null
     baseRecord.put("createTime", null);
@@ -200,7 +223,19 @@ public class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-02 12", keyGen.getPartitionPath(baseRow));
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+    assertEquals("1970-01-02 12", keyGen.getPartitionPath(internalRow, baseRow.schema()));
 
+    // timezone is GMT. number of days store integer in mysql
+    baseRecord.put("createTime", 18736);
+    properties = getBaseKeyConfig("SCALAR", "yyyy-MM-dd", "GMT", "DAYS");
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey scalarSecondsKey = keyGen.getKey(baseRecord);
+    assertEquals("2021-04-19", scalarSecondsKey.getPartitionPath());
+
+    // test w/ Row
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("2021-04-19", keyGen.getPartitionPath(baseRow));
   }
 
   @Test

@@ -53,9 +53,7 @@ public class Metrics {
     }
     reporter.start();
 
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      reportAndCloseReporter();
-    }));
+    Runtime.getRuntime().addShutdownHook(new Thread(this::reportAndCloseReporter));
   }
 
   private void reportAndCloseReporter() {

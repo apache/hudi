@@ -58,7 +58,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
       return new Tuple2<>(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData());
+      T reducedData = (T) rec2.getData().preCombine(rec1.getData());
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
 
       return new HoodieRecord<T>(reducedKey, reducedData);

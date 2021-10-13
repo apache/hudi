@@ -46,6 +46,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
@@ -76,7 +77,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()
-            .hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
+            .hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).orcMaxFileSize(1024 * 1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
@@ -135,7 +136,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       List<HoodieBaseFile> dataFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
       assertTrue(dataFilesToRead.stream().findAny().isPresent(),
-          "should list the parquet files we wrote in the delta commit");
+          "should list the base files we wrote in the delta commit");
       validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
     }
 
@@ -175,6 +176,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
                                  HoodieWriteConfig cfg, int expectedNumRecs, boolean hasDeltaCommitAfterPendingCompaction) throws IOException {
 
     client.compact(compactionInstantTime);
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, compactionInstantTime).doesMarkerDirExist());
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
     assertFalse(fileSliceList.stream()
@@ -198,7 +200,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     assertEquals(latestCompactionCommitTime, compactionInstantTime,
         "Expect compaction instant time to be the latest commit time");
     assertEquals(expectedNumRecs,
-        HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
+        HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of("000")),
         "Must contain expected records");
 
   }

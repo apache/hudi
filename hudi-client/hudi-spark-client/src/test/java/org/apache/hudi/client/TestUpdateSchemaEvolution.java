@@ -25,7 +25,8 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
@@ -36,7 +37,6 @@ import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.io.InvalidRecordException;
 import org.apache.parquet.io.ParquetDecodingException;
 import org.junit.jupiter.api.AfterEach;
@@ -122,10 +122,11 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     jsc.parallelize(Arrays.asList(1)).map(x -> {
       Executable executable = () -> {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
-            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier);
-        AvroReadSupport.setAvroReadSchema(updateTable.getHadoopConf(), mergeHandle.getWriterSchemaWithMetafields());
-        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(updateTable.getHadoopConf(),
-            new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()));
+            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
+        List<GenericRecord> oldRecords = BaseFileUtils.getInstance(updateTable.getBaseFileFormat())
+            .readAvroRecords(updateTable.getHadoopConf(),
+                new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
+                mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {
           mergeHandle.write(rec);
         }

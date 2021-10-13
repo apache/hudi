@@ -146,7 +146,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
    * @return smallFiles not in clustering
    */
   private List<SmallFile> filterSmallFilesInClustering(final Set<String> pendingClusteringFileGroupsId, final List<SmallFile> smallFiles) {
-    if (this.config.isClusteringEnabled()) {
+    if (!pendingClusteringFileGroupsId.isEmpty()) {
       return smallFiles.stream()
           .filter(smallFile -> !pendingClusteringFileGroupsId.contains(smallFile.location.getFileId())).collect(Collectors.toList());
     } else {
@@ -187,7 +187,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
         for (SmallFile smallFile : smallFiles) {
           long recordsToAppend = Math.min((config.getParquetMaxFileSize() - smallFile.sizeBytes) / averageRecordSize,
               totalUnassignedInserts);
-          if (recordsToAppend > 0 && totalUnassignedInserts > 0) {
+          if (recordsToAppend > 0) {
             // create a new bucket or re-use an existing bucket
             int bucket;
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
@@ -200,6 +200,10 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
             bucketNumbers.add(bucket);
             recordsPerBucket.add(recordsToAppend);
             totalUnassignedInserts -= recordsToAppend;
+            if (totalUnassignedInserts <= 0) {
+              // stop the loop when all the inserts are assigned
+              break;
+            }
           }
         }
 
@@ -228,13 +232,13 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
 
         // Go over all such buckets, and assign weights as per amount of incoming inserts.
         List<InsertBucketCumulativeWeightPair> insertBuckets = new ArrayList<>();
-        double curentCumulativeWeight = 0;
+        double currentCumulativeWeight = 0;
         for (int i = 0; i < bucketNumbers.size(); i++) {
           InsertBucket bkt = new InsertBucket();
           bkt.bucketNumber = bucketNumbers.get(i);
           bkt.weight = (1.0 * recordsPerBucket.get(i)) / pStat.getNumInserts();
-          curentCumulativeWeight += bkt.weight;
-          insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, curentCumulativeWeight));
+          currentCumulativeWeight += bkt.weight;
+          insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
         LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);

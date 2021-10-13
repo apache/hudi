@@ -21,9 +21,10 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,13 +34,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,30 +49,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test Cases for {@link ArchivedCommitsCommand}.
  */
-public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
+@Tag("functional")
+public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
   private String tablePath;
 
   @BeforeEach
   public void init() throws Exception {
-    initDFS();
-    jsc.hadoopConfiguration().addResource(dfs.getConf());
-    HoodieCLI.conf = dfs.getConf();
+    HoodieCLI.conf = hadoopConf();
 
     // Create table and connect
-    String tableName = "test_table";
-    tablePath = basePath + File.separator + tableName;
+    String tableName = tableName();
+    tablePath = tablePath(tableName);
 
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
 
-    metaClient = HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .forTable("test-trip-table").build();
 
     // Create six commits
@@ -81,11 +80,11 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
       String timestamp = String.valueOf(i);
       // Requested Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), dfs.getConf());
+          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
       // Inflight Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), dfs.getConf());
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, dfs.getConf());
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, hadoopConf());
     }
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -93,14 +92,9 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
     // archive
-    HoodieSparkTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    archiveLog.archiveIfRequired(context);
-  }
-
-  @AfterEach
-  public void clean() throws IOException {
-    cleanupDFS();
+    archiveLog.archiveIfRequired(context());
   }
 
   /**
@@ -108,7 +102,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testShowArchivedCommits() {
-    CommandResult cr = getShell().executeCommand("show archived commit stats");
+    CommandResult cr = shell().executeCommand("show archived commit stats");
     assertTrue(cr.isSuccess());
 
     TableHeader header = new TableHeader().addTableHeaderField("action").addTableHeaderField("instant")
@@ -159,7 +153,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testShowCommits() throws Exception {
-    CommandResult cr = getShell().executeCommand("show archived commits");
+    CommandResult cr = shell().executeCommand("show archived commits");
     assertTrue(cr.isSuccess());
     final List<Comparable[]> rows = new ArrayList<>();
 
@@ -179,7 +173,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     assertEquals(expected, got);
 
     // Test with Metadata and no limit
-    cr = getShell().executeCommand("show archived commits --skipMetadata false --limit -1");
+    cr = shell().executeCommand("show archived commits --skipMetadata false --limit -1");
     assertTrue(cr.isSuccess());
 
     rows.clear();

@@ -19,21 +19,23 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -51,6 +53,20 @@ import java.util.stream.Collectors;
 public class RollbackUtils {
 
   private static final Logger LOG = LogManager.getLogger(RollbackUtils.class);
+
+  /**
+   * Get Latest version of Rollback plan corresponding to a clean instant.
+   * @param metaClient  Hoodie Table Meta Client
+   * @param rollbackInstant Instant referring to rollback action
+   * @return Rollback plan corresponding to rollback instant
+   * @throws IOException
+   */
+  static HoodieRollbackPlan getRollbackPlan(HoodieTableMetaClient metaClient, HoodieInstant rollbackInstant)
+      throws IOException {
+    // TODO: add upgrade step if required.
+    return TimelineMetadataUtils.deserializeAvroMetadata(
+        metaClient.getActiveTimeline().readRollbackInfoAsBytes(rollbackInstant).get(), HoodieRollbackPlan.class);
+  }
 
   static Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String instantToRollback, String rollbackInstantTime) {
     // generate metadata
@@ -88,7 +104,7 @@ public class RollbackUtils {
 
   /**
    * Generate all rollback requests that needs rolling back this action without actually performing rollback for COW table type.
-   * @param fs instance of {@link FileSystem} to use.
+   * @param engineContext instance of {@link HoodieEngineContext} to use.
    * @param basePath base path of interest.
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @return {@link List} of {@link ListingBasedRollbackRequest}s thus collected.
@@ -112,6 +128,9 @@ public class RollbackUtils {
     String commit = instantToRollback.getTimestamp();
     HoodieWriteConfig config = table.getConfig();
     List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+    if (partitions.isEmpty()) {
+      return new ArrayList<>();
+    }
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(RollbackUtils.class.getSimpleName(), "Generate all rollback requests");
     return context.flatMap(partitions, partitionPath -> {
@@ -132,7 +151,7 @@ public class RollbackUtils {
               !activeTimeline.getDeltaCommitTimeline().filterCompletedInstants().findInstantsAfter(commit, 1).empty();
           if (higherDeltaCommits) {
             // Rollback of a compaction action with no higher deltacommit means that the compaction is scheduled
-            // and has not yet finished. In this scenario we should delete only the newly created parquet files
+            // and has not yet finished. In this scenario we should delete only the newly created base files
             // and not corresponding base commit log files created with this as baseCommit since updates would
             // have been written to the log files.
             LOG.info("Rolling back compaction. There are higher delta commits. So only deleting data files");
@@ -165,13 +184,13 @@ public class RollbackUtils {
           // ---------------------------------------------------------------------------------------------------
           // (B) The following cases are possible if !index.canIndexLogFiles and/or !index.isGlobal
           // ---------------------------------------------------------------------------------------------------
-          // (B.1) Failed first commit - Inserts were written to parquet files and HoodieWriteStat has no entries.
-          // In this scenario, we delete all the parquet files written for the failed commit.
-          // (B.2) Failed recurring commits - Inserts were written to parquet files and updates to log files. In
+          // (B.1) Failed first commit - Inserts were written to base files and HoodieWriteStat has no entries.
+          // In this scenario, we delete all the base files written for the failed commit.
+          // (B.2) Failed recurring commits - Inserts were written to base files and updates to log files. In
           // this scenario, perform (A.1) and for updates written to log files, write rollback blocks.
           // (B.3) Rollback triggered for first commit - Same as (B.1)
           // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
-          // as well if the base parquet file gets deleted.
+          // as well if the base base file gets deleted.
           try {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
                 table.getMetaClient().getCommitTimeline()
@@ -180,7 +199,7 @@ public class RollbackUtils {
                 HoodieCommitMetadata.class);
 
             // In case all data was inserts and the commit failed, delete the file belonging to that commit
-            // We do not know fileIds for inserts (first inserts are either log files or parquet files),
+            // We do not know fileIds for inserts (first inserts are either log files or base files),
             // delete all files for the corresponding failed commit, if present (same as COW)
             partitionRollbackRequests.add(
                 ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));
@@ -208,7 +227,7 @@ public class RollbackUtils {
     // wStat.getPrevCommit() might not give the right commit time in the following
     // scenario : If a compaction was scheduled, the new commitTime associated with the requested compaction will be
     // used to write the new log files. In this case, the commit time for the log file is the compaction requested time.
-    // But the index (global) might store the baseCommit of the parquet and not the requested, hence get the
+    // But the index (global) might store the baseCommit of the base and not the requested, hence get the
     // baseCommit always by listing the file slice
     Map<String, String> fileIdToBaseCommitTimeForLogMap = table.getSliceView().getLatestFileSlices(partitionPath)
         .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));

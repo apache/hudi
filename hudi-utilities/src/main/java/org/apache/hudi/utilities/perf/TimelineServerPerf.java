@@ -20,7 +20,9 @@ package org.apache.hudi.utilities.perf;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -37,6 +39,7 @@ import com.beust.jcommander.Parameter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -71,7 +74,12 @@ public class TimelineServerPerf implements Serializable {
   public TimelineServerPerf(Config cfg) throws IOException {
     this.cfg = cfg;
     useExternalTimelineServer = (cfg.serverHost != null);
-    this.timelineServer = new TimelineService(cfg.getTimelinServerConfig());
+    TimelineService.Config timelineServiceConf = cfg.getTimelinServerConfig();
+    this.timelineServer = new TimelineService(
+        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
+        new Configuration(), timelineServiceConf, FileSystem.get(new Configuration()),
+        TimelineService.buildFileSystemViewManager(timelineServiceConf,
+            new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))));
   }
 
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
@@ -87,8 +95,7 @@ public class TimelineServerPerf implements Serializable {
   public void run() throws IOException {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath,
-        cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, true);
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath, cfg.useFileListingFromMetadata, true);
     Collections.shuffle(allPartitionPaths);
     List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
         .collect(Collectors.toList());
@@ -289,19 +296,16 @@ public class TimelineServerPerf implements Serializable {
 
     @Parameter(names = {"--base-store-path", "-sp"},
         description = "Directory where spilled view entries will be stored. Used for SPILLABLE_DISK storage type")
-    public String baseStorePathForFileGroups = FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR;
+    public String baseStorePathForFileGroups = FileSystemViewStorageConfig.SPILLABLE_DIR.defaultValue();
 
     @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
-    public String rocksDBPath = FileSystemViewStorageConfig.DEFAULT_ROCKSDB_BASE_PATH;
+    public String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH.defaultValue();
 
     @Parameter(names = {"--wait-for-manual-queries", "-ww"})
     public Boolean waitForManualQueries = false;
 
     @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
     public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-
-    @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;

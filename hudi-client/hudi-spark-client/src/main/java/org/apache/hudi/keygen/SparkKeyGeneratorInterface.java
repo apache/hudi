@@ -19,6 +19,8 @@
 package org.apache.hudi.keygen;
 
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructType;
 
 /**
  * Spark key generator interface.
@@ -28,4 +30,6 @@ public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface {
   String getRecordKey(Row row);
 
   String getPartitionPath(Row row);
+
+  String getPartitionPath(InternalRow internalRow, StructType structType);
 }

@@ -30,11 +30,12 @@ import scala.collection.JavaConverters._
 
 /**
  * Spark datasource based insert node
- * @param config1
+ *
+ * @param dagNodeConfig DAG node configurations.
  */
-class SparkInsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
+class SparkInsertNode(dagNodeConfig: Config) extends DagNode[RDD[WriteStatus]] {
 
-  config = config1
+  config = dagNodeConfig
 
   /**
    * Execute the {@link DagNode}.
@@ -53,12 +54,12 @@ class SparkInsertNode(config1: Config) extends DagNode[RDD[WriteStatus]] {
       context.getWriterContext.getSparkSession)
     inputDF.write.format("hudi")
       .options(DataSourceWriteOptions.translateSqlOptions(context.getWriterContext.getProps.asScala.toMap))
-      .option(DataSourceWriteOptions.TABLE_NAME_OPT_KEY, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, context.getHoodieTestSuiteWriter.getCfg.tableType)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX_OPT_KEY, "deltastreamer.checkpoint.key")
+      .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX.key, "deltastreamer.checkpoint.key")
       .option("deltastreamer.checkpoint.key", context.getWriterContext.getHoodieTestSuiteWriter.getLastCheckpoint.orElse(""))
-      .option(HoodieWriteConfig.TABLE_NAME, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
+      .option(HoodieWriteConfig.TBL_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .mode(SaveMode.Overwrite)
       .save(context.getHoodieTestSuiteWriter.getWriteConfig.getBasePath)
   }
