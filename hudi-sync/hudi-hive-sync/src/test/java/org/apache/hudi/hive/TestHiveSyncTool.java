@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -1016,5 +1018,35 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.getTableSchema(tableName).size() == 1 && hiveClient.getTableSchema(tableName)
         .containsValue("BIGINT"), errorMsg);
     ddlExecutor.runSQL(dropTableSql);
+  }
+
+  @ParameterizedTest
+  public void testHiveSyncOfKerberosEnvironment() throws Exception {
+    // Path to the krb5 file
+    String KER5_PATH = "/krb5.conf";
+    // Path to the user keytab file
+    String PRINCIPAL = "/test.keytab";
+    // User Principal
+    String KEYTAB_PATH = "test@HADOOP";
+    // Kerberos authentication of the client
+    System.setProperty("java.security.krb5.conf", KER5_PATH);
+    Configuration conf = new Configuration();
+    conf.set("hadoop.security.authentication", "kerberos");
+    UserGroupInformation.setConfiguration(conf);
+    UserGroupInformation.loginUserFromKeytab(PRINCIPAL, KEYTAB_PATH);
+    // If flink or Spark is used, you need to use the Kerberos authentication method recommended by Flink or Spark
+
+    // Setting Kerberos Parameters
+    // Hive Principal
+    String HIVE_PRINCIPAL = "hive@HADOOP";
+    HiveTestUtil.hiveSyncConfig.useKerberos = true;
+    HiveTestUtil.hiveSyncConfig.kerberosPrincipal = HIVE_PRINCIPAL;
+    HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HoodieHiveClient hoodieHiveClient = hiveSyncTool.hoodieHiveClient;
+
+    // Create a database in Hive. If the database is created successfully
+    // the client synchronizes the Kerberos metadata for managing Hive
+    hoodieHiveClient.createDatabase(hiveSyncConfig.databaseName);
+
   }
 }
