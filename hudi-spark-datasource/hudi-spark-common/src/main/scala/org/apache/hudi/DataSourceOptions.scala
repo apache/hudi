@@ -466,6 +466,16 @@ object DataSourceWriteOptions {
     .noDefaultValue()
     .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.")
 
+  val HIVE_SYNC_USE_KERBEROS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.use_kerberos")
+    .defaultValue("false")
+    .withDocumentation("Whether to use Kerberos authentication.")
+
+  val HIVE_SYNC_KERBEROS_PRINCIPAL: ConfigProperty[String] = ConfigProperty
+    .key("hive_sync.kerberos_principal")
+    .noDefaultValue()
+    .withDocumentation("Hive metastore principal.")
+
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.compaction.async.enable")
