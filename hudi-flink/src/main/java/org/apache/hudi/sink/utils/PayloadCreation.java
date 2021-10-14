@@ -55,7 +55,7 @@ public class PayloadCreation implements Serializable {
   }
 
   public static PayloadCreation instance(Configuration conf) throws Exception {
-    boolean shouldCombine = conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS)
+    boolean shouldCombine = conf.getBoolean(FlinkOptions.PRE_COMBINE)
         || WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
     String preCombineField = null;
     final Class<?>[] argTypes;

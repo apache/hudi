@@ -154,7 +154,7 @@ public class StreamerUtil {
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
             .withPath(conf.getString(FlinkOptions.PATH))
-            .combineInput(conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS), true)
+            .combineInput(conf.getBoolean(FlinkOptions.PRE_COMBINE), true)
             .withMergeAllowDuplicateOnInserts(allowDuplicateInserts(conf))
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
@@ -300,16 +300,6 @@ public class StreamerUtil {
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
-  }
-
-  /**
-   * Returns whether the compaction trigger strategy is time based.
-   *
-   * @param conf The flink configuration.
-   */
-  public static boolean isTimeCompactionTriggerStrategy(Configuration conf) {
-    final String strategy = conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY);
-    return FlinkOptions.TIME_ELAPSED.equalsIgnoreCase(strategy) || FlinkOptions.NUM_OR_TIME.equalsIgnoreCase(strategy);
   }
 
   /**

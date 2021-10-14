@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -157,6 +158,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupHiveOptions(conf);
     // read options
     setupReadOptions(conf);
+    // write options
+    setupWriteOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toPhysicalRowDataType().notNull().getLogicalType());
   }
@@ -249,12 +252,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
       conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
     }
-    if (conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED)
-        && !conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)
-        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
-      // if compaction schedule is on, tweak the target io to 500GB
-      conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
-    }
     if (StreamerUtil.allowDuplicateInserts(conf)) {
       // no need for compaction if insert duplicates is allowed
       conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
@@ -279,6 +276,16 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
         && (conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent())) {
       conf.setString(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    }
+  }
+
+  /**
+   * Sets up the write options from the table definition.
+   */
+  private static void setupWriteOptions(Configuration conf) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)
+        && HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)) == HoodieTableType.COPY_ON_WRITE) {
+      conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
     }
   }
 

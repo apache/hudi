@@ -652,7 +652,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.INDEX_GLOBAL_ENABLED, true)
-        .option(FlinkOptions.INSERT_DROP_DUPS, true)
+        .option(FlinkOptions.PRE_COMBINE, true)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
@@ -674,7 +674,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.INDEX_GLOBAL_ENABLED, false)
-        .option(FlinkOptions.INSERT_DROP_DUPS, true)
+        .option(FlinkOptions.PRE_COMBINE, true)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
