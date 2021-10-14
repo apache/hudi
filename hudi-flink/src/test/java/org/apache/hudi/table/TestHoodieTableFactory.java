@@ -394,6 +394,21 @@ public class TestHoodieTableFactory {
         is("UTC"));
   }
 
+  @Test
+  void testSetupWriteOptionsForSink() {
+    final HoodieTableSink tableSink1 =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
+    final Configuration conf1 = tableSink1.getConf();
+    assertThat(conf1.get(FlinkOptions.PRE_COMBINE), is(true));
+
+    // set up operation as 'insert'
+    this.conf.setString(FlinkOptions.OPERATION, "insert");
+    HoodieTableSink tableSink2 =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
+    Configuration conf2 = tableSink2.getConf();
+    assertThat(conf2.get(FlinkOptions.PRE_COMBINE), is(false));
+  }
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
