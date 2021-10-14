@@ -151,6 +151,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     conf.setString(FlinkOptions.TABLE_NAME.key(), tableName);
     // hoodie key about options
     setupHoodieKeyOptions(conf, table);
+    // write options
+    setupWriteOptions(conf, table);
     // compaction options
     setupCompactionOptions(conf);
     // hive options
@@ -279,6 +281,16 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
         && (conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent())) {
       conf.setString(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    }
+  }
+
+  /**
+   * Sets up write options from the table definition.
+   * */
+  private static void setupWriteOptions(Configuration conf, CatalogTable table) {
+    // sets up dropDuplicate options
+    if (conf.getString(FlinkOptions.TABLE_TYPE).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE)) {
+      conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
     }
   }
 
