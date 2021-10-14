@@ -211,11 +211,13 @@ public class StreamWriteOperatorCoordinator
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
           final boolean committed = commitInstant(this.instant);
-          if (committed) {
+          if (tableState.scheduleCompaction) {
             // if async compaction is on, schedule the compaction
-            if (tableState.scheduleCompaction) {
+            if (committed || tableState.timeCompactionTriggerStrategy) {
               writeClient.scheduleCompaction(Option.empty());
             }
+          }
+          if (committed) {
             // start new instant.
             startInstant();
             // sync Hive if is enabled
@@ -530,6 +532,7 @@ public class StreamWriteOperatorCoordinator
     final String commitAction;
     final boolean isOverwrite;
     final boolean scheduleCompaction;
+    final boolean timeCompactionTriggerStrategy;
     final boolean syncHive;
     final boolean syncMetadata;
 
@@ -539,6 +542,7 @@ public class StreamWriteOperatorCoordinator
           HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE).toUpperCase(Locale.ROOT)));
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
       this.scheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
+      this.timeCompactionTriggerStrategy = StreamerUtil.isTimeCompactionTriggerStrategy(conf);
       this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
     }

@@ -286,7 +286,7 @@ public class StreamerUtil {
   }
 
   /**
-   * Returns whether needs to schedule the compaction plan.
+   * Returns whether there is need to schedule the compaction plan.
    *
    * @param conf The flink configuration.
    */
@@ -295,6 +295,16 @@ public class StreamerUtil {
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
+  }
+
+  /**
+   * Returns whether the compaction trigger strategy is time based.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean isTimeCompactionTriggerStrategy(Configuration conf) {
+    final String strategy = conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY);
+    return FlinkOptions.TIME_ELAPSED.equalsIgnoreCase(strategy) || FlinkOptions.NUM_OR_TIME.equalsIgnoreCase(strategy);
   }
 
   /**

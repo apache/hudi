@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
@@ -159,23 +160,24 @@ public class IncrementalInputSplits implements Serializable {
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
     List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
     if (archivedMetadataList.size() > 0) {
-      LOG.warn(""
+      LOG.warn("\n"
           + "--------------------------------------------------------------------------------\n"
           + "---------- caution: the reader has fall behind too much from the writer,\n"
           + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
           + "--------------------------------------------------------------------------------");
     }
     List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
-        ? mergeList(activeMetadataList, archivedMetadataList)
+        // IMPORTANT: the merged metadata list must be in ascending order by instant time
+        ? mergeList(archivedMetadataList, activeMetadataList)
         : activeMetadataList;
 
-    Set<String> writePartitions = getWritePartitionPaths(metadataList);
+    Set<String> writePartitions = HoodieInputFormatUtils.getWritePartitionPaths(metadataList);
     // apply partition push down
     if (this.requiredPartitions != null) {
       writePartitions = writePartitions.stream()
           .filter(this.requiredPartitions::contains).collect(Collectors.toSet());
     }
-    FileStatus[] fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList);
+    FileStatus[] fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
     if (fileStatuses.length == 0) {
       LOG.warn("No files found for reading in user provided path.");
       return Result.EMPTY;
@@ -273,19 +275,6 @@ public class IncrementalInputSplits implements Serializable {
       instantStream = instantStream.filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN_OR_EQUALS, endCommit));
     }
     return instantStream.collect(Collectors.toList());
-  }
-
-  /**
-   * Returns all the incremental write partition paths as a set with the given commits metadata.
-   *
-   * @param metadataList The commits metadata
-   * @return the partition path set
-   */
-  private Set<String> getWritePartitionPaths(List<HoodieCommitMetadata> metadataList) {
-    return metadataList.stream()
-        .map(HoodieCommitMetadata::getWritePartitionPaths)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toSet());
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
