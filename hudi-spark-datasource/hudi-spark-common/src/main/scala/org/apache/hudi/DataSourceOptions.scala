@@ -381,6 +381,11 @@ object DataSourceWriteOptions {
   val HIVE_URL: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.jdbcurl")
     .defaultValue("jdbc:hive2://localhost:10000")
+    .withDocumentation("Hive jdbc url")
+
+  val METASTORE_URIS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.metastore.uris")
+    .defaultValue("thrift:localhost:9083")
     .withDocumentation("Hive metastore url")
 
   val HIVE_PARTITION_FIELDS: ConfigProperty[String] = ConfigProperty

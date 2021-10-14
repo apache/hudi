@@ -65,6 +65,7 @@ object HoodieWriterUtils {
       HIVE_USER.key -> HIVE_USER.defaultValue,
       HIVE_PASS.key -> HIVE_PASS.defaultValue,
       HIVE_URL.key -> HIVE_URL.defaultValue,
+      METASTORE_URIS.key -> METASTORE_URIS.defaultValue,
       HIVE_PARTITION_FIELDS.key -> HIVE_PARTITION_FIELDS.defaultValue,
       HIVE_PARTITION_EXTRACTOR_CLASS.key -> HIVE_PARTITION_EXTRACTOR_CLASS.defaultValue,
       HIVE_STYLE_PARTITIONING.key -> HIVE_STYLE_PARTITIONING.defaultValue,

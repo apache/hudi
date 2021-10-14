@@ -159,10 +159,14 @@ public class BootstrapExecutor  implements Serializable {
    * Sync to Hive.
    */
   private void syncHive() {
-    if (cfg.enableHiveSync) {
+    if (cfg.enableHiveSync || cfg.enableHiveSync) {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-      LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-          + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+      HiveConf hiveConf = new HiveConf(fs.getConf(), HiveConf.class);
+      if (!DataSourceWriteOptions.METASTORE_URIS().defaultValue().equals(hiveSyncConfig.metastoreUris)) {
+        hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname,hiveSyncConfig.metastoreUris);
+      }
+      LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
+      LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
       new HiveSyncTool(hiveSyncConfig, new HiveConf(configuration, HiveConf.class), fs).syncHoodieTable();
     }
   }
