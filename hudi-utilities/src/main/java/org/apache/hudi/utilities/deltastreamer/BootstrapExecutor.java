@@ -159,7 +159,7 @@ public class BootstrapExecutor  implements Serializable {
    * Sync to Hive.
    */
   private void syncHive() {
-    if (cfg.enableHiveSync || cfg.enableHiveSync) {
+    if (cfg.enableHiveSync || cfg.enableMetaSync) {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
       HiveConf hiveConf = new HiveConf(fs.getConf(), HiveConf.class);
       if (!DataSourceWriteOptions.METASTORE_URIS().defaultValue().equals(hiveSyncConfig.metastoreUris)) {
