@@ -419,7 +419,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
     List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
-    if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
+    if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
       records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
     }
     bucket.preWrite(records);
@@ -454,7 +454,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
           .forEach(bucket -> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
-              if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
+              if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
                 records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
               }
               bucket.preWrite(records);

@@ -115,15 +115,15 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Double> INDEX_STATE_TTL = ConfigOptions
       .key("index.state.ttl")
       .doubleType()
-      .defaultValue(1.5D)
-      .withDescription("Index state ttl in days, default 1.5 day");
+      .defaultValue(0D)
+      .withDescription("Index state ttl in days, default stores the index permanently");
 
   public static final ConfigOption<Boolean> INDEX_GLOBAL_ENABLED = ConfigOptions
       .key("index.global.enabled")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("Whether to update index for the old partition path\n"
-          + "if same key record with different partition path came in, default false");
+          + "if same key record with different partition path came in, default true");
 
   public static final ConfigOption<String> INDEX_PARTITION_REGEX = ConfigOptions
       .key("index.partition.regex")
@@ -255,15 +255,17 @@ public class FlinkOptions extends HoodieConfig {
           + "This will render any value set for the option in-effective");
 
   /**
-   * Flag to indicate whether to drop duplicates upon insert.
-   * By default insert will accept duplicates, to gain extra performance.
+   * Flag to indicate whether to drop duplicates before insert/upsert.
+   * By default false to gain extra performance.
    */
-  public static final ConfigOption<Boolean> INSERT_DROP_DUPS = ConfigOptions
-      .key("write.insert.drop.duplicates")
+  public static final ConfigOption<Boolean> PRE_COMBINE = ConfigOptions
+      .key("write.precombine")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Flag to indicate whether to drop duplicates upon insert.\n"
-          + "By default insert will accept duplicates, to gain extra performance");
+      .withDescription("Flag to indicate whether to drop duplicates before insert/upsert.\n"
+          + "By default these cases will accept duplicates, to gain extra performance:\n"
+          + "1) insert operation;\n"
+          + "2) upsert for MOR table, the MOR table deduplicate on reading");
 
   public static final ConfigOption<Integer> RETRY_TIMES = ConfigOptions
       .key("write.retry.times")
@@ -496,8 +498,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Long> COMPACTION_TARGET_IO = ConfigOptions
       .key("compaction.target_io")
       .longType()
-      .defaultValue(5120L) // default 5 GB
-      .withDescription("Target IO per compaction (both read and write), default 5 GB");
+      .defaultValue(500 * 1024L) // default 500 GB
+      .withDescription("Target IO per compaction (both read and write), default 500 GB");
 
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")

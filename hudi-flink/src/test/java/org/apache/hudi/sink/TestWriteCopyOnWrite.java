@@ -275,7 +275,7 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertDuplicates() throws Exception {
     // reset the config option
-    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
@@ -470,7 +470,7 @@ public class TestWriteCopyOnWrite {
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0008); // 839 bytes batch size
-    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
