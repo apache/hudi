@@ -100,7 +100,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
       .intType()
-      .defaultValue(24)
+      .defaultValue(10)
       .withDescription("Max delta commits for metadata table to trigger compaction, default 24");
 
   // ------------------------------------------------------------------------

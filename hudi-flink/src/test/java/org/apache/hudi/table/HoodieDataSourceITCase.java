@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -582,6 +583,34 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par1]");
+  }
+
+  @Test
+  void testUpdateWithDefaultHoodieRecordPayload() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .field("id int")
+        .field("name string")
+        .field("price double")
+        .field("ts bigint")
+        .pkField("id")
+        .noPartition()
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.PAYLOAD_CLASS_NAME, DefaultHoodieRecordPayload.class.getName())
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto1 = "insert into t1 values\n"
+        + "(1,'a1',20,20)";
+    execInsertSql(tableEnv, insertInto1);
+
+    final String insertInto4 = "insert into t1 values\n"
+        + "(1,'a1',20,1)";
+    execInsertSql(tableEnv, insertInto4);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "[+I[1, a1, 20.0, 20]]");
   }
 
   @ParameterizedTest
