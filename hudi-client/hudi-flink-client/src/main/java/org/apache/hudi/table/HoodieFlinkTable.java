@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,11 +36,14 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.List;
+
+import static org.apache.hudi.common.data.HoodieListData.getList;
 
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
@@ -85,6 +89,11 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
       hoodieFlinkTable.getHoodieView().sync();
     }
     return hoodieFlinkTable;
+  }
+
+  public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
+      HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
+    return metadata.clone(getList(metadata.getWriteStatuses()));
   }
 
   @Override
