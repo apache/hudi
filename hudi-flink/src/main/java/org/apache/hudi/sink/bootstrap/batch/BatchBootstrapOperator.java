@@ -57,6 +57,11 @@ public class BatchBootstrapOperator<I, O extends HoodieRecord>
   }
 
   @Override
+  protected void preLoadIndexRecords() {
+    // no operation
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
   public void processElement(StreamRecord<I> element) throws Exception {
     final HoodieRecord record = (HoodieRecord<?>) element.getValue();

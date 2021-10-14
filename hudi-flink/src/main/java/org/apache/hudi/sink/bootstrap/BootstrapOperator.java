@@ -129,6 +129,13 @@ public class BootstrapOperator<I, O extends HoodieRecord>
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)));
 
+    preLoadIndexRecords();
+  }
+
+  /**
+   * Load the index records before {@link #processElement}.
+   */
+  protected void preLoadIndexRecords() throws Exception {
     String basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
