@@ -50,6 +50,10 @@ public enum WriteOperationType {
   COMPACT("compact"),
 
   INDEX("index"),
+
+  // alter schema
+  ALTER_SCHEMA("alter_schema"),
+
   // used for old version
   UNKNOWN("unknown");
 
@@ -90,6 +94,8 @@ public enum WriteOperationType {
         return COMPACT;
       case "index":
         return INDEX;
+      case "alter_schema":
+        return ALTER_SCHEMA;
       case "unknown":
         return UNKNOWN;
       default:

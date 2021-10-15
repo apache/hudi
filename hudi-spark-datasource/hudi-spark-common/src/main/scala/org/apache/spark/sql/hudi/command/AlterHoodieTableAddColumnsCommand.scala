@@ -110,7 +110,7 @@ object AlterHoodieTableAddColumnsCommand {
       HoodieWriterUtils.parametersWithWriteDefaults(hoodieCatalogTable.catalogProperties).asJava
     )
 
-    val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.INSERT, hoodieCatalogTable.tableType)
+    val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, hoodieCatalogTable.tableType)
     val instantTime = HoodieActiveTimeline.createNewInstantTime
     client.startCommitWithTime(instantTime, commitActionType)
 
@@ -118,7 +118,7 @@ object AlterHoodieTableAddColumnsCommand {
     val timeLine = hoodieTable.getActiveTimeline
     val requested = new HoodieInstant(State.REQUESTED, commitActionType, instantTime)
     val metadata = new HoodieCommitMetadata
-    metadata.setOperationType(WriteOperationType.INSERT)
+    metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
     timeLine.transitionRequestedToInflight(requested, Option.of(metadata.toJsonString.getBytes(StandardCharsets.UTF_8)))
 
     client.commit(instantTime, jsc.emptyRDD)
