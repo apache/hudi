@@ -50,6 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import scala.Tuple2;
@@ -67,7 +68,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
 
   private String schemaStr;
-  private transient Schema schema;
   private StructType structType;
 
   public TestHoodieDatasetBulkInsertHelper() throws IOException {
@@ -84,14 +84,35 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   }
 
   private void init() throws IOException {
-    schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
-    schema = DataSourceTestUtils.getStructTypeExampleSchema();
+    String schemaPath = "/exampleSchema.txt";
+    schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream(schemaPath));
+    Schema schema = DataSourceTestUtils.getStructTypeExampleSchema(schemaPath);
     structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
   }
 
   @Test
-  public void testBulkInsertHelper() {
-    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineInput(false, false).build();
+  public void testBulkInsertHelperConcurrently() throws IOException {
+    String schema2Path = "/exampleSchema2.txt";
+    String schemaStr2 =  FileIOUtils.readAsUTFString(getClass().getResourceAsStream(schema2Path));
+    StructType structType2 = AvroConversionUtils
+            .convertAvroSchemaToStructType(DataSourceTestUtils.getStructTypeExampleSchema(schema2Path));
+
+    IntStream.range(0, 10).parallel().forEach(i -> {
+      if (i % 2 == 0) {
+        _testBulkInsertHelper(schemaStr, structType, "_row_key");
+      } else
+        _testBulkInsertHelper(schemaStr2, structType2, "_row_key2");
+    });
+  }
+
+  @Test
+  public void testBulkInsertHelper() throws IOException {
+    _testBulkInsertHelper(schemaStr, structType, "_row_key");
+  }
+
+
+  private void _testBulkInsertHelper(String schema, StructType structType, String recordKey) {
+    HoodieWriteConfig config = getConfigBuilder(schema).withProps(getPropsAllSet(recordKey)).combineInput(false, false).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
@@ -106,7 +127,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     }
 
     result.toJavaRDD().foreach(entry -> {
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)).equals(entry.getAs("_row_key")));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)).equals(entry.getAs(recordKey)));
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).equals(entry.getAs("partition")));
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)).equals(""));
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).equals(""));
@@ -148,7 +169,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("providePreCombineArgs")
   public void testBulkInsertPreCombine(boolean enablePreCombine) {
-    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineInput(enablePreCombine, enablePreCombine)
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet("_row_key"))
+            .combineInput(enablePreCombine, enablePreCombine)
             .withPreCombineField("ts").build();
     List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> toUpdateDataset = sqlContext.createDataFrame(inserts.subList(0, 5), structType);
@@ -207,22 +229,26 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     }
   }
 
-  private Map<String, String> getPropsAllSet() {
-    return getProps(true, true, true, true);
+  private Map<String, String> getPropsAllSet(String recordKey) {
+    return getProps(recordKey, true, true, true, true);
   }
 
   private Map<String, String> getProps(boolean setAll, boolean setKeyGen, boolean setRecordKey, boolean setPartitionPath) {
+    return getProps("_row_key", setAll, setKeyGen, setRecordKey, setPartitionPath);
+  }
+
+  private Map<String, String> getProps(String recordKey, boolean setAll, boolean setKeyGen, boolean setRecordKey, boolean setPartitionPath) {
     Map<String, String> props = new HashMap<>();
     if (setAll) {
       props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
-      props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+      props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey);
       props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition");
     } else {
       if (setKeyGen) {
         props.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
       }
       if (setRecordKey) {
-        props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+        props.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey);
       }
       if (setPartitionPath) {
         props.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition");

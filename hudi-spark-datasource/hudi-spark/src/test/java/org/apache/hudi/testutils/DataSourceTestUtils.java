@@ -49,7 +49,11 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_T
 public class DataSourceTestUtils {
 
   public static Schema getStructTypeExampleSchema() throws IOException {
-    return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
+    return getStructTypeExampleSchema("/exampleSchema.txt");
+  }
+
+  public static Schema getStructTypeExampleSchema(String path) throws IOException {
+    return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream(path)));
   }
 
   public static Schema getStructTypeExampleEvolvedSchema() throws IOException {
