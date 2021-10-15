@@ -153,6 +153,10 @@
               </artifactSet>
               <relocations>
                 <relocation>
+                  <pattern>javax.servlet.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}javax.servlet.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>org.apache.avro.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.avro.</shadedPattern>
                 </relocation>
