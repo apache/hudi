@@ -48,6 +48,8 @@ public enum WriteOperationType {
   INSERT_OVERWRITE_TABLE("insert_overwrite_table"),
   // compact
   COMPACT("compact"),
+  // alter schema
+  ALTER_SCHEMA("alter_schema"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -86,6 +88,8 @@ public enum WriteOperationType {
         return CLUSTER;
       case "compact":
         return COMPACT;
+      case "alter_schema":
+        return ALTER_SCHEMA;
       case "unknown":
         return UNKNOWN;
       default:

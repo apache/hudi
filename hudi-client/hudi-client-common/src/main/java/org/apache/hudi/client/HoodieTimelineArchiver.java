@@ -50,6 +50,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -550,6 +551,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         }
       }
       writeToFile(wrapperSchema, records);
+      // try to clean old history schema.
+      FileBasedInternalSchemaStorageManager fss = new FileBasedInternalSchemaStorageManager(metaClient);
+      fss.cleanOldFiles(instants.stream().map(is -> is.getTimestamp()).collect(Collectors.toList()));
     } catch (Exception e) {
       throw new HoodieCommitException("Failed to archive commits", e);
     }
