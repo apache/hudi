@@ -38,7 +38,6 @@ public abstract class HoodieData<T> implements Serializable {
    */
   public abstract Object get();
 
-
   /**
    * @return whether the collection is empty.
    */
