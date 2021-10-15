@@ -69,7 +69,7 @@ extends RunnableCommand {
       normalizedSpecs: Seq[Map[String, String]]): Map[String, String] = {
     val table = sparkSession.sessionState.catalog.getTableMetadata(tableIdentifier)
     val allPartitionPaths = getAllPartitionPaths(sparkSession, table)
-    val enableHiveStylePartitioning = isHiveStylePartitionPartitioning(allPartitionPaths, table)
+    val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
     val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
     val partitionsToDelete = normalizedSpecs.map { spec =>
       partitionColumns.map{ partitionColumn =>

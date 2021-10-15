@@ -100,7 +100,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
      var upgrateConfig = Map.empty[String, String]
      // If this is a non-hive-styled partition table, disable the hive style config.
      // (By default this config is enable for spark sql)
-     upgrateConfig = if (!isHiveStylePartitionPartitioning(allPartitionPaths, table)) {
+     upgrateConfig = if (!isHiveStyledPartitioning(allPartitionPaths, table)) {
         upgrateConfig + (DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "false")
      } else {
        upgrateConfig

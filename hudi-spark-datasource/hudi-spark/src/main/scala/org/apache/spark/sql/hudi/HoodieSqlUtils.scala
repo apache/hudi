@@ -105,7 +105,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
    * merge or update the table. Or else, we will get an incorrect merge result
    * as the partition path mismatch.
    */
-  def isHiveStylePartitionPartitioning(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
+  def isHiveStyledPartitioning(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
     if (table.partitionColumnNames.nonEmpty) {
       val isHiveStylePartitionPath = (path: String) => {
         val fragments = path.split("/")
