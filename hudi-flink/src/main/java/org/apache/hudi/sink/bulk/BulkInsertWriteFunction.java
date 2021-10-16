@@ -21,9 +21,8 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
@@ -83,6 +82,11 @@ public class BulkInsertWriteFunction<I, O>
   private int taskID;
 
   /**
+   * Meta Client.
+   */
+  private transient HoodieTableMetaClient metaClient;
+
+  /**
    * Write Client.
    */
   private transient HoodieFlinkWriteClient writeClient;
@@ -98,11 +102,6 @@ public class BulkInsertWriteFunction<I, O>
   private transient OperatorEventGateway eventGateway;
 
   /**
-   * Commit action type.
-   */
-  private transient String actionType;
-
-  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -115,12 +114,9 @@ public class BulkInsertWriteFunction<I, O>
   @Override
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.metaClient = StreamerUtil.createMetaClient(this.config);
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
-        HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
-
-    this.initInstant = this.writeClient.getLastPendingInstant(this.actionType);
+    this.initInstant = StreamerUtil.getLastPendingInstant(this.metaClient, false);
     sendBootstrapEvent();
     initWriterHelper();
   }
@@ -204,12 +200,13 @@ public class BulkInsertWriteFunction<I, O>
   }
 
   private String instantToWrite() {
-    String instant = this.writeClient.getLastPendingInstant(this.actionType);
+    String instant = StreamerUtil.getLastPendingInstant(this.metaClient);
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
     TimeWait timeWait = TimeWait.builder()
         .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
         .action("instant initialize")
+        .throwsT(true)
         .build();
     while (instant == null || instant.equals(this.initInstant)) {
       // wait condition:
@@ -218,7 +215,7 @@ public class BulkInsertWriteFunction<I, O>
       // sleep for a while
       timeWait.waitFor();
       // refresh the inflight instant
-      instant = this.writeClient.getLastPendingInstant(this.actionType);
+      instant = StreamerUtil.getLastPendingInstant(this.metaClient);
     }
     return instant;
   }

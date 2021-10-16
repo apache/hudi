@@ -460,6 +460,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
+  public void transitionRequestedToInflight(String commitType, String inFlightInstant) {
+    HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, commitType, inFlightInstant);
+    transitionRequestedToInflight(requested, Option.empty(), false);
+  }
+
   public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content) {
     transitionRequestedToInflight(requested, content, false);
   }

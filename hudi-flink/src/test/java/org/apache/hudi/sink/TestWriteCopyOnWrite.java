@@ -23,17 +23,16 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
@@ -45,21 +44,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -98,8 +99,7 @@ public class TestWriteCopyOnWrite {
 
   @BeforeEach
   public void before() throws Exception {
-    final String basePath = tempFile.getAbsolutePath();
-    conf = TestConfigurations.getDefaultConf(basePath);
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
     setUp(conf);
     this.funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
@@ -133,7 +133,7 @@ public class TestWriteCopyOnWrite {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
 
-    String instant = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
@@ -148,18 +148,17 @@ public class TestWriteCopyOnWrite {
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
+    checkInstantState(REQUESTED, instant);
     funcWrapper.checkpointComplete(1);
     // the coordinator checkpoint commits the inflight instant.
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
 
     // checkpoint for next round, no data input, so after the checkpoint,
     // there should not be REQUESTED Instant
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(2);
 
-    String instant2 = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant2 = lastPendingInstant();
     assertNotEquals(instant, instant2);
 
     final OperatorEvent nextEvent2 = funcWrapper.getNextEvent();
@@ -173,12 +172,15 @@ public class TestWriteCopyOnWrite {
 
     funcWrapper.checkpointComplete(2);
     // started a new instant already
-    checkInflightInstant(funcWrapper.getWriteClient());
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInflightInstant();
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
   }
 
   @Test
   public void testCheckpointFails() throws Exception {
+    // reset the config option
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
     // open the function and ingest data
     funcWrapper.openFunction();
     // no data written and triggers checkpoint fails,
@@ -187,8 +189,7 @@ public class TestWriteCopyOnWrite {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
 
-    String instant = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
     assertNotNull(instant);
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
@@ -203,18 +204,17 @@ public class TestWriteCopyOnWrite {
         "The last checkpoint was aborted, ignore the events");
 
     // the instant metadata should be reused
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, null);
+    checkInstantState(REQUESTED, instant);
+    checkInstantState(HoodieInstant.State.COMPLETED, null);
 
     for (RowData rowData : TestData.DATA_SET_INSERT) {
       funcWrapper.invoke(rowData);
     }
 
     // this returns early because there is no inflight instant
-    assertThrows(HoodieException.class,
-        () -> funcWrapper.checkpointFunction(2),
-        "Timeout(0ms) while waiting for");
-    // do not sent the write event and fails the checkpoint,
+    assertDoesNotThrow(() -> funcWrapper.checkpointFunction(2),
+        "The stream writer reuse the last instant time when waiting for the last instant commit timeout");
+    // do not send the write event and fails the checkpoint,
     // behaves like the last checkpoint is successful.
     funcWrapper.checkpointFails(2);
   }
@@ -230,16 +230,16 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
     funcWrapper.getNextEvent();
 
-    String instant1 = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
+    String instant1 = lastPendingInstant();
     assertNotNull(instant1);
 
     // fails the subtask
     funcWrapper.subTaskFails(0);
 
-    String instant2 = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
+    String instant2 = lastPendingInstant();
     assertNotEquals(instant2, instant1, "The previous instant should be rolled back when starting new instant");
 
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, null);
+    checkInstantState(HoodieInstant.State.COMPLETED, null);
   }
 
   @Test
@@ -254,8 +254,7 @@ public class TestWriteCopyOnWrite {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
 
-    String instant = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
@@ -263,11 +262,11 @@ public class TestWriteCopyOnWrite {
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
+    checkInstantState(REQUESTED, instant);
     funcWrapper.checkpointComplete(1);
     checkWrittenData(tempFile, EXPECTED1);
     // the coordinator checkpoint commits the inflight instant.
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED1);
   }
 
@@ -340,8 +339,7 @@ public class TestWriteCopyOnWrite {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(2);
 
-    String instant = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
@@ -349,10 +347,10 @@ public class TestWriteCopyOnWrite {
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
+    checkInstantState(REQUESTED, instant);
     funcWrapper.checkpointComplete(2);
     // the coordinator checkpoint commits the inflight instant.
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED2);
   }
 
@@ -385,8 +383,7 @@ public class TestWriteCopyOnWrite {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(2);
 
-    String instant = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
@@ -394,10 +391,10 @@ public class TestWriteCopyOnWrite {
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
+    checkInstantState(REQUESTED, instant);
     funcWrapper.checkpointComplete(2);
     // the coordinator checkpoint commits the inflight instant.
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
 
     Map<String, String> expected = getUpsertWithDeleteExpected();
     checkWrittenData(tempFile, expected);
@@ -436,8 +433,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    String instant = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     funcWrapper.checkpointComplete(1);
 
@@ -445,8 +441,8 @@ public class TestWriteCopyOnWrite {
     checkWrittenData(tempFile, expected, 1);
 
     // started a new instant already
-    checkInflightInstant(funcWrapper.getWriteClient());
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInflightInstant();
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
 
     // insert duplicates again
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
@@ -499,8 +495,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    String instant = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     funcWrapper.checkpointComplete(1);
 
@@ -510,8 +505,8 @@ public class TestWriteCopyOnWrite {
     checkWrittenData(tempFile, expected, 1);
 
     // started a new instant already
-    checkInflightInstant(funcWrapper.getWriteClient());
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInflightInstant();
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
 
     // insert duplicates again
     for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
@@ -534,7 +529,7 @@ public class TestWriteCopyOnWrite {
   public void testInsertAllowsDuplication() throws Exception {
     // reset the config option
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
-    conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+    conf.setString(FlinkOptions.OPERATION, "insert");
     conf.setBoolean(FlinkOptions.INSERT_DEDUP, false);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
@@ -558,8 +553,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    String instant = funcWrapper.getWriteClient()
-            .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     funcWrapper.checkpointComplete(1);
 
@@ -575,8 +569,8 @@ public class TestWriteCopyOnWrite {
     TestData.checkWrittenAllData(tempFile, expected, 1);
 
     // started a new instant already
-    checkInflightInstant(funcWrapper.getWriteClient());
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInflightInstant();
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
 
     // insert duplicates again
     for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
@@ -587,8 +581,10 @@ public class TestWriteCopyOnWrite {
 
     final OperatorEvent event3 = funcWrapper.getNextEvent(); // remove the first event first
     final OperatorEvent event4 = funcWrapper.getNextEvent();
+    final OperatorEvent event5 = funcWrapper.getNextEvent();
     funcWrapper.getCoordinator().handleEventFromOperator(0, event3);
     funcWrapper.getCoordinator().handleEventFromOperator(0, event4);
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event5);
     funcWrapper.checkpointComplete(2);
 
     // same with the original base file content.
@@ -639,8 +635,7 @@ public class TestWriteCopyOnWrite {
     }
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    String instant = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     funcWrapper.checkpointComplete(1);
 
@@ -648,8 +643,8 @@ public class TestWriteCopyOnWrite {
     checkWrittenData(tempFile, expected, 1);
 
     // started a new instant already
-    checkInflightInstant(funcWrapper.getWriteClient());
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInflightInstant();
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
 
     // insert duplicates again
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
@@ -744,8 +739,7 @@ public class TestWriteCopyOnWrite {
 
     assertTrue(funcWrapper.isAlreadyBootstrap());
 
-    String instant = funcWrapper.getWriteClient()
-        .getLastPendingInstant(getTableType());
+    String instant = lastPendingInstant();
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
@@ -756,18 +750,18 @@ public class TestWriteCopyOnWrite {
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
+    checkInstantState(REQUESTED, instant);
 
     funcWrapper.checkpointComplete(1);
     // the coordinator checkpoint commits the inflight instant.
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkInstantState(HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED2);
   }
 
   @Test
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 3);
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
@@ -787,7 +781,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
     assertTrue(funcWrapper.isConforming(), "The write function should be waiting for the instant to commit");
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 4; i++) {
       final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
       assertThat("The operator expect to send an event", event, instanceOf(WriteMetadataEvent.class));
       funcWrapper.getCoordinator().handleEventFromOperator(0, event);
@@ -801,26 +795,25 @@ public class TestWriteCopyOnWrite {
 
     assertFalse(funcWrapper.isConforming(), "The write function should finish waiting for the instant to commit");
 
-    // checkpoint for the next round, when there is eager flush but the write
-    // task is waiting for the instant commit ack, should throw for timeout.
+    // checkpoint for the next round
     funcWrapper.checkpointFunction(2);
 
-    assertThrows(HoodieException.class, () -> {
+    assertDoesNotThrow(() -> {
       for (RowData rowData : TestData.DATA_SET_INSERT) {
         funcWrapper.invoke(rowData);
       }
-    }, "Timeout(500ms) while waiting for instant");
+    }, "The stream writer reuse the last instant time when waiting for the last instant commit timeout");
   }
 
   @Test
-  public void testReuseEmbeddedServer() {
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
+  public void testReuseEmbeddedServer() throws IOException {
+    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
     FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 
     assertSame(viewStorageConfig.getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
 
     // get another write client
-    writeClient = StreamerUtil.createWriteClient(conf, null);
+    writeClient = StreamerUtil.createWriteClient(conf);
     assertSame(writeClient.getConfig().getViewStorageConfig().getStorageType(), FileSystemViewStorageType.REMOTE_FIRST);
     assertEquals(viewStorageConfig.getRemoteViewServerPort(), writeClient.getConfig().getViewStorageConfig().getRemoteViewServerPort());
   }
@@ -829,29 +822,32 @@ public class TestWriteCopyOnWrite {
   //  Utilities
   // -------------------------------------------------------------------------
 
-  @SuppressWarnings("rawtypes")
-  private void checkInflightInstant(HoodieFlinkWriteClient writeClient) {
-    final String instant = writeClient.getLastPendingInstant(getTableType());
+  private void checkInflightInstant() {
+    final String instant = TestUtils.getLastPendingInstant(tempFile.getAbsolutePath());
     assertNotNull(instant);
   }
 
-  @SuppressWarnings("rawtypes")
-  private void checkInstantState(
-      HoodieFlinkWriteClient writeClient,
-      HoodieInstant.State state,
-      String instantStr) {
+  private void checkInstantState(HoodieInstant.State state, String instantStr) {
     final String instant;
     switch (state) {
       case REQUESTED:
-        instant = writeClient.getLastPendingInstant(getTableType());
+        instant = lastPendingInstant();
         break;
       case COMPLETED:
-        instant = writeClient.getLastCompletedInstant(getTableType());
+        instant = lastCompleteInstant();
         break;
       default:
         throw new AssertionError("Unexpected state");
     }
     assertThat(instant, is(instantStr));
+  }
+
+  protected String lastPendingInstant() {
+    return TestUtils.getLastPendingInstant(tempFile.getAbsolutePath());
+  }
+
+  protected String lastCompleteInstant() {
+    return TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
   }
 
   protected HoodieTableType getTableType() {

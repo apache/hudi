@@ -92,7 +92,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig, true)) {
       writeClient.startCommitWithTime(instantTime);
-      writeClient.transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+      this.metaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
 
       List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime);
       statuses.forEach(writeStatus -> {

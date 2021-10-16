@@ -63,9 +63,9 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
     return (DataStreamSinkProvider) dataStream -> {
 
       // setup configuration
-      long ckpTimeout = dataStream.getExecutionEnvironment()
-          .getCheckpointConfig().getCheckpointTimeout();
-      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+      long ckpInterval = dataStream.getExecutionEnvironment()
+          .getCheckpointConfig().getCheckpointInterval();
+      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpInterval * 5); // five checkpoints interval
 
       RowType rowType = (RowType) schema.toRowDataType().notNull().getLogicalType();
 

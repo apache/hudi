@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.bootstrap;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,14 +26,12 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -92,8 +89,6 @@ public class BootstrapOperator<I, O extends HoodieRecord>
   private transient ListState<String> instantState;
   private final Pattern pattern;
   private String lastInstantTime;
-  private HoodieFlinkWriteClient writeClient;
-  private String actionType;
 
   public BootstrapOperator(Configuration conf) {
     this.conf = conf;
@@ -102,7 +97,8 @@ public class BootstrapOperator<I, O extends HoodieRecord>
 
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
-    lastInstantTime = this.writeClient.getLastPendingInstant(this.actionType);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(this.conf);
+    lastInstantTime = StreamerUtil.getLastPendingInstant(metaClient);
     instantState.update(Collections.singletonList(lastInstantTime));
   }
 
@@ -122,12 +118,8 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     }
 
     this.hadoopConf = StreamerUtil.getHadoopConf();
-    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
+    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
     this.hoodieTable = getTable();
-    this.writeClient = StreamerUtil.createWriteClient(this.conf, getRuntimeContext());
-    this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)),
-        HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)));
 
     preLoadIndexRecords();
   }
