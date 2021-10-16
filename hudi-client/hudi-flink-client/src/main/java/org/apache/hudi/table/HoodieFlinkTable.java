@@ -63,14 +63,28 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
   public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
                                                                            HoodieFlinkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
+    return HoodieFlinkTable.create(config, context, metaClient, config.isMetadataTableEnabled());
+  }
+
+  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
+                                                                           HoodieFlinkEngineContext context,
+                                                                           HoodieTableMetaClient metaClient,
+                                                                           boolean refreshTimeline) {
+    final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieFlinkCopyOnWriteTable<>(config, context, metaClient);
+        hoodieFlinkTable = new HoodieFlinkCopyOnWriteTable<>(config, context, metaClient);
+        break;
       case MERGE_ON_READ:
-        return new HoodieFlinkMergeOnReadTable<>(config, context, metaClient);
+        hoodieFlinkTable = new HoodieFlinkMergeOnReadTable<>(config, context, metaClient);
+        break;
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
+    if (refreshTimeline) {
+      hoodieFlinkTable.getHoodieView().sync();
+    }
+    return hoodieFlinkTable;
   }
 
   @Override
