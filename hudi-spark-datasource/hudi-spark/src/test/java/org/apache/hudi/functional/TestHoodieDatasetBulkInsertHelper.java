@@ -99,19 +99,19 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
 
     IntStream.range(0, 10).parallel().forEach(i -> {
       if (i % 2 == 0) {
-        _testBulkInsertHelper(schemaStr, structType, "_row_key");
-      } else
-        _testBulkInsertHelper(schemaStr2, structType2, "_row_key2");
+        testBulkInsertHelperFor(schemaStr, structType, "_row_key");
+      } else {
+        testBulkInsertHelperFor(schemaStr2, structType2, "_row_key2");
+      }
     });
   }
 
   @Test
   public void testBulkInsertHelper() throws IOException {
-    _testBulkInsertHelper(schemaStr, structType, "_row_key");
+    testBulkInsertHelperFor(schemaStr, structType, "_row_key");
   }
 
-
-  private void _testBulkInsertHelper(String schema, StructType structType, String recordKey) {
+  private void testBulkInsertHelperFor(String schema, StructType structType, String recordKey) {
     HoodieWriteConfig config = getConfigBuilder(schema).withProps(getPropsAllSet(recordKey)).combineInput(false, false).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
