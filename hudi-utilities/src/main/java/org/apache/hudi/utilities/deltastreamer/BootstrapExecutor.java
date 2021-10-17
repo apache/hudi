@@ -162,9 +162,7 @@ public class BootstrapExecutor  implements Serializable {
     if (cfg.enableHiveSync || cfg.enableMetaSync) {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
       HiveConf hiveConf = new HiveConf(fs.getConf(), HiveConf.class);
-      if (!DataSourceWriteOptions.METASTORE_URIS().defaultValue().equals(hiveSyncConfig.metastoreUris)) {
-        hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname,hiveSyncConfig.metastoreUris);
-      }
+      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname,hiveSyncConfig.metastoreUris);
       LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
       LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
       new HiveSyncTool(hiveSyncConfig, new HiveConf(configuration, HiveConf.class), fs).syncHoodieTable();
