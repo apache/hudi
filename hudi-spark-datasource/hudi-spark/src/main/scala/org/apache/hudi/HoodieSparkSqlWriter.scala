@@ -517,7 +517,7 @@ object HoodieSparkSqlWriter {
     val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, hoodieConfig, sqlConf)
     val hiveConf: HiveConf = new HiveConf()
     hiveConf.addResource(fs.getConf)
-    if (!DataSourceWriteOptions.METASTORE_URIS.defaultValue.equals(hiveSyncConfig.metastoreUris)) {
+    if (hiveSyncConfig.metastoreUris != null) {
       hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname,hiveSyncConfig.metastoreUris)
     }
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable()
