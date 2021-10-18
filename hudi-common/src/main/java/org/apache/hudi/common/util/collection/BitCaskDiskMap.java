@@ -37,7 +37,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
-import java.net.InetAddress;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.HashSet;
@@ -133,9 +132,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
       writeOnlyFile.getParentFile().mkdir();
     }
     writeOnlyFile.createNewFile();
-    LOG.info("Spilling to file location " + writeOnlyFile.getAbsolutePath() + " in host ("
-        + InetAddress.getLocalHost().getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName()
-        + ")");
+    LOG.debug("Spilling to file location " + writeOnlyFile.getAbsolutePath());
     // Make sure file is deleted when JVM exits
     writeOnlyFile.deleteOnExit();
   }
