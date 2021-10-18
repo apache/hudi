@@ -1048,5 +1048,7 @@ public class TestHiveSyncTool {
     // the client synchronizes the Kerberos metadata for managing Hive
     hoodieHiveClient.createDatabase(hiveSyncConfig.databaseName);
 
+    assert hoodieHiveClient.doesDataBaseExist(hiveSyncConfig.databaseName) : "Database creation failed!";
+    
   }
 }
