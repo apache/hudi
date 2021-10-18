@@ -1049,6 +1049,7 @@ public class TestHiveSyncTool {
     hoodieHiveClient.createDatabase(hiveSyncConfig.databaseName);
 
     assert !hoodieHiveClient.doesDataBaseExist(hiveSyncConfig.databaseName) : "Database creation failed!";
+    System.out.println("Database created successfully: " + hiveSyncConfig.databaseName);
 
   }
 }
