@@ -389,7 +389,13 @@ public class StreamerUtil {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf) throws IOException {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
     // create the filesystem view storage properties for client
-    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), writeConfig.getViewStorageConfig());
+    FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
+    // rebuild the view storage config with simplified options.
+    FileSystemViewStorageConfig rebuilt = FileSystemViewStorageConfig.newBuilder()
+        .withStorageType(viewStorageConfig.getStorageType())
+        .withRemoteServerHost(viewStorageConfig.getRemoteViewServerHost())
+        .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort()).build();
+    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt);
     return new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, writeConfig);
   }
 

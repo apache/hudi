@@ -35,15 +35,15 @@ public class TimeWait {
   private final long timeout;    // timeout in SECONDS
   private final long interval;   // interval in MILLISECONDS
   private final String action;   // action to report error message
-  private final boolean throwsE; // whether to throw when timeout
+  private final boolean throwsT; // whether to throw when timeout
 
   private long waitingTime = 0L;
 
-  private TimeWait(long timeout, long interval, String action, boolean throwsE) {
+  private TimeWait(long timeout, long interval, String action, boolean throwsT) {
     this.timeout = timeout;
     this.interval = interval;
     this.action = action;
-    this.throwsE = throwsE;
+    this.throwsT = throwsT;
   }
 
   public static Builder builder() {
@@ -59,7 +59,7 @@ public class TimeWait {
     try {
       if (waitingTime > timeout) {
         final String msg = "Timeout(" + waitingTime + "ms) while waiting for " + action;
-        if (this.throwsE) {
+        if (this.throwsT) {
           throw new HoodieException(msg);
         } else {
           LOG.warn(msg);
@@ -78,7 +78,7 @@ public class TimeWait {
    * Builder.
    */
   public static class Builder {
-    private long timeout = 5 * 60 * 1000; // default 5 minutes
+    private long timeout = 5 * 60 * 1000L; // default 5 minutes
     private long interval = 1000;
     private String action;
     private boolean throwsT = false;
