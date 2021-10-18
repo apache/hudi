@@ -22,6 +22,7 @@ import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -36,10 +37,10 @@ class AsyncCleanerService extends HoodieAsyncService {
 
   private static final Logger LOG = LogManager.getLogger(AsyncCleanerService.class);
 
-  private final AbstractHoodieWriteClient writeClient;
+  private final CleanDelegate writeClient;
   private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
-  protected AsyncCleanerService(AbstractHoodieWriteClient writeClient) {
+  protected AsyncCleanerService(CleanDelegate writeClient) {
     this.writeClient = writeClient;
   }
 
@@ -53,10 +54,10 @@ class AsyncCleanerService extends HoodieAsyncService {
     }, executor), executor);
   }
 
-  public static AsyncCleanerService startAsyncCleaningIfEnabled(AbstractHoodieWriteClient writeClient) {
+  public static AsyncCleanerService startAsyncCleaningIfEnabled(CleanDelegate cleanDelegate) {
     AsyncCleanerService asyncCleanerService = null;
-    if (writeClient.getConfig().isAutoClean() && writeClient.getConfig().isAsyncClean()) {
-      asyncCleanerService = new AsyncCleanerService(writeClient);
+    if (cleanDelegate.isAutoClean() && cleanDelegate.isAsyncClean()) {
+      asyncCleanerService = new AsyncCleanerService(cleanDelegate);
       asyncCleanerService.start(null);
     } else {
       LOG.info("Async auto cleaning is not enabled. Not running cleaner now");
