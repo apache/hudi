@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.table.HoodieBaseTable;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
@@ -48,7 +49,7 @@ public class HoodieInternalRowFileWriterFactory {
    *
    */
   public static HoodieInternalRowFileWriter getInternalRowFileWriter(
-      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
+      Path path, HoodieBaseTable hoodieTable, HoodieWriteConfig config, StructType schema)
       throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
@@ -58,7 +59,7 @@ public class HoodieInternalRowFileWriterFactory {
   }
 
   private static HoodieInternalRowFileWriter newParquetInternalRowFileWriter(
-      Path path, HoodieWriteConfig writeConfig, StructType structType, HoodieTable table)
+      Path path, HoodieWriteConfig writeConfig, StructType structType, HoodieBaseTable table)
       throws IOException {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
             writeConfig.getBloomFilterNumEntries(),
