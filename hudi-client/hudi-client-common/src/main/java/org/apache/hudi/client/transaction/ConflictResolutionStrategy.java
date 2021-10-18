@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieBaseTable;
 
 import java.util.stream.Stream;
 
@@ -58,7 +58,7 @@ public interface ConflictResolutionStrategy {
    * @return
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  Option<HoodieCommitMetadata> resolveConflict(HoodieTable table,
+  Option<HoodieCommitMetadata> resolveConflict(HoodieBaseTable table,
       ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) throws HoodieWriteConflictException;
 
 }

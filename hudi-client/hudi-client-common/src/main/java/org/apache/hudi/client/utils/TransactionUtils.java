@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieBaseTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -55,7 +55,7 @@ public class TransactionUtils {
    * @throws HoodieWriteConflictException
    */
   public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
-      final HoodieTable table,
+      final HoodieBaseTable table,
       final Option<HoodieInstant> currentTxnOwnerInstant,
       final Option<HoodieCommitMetadata> thisCommitMetadata,
       final HoodieWriteConfig config,

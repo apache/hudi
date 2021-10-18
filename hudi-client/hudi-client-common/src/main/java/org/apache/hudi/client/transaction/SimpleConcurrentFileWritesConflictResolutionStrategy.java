@@ -26,7 +26,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieBaseTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -85,7 +86,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   }
 
   @Override
-  public Option<HoodieCommitMetadata> resolveConflict(HoodieTable table,
+  public Option<HoodieCommitMetadata> resolveConflict(HoodieBaseTable table,
       ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
     // A completed COMPACTION action eventually shows up as a COMMIT action on the timeline.
     // We need to ensure we handle this during conflict resolution and not treat the commit from a

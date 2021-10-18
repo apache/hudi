@@ -22,7 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieBaseTable;
 
 import com.esotericsoftware.minlog.Log;
 import org.apache.log4j.LogManager;
@@ -36,11 +36,11 @@ public class WriteMarkersFactory {
 
   /**
    * @param markerType the type of markers to use
-   * @param table {@code HoodieTable} instance
+   * @param table {@link HoodieBaseTable} instance
    * @param instantTime current instant time
-   * @return  {@code WriteMarkers} instance based on the {@code MarkerType}
+   * @return {@link WriteMarkers} instance based on the {@link MarkerType}
    */
-  public static WriteMarkers get(MarkerType markerType, HoodieTable table, String instantTime) {
+  public static WriteMarkers get(MarkerType markerType, HoodieBaseTable table, String instantTime) {
     LOG.debug("Instantiated MarkerFiles with marker type: " + markerType.toString());
     switch (markerType) {
       case DIRECT:

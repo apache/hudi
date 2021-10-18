@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieRemoteException;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieBaseTable;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,7 +64,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   private final int timelineServerPort;
   private final int timeoutSecs;
 
-  public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
+  public TimelineServerBasedWriteMarkers(HoodieBaseTable table, String instantTime) {
     this(table.getMetaClient().getBasePath(),
         table.getMetaClient().getMarkerFolderPath(instantTime), instantTime,
         table.getConfig().getViewStorageConfig().getRemoteViewServerHost(),
