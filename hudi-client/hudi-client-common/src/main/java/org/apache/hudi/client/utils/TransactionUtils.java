@@ -119,7 +119,7 @@ public class TransactionUtils {
     }
     Option<Pair<HoodieInstant, Map<String, String>>> lastInstant = getLastCompletedTxnInstantAndMetadata(metaClient);
     if (lastInstant.isPresent() && thisMetadata.isPresent()) {
-      Stream<String> keys = thisMetadata.get().getExtraMetadata().keySet().stream();
+      Stream<String> keys = lastInstant.get().getRight().keySet().stream();
       keyPrefixes.stream().forEach(keyPrefix -> keys
           .filter(key -> key.startsWith(keyPrefix))
           .forEach(key -> thisMetadata.get().getExtraMetadata().put(key, lastInstant.get().getRight().get(key))));
