@@ -41,8 +41,9 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.Arrays;
@@ -69,9 +70,8 @@ public class ITTestHoodieFlinkCompactor {
   @TempDir
   File tempFile;
 
-  //@ParameterizedTest
-  //@ValueSource(booleans = {true, false})
-  @Disabled
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
   public void testHoodieFlinkCompactor(boolean enableChangelog) throws Exception {
     // Create hoodie table and insert into data.
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
@@ -112,7 +112,7 @@ public class ITTestHoodieFlinkCompactor {
     // judge whether have operation
     // To compute the compaction instant time and do compaction.
     String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
+    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
     boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
 
     assertTrue(scheduled, "The compaction plan should be scheduled");
@@ -141,6 +141,7 @@ public class ITTestHoodieFlinkCompactor {
         .setParallelism(1);
 
     env.execute("flink_hudi_compaction");
+    writeClient.close();
     TestData.checkWrittenFullData(tempFile, EXPECTED);
   }
 }

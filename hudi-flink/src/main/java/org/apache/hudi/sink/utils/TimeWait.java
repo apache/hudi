@@ -20,6 +20,9 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.exception.HoodieException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -27,15 +30,19 @@ import java.util.concurrent.TimeUnit;
  * Tool used for time waiting.
  */
 public class TimeWait {
-  private final long timeout;  // timeout in SECONDS
-  private final long interval; // interval in MILLISECONDS
-  private final String action; // action to report error message
+  private static final Logger LOG = LoggerFactory.getLogger(TimeWait.class);
+
+  private final long timeout;    // timeout in SECONDS
+  private final long interval;   // interval in MILLISECONDS
+  private final String action;   // action to report error message
+  private final boolean throwsE; // whether to throw when timeout
   private long waitingTime = 0L;
 
-  private TimeWait(long timeout, long interval, String action) {
+  private TimeWait(long timeout, long interval, String action, boolean throwsE) {
     this.timeout = timeout;
     this.interval = interval;
     this.action = action;
+    this.throwsE = throwsE;
   }
 
   public static Builder builder() {
@@ -44,14 +51,23 @@ public class TimeWait {
 
   /**
    * Wait for an interval time.
+   *
+   * @return true if is timed out
    */
-  public void waitFor() {
+  public boolean waitFor() {
     try {
       if (waitingTime > timeout) {
-        throw new HoodieException("Timeout(" + waitingTime + "ms) while waiting for " + action);
+        final String msg = "Timeout(" + waitingTime + "ms) while waiting for " + action;
+        if (this.throwsE) {
+          throw new HoodieException(msg);
+        } else {
+          LOG.warn(msg);
+          return true;
+        }
       }
       TimeUnit.MILLISECONDS.sleep(interval);
       waitingTime += interval;
+      return false;
     } catch (InterruptedException e) {
       throw new HoodieException("Error while waiting for " + action, e);
     }
@@ -61,17 +77,18 @@ public class TimeWait {
    * Builder.
    */
   public static class Builder {
-    private long timeout;
-    private long interval;
+    private long timeout = 5 * 60 * 1000L; // default 5 minutes
+    private long interval = 1000;
     private String action;
+    private boolean throwsT = false;
 
-    public Builder() {
-      this.timeout = 3600;
-      this.interval = 500;
+    private Builder() {
     }
 
     public Builder timeout(long timeout) {
-      this.timeout = timeout;
+      if (timeout > 0) {
+        this.timeout = timeout;
+      }
       return this;
     }
 
@@ -85,9 +102,14 @@ public class TimeWait {
       return this;
     }
 
+    public Builder throwsT(boolean throwsT) {
+      this.throwsT = throwsT;
+      return this;
+    }
+
     public TimeWait build() {
       Objects.requireNonNull(this.action);
-      return new TimeWait(this.timeout, this.interval, this.action);
+      return new TimeWait(this.timeout, this.interval, this.action, this.throwsT);
     }
   }
 }

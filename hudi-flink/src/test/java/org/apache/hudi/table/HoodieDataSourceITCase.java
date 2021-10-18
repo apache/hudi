@@ -111,7 +111,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);
 
-    String firstCommit = TestUtils.getFirstCommit(tempFile.getAbsolutePath());
+    String firstCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
     streamTableEnv.executeSql("drop table t1");
     hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
@@ -181,7 +181,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     // execute 2 times
     execInsertSql(streamTableEnv, insertInto);
     // remember the commit
-    String specifiedCommit = TestUtils.getFirstCommit(tempFile.getAbsolutePath());
+    String specifiedCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
     // another update batch
     String insertInto2 = "insert into t1 select * from source2";
     execInsertSql(streamTableEnv, insertInto2);
@@ -264,8 +264,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     Map<String, String> options1 = new HashMap<>(defaultConf.toMap());
     options1.put(FlinkOptions.TABLE_NAME.key(), "t1");
     Configuration conf = Configuration.fromMap(options1);
-    HoodieTimeline timeline = StreamerUtil.createWriteClient(conf, null)
-        .getHoodieTable().getActiveTimeline();
+    HoodieTimeline timeline = StreamerUtil.createMetaClient(conf).getActiveTimeline();
     assertTrue(timeline.filterCompletedInstants()
             .getInstants().anyMatch(instant -> instant.getAction().equals("clean")),
         "some commits should be cleaned");
@@ -285,8 +284,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     // write another commit with deletes
     TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
 
-    String latestCommit = StreamerUtil.createWriteClient(conf, null)
-        .getLastCompletedInstant(HoodieTableType.MERGE_ON_READ);
+    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
 
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
@@ -756,19 +754,17 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "  'format' = 'debezium-json'\n"
         + ")";
     streamTableEnv.executeSql(sourceDDL);
-    String hoodieTableDDL = ""
-        + "CREATE TABLE hoodie_sink(\n"
-        + "  id INT NOT NULL,\n"
-        + "  ts BIGINT,\n"
-        + "  name STRING,"
-        + "  weight DOUBLE,"
-        + "  PRIMARY KEY (id) NOT ENFORCED"
-        + ") with (\n"
-        + "  'connector' = 'hudi',\n"
-        + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
-        + "  'read.streaming.enabled' = '" + (execMode == ExecMode.STREAM) + "',\n"
-        + "  'write.insert.drop.duplicates' = 'true'"
-        + ")";
+    String hoodieTableDDL = sql("hoodie_sink")
+        .field("id INT NOT NULL")
+        .field("ts BIGINT")
+        .field("name STRING")
+        .field("weight DOUBLE")
+        .pkField("id")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, execMode == ExecMode.STREAM)
+        .option(FlinkOptions.PRE_COMBINE, true)
+        .noPartition()
+        .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into hoodie_sink select id, ts, name, weight from debezium_source";
     execInsertSql(streamTableEnv, insertInto);
@@ -949,7 +945,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     TestData.writeData(TestData.dataSetInsert(3, 4), conf);
     TestData.writeData(TestData.dataSetInsert(5, 6), conf);
 
-    String latestCommit = TestUtils.getLatestCommit(tempFile.getAbsolutePath());
+    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
 
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())

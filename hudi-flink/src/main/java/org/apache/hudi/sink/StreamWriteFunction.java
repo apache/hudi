@@ -139,7 +139,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   public void close() {
     if (this.writeClient != null) {
       this.writeClient.cleanHandlesGracefully();
-      // this.writeClient.close();
+      this.writeClient.close();
     }
   }
 
@@ -155,7 +155,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   // -------------------------------------------------------------------------
   //  Getter/Setter
   // -------------------------------------------------------------------------
-
   @VisibleForTesting
   @SuppressWarnings("rawtypes")
   public Map<String, List<HoodieRecord>> getDataBuffer() {

@@ -25,8 +25,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -39,10 +37,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.File;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Test cases for delta stream write.
@@ -71,13 +67,7 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   protected void checkWrittenData(File baseFile, Map<String, String> expected, int partitions) throws Exception {
     HoodieTableMetaClient metaClient = HoodieFlinkTable.create(writeConfig, context).getMetaClient();
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    String latestInstant = metaClient.getCommitsTimeline().filterCompletedInstants()
-        .getInstants()
-        .filter(x -> x.getAction().equals(HoodieActiveTimeline.DELTA_COMMIT_ACTION))
-        .map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList()).stream()
-        .max(Comparator.naturalOrder())
-        .orElse(null);
+    String latestInstant = lastCompleteInstant();
     TestData.checkWrittenDataMOR(fs, latestInstant, baseFile, expected, partitions, schema);
   }
 

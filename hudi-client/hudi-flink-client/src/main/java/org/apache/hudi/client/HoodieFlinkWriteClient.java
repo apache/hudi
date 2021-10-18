@@ -35,7 +35,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -70,7 +69,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -506,43 +504,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     } else {
       writeTimer = metrics.getDeltaCommitCtx();
     }
-    table.getHoodieView().sync();
     return table;
-  }
-
-  public String getLastPendingInstant(HoodieTableType tableType) {
-    final String actionType = CommitUtils.getCommitActionType(tableType);
-    return getLastPendingInstant(actionType);
-  }
-
-  public String getLastPendingInstant(String actionType) {
-    HoodieTimeline unCompletedTimeline = FlinkClientUtil.createMetaClient(basePath)
-        .getCommitsTimeline().filterInflightsAndRequested();
-    return unCompletedTimeline.getInstants()
-        .filter(x -> x.getAction().equals(actionType) && x.isInflight())
-        .map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList()).stream()
-        .max(Comparator.naturalOrder())
-        .orElse(null);
-  }
-
-  public String getLastCompletedInstant(HoodieTableType tableType) {
-    final String commitType = CommitUtils.getCommitActionType(tableType);
-    HoodieTimeline completedTimeline = FlinkClientUtil.createMetaClient(basePath)
-        .getCommitsTimeline().filterCompletedInstants();
-    return completedTimeline.getInstants()
-        .filter(x -> x.getAction().equals(commitType))
-        .map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList()).stream()
-        .max(Comparator.naturalOrder())
-        .orElse(null);
-  }
-
-  public void transitionRequestedToInflight(String commitType, String inFlightInstant) {
-    HoodieActiveTimeline activeTimeline = FlinkClientUtil.createMetaClient(basePath).getActiveTimeline();
-    HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, commitType, inFlightInstant);
-    activeTimeline.transitionRequestedToInflight(requested, Option.empty(),
-        config.shouldAllowMultiWriteOnSameInstant());
   }
 
   public HoodieFlinkTable<T> getHoodieTable() {

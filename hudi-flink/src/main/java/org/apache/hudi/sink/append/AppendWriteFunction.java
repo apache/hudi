@@ -82,20 +82,11 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.writerHelper.write((RowData) value);
   }
 
-  @Override
-  public void close() {
-    if (this.writeClient != null) {
-      this.writeClient.cleanHandlesGracefully();
-      this.writeClient.close();
-    }
-  }
-
   /**
    * End input action for batch source.
    */
   public void endInput() {
     flushData(true);
-    this.writeClient.cleanHandles();
     this.writeStatuses.clear();
   }
 
