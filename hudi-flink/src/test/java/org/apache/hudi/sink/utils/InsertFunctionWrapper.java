@@ -35,6 +35,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
+import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventGateway;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
@@ -101,7 +102,7 @@ public class InsertFunctionWrapper<I> {
     // checkpoint the coordinator first
     this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
 
-    writeFunction.snapshotState(null);
+    writeFunction.snapshotState(new MockFunctionSnapshotContext(checkpointId));
     stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
   }
 
