@@ -177,6 +177,11 @@ public class StreamWriteFunction<K, I, O>
   private List<WriteStatus> writeStatuses;
 
   /**
+   * Current checkpoint id.
+   */
+  private long checkpointId = -1;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -217,6 +222,7 @@ public class StreamWriteFunction<K, I, O>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
+    this.checkpointId = functionSnapshotContext.getCheckpointId();
     // Based on the fact that the coordinator starts the checkpoint first,
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
@@ -343,7 +349,10 @@ public class StreamWriteFunction<K, I, O>
   public void handleOperatorEvent(OperatorEvent event) {
     ValidationUtils.checkArgument(event instanceof CommitAckEvent,
         "The write function can only handle CommitAckEvent");
-    this.confirming = false;
+    long checkpointId = ((CommitAckEvent) event).getCheckpointId();
+    if (checkpointId == -1 || checkpointId == this.checkpointId) {
+      this.confirming = false;
+    }
   }
 
   /**

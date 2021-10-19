@@ -28,7 +28,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -43,6 +42,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
@@ -171,7 +171,7 @@ public class StreamerUtil {
             .withEngineType(EngineType.FLINK)
             .withPath(conf.getString(FlinkOptions.PATH))
             .combineInput(conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS), true)
-            .withMergeAllowDuplicateOnInserts(allowDuplicateInserts(conf))
+            .withMergeAllowDuplicateOnInserts(OptionsResolver.insertClustering(conf))
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
                     .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
@@ -301,14 +301,12 @@ public class StreamerUtil {
   }
 
   /**
-   * Returns whether needs to schedule the async compaction.
+   * Returns whether there is need to schedule the async compaction.
    *
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncCompaction(Configuration conf) {
-    return conf.getString(FlinkOptions.TABLE_TYPE)
-        .toUpperCase(Locale.ROOT)
-        .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+    return OptionsResolver.isMorTable(conf)
         && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
   }
 
@@ -318,9 +316,7 @@ public class StreamerUtil {
    * @param conf The flink configuration.
    */
   public static boolean needsScheduleCompaction(Configuration conf) {
-    return conf.getString(FlinkOptions.TABLE_TYPE)
-        .toUpperCase(Locale.ROOT)
-        .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+    return OptionsResolver.isMorTable(conf)
         && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
   }
 
@@ -459,14 +455,6 @@ public class StreamerUtil {
     }
 
     return fileStatus.getLen() > 0;
-  }
-
-  /**
-   * Returns whether insert deduplication is allowed with given configuration {@code conf}.
-   */
-  public static boolean allowDuplicateInserts(Configuration conf) {
-    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
-    return operationType == WriteOperationType.INSERT && !conf.getBoolean(FlinkOptions.INSERT_DEDUP);
   }
 
   public static String getLastPendingInstant(HoodieTableMetaClient metaClient) {

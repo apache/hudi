@@ -851,6 +851,36 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "id1,Sophia,18,1970-01-01T00:00:05,par5]", 3);
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testAppendWrite(boolean clustering) {
+    TableEnvironment tableEnv = streamTableEnv;
+    // csv source
+    String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
+    tableEnv.executeSql(csvSourceDDL);
+
+    String hoodieTableDDL = sql("hoodie_sink")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.OPERATION, "insert")
+        .option(FlinkOptions.INSERT_CLUSTER, clustering)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    String insertInto = "insert into hoodie_sink select * from csv_source";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from hoodie_sink").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+    // apply filters
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from hoodie_sink where uuid > 'id5'").execute().collect());
+    assertRowsEquals(result2, "["
+        + "id6,Emma,20,1970-01-01T00:00:06,par3, "
+        + "id7,Bob,44,1970-01-01T00:00:07,par4, "
+        + "id8,Han,56,1970-01-01T00:00:08,par4]");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

@@ -23,7 +23,6 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -209,11 +208,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
       // if compaction schedule is on, tweak the target io to 500GB
       conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
-    }
-    if (StreamerUtil.allowDuplicateInserts(conf)) {
-      // no need for compaction if insert duplicates is allowed
-      conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-      conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
     }
   }
 
