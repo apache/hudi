@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -139,5 +140,30 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
       writer.update(completeReplaceMetadata, instantTime);
     }
     return this;
+  }
+
+  /**
+   * Add commits to the requested partitions and update metadata table.
+   *
+   * @param commitTime                    - Commit time for the operation
+   * @param operationType                 - Operation type
+   * @param newPartitionsToAdd            - New partitions to add for the operation
+   * @param partitionToFilesNameLengthMap - Map of partition names to its list of files name and length pair
+   * @param bootstrap                     - Whether bootstrapping needed for the operation
+   * @param createInflightCommit          - Whether in flight commit needed for the operation
+   * @return Commit metadata for the commit operation performed.
+   * @throws Exception
+   */
+  @Override
+  public HoodieCommitMetadata doWriteOperation(String commitTime, WriteOperationType operationType,
+                                               List<String> newPartitionsToAdd,
+                                               Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap,
+                                               boolean bootstrap, boolean createInflightCommit) throws Exception {
+    HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd,
+        partitionToFilesNameLengthMap, bootstrap, createInflightCommit);
+    if (writer != null) {
+      writer.update(commitMetadata, commitTime);
+    }
+    return commitMetadata;
   }
 }
