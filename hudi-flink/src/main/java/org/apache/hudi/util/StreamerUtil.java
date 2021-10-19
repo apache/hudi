@@ -407,12 +407,12 @@ public class StreamerUtil {
    */
   public static String medianInstantTime(String highVal, String lowVal) {
     try {
-      long high = HoodieActiveTimeline.COMMIT_FORMATTER.parse(highVal).getTime();
-      long low = HoodieActiveTimeline.COMMIT_FORMATTER.parse(lowVal).getTime();
+      long high = HoodieActiveTimeline.parseDateFromInstantTime(highVal).getTime();
+      long low = HoodieActiveTimeline.parseDateFromInstantTime(lowVal).getTime();
       ValidationUtils.checkArgument(high > low,
           "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
       long median = low + (high - low) / 2;
-      return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(median));
+      return HoodieActiveTimeline.getInstantForDate(new Date(median));
     } catch (ParseException e) {
       throw new HoodieException("Get median instant time with interval [" + lowVal + ", " + highVal + "] error", e);
     }
@@ -423,8 +423,8 @@ public class StreamerUtil {
    */
   public static long instantTimeDiffSeconds(String newInstantTime, String oldInstantTime) {
     try {
-      long newTimestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(newInstantTime).getTime();
-      long oldTimestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(oldInstantTime).getTime();
+      long newTimestamp = HoodieActiveTimeline.parseDateFromInstantTime(newInstantTime).getTime();
+      long oldTimestamp = HoodieActiveTimeline.parseDateFromInstantTime(oldInstantTime).getTime();
       return (newTimestamp - oldTimestamp) / 1000;
     } catch (ParseException e) {
       throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);

@@ -35,6 +35,7 @@ import org.apache.log4j.Logger;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
@@ -59,7 +60,9 @@ import java.util.function.Function;
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
-  public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmssSSS");
+  private static final String COMMIT_FORMAT = "yyyyMMddHHmmssSSS";
+  private static final int INSTANT_ID_LENGTH = COMMIT_FORMAT.length();
+  private static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat(COMMIT_FORMAT);
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
@@ -73,6 +76,26 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
   private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
+
+  /**
+   * Parses the given instant ID to return a date instance.
+   * @param instant The instant ID
+   * @return A date
+   * @throws ParseException If the instant ID is malformed
+   */
+  public static Date parseDateFromInstantTime(String instant) throws ParseException {
+    // Enables backwards compatibility with non-millisecond granularity instants
+    if (isMillisecondGranularity(instant)) {
+      return COMMIT_FORMATTER.parse(instant);
+    } else {
+      // Add milliseconds to the instant in order to parse successfully
+      return COMMIT_FORMATTER.parse(instant + "000");
+    }
+  }
+
+  public static String getInstantForDate(Date instantDate) {
+    return COMMIT_FORMATTER.format(instantDate);
+  }
 
   /**
    * Returns next instant time in the {@link #COMMIT_FORMATTER} format.
@@ -90,7 +113,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
-        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(System.currentTimeMillis() + milliseconds));
+        newCommitTime = getInstantForDate(new Date(System.currentTimeMillis() + milliseconds));
       } while (HoodieTimeline.compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
     });
@@ -191,6 +214,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     ValidationUtils.checkArgument(instant.isRequested());
     ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.COMPACTION_ACTION));
     deleteInstantFile(instant);
+  }
+
+  private static boolean isMillisecondGranularity(String instant) {
+    return instant.length() == INSTANT_ID_LENGTH;
   }
 
   private void deleteInstantFileIfExists(HoodieInstant instant) {
