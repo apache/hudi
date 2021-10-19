@@ -265,7 +265,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @EnumSource(HoodieTableType.class)
   public void testInsertUpsertCluster(HoodieTableType tableType) throws Exception {
     init(tableType);
-    doWriteOperation(testTable,"0000001",  INSERT);
+    doWriteOperation(testTable, "0000001", INSERT);
     doWriteOperation(testTable, "0000002");
     doClusterAndValidate(testTable, "0000003");
     if (tableType == MERGE_ON_READ) {
@@ -643,6 +643,51 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   /**
+   * Tests that when inline cleaning is enabled and with auto commit set to true, there is no double locking.
+   * bcoz, auto clean is triggered within post commit which is already happening within a lock.
+   *
+   * @throws Exception
+   */
+  @Test
+  public void testMultiWriterForDoubleLocking() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "5000");
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(true).retainCommits(4).build())
+        .withAutoCommit(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class).build())
+        .withProperties(properties)
+        .build();
+
+    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig);
+    String partitionPath = dataGen.getPartitionPaths()[0];
+    for (int j = 0; j < 6; j++) {
+      String newCommitTime = "000000" + j;
+      List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, partitionPath);
+      writeClient.startCommitWithTime(newCommitTime);
+      JavaRDD writeStatuses = writeClient.insert(jsc.parallelize(records, 1), newCommitTime);
+      writeClient.commit(newCommitTime, writeStatuses);
+    }
+
+    // Ensure all commits were synced to the Metadata Table
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    LOG.warn("total commits in metadata table " + metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
+
+    // 6 commits and 2 cleaner commits.
+    assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 8);
+    assertTrue(metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants() <= 1);
+    // Validation
+    validateMetadata(writeClient);
+  }
+
+  /**
    * Lets say clustering commit succeeded in metadata table, but failed before committing to datatable.
    * Next time, when clustering kicks in, hudi will rollback pending clustering and re-attempt the clustering with same instant time.
    * So, this test ensures the 2nd attempt succeeds with metadata enabled.
@@ -926,6 +971,92 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.TWO.versionCode());
     assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not exist");
+  }
+
+  /**
+   * When table needs to be upgraded and when multi writer is enabled, hudi rollsback partial commits. Upgrade itself is happening
+   * within a lock and hence rollback should not lock again.
+   *
+   * @throws IOException
+   * @throws InterruptedException
+   */
+  @Test
+  public void testRollbackDuringUpgradeForDoubleLocking() throws IOException, InterruptedException {
+    init(HoodieTableType.COPY_ON_WRITE, false);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    // Perform a commit. This should bootstrap the metadata table with latest version.
+    List<HoodieRecord> records;
+    JavaRDD<WriteStatus> writeStatuses;
+    String commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "5000");
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(false, true, false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class).build())
+        .withProperties(properties)
+        .build();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      records = dataGen.generateInserts(commitTimestamp, 5);
+      client.startCommitWithTime(commitTimestamp);
+      writeStatuses = client.insert(jsc.parallelize(records, 1), commitTimestamp);
+      client.commit(commitTimestamp, writeStatuses);
+    }
+
+    // Metadata table should have been bootstrapped
+    assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
+    FileStatus oldStatus = fs.getFileStatus(new Path(metadataTableBasePath));
+
+    // trigger partial commit
+    metaClient.reloadActiveTimeline();
+    commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      records = dataGen.generateInserts(commitTimestamp, 5);
+      client.startCommitWithTime(commitTimestamp);
+      writeStatuses = client.insert(jsc.parallelize(records, 1), commitTimestamp);
+    }
+
+    // set hoodie.table.version to 2 in hoodie.properties file
+    changeTableVersion(HoodieTableVersion.TWO);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withRollbackUsingMarkers(false)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class).build())
+        .withProperties(properties)
+        .build();
+
+    // With next commit the table should be deleted (as part of upgrade) and partial commit should be rolled back.
+    metaClient.reloadActiveTimeline();
+    commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    Thread.sleep(1000);
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      records = dataGen.generateInserts(commitTimestamp, 5);
+      client.startCommitWithTime(commitTimestamp);
+      writeStatuses = client.insert(jsc.parallelize(records, 1), commitTimestamp);
+      assertNoWriteErrors(writeStatuses.collect());
+    }
+    assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not exist");
+
+    // With next commit the table should be re-bootstrapped (currently in the constructor. To be changed)
+    commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      records = dataGen.generateInserts(commitTimestamp, 5);
+      client.startCommitWithTime(commitTimestamp);
+      writeStatuses = client.insert(jsc.parallelize(records, 1), commitTimestamp);
+      assertNoWriteErrors(writeStatuses.collect());
+    }
+
+    initMetaClient();
+    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.THREE.versionCode());
+    assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
+    FileStatus newStatus = fs.getFileStatus(new Path(metadataTableBasePath));
+    assertTrue(oldStatus.getModificationTime() < newStatus.getModificationTime());
   }
 
   /**

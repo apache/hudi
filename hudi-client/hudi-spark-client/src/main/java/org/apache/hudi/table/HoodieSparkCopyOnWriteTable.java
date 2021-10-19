@@ -256,13 +256,15 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
-    return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
+  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking) {
+    return new CleanActionExecutor(context, config, this, cleanInstantTime, skipLocking).execute();
   }
 
   @Override
-  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants) {
-    return new CopyOnWriteRollbackActionExecutor((HoodieSparkEngineContext) context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
+  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant,
+                                         boolean deleteInstants, boolean skipLocking) {
+    return new CopyOnWriteRollbackActionExecutor((HoodieSparkEngineContext) context, config, this, rollbackInstantTime, commitInstant,
+        deleteInstants, skipLocking).execute();
   }
 
   @Override

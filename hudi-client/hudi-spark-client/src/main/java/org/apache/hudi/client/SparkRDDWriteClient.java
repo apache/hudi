@@ -424,7 +424,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         this.txnManager.beginTransaction();
         try {
           // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
-          this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER));
+          this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime)), true);
           new UpgradeDowngrade(
               metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
               .run(HoodieTableVersion.current(), instantTime);
@@ -434,6 +434,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       } else {
         upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
       }
+      metaClient.reloadActiveTimeline();
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
