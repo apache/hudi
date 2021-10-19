@@ -99,7 +99,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
 
   private void doCompaction(String instantTime, CompactionOperation compactionOperation, Collector<CompactionCommitEvent> collector) throws IOException {
     List<WriteStatus> writeStatuses = FlinkCompactHelpers.compact(writeClient, instantTime, compactionOperation);
-    collector.collect(new CompactionCommitEvent(instantTime, writeStatuses, taskID));
+    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
 
   @VisibleForTesting
