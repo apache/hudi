@@ -22,9 +22,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.transaction.ConnectTransactionCoordinator;
-import org.apache.hudi.connect.transaction.ControlEvent;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionParticipant;
+import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.helper.MockConnectTransactionServices;
@@ -108,7 +108,7 @@ public class TestConnectTransactionCoordinator {
     private final int maxNumberCommitRounds;
     private final Map<Integer, Long> kafkaOffsetsCommitted;
 
-    private ControlEvent.MsgType expectedMsgType;
+    private ControlMessage.EventType expectedMsgType;
     private int numberCommitRounds;
 
     public MockParticipant(MockKafkaControlAgent kafkaControlAgent,
@@ -121,7 +121,7 @@ public class TestConnectTransactionCoordinator {
       this.maxNumberCommitRounds = maxNumberCommitRounds;
       this.partition = new TopicPartition(TOPIC_NAME, (NUM_PARTITIONS - 1));
       this.kafkaOffsetsCommitted = new HashMap<>();
-      expectedMsgType = ControlEvent.MsgType.START_COMMIT;
+      expectedMsgType = ControlMessage.EventType.START_COMMIT;
       numberCommitRounds = 0;
     }
 
@@ -149,9 +149,9 @@ public class TestConnectTransactionCoordinator {
     }
 
     @Override
-    public void processControlEvent(ControlEvent message) {
-      assertEquals(message.getSenderType(), ControlEvent.SenderType.COORDINATOR);
-      assertEquals(message.senderPartition().topic(), partition.topic());
+    public void processControlEvent(ControlMessage message) {
+      assertEquals(message.getSenderType(), ControlMessage.EntityType.COORDINATOR);
+      assertEquals(message.getTopicName(), partition.topic());
       testScenarios(message);
     }
 
@@ -160,24 +160,24 @@ public class TestConnectTransactionCoordinator {
       return 0;
     }
 
-    private void testScenarios(ControlEvent message) {
-      assertEquals(expectedMsgType, message.getMsgType());
+    private void testScenarios(ControlMessage message) {
+      assertEquals(expectedMsgType, message.getType());
 
-      switch (message.getMsgType()) {
+      switch (message.getType()) {
         case START_COMMIT:
-          expectedMsgType = ControlEvent.MsgType.END_COMMIT;
+          expectedMsgType = ControlMessage.EventType.END_COMMIT;
           break;
         case END_COMMIT:
           assertEquals(kafkaOffsetsCommitted, message.getCoordinatorInfo().getGlobalKafkaCommitOffsets());
           int numSuccessPartitions;
           Map<Integer, Long> kafkaOffsets = new HashMap<>();
-          List<ControlEvent> controlEvents = new ArrayList<>();
+          List<ControlMessage> controlEvents = new ArrayList<>();
           // Prepare the WriteStatuses for all partitions
           for (int i = 1; i <= NUM_PARTITIONS; i++) {
             try {
               long kafkaOffset = (long) (Math.random() * 10000);
               kafkaOffsets.put(i, kafkaOffset);
-              ControlEvent event = successWriteStatus(
+              ControlMessage event = successWriteStatus(
                   message.getCommitTime(),
                   new TopicPartition(TOPIC_NAME, i),
                   kafkaOffset);
@@ -191,11 +191,11 @@ public class TestConnectTransactionCoordinator {
             case ALL_CONNECT_TASKS_SUCCESS:
               numSuccessPartitions = NUM_PARTITIONS;
               kafkaOffsetsCommitted.putAll(kafkaOffsets);
-              expectedMsgType = ControlEvent.MsgType.ACK_COMMIT;
+              expectedMsgType = ControlMessage.EventType.ACK_COMMIT;
               break;
             case SUBSET_CONNECT_TASKS_FAILED:
               numSuccessPartitions = NUM_PARTITIONS / 2;
-              expectedMsgType = ControlEvent.MsgType.START_COMMIT;
+              expectedMsgType = ControlMessage.EventType.START_COMMIT;
               break;
             default:
               throw new HoodieException("Unknown test scenario " + testScenario);
@@ -210,18 +210,18 @@ public class TestConnectTransactionCoordinator {
           if (numberCommitRounds >= maxNumberCommitRounds) {
             latch.countDown();
           }
-          expectedMsgType = ControlEvent.MsgType.START_COMMIT;
+          expectedMsgType = ControlMessage.EventType.START_COMMIT;
           break;
         default:
-          throw new HoodieException("Illegal control message type " + message.getMsgType());
+          throw new HoodieException("Illegal control message type " + message.getType());
       }
 
-      if (message.getMsgType().equals(ControlEvent.MsgType.START_COMMIT)) {
+      if (message.getType().equals(ControlMessage.EventType.START_COMMIT)) {
         if (numberCommitRounds >= maxNumberCommitRounds) {
           latch.countDown();
         }
         numberCommitRounds++;
-        expectedMsgType = ControlEvent.MsgType.END_COMMIT;
+        expectedMsgType = ControlMessage.EventType.END_COMMIT;
       }
     }
 
@@ -230,24 +230,29 @@ public class TestConnectTransactionCoordinator {
       ALL_CONNECT_TASKS_SUCCESS
     }
 
-    private static ControlEvent successWriteStatus(String commitTime,
-                                                   TopicPartition partition,
-                                                   long kafkaOffset) throws Exception {
+    private static ControlMessage successWriteStatus(String commitTime,
+                                                     TopicPartition partition,
+                                                     long kafkaOffset) throws Exception {
       // send WS
       WriteStatus writeStatus = new WriteStatus();
       WriteStatus status = new WriteStatus(false, 1.0);
       for (int i = 0; i < 1000; i++) {
         status.markSuccess(mock(HoodieRecord.class), Option.empty());
       }
-      return new ControlEvent.Builder(ControlEvent.MsgType.WRITE_STATUS,
-          ControlEvent.SenderType.PARTICIPANT,
-          commitTime,
-          partition)
-          .setParticipantInfo(new ControlEvent.ParticipantInfo(
-              Collections.singletonList(writeStatus),
-              kafkaOffset,
-              ControlEvent.OutcomeType.WRITE_SUCCESS))
-          .build();
+      return ControlMessage.newBuilder()
+          .setType(ControlMessage.EventType.WRITE_STATUS)
+          .setTopicName(partition.topic())
+          .setSenderType(ControlMessage.EntityType.PARTICIPANT)
+          .setSenderPartition(partition.partition())
+          .setReceiverType(ControlMessage.EntityType.COORDINATOR)
+          .setReceiverPartition(ConnectTransactionCoordinator.COORDINATOR_KAFKA_PARTITION)
+          .setCommitTime(commitTime)
+          .setParticipantInfo(
+              ControlMessage.ParticipantInfo.newBuilder()
+                  .setWriteStatus(KafkaConnectUtils.buildWriteStatuses(Collections.singletonList(writeStatus)))
+                  .setKafkaOffset(kafkaOffset)
+                  .build()
+          ).build();
     }
   }
 }
