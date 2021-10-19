@@ -380,12 +380,6 @@ public class HoodieWriteConfig extends HoodieConfig {
                   + "and batch writers to ingest into a single table. "
                   + "This should not be enabled on Deltastreamer writers.");
 
-  public static final ConfigProperty<String> WRITE_META_KEY_PREFIXES = ConfigProperty
-      .key("hoodie.write.meta.key.prefixes")
-      .defaultValue("")
-      .withDocumentation("Comma separated metadata key prefixes to override from latest commit "
-          + "during overlapping commits via multi writing");
-
   /**
    * Currently the  use this to specify the write schema.
    */
@@ -795,16 +789,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_WRITE_CONCURRENCY_MODE = WRITE_CONCURRENCY_MODE.defaultValue();
-  /**
-   * @deprecated Use {@link #WRITE_META_KEY_PREFIXES} and its methods instead
-   */
-  @Deprecated
-  public static final String WRITE_META_KEY_PREFIXES_PROP = WRITE_META_KEY_PREFIXES.key();
-  /**
-   * @deprecated Use {@link #WRITE_META_KEY_PREFIXES} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_WRITE_META_KEY_PREFIXES = WRITE_META_KEY_PREFIXES.defaultValue();
   /**
    * @deprecated Use {@link #ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE} and its methods instead
    */
@@ -1784,10 +1768,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
   }
 
-  public String getWriteMetaKeyPrefixes() {
-    return getString(WRITE_META_KEY_PREFIXES);
-  }
-
   public String getPreCommitValidators() {
     return getString(HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES);
   }
@@ -2144,11 +2124,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
       writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.value());
-      return this;
-    }
-
-    public Builder withWriteMetaKeyPrefixes(String writeMetaKeyPrefixes) {
-      writeConfig.setValue(WRITE_META_KEY_PREFIXES, writeMetaKeyPrefixes);
       return this;
     }
 
