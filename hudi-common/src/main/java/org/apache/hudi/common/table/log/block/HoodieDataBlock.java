@@ -119,7 +119,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @throws IOException
    */
   public List<IndexedRecord> getRecords(List<String> keys) throws IOException {
-    throw new UnsupportedOperationException("On demand batch get based on keys not supported");
+    throw new UnsupportedOperationException("On demand batch get based on interested keys not supported");
   }
 
   public Schema getSchema() {

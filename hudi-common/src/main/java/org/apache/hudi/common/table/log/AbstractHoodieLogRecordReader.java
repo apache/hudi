@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -50,7 +49,6 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -117,26 +115,23 @@ public abstract class AbstractHoodieLogRecordReader {
   private AtomicLong totalCorruptBlocks = new AtomicLong(0);
   // Store the last instant log blocks (needed to implement rollback)
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
-  // Enables inline reading for Hfile data blocks
-  protected final boolean enableInlineReading;
   // Enables full scan of log records
   protected final boolean enableFullScan;
   private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
-  private AtomicLong repeatedCall = new AtomicLong(0L);
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                           String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
                                           int bufferSize, Option<InstantRange> instantRange, boolean withOperationField) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField,
-        false, true);
+        true);
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
                                           String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
                                           int bufferSize, Option<InstantRange> instantRange, boolean withOperationField,
-                                          boolean enableInlineReading, boolean enableFullScan) {
+                                          boolean enableFullScan) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -155,18 +150,14 @@ public abstract class AbstractHoodieLogRecordReader {
     this.bufferSize = bufferSize;
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
-    this.enableInlineReading = enableInlineReading;
     this.enableFullScan = enableFullScan;
-    if (!enableFullScan) {
-      ValidationUtils.checkArgument(enableInlineReading, "Inline should be enabled if full scan is not enabled");
-    }
   }
 
   public void scan() {
-    scan(Collections.emptyList());
+    scan(Option.empty());
   }
 
-  public void scan(List<String> keys) {
+  public void scan(Option<List<String>> keys) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -182,7 +173,7 @@ public abstract class AbstractHoodieLogRecordReader {
       // iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, enableInlineReading);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan);
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
@@ -338,13 +329,13 @@ public abstract class AbstractHoodieLogRecordReader {
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
    * handle it.
    */
-  private void processDataBlock(HoodieDataBlock dataBlock, List<String> keys) throws Exception {
+  private void processDataBlock(HoodieDataBlock dataBlock, Option<List<String>> keys) throws Exception {
     // TODO (NA) - Implement getRecordItr() in HoodieAvroDataBlock and use that here
     List<IndexedRecord> recs = new ArrayList<>();
-    if (keys.isEmpty()) {
+    if (!keys.isPresent()) {
       recs = dataBlock.getRecords();
     } else {
-      recs = dataBlock.getRecords(keys);
+      recs = dataBlock.getRecords(keys.get());
     }
     totalLogRecords.addAndGet(recs.size());
     for (IndexedRecord rec : recs) {
@@ -377,7 +368,8 @@ public abstract class AbstractHoodieLogRecordReader {
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
-  private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen, List<String> keys) throws Exception {
+  private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
+                                             Option<List<String>> keys) throws Exception {
     while (!logBlocks.isEmpty()) {
       LOG.info("Number of remaining logblocks to merge " + logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted

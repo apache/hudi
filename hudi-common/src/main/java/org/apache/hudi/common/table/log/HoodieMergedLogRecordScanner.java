@@ -77,9 +77,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                          Option<InstantRange> instantRange, boolean autoScan,
                                          ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
-                                         boolean withOperationField, boolean enableInlineReading, boolean enableFullScan) {
+                                         boolean withOperationField, boolean enableFullScan) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField,
-        enableInlineReading, enableFullScan);
+        enableFullScan);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -277,7 +277,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, false, true);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true);
     }
   }
 }

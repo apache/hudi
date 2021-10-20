@@ -35,9 +35,11 @@ import org.apache.hadoop.hbase.util.Pair;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -51,9 +53,14 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResou
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieHFileReaderWriter {
-  private final Path filePath = new Path(System.getProperty("java.io.tmpdir") + "/f1_1-0-1_000.hfile");
+  @TempDir File tempDir;
+  private Path filePath;
 
   @BeforeEach
+  public void setup() throws IOException {
+    filePath = new Path(tempDir.toString() + "tempFile.txt");
+  }
+
   @AfterEach
   public void clearTempFile() {
     File file = new File(filePath.toString());
@@ -104,7 +111,7 @@ public class TestHoodieHFileReaderWriter {
       List<String> rowsList = new ArrayList<>(rowsToFetch);
       Collections.sort(rowsList);
       hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf));
-      List<Pair<String, GenericRecord>> result = hoodieHFileReader.readRecordsByKey(rowsList);
+      List<Pair<String, GenericRecord>> result = hoodieHFileReader.readRecords(rowsList);
       assertEquals(result.size(), randomRowstoFetch);
       result.forEach(entry -> {
         assertEquals(entry.getSecond(), recordMap.get(entry.getFirst()));

@@ -72,10 +72,10 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
   }
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable) throws IOException {
-    init(tableType, enableMetadataTable, true, false);
+    init(tableType, enableMetadataTable, true);
   }
 
-  public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableFullScan, boolean enableInineReading) throws IOException {
+  public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableFullScan) throws IOException {
     this.tableType = tableType;
     initPath();
     initSparkContexts("TestHoodieMetadata");
@@ -85,7 +85,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     initTestDataGenerator();
     metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, enableMetadataTable, false,
-        enableFullScan, enableInineReading).build();
+        enableFullScan).build();
     initWriteConfigAndMetatableWriter(writeConfig, enableMetadataTable);
   }
 
@@ -263,11 +263,11 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
   protected HoodieWriteConfig.Builder getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy policy, boolean autoCommit, boolean useFileListingMetadata,
                                                             boolean enableMetrics) {
-    return getWriteConfigBuilder(policy, autoCommit, useFileListingMetadata, enableMetrics, true, false);
+    return getWriteConfigBuilder(policy, autoCommit, useFileListingMetadata, enableMetrics, true);
   }
 
   protected HoodieWriteConfig.Builder getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy policy, boolean autoCommit, boolean useFileListingMetadata,
-                                                            boolean enableMetrics, boolean enableFullScan, boolean enableInlineReading) {
+                                                            boolean enableMetrics, boolean enableFullScan) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
         .withAutoCommit(autoCommit)
@@ -283,7 +283,6 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(useFileListingMetadata)
             .enableFullScan(enableFullScan)
-            .enableInlineReading(enableInlineReading)
             .enableMetrics(enableMetrics).build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(true).build())

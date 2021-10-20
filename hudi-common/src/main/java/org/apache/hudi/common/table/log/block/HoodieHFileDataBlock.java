@@ -187,7 +187,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     }
     HoodieHFileReader reader = new HoodieHFileReader(inlineConf, inlinePath, cacheConf, inlinePath.getFileSystem(inlineConf));
     List<org.apache.hadoop.hbase.util.Pair<String, IndexedRecord>> logRecords = enableFullScan ? reader.readAllRecords(writerSchema, schema) :
-        reader.readRecordsByKey(keys, schema);
+        reader.readRecords(keys, schema);
     reader.close();
     this.records = logRecords.stream().map(t -> t.getSecond()).collect(Collectors.toList());
   }

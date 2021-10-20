@@ -53,10 +53,9 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes, int bufferSize,
                                               String spillableMapBasePath, Set<String> mergeKeyFilter,
                                               ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
-                                              Option<InstantRange> instantRange, boolean enableInlineReading, boolean enableFullScan) {
+                                              Option<InstantRange> instantRange, boolean enableFullScan) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
-        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false,
-        enableInlineReading, enableFullScan);
+        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false, enableFullScan);
     this.mergeKeyFilter = mergeKeyFilter;
     if (enableFullScan) {
       performScan();
@@ -90,13 +89,13 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    * @param key Key of the record to retrieve
    * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
    */
-  public Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key) {
-    return Option.ofNullable((HoodieRecord) records.get(key));
+  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
+    return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
   }
 
   public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
-    records.close();
-    scan(keys);
+    records.clear();
+    scan(Option.of(keys));
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> metadataRecords = new ArrayList<>();
     keys.forEach(entry -> {
       if (records.containsKey(entry)) {
@@ -201,16 +200,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
       return this;
     }
 
-    public Builder enableInlineReading(boolean enableInlineReading) {
-      this.enableInlineReading = enableInlineReading;
-      return this;
-    }
-
     @Override
     public HoodieMetadataMergedLogRecordReader build() {
       return new HoodieMetadataMergedLogRecordReader(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, enableInlineReading, enableFullScan);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, enableFullScan);
     }
   }
 

@@ -174,13 +174,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return readAllRecords(schema, schema);
   }
 
-  public List<Pair<String, R>> readRecordsByKey(List<String> keys) throws IOException {
+  public List<Pair<String, R>> readRecords(List<String> keys) throws IOException {
     reader.loadFileInfo();
     Schema schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get(KEY_SCHEMA.getBytes())));
-    return readRecordsByKey(keys, schema);
+    return readRecords(keys, schema);
   }
 
-  public List<Pair<String, R>> readRecordsByKey(List<String> keys, Schema schema) throws IOException {
+  public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
     this.schema = schema;
     reader.loadFileInfo();
     List<Pair<String, R>> records = new ArrayList<>();
