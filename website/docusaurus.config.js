@@ -118,6 +118,10 @@ module.exports = {
           position: 'left',
           items: [
             {
+              label: 'Use Cases',
+              to: '/learn/use_cases',
+            },
+            {
               label: 'Blog',
               to: '/blog',
             },

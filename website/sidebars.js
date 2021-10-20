@@ -15,40 +15,52 @@ module.exports = {
             items: [
                 'quick-start-guide',
                 'flink-quick-start-guide',
-            ],
-        },
-        'use_cases',
-        'writing_data',
-        'schema_evolution',
-        'concurrency_control',
-        'querying_data',
-        'configurations',
-        'performance',
-        'deployment',
-        {
-            type: 'category',
-            label: 'Storage Configurations',
-            items: [
-                'cloud',
-                's3_hoodie',
-                'gcs_hoodie',
-                'oss_hoodie',
-                'azure_hoodie',
-                'cos_hoodie',
-                'ibm_cos_hoodie',
-                'bos_hoodie',
-                'jfs_hoodie'
+                'docker_demo'
             ],
         },
         {
             type: 'category',
-            label: 'Resources',
+            label: 'Design (Concepts)',
             items: [
-                'docker_demo',
+                'concurrency_control',
+                'schema_evolution'
+            ],
+        },
+        {
+            type: 'category',
+            label: 'How To',
+            items: [
+                'writing_data',
+                'querying_data',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Guides',
+            items: [
+                'performance',
+                'deployment',
                 'metrics',
-                'privacy'
+                'configurations',
+                {
+                    type: 'category',
+                    label: 'Storage Configurations',
+                    items: [
+                        'cloud',
+                        's3_hoodie',
+                        'gcs_hoodie',
+                        'oss_hoodie',
+                        'azure_hoodie',
+                        'cos_hoodie',
+                        'ibm_cos_hoodie',
+                        'bos_hoodie',
+                        'jfs_hoodie'
+                    ],
+                },
             ],
         },
+        //'use_cases',
+        'privacy',
     ],
     quick_links: [
         {
