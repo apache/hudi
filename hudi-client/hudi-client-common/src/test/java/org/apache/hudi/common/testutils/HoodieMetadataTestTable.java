@@ -33,15 +33,18 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * {@link HoodieTestTable} impl used for testing metadata. This class does synchronous updates to HoodieTableMetadataWriter if non null.
  */
 public class HoodieMetadataTestTable extends HoodieTestTable {
 
-  private HoodieTableMetadataWriter writer;
+  private final HoodieTableMetadataWriter writer;
 
   protected HoodieMetadataTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, HoodieTableMetadataWriter writer) {
     super(basePath, fs, metaClient);
@@ -57,11 +60,52 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     return new HoodieMetadataTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient, writer);
   }
 
+  /**
+   * Add commits to the requested partitions and update metadata table.
+   *
+   * @param commitTime           - Commit time for the operation
+   * @param operationType        - Operation type
+   * @param newPartitionsToAdd   - New partitions to add for the operation
+   * @param partitions           - List of partitions for this operation
+   * @param filesPerPartition    - Total file count to create per partition
+   * @param bootstrap            - Whether bootstrapping needed for the operation
+   * @param createInflightCommit - Whether in flight commit needed for the operation
+   * @return Commit metadata for the commit operation performed.
+   * @throws Exception
+   */
   @Override
   public HoodieCommitMetadata doWriteOperation(String commitTime, WriteOperationType operationType,
                                                List<String> newPartitionsToAdd, List<String> partitions,
-                                               int filesPerPartition, boolean bootstrap, boolean createInflightCommit) throws Exception {
-    HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd, partitions, filesPerPartition, bootstrap, createInflightCommit);
+                                               int filesPerPartition, boolean bootstrap,
+                                               boolean createInflightCommit) throws Exception {
+    if (partitions.isEmpty()) {
+      partitions = Collections.singletonList(EMPTY_STRING);
+    }
+    Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = getPartitionFiles(partitions,
+        filesPerPartition);
+    return this.doWriteOperation(commitTime, operationType, newPartitionsToAdd, partitionToFilesNameLengthMap,
+        bootstrap, createInflightCommit);
+  }
+
+  /**
+   * Add commits to the requested partitions and update metadata table.
+   *
+   * @param commitTime                    - Commit time for the operation
+   * @param operationType                 - Operation type
+   * @param newPartitionsToAdd            - New partitions to add for the operation
+   * @param partitionToFilesNameLengthMap - Map of partition names to its list of files name and length pair
+   * @param bootstrap                     - Whether bootstrapping needed for the operation
+   * @param createInflightCommit          - Whether in flight commit needed for the operation
+   * @return Commit metadata for the commit operation performed.
+   * @throws Exception
+   */
+  @Override
+  public HoodieCommitMetadata doWriteOperation(String commitTime, WriteOperationType operationType,
+                                               List<String> newPartitionsToAdd,
+                                               Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap,
+                                               boolean bootstrap, boolean createInflightCommit) throws Exception {
+    HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd,
+        partitionToFilesNameLengthMap, bootstrap, createInflightCommit);
     if (writer != null && !createInflightCommit) {
       writer.update(commitMetadata, commitTime);
     }
@@ -142,28 +186,4 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     return this;
   }
 
-  /**
-   * Add commits to the requested partitions and update metadata table.
-   *
-   * @param commitTime                    - Commit time for the operation
-   * @param operationType                 - Operation type
-   * @param newPartitionsToAdd            - New partitions to add for the operation
-   * @param partitionToFilesNameLengthMap - Map of partition names to its list of files name and length pair
-   * @param bootstrap                     - Whether bootstrapping needed for the operation
-   * @param createInflightCommit          - Whether in flight commit needed for the operation
-   * @return Commit metadata for the commit operation performed.
-   * @throws Exception
-   */
-  @Override
-  public HoodieCommitMetadata doWriteOperation(String commitTime, WriteOperationType operationType,
-                                               List<String> newPartitionsToAdd,
-                                               Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap,
-                                               boolean bootstrap, boolean createInflightCommit) throws Exception {
-    HoodieCommitMetadata commitMetadata = super.doWriteOperation(commitTime, operationType, newPartitionsToAdd,
-        partitionToFilesNameLengthMap, bootstrap, createInflightCommit);
-    if (writer != null) {
-      writer.update(commitMetadata, commitTime);
-    }
-    return commitMetadata;
-  }
 }

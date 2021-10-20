@@ -638,7 +638,7 @@ public class TestCleaner extends HoodieClientTestBase {
   }
 
   /**
-   * Test Hudi Table Cleaner - Keep the latest file versions policy.
+   * Test Hudi COW Table Cleaner - Keep the latest file versions policy.
    */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
@@ -685,10 +685,9 @@ public class TestCleaner extends HoodieClientTestBase {
     testTable.doWriteOperation("00000000000002", WriteOperationType.UPSERT, Collections.emptyList(),
         c2PartitionToFilesNameLengthMap, false, false);
 
+    // enableBootstrapSourceClean would delete the bootstrap base file at the same time
     List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config, 1);
     HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsTwo, p0);
-
-    // enableBootstrapSourceClean would delete the bootstrap base file at the same time
     assertEquals(enableBootstrapSourceClean ? 2 : 1, cleanStat.getSuccessDeleteFiles().size()
         + (cleanStat.getSuccessDeleteBootstrapBaseFiles() == null ? 0
         : cleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least 1 file");

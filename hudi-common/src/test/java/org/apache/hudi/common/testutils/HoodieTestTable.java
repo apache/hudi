@@ -946,8 +946,8 @@ public class HoodieTestTable {
    * @param filesPerPartition - File count per partition
    * @return Map of partition to its collection of files name and length pair
    */
-  private static Map<String, List<Pair<String, Integer>>> getPartitionFiles(List<String> partitions,
-                                                                            int filesPerPartition) {
+  protected static Map<String, List<Pair<String, Integer>>> getPartitionFiles(List<String> partitions,
+                                                                              int filesPerPartition) {
     Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
     for (String partition : partitions) {
       Stream<Integer> fileLengths = IntStream.range(0, filesPerPartition).map(i -> 100 + RANDOM.nextInt(500)).boxed();
