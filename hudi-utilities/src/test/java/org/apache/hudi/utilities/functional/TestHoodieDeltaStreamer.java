@@ -240,18 +240,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     static void assertRecordCount(long expected, String tablePath, SQLContext sqlContext) {
       long recordCount = sqlContext.read().format("org.apache.hudi").load(tablePath).count();
+      sqlContext.clearCache();
       assertEquals(expected, recordCount);
     }
 
     static List<Row> countsPerCommit(String tablePath, SQLContext sqlContext) {
-      return sqlContext.read().format("org.apache.hudi").load(tablePath).groupBy("_hoodie_commit_time").count()
+      List<Row> rows = sqlContext.read().format("org.apache.hudi").load(tablePath)
+          .groupBy("_hoodie_commit_time").count()
           .sort("_hoodie_commit_time").collectAsList();
+      sqlContext.clearCache();
+      return rows;
     }
 
     static void assertDistanceCount(long expected, String tablePath, SQLContext sqlContext) {
       sqlContext.read().format("org.apache.hudi").load(tablePath).registerTempTable("tmp_trips");
       long recordCount =
           sqlContext.sparkSession().sql("select * from tmp_trips where haversine_distance is not NULL").count();
+      sqlContext.clearCache();
       assertEquals(expected, recordCount);
     }
 
@@ -259,6 +264,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       sqlContext.read().format("org.apache.hudi").load(tablePath).registerTempTable("tmp_trips");
       long recordCount =
           sqlContext.sparkSession().sql("select * from tmp_trips where haversine_distance = 1.0").count();
+      sqlContext.clearCache();
       assertEquals(expected, recordCount);
     }
 
@@ -311,7 +317,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         boolean ret = false;
         while (!ret && !dsFuture.isDone()) {
           try {
-            Thread.sleep(3000);
+            Thread.sleep(5000);
             ret = condition.apply(true);
           } catch (Throwable error) {
             LOG.warn("Got error :", error);
