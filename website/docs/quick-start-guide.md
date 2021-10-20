@@ -15,7 +15,7 @@ After each write operation we will also show how to read the data both snapshot 
 ## Setup
 
 Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up spark.
-With 0.9.0 release, spark-sql dml support has been added and is experimental.
+As of 0.9.0 release, spark-sql dml support has been added and is experimental.
 
 <Tabs
 defaultValue="scala"
@@ -144,8 +144,8 @@ dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 </Tabs>
 
 :::tip
-The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
-can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L51) 
+can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)
 :::
 
 ## Create Table

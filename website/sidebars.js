@@ -22,14 +22,16 @@ module.exports = {
             type: 'category',
             label: 'Design (Concepts)',
             items: [
+                'table_types',
                 'concurrency_control',
-                'schema_evolution'
+                'schema_evolution',
             ],
         },
         {
             type: 'category',
             label: 'How To',
             items: [
+                'create_table',
                 'writing_data',
                 'querying_data',
             ],
