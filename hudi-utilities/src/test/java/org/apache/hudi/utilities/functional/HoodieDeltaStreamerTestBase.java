@@ -26,9 +26,8 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -38,7 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import java.io.IOException;
 import java.util.Random;
 
-public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
+public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
 
   static final Random RANDOM = new Random();
@@ -78,7 +77,6 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
   static final String HOODIE_CONF_PARAM = "--hoodie-conf";
   static final String HOODIE_CONF_VALUE1 = "hoodie.datasource.hive_sync.table=test_table";
   static final String HOODIE_CONF_VALUE2 = "hoodie.datasource.write.recordkey.field=Field1,Field2,Field3";
-  static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamerBase.class);
   public static KafkaTestUtils testUtils;
   protected static String topicName;
   protected static String defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
@@ -93,7 +91,13 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
     topicName = "topic" + testNum;
+    prepareInitialConfigs(dfs, dfsBasePath, testUtils.brokerAddress());
 
+    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
+    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
+  }
+
+  protected static void prepareInitialConfigs(FileSystem dfs, String dfsBasePath, String brokerAddress) throws IOException {
     // prepare the configs.
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/base.properties", dfs, dfsBasePath + "/base.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/base.properties", dfs, dfsBasePath + "/config/base.properties");
@@ -114,7 +118,7 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/short_trip_uber_config.properties", dfs, dfsBasePath + "/config/short_trip_uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/clusteringjob.properties", dfs, dfsBasePath + "/clusteringjob.properties");
 
-    writeCommonPropsToFile();
+    writeCommonPropsToFile(dfs, dfsBasePath);
 
     // Properties used for the delta-streamer which incrementally pulls from upstream Hudi source table and writes to
     // downstream hudi table
@@ -139,23 +143,20 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
 
     TypedProperties props1 = new TypedProperties();
-    populateAllCommonProps(props1);
+    populateAllCommonProps(props1, dfsBasePath, brokerAddress);
     UtilitiesTestBase.Helpers.savePropsToDFS(props1, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
 
     TypedProperties properties = new TypedProperties();
-    populateInvalidTableConfigFilePathProps(properties);
+    populateInvalidTableConfigFilePathProps(properties, dfsBasePath);
     UtilitiesTestBase.Helpers.savePropsToDFS(properties, dfs, dfsBasePath + "/" + PROPS_INVALID_TABLE_CONFIG_FILE);
 
     TypedProperties invalidHiveSyncProps = new TypedProperties();
     invalidHiveSyncProps.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "uber_db.dummy_table_uber");
     invalidHiveSyncProps.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_hive_sync_uber_config.properties");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidHiveSyncProps, dfs, dfsBasePath + "/" + PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1);
-
-    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
-    prepareORCDFSFiles(ORC_NUM_RECORDS, ORC_SOURCE_ROOT);
   }
 
-  protected static void writeCommonPropsToFile() throws IOException {
+  protected static void writeCommonPropsToFile(FileSystem dfs, String dfsBasePath) throws IOException {
     TypedProperties props = new TypedProperties();
     props.setProperty("include", "sql-transformer.properties");
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
@@ -192,20 +193,20 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     super.teardown();
   }
 
-  private static void populateInvalidTableConfigFilePathProps(TypedProperties props) {
+  protected static void populateInvalidTableConfigFilePathProps(TypedProperties props, String dfsBasePath) {
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
     props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "uber_db.dummy_table_uber");
     props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_uber_config.properties");
   }
 
-  static void populateAllCommonProps(TypedProperties props) {
-    populateCommonProps(props);
-    populateCommonKafkaProps(props);
+  protected static void populateAllCommonProps(TypedProperties props, String dfsBasePath, String brokerAddress) {
+    populateCommonProps(props, dfsBasePath);
+    populateCommonKafkaProps(props, brokerAddress);
     populateCommonHiveProps(props);
   }
 
-  protected static void populateCommonProps(TypedProperties props) {
+  protected static void populateCommonProps(TypedProperties props, String dfsBasePath) {
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
     props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "short_trip_db.dummy_table_short_trip,uber_db.dummy_table_uber");
@@ -213,9 +214,9 @@ public class TestHoodieDeltaStreamerBase extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.ingestion.short_trip_db.dummy_table_short_trip.configFile", dfsBasePath + "/config/short_trip_uber_config.properties");
   }
 
-  protected static void populateCommonKafkaProps(TypedProperties props) {
+  protected static void populateCommonKafkaProps(TypedProperties props, String brokerAddress) {
     //Kafka source properties
-    props.setProperty("bootstrap.servers", testUtils.brokerAddress());
+    props.setProperty("bootstrap.servers", brokerAddress);
     props.setProperty("auto.offset.reset", "earliest");
     props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");

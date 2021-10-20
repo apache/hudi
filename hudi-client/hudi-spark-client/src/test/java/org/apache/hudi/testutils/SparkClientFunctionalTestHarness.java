@@ -51,6 +51,7 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -112,6 +113,10 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   public Configuration hadoopConf() {
     return jsc.hadoopConfiguration();
+  }
+
+  public FileSystem fs() {
+    return FSUtils.getFs(basePath(), hadoopConf());
   }
 
   @Override
