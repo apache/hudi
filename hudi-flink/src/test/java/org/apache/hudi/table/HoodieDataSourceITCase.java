@@ -850,9 +850,10 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "+I[id1, Sophia, 18, 1970-01-01T00:00:05, par5]]", 3);
   }
 
-  @Test
-  void testAppendWrite() {
-    TableEnvironment tableEnv = batchTableEnv;
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testAppendWrite(boolean clustering) {
+    TableEnvironment tableEnv = streamTableEnv;
     // csv source
     String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
     tableEnv.executeSql(csvSourceDDL);
@@ -860,7 +861,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("hoodie_sink")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, "insert")
-        .option(FlinkOptions.INSERT_DEDUP, false)
+        .option(FlinkOptions.INSERT_CLUSTER, clustering)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 

@@ -64,6 +64,11 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Override
+  public void testInsertClustering() {
+    // insert clustering is only valid for cow table.
+  }
+
+  @Override
   protected void checkWrittenData(File baseFile, Map<String, String> expected, int partitions) throws Exception {
     HoodieTableMetaClient metaClient = HoodieFlinkTable.create(writeConfig, context).getMetaClient();
     Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();

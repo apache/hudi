@@ -115,6 +115,11 @@ public abstract class AbstractStreamWriteFunction<I>
   protected List<WriteStatus> writeStatuses;
 
   /**
+   * Current checkpoint id.
+   */
+  private long checkpointId = -1;
+
+  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
@@ -147,6 +152,7 @@ public abstract class AbstractStreamWriteFunction<I>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
+    this.checkpointId = functionSnapshotContext.getCheckpointId();
     snapshotState();
     // Reload the snapshot state as the current state.
     reloadWriteMetaState();
@@ -210,7 +216,10 @@ public abstract class AbstractStreamWriteFunction<I>
   public void handleOperatorEvent(OperatorEvent event) {
     ValidationUtils.checkArgument(event instanceof CommitAckEvent,
         "The write function can only handle CommitAckEvent");
-    this.confirming = false;
+    long checkpointId = ((CommitAckEvent) event).getCheckpointId();
+    if (checkpointId == -1 || checkpointId == this.checkpointId) {
+      this.confirming = false;
+    }
   }
 
   /**
