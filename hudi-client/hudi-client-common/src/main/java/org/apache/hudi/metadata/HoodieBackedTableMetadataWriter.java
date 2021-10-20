@@ -151,7 +151,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withAutoCommit(true)
-        .withAvroSchemaValidate(true)
+        .withAvroSchemaValidate(writeConfig.getAvroSchemaValidate())
         .withEmbeddedTimelineServerEnabled(false)
         .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
