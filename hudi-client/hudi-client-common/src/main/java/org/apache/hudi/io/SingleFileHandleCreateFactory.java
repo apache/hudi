@@ -31,11 +31,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * Please use this with caution. This can end up creating very large files if not used correctly.
  */
-public class SingleFileHandleCreateFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> {
+public class SingleFileHandleCreateFactory<T extends HoodieRecordPayload, I, K, O> extends CreateHandleFactory<T, I, K, O> {
 
-  private AtomicBoolean isHandleCreated = new AtomicBoolean(false);
-  private String fileId;
-  private boolean preserveHoodieMetadata;
+  private final AtomicBoolean isHandleCreated = new AtomicBoolean(false);
+  private final String fileId;
+  private final boolean preserveHoodieMetadata;
 
   public SingleFileHandleCreateFactory(String fileId, boolean preserveHoodieMetadata) {
     super();

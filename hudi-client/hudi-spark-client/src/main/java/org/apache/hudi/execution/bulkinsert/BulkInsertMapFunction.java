@@ -19,11 +19,14 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy;
+import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.function.Function2;
@@ -60,8 +63,19 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload>
 
   @Override
   public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> recordItr) {
+    // Use SingleFileHandleCreateFactory when clustering plan is SparkSingleFileSortPlanStrategy,
+    // and execution strategy is SparkSingleFileSortExecutionStrategy.
+    CreateHandleFactory writeHandleFactory;
+    if (config.getClusteringPlanStrategyClass().equals(SparkSingleFileSortPlanStrategy.class.getName())
+        && config.getClusteringExecutionStrategyClass().equals(SparkSingleFileSortExecutionStrategy.class.getName())) {
+      // Note that SingleFileHandleCreateFactory taken only a single fileID.
+      // fileIDPrefixes should have just one element. If not, the exception would have already been thrown in SparkSingleFileSortExecutionStrategy.
+      writeHandleFactory = new SingleFileHandleCreateFactory(fileIDPrefixes.get(0), preserveMetadata);
+    } else {
+      writeHandleFactory = new CreateHandleFactory(preserveMetadata);
+    }
     return new SparkLazyInsertIterable<>(recordItr, areRecordsSorted, config, instantTime, hoodieTable,
         fileIDPrefixes.get(partition), hoodieTable.getTaskContextSupplier(), useWriterSchema,
-        new CreateHandleFactory(preserveMetadata));
+        writeHandleFactory);
   }
 }
