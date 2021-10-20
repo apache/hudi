@@ -18,8 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.specific.SpecificRecordBase;
-
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -49,12 +47,14 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
+import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -546,8 +546,11 @@ public class HoodieAvroUtils {
         return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
             LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
       } else if (fieldSchema.getType() == Schema.Type.BYTES) {
-        return decimalConversion.fromBytes((ByteBuffer) fieldValue, fieldSchema,
-            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+        ByteBuffer byteBuffer = (ByteBuffer) fieldValue;
+        BigDecimal convertedValue = decimalConversion.fromBytes((ByteBuffer) fieldValue, fieldSchema,
+                LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+        byteBuffer.rewind();
+        return convertedValue;
       }
     }
     return fieldValue;
