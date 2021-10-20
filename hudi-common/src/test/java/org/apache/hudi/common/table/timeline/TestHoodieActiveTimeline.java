@@ -31,8 +31,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -426,6 +428,27 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals(1, validReplaceInstants.size());
     assertEquals(instant.getTimestamp(), validReplaceInstants.get(0).getTimestamp());
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, validReplaceInstants.get(0).getAction());
+  }
+
+  @Test
+  public void testMillisGranularityInstantDateParsing() throws ParseException {
+    // Old second granularity instant ID
+    String secondGranularityInstant = "20210101120101";
+    Date secondGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
+    // New ms granularity instant ID
+    String msGranularityInstant = secondGranularityInstant + "009";
+    Date msGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(msGranularityInstant);
+    assertEquals(0, secondGranularityDate.getTime() % 1000, "Expected the ms part to be 0");
+    assertEquals(9, msGranularityDate.getTime() % 1000, "Expected the ms part to be 9");
+
+    // Ensure that any date math which expects second granularity still works
+    String laterDateInstant = "20210101120111"; // + 10 seconds from original instant
+    assertEquals(
+            10,
+            HoodieActiveTimeline.parseDateFromInstantTime(laterDateInstant).getTime() / 1000
+                    - HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant).getTime() / 1000,
+            "Expected the difference between later instant and previous instant to be 10 seconds"
+    );
   }
 
   /**
