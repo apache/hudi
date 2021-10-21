@@ -351,12 +351,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<String> getAllPartitions() {
-    // TODO
-    return null;
-  }
-
-  @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath) {
     Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
     try {

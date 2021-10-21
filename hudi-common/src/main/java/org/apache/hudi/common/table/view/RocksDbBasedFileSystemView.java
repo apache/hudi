@@ -217,12 +217,6 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  public Stream<String> getAllPartitions() {
-    // todo:
-    return null;
-  }
-
-  @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
     LOG.info("Resetting and adding new partition (" + partitionPath + ") to ROCKSDB based file-system view at "
         + config.getRocksdbBasePath() + ", Total file-groups=" + fileGroups.size());

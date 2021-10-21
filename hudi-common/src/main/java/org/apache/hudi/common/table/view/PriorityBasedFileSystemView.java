@@ -185,11 +185,6 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
-  public Stream<String> getAllPartitions() {
-    return execute(preferredView::getAllPartitions, secondaryView::getAllPartitions);
-  }
-
-  @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath) {
     return execute(partitionPath, preferredView::getAllFileSlices, secondaryView::getAllFileSlices);
   }

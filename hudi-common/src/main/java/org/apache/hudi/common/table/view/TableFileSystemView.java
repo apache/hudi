@@ -138,11 +138,6 @@ public interface TableFileSystemView {
   interface SliceView extends SliceViewWithLatestSlice {
 
     /**
-     * Lists all partitions.
-     */
-    Stream<String> getAllPartitions();
-
-    /**
      * Stream all the file slices for a given partition, latest or not.
      */
     Stream<FileSlice> getAllFileSlices(String partitionPath);
