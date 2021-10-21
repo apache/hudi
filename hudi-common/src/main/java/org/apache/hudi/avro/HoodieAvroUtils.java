@@ -547,7 +547,7 @@ public class HoodieAvroUtils {
             LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
       } else if (fieldSchema.getType() == Schema.Type.BYTES) {
         ByteBuffer byteBuffer = (ByteBuffer) fieldValue;
-        BigDecimal convertedValue = decimalConversion.fromBytes((ByteBuffer) fieldValue, fieldSchema,
+        BigDecimal convertedValue = decimalConversion.fromBytes(byteBuffer, fieldSchema,
                 LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
         byteBuffer.rewind();
         return convertedValue;

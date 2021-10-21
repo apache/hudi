@@ -255,7 +255,6 @@ public class TestHoodieAvroUtils {
     ByteBuffer byteBuffer = ByteBuffer.wrap(bigDecimal.unscaledValue().toByteArray());
     rec.put("decimal_col", byteBuffer);
 
-
     Object decimalCol = HoodieAvroUtils.getNestedFieldVal(rec, "decimal_col", true);
     assertEquals(bigDecimal, decimalCol);
 
