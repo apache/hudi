@@ -1,5 +1,5 @@
 ---
-title: Create Table
+title: Table Management
 summary: "In this page, we introduce how to create tables with Hudi."
 toc: true
 last_modified_at: 
@@ -7,13 +7,14 @@ last_modified_at:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+The following are SparkSQL table management actions available:
 
-## Spark
+## Create Table
 :::note
 Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or Python. The first batch of a [Write](https://hudi.apache.org/docs/writing_data) to a table will create the table if it does not exist.
 :::
 
-### Create Table Options
+### Options
 
 Users can set table options while creating a hudi table.
 
@@ -144,4 +145,61 @@ create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' options (
 partitioned by (datestr) as select * from parquet_mngd;
 ```
 
-## Flink
+### Set hoodie config options
+You can also set the config with table options when creating table which will work for
+the table scope only and override the config set by the SET command.
+```sql
+create table if not exists h3(
+  id bigint, 
+  name string, 
+  price double
+) using hudi
+options (
+  primaryKey = 'id',
+  type = 'mor',
+  ${hoodie.config.key1} = '${hoodie.config.value2}',
+  ${hoodie.config.key2} = '${hoodie.config.value2}',
+  ....
+);
+
+e.g.
+create table if not exists h3(
+  id bigint, 
+  name string, 
+  price double
+) using hudi
+options (
+  primaryKey = 'id',
+  type = 'mor',
+  hoodie.cleaner.fileversions.retained = '20',
+  hoodie.keep.max.commits = '20'
+);
+```
+
+## Alter Table
+### Syntax
+```sql
+-- Alter table name
+ALTER TABLE oldTableName RENAME TO newTableName
+
+-- Alter table add columns
+ALTER TABLE tableIdentifier ADD COLUMNS(colAndType (,colAndType)*)
+
+-- Alter table column type
+ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
+```
+### Examples
+```sql
+alter table h0 rename to h0_1;
+
+alter table h0_1 add columns(ext0 string);
+
+alter table h0_1 change column id id bigint;
+```
+### Alter hoodie config options
+You can also alter the write config for a table by the **ALTER SERDEPROPERTIES**
+
+Example:
+```sql
+ alter table h3 set serdeproperties (hoodie.keep.max.commits = '10') 
+```

@@ -175,68 +175,8 @@ values={[
 </TabItem>
 <TabItem value="sparksql">
 
-Spark-sql needs an explicit create table command.
-
-- Table types:
-  Both types of hudi tables (CopyOnWrite (COW) and MergeOnRead (MOR)) can be created using spark-sql.
-
-  While creating the table, table type can be specified using **type** option. **type = 'cow'** represents COW table, while **type = 'mor'** represents MOR table.
-
-- Partitioned & Non-Partitioned table:
-  Users can create a partitioned table or non-partitioned table in spark-sql.
-  To create a partitioned table, one needs to use **partitioned by** statement to specify the partition columns to create a partitioned table. 
-  When there is no **partitioned by** statement with create table command, table is considered to be a non-partitioned table.
-
-- Managed & External table:
-  In general, spark-sql supports two kinds of tables, namely managed and external. If one specifies a location using **location** statement, it is an external table, else its considered a managed table. You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
-
-- Table with primary key:
-  Users can choose to create a table with primary key as required. Else table is considered a non-primary keyed table.
-  One needs to set **primaryKey** column in options to create a primary key table.
-  If you are using any of the built-in key generators in Hudi, likely it is a primary key table.
-
-Let's go over some of the create table commands.
-
-**Create a Non-Partitioned Table**
-
-Here is an example of creating a managed non-partitioned COW managed table with a primary key 'id'.
-
 ```sql
--- create a managed cow table
-create table if not exists hudi_table0 (
-  id int, 
-  name string, 
-  price double
-) using hudi
-options (
-  type = 'cow',
-  primaryKey = 'id'
-);
-```
-
-Here is an example of creating an MOR external table (location needs to be specified). The **preCombineField** option
-is used to specify the preCombine field for merge.
-
-```sql
--- create an external mor table
-create table if not exists hudi_table1 (
-  id int, 
-  name string, 
-  price double,
-  ts bigint
-) using hudi
-location '/tmp/hudi/hudi_table1'  
-options (
-  type = 'mor',
-  primaryKey = 'id,name',
-  preCombineField = 'ts' 
-);
-```
-
-Here is an example of creating a COW table without primary key.
-
-```sql
--- create a non-primary key table
+-- 
 create table if not exists hudi_table2(
   id int, 
   name string, 
@@ -246,92 +186,6 @@ options (
   type = 'cow'
 );
 ```
-
-Here is an example of creating an external COW partitioned table.
-
-**Create Partitioned Table**
-```sql
-create table if not exists hudi_table_p0 (
-id bigint,
-name string,
-dt string，
-hh string  
-) using hudi
-location '/tmp/hudi/hudi_table_p0'
-options (
-  type = 'cow',
-  primaryKey = 'id',
-  preCombineField = 'ts'
- ) 
-partitioned by (dt, hh);
-```
-
-If you wish to use spark-sql for an already existing hudi table (created pre 0.9.0), it is possible with the below command.
-
-**Create Table for an existing Hudi Table**
-
-We can create a table on an existing hudi table(created with spark-shell or deltastreamer). This is useful to 
-read/write to/from a pre-existing hudi table.
-
-```sql
- create table h_p1 using hudi 
- options (
-    primaryKey = 'id',
-    preCombineField = 'ts'
- )
- partitioned by (dt)
- location '/path/to/hudi';
-```
-
-**CTAS**
-
-Hudi supports CTAS(Create table as select) on spark sql. <br/> 
-Note: For better performance to load data to hudi table, CTAS uses the **bulk insert** as the write operation.
-
-Example CTAS command to create a partitioned, primary key COW table.
-
-```sql
-create table h2 using hudi
-options (type = 'cow', primaryKey = 'id')
-partitioned by (dt)
-as
-select 1 as id, 'a1' as name, 10 as price, 1000 as dt;
-```
-
-Example CTAS command to create a non-partitioned COW table.
-
-```sql 
-create table h3 using hudi
-as
-select 1 as id, 'a1' as name, 10 as price;
-```
-
-Example CTAS command to load data from another table.
-
-```sql
-# create managed parquet table 
-create table parquet_mngd using parquet location 'file:///tmp/parquet_dataset/*.parquet';
-
-# CTAS by loading data into hudi table
-create table hudi_tbl using hudi location 'file:/tmp/hudi/hudi_tbl/' options ( 
-  type = 'cow', 
-  primaryKey = 'id', 
-  preCombineField = 'ts' 
- ) 
-partitioned by (datestr) as select * from parquet_mngd;
-```
-
-**Create Table Options**
-
-Users can set table options while creating a hudi table. Critical options are listed here.
-
-| Parameter Name | Introduction |
-|------------|--------|
-| primaryKey | The primary key names of the table, multiple fields separated by commas. |
-| type       | The table type to create. type = 'cow' means a COPY-ON-WRITE table,while type = 'mor' means a MERGE-ON-READ table. Default value is 'cow' without specified this option.|
-| preCombineField | The Pre-Combine field of the table. |
-
-To set any custom hudi config(like index type, max parquet size, etc), see the  "Set hudi config section" .
 
 </TabItem>
 </Tabs>
@@ -414,25 +268,13 @@ Here we are using the default write operation : `upsert`. If you have a workload
 <TabItem value="sparksql">
 
 ```sql
-insert into h0 select 1, 'a1', 20;
+insert into hudi_table2 select 1, 'a1', 20;
 
 -- insert static partition
-insert into h_p0 partition(dt = '2021-01-02') select 1, 'a1';
-
--- insert dynamic partition
-insert into h_p0 select 1, 'a1', dt;
-
--- insert dynamic partition
-insert into h_p1 select 1 as id, 'a1', '2021-01-03' as dt, '19' as hh;
+insert into hudi_table2 partition(dt = '2021-01-02') select 1, 'a1';
 
 -- insert overwrite table
 insert overwrite table h0 select 1, 'a1', 20;
-
--- insert overwrite table with static partition
-insert overwrite h_p0 partition(dt = '2021-01-02') select 1, 'a1';
-
--- insert overwrite table with dynamic partition
-  insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh;
 ```
 
 **NOTICE**
@@ -534,7 +376,7 @@ spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_trips_snapshot where
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_trips_snapshot").show()
 ```
 
-### Time Travel Query
+**Time Travel Query**
 
 Hudi support time travel query since 0.9.0. Currently three query time formats are supported as given below.
 ```python
@@ -937,187 +779,6 @@ Only `Append` mode is supported for delete operation.
 
 See the [deletion section](/docs/writing_data#deletes) of the writing data page for more details.
 
-## Insert Overwrite Table
-
-Generate some new trips, overwrite the table logically at the Hudi metadata level. The Hudi cleaner will eventually
-clean up the previous table snapshot's file groups. This can be faster than deleting the older table and recreating 
-in `Overwrite` mode.
-
-<Tabs
-defaultValue="scala"
-values={[
-{ label: 'Scala', value: 'scala', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
-<TabItem value="scala">
-
-```scala
-// spark-shell
-spark.
-  read.format("hudi").
-  load(basePath).
-  select("uuid","partitionpath").
-  show(10, false)
-
-val inserts = convertToStringList(dataGen.generateInserts(10))
-val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
-df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"insert_overwrite_table").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
-  mode(Append).
-  save(basePath)
-
-// Should have different keys now, from query before.
-spark.
-  read.format("hudi").
-  load(basePath).
-  select("uuid","partitionpath").
-  show(10, false)
-
-``` 
-</TabItem>
-
-<TabItem value="sparksql">
-
-The insert overwrite non-partitioned table sql statement will convert to the ***insert_overwrite_table*** operation.
-e.g.
-```sql
-insert overwrite table h0 select 1, 'a1', 20;
-```
-</TabItem>
-</Tabs>
-
-## Insert Overwrite 
-
-Generate some new trips, overwrite the all the partitions that are present in the input. This operation can be faster
-than `upsert` for batch ETL jobs, that are recomputing entire target partitions at once (as opposed to incrementally
-updating the target tables). This is because, we are able to bypass indexing, precombining and other repartitioning 
-steps in the upsert write path completely.
-
-<Tabs
-defaultValue="scala"
-values={[
-{ label: 'Scala', value: 'scala', },
-{ label: 'SparkSQL', value: 'sparksql', },
-]}>
-<TabItem value="scala">
-
-```scala
-// spark-shell
-spark.
-  read.format("hudi").
-  load(basePath).
-  select("uuid","partitionpath").
-  sort("partitionpath","uuid").
-  show(100, false)
-
-val inserts = convertToStringList(dataGen.generateInserts(10))
-val df = spark.
-  read.json(spark.sparkContext.parallelize(inserts, 2)).
-  filter("partitionpath = 'americas/united_states/san_francisco'")
-df.write.format("hudi").
-  options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"insert_overwrite").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
-  mode(Append).
-  save(basePath)
-
-// Should have different keys now for San Francisco alone, from query before.
-spark.
-  read.format("hudi").
-  load(basePath).
-  select("uuid","partitionpath").
-  sort("partitionpath","uuid").
-  show(100, false)
-```
-</TabItem>
-
-<TabItem value="sparksql">
-
-The insert overwrite partitioned table sql statement will convert to the ***insert_overwrite*** operation.
-e.g.
-```sql
-insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh;
-```
-</TabItem>
-</Tabs>
-
-## More Spark Sql Commands
-
-### AlterTable
-**Syntax**
-```sql
--- Alter table name
-ALTER TABLE oldTableName RENAME TO newTableName
-
--- Alter table add columns
-ALTER TABLE tableIdentifier ADD COLUMNS(colAndType (,colAndType)*)
-
--- Alter table column type
-ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
-```
-**Examples**
-```sql
-alter table h0 rename to h0_1;
-
-alter table h0_1 add columns(ext0 string);
-
-alter table h0_1 change column id id bigint;
-```
-
-### Use set command
-You can use the **set** command to set any custom hudi's config, which will work for the
-whole spark session scope.
-```sql
-set hoodie.insert.shuffle.parallelism = 100;
-set hoodie.upsert.shuffle.parallelism = 100;
-set hoodie.delete.shuffle.parallelism = 100;
-```
-
-### Set with table options
-You can also set the config with table options when creating table which will work for
-the table scope only and override the config set by the SET command.
-```sql
-create table if not exists h3(
-  id bigint, 
-  name string, 
-  price double
-) using hudi
-options (
-  primaryKey = 'id',
-  type = 'mor',
-  ${hoodie.config.key1} = '${hoodie.config.value2}',
-  ${hoodie.config.key2} = '${hoodie.config.value2}',
-  ....
-);
-
-e.g.
-create table if not exists h3(
-  id bigint, 
-  name string, 
-  price double
-) using hudi
-options (
-  primaryKey = 'id',
-  type = 'mor',
-  hoodie.cleaner.fileversions.retained = '20',
-  hoodie.keep.max.commits = '20'
-);
-```
-
-You can also alter the write config for a table by the **ALTER SERDEPROPERTIES**
-
-e.g.
-```sql
- alter table h3 set serdeproperties (hoodie.keep.max.commits = '10') 
-```
 
 ## Where to go from here?
 

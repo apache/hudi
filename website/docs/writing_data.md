@@ -26,6 +26,14 @@ can be chosen/changed across each commit/deltacommit issued against the table.
  initial loading/bootstrapping a Hudi table at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs 
  of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do. 
 
+### Use set command
+You can use the **set** command to set any custom hudi's config, which will work for the
+whole spark session scope.
+```sql
+set hoodie.insert.shuffle.parallelism = 100;
+set hoodie.upsert.shuffle.parallelism = 100;
+set hoodie.delete.shuffle.parallelism = 100;
+```
 
 ## DeltaStreamer
 

@@ -31,7 +31,8 @@ module.exports = {
             type: 'category',
             label: 'How To',
             items: [
-                'create_table',
+                'table_management',
+                'insert_data',
                 'writing_data',
                 'querying_data',
             ],
