@@ -47,7 +47,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <I> Input type
  */
-public class InsertFunctionWrapper<I> {
+public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final Configuration conf;
   private final RowType rowType;
 
@@ -113,6 +113,11 @@ public class InsertFunctionWrapper<I> {
 
   public StreamWriteOperatorCoordinator getCoordinator() {
     return coordinator;
+  }
+
+  @Override
+  public void close() throws Exception {
+    this.coordinator.close();
   }
 
   public BulkInsertWriterHelper getWriterHelper() {
