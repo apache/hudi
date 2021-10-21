@@ -180,7 +180,8 @@ public class HoodieTableSource implements
               conf, FilePathUtils.toFlinkPath(path), maxCompactionMemoryInBytes, getRequiredPartitionPaths());
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
-          SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, "split_monitor")
+          SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction,
+              "split_monitor(table=[" + conf.getString(FlinkOptions.TABLE_NAME) + "], fields=" + schema.getColumnNames() + ")")
               .setParallelism(1)
               .transform("split_reader", typeInfo, factory)
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
@@ -188,7 +189,8 @@ public class HoodieTableSource implements
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
           DataStreamSource<RowData> source = execEnv.addSource(func, asSummaryString(), typeInfo);
-          return source.name("bounded_source").setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          return source.name("bounded_source(table=[" + conf.getString(FlinkOptions.TABLE_NAME) + "], fields=" + schema.getColumnNames() + ")")
+              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
         }
       }
     };
