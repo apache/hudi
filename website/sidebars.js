@@ -25,6 +25,7 @@ module.exports = {
                 'table_types',
                 'concurrency_control',
                 'schema_evolution',
+                'key_generation'
             ],
         },
         {

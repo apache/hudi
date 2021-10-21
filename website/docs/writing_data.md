@@ -302,71 +302,6 @@ INSERT INTO hudi_table select ... from ...;
 ```
 
 **Note**: INSERT OVERWRITE is not supported yet but already on the roadmap.
-
-## Key Generation
-
-Hudi maintains hoodie keys (record key + partition path) for uniquely identifying a particular record. Key generator class will extract these out of incoming record. Both the tools above have configs to specify the 
-`hoodie.datasource.write.keygenerator.class` property. For DeltaStreamer this would come from the property file specified in `--props` and 
-DataSource writer takes this config directly using `DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()`.
-The default value for this config is `SimpleKeyGenerator`. Note: A custom key generator class can be written/provided here as well. Primary key columns should be provided via `RECORDKEY_FIELD_OPT_KEY` option.<br/>
- 
-Hudi currently supports different combinations of record keys and partition paths as below - 
-
- - Simple record key (consisting of only one field) and simple partition path (with optional hive style partitioning)
- - Simple record key and custom timestamp based partition path (with optional hive style partitioning)
- - Composite record keys (combination of multiple fields) and composite partition paths
- - Composite record keys and timestamp based partition paths (composite also supported)
- - Non partitioned table
-
-`CustomKeyGenerator.java` (part of hudi-spark module) class provides great support for generating hoodie keys of all the above listed types. All you need to do is supply values for the following properties properly to create your desired keys - 
-
-```java
-hoodie.datasource.write.recordkey.field
-hoodie.datasource.write.partitionpath.field
-hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.CustomKeyGenerator
-```
-
-For having composite record keys, you need to provide comma separated fields like
-```java
-hoodie.datasource.write.recordkey.field=field1,field2
-```
-
-This will create your record key in the format `field1:value1,field2:value2` and so on, otherwise you can specify only one field in case of simple record keys. `CustomKeyGenerator` class defines an enum `PartitionKeyType` for configuring partition paths. It can take two possible values - SIMPLE and TIMESTAMP. 
-The value for `hoodie.datasource.write.partitionpath.field` property in case of partitioned tables needs to be provided in the format `field1:PartitionKeyType1,field2:PartitionKeyType2` and so on. For example, if you want to create partition path using 2 fields `country` and `date` where the latter has timestamp based values and needs to be customised in a given format, you can specify the following 
-
-```java
-hoodie.datasource.write.partitionpath.field=country:SIMPLE,date:TIMESTAMP
-``` 
-This will create the partition path in the format `<country_name>/<date>` or `country=<country_name>/date=<date>` depending on whether you want hive style partitioning or not.
-
-`TimestampBasedKeyGenerator` class defines the following properties which can be used for doing the customizations for timestamp based partition paths
-
-```java
-hoodie.deltastreamer.keygen.timebased.timestamp.type
-  This defines the type of the value that your field contains. It can be in string format or epoch format, for example
-hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit
-  This defines the granularity of your field, whether it contains the values in seconds or milliseconds
-hoodie.deltastreamer.keygen.timebased.input.dateformat
-  This defines the custom format in which the values are present in your field, for example yyyy/MM/dd
-hoodie.deltastreamer.keygen.timebased.output.dateformat
-  This defines the custom format in which you want the partition paths to be created, for example dt=yyyyMMdd
-hoodie.deltastreamer.keygen.timebased.timezone
-  This defines the timezone which the timestamp based values belong to
-```
-
-When keygenerator class is `CustomKeyGenerator`, non partitioned table can be handled by simply leaving the property blank like
-```java
-hoodie.datasource.write.partitionpath.field=
-```
-
-For those on hudi versions < 0.6.0, you can use the following key generator classes for fulfilling your use cases - 
-
- - Simple record key (consisting of only one field) and simple partition path (with optional hive style partitioning) - `SimpleKeyGenerator.java`
- - Simple record key and custom timestamp based partition path (with optional hive style partitioning) - `TimestampBasedKeyGenerator.java`
- - Composite record keys (combination of multiple fields) and composite partition paths - `ComplexKeyGenerator.java`
- - Composite record keys and timestamp based partition paths (composite also supported) - You might need to move to 0.6.0 and use `CustomKeyGenerator.java` class
- - Non partitioned table - `NonpartitionedKeyGenerator.java`. Non-partitioned tables can currently only have a single key column, [HUDI-1053](https://issues.apache.org/jira/browse/HUDI-1053)
- 
  
 ## Syncing to Hive
 
@@ -412,22 +347,3 @@ Example using hard delete method 2, remove all the records from the table that e
    .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
  
 ```
-
-
-## Optimized DFS Access
-
-Hudi also performs several key storage management functions on the data stored in a Hudi table. A key aspect of storing data on DFS is managing file sizes and counts
-and reclaiming storage space. For e.g HDFS is infamous for its handling of small files, which exerts memory/RPC pressure on the Name Node and can potentially destabilize
-the entire cluster. In general, query engines provide much better performance on adequately sized columnar files, since they can effectively amortize cost of obtaining 
-column statistics etc. Even on some cloud data stores, there is often cost to listing directories with large number of small files.
-
-Here are some ways to efficiently manage the storage of your Hudi tables.
-
- - The [small file handling feature](/docs/configurations#compactionSmallFileSize) in Hudi, profiles incoming workload 
-   and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files. 
- - Cleaner can be [configured](/docs/configurations#retainCommits) to clean up older file slices, more or less aggressively depending on maximum time for queries to run & lookback needed for incremental pull
- - User can also tune the size of the [base/parquet file](/docs/configurations#limitFileSize), [log files](/docs/configurations#logFileMaxSize) & expected [compression ratio](/docs/configurations#parquetCompressionRatio), 
-   such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.
- - Intelligently tuning the [bulk insert parallelism](/docs/configurations#withBulkInsertParallelism), can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
-   once created cannot be deleted, but simply expanded as explained before.
- - For workloads with heavy updates, the [merge-on-read table](/docs/concepts#merge-on-read-table) provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.
