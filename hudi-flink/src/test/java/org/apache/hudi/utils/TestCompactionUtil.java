@@ -58,7 +58,7 @@ public class TestCompactionUtil {
 
     StreamerUtil.initTableIfNotExists(conf);
 
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
+    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
     HoodieFlinkTable table = writeClient.getHoodieTable();
     HoodieTableMetaClient metaClient = table.getMetaClient();
 

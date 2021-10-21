@@ -82,6 +82,7 @@ import org.apache.hadoop.util.Time;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -276,8 +277,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Test rollback of various table operations sync to Metadata Table correctly.
    */
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
+  //@ParameterizedTest
+  //@EnumSource(HoodieTableType.class)
+  @Disabled
   public void testRollbackOperations(HoodieTableType tableType) throws Exception {
     init(tableType);
     doWriteInsertAndUpsert(testTable);
@@ -896,7 +898,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Test various error scenarios.
    */
-  @Test
+  //@Test
+  @Disabled
   public void testErrorCases() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);

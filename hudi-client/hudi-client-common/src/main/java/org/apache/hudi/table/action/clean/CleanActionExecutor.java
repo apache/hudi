@@ -211,7 +211,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
 
   /**
    * Update metadata table if available. Any update to metadata table happens within data table lock.
-   * @param cleanMetadata intance of {@link HoodieCleanMetadata} to be applied to metadata.
+   * @param cleanMetadata instance of {@link HoodieCleanMetadata} to be applied to metadata.
    */
   private void writeMetadata(HoodieCleanMetadata cleanMetadata) {
     try {

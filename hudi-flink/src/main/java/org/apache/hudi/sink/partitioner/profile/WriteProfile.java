@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.AbstractTableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -36,7 +36,6 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +44,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -98,7 +96,7 @@ public class WriteProfile {
   /**
    * The file system view cache for one checkpoint interval.
    */
-  protected HoodieTableFileSystemView fsView;
+  protected AbstractTableFileSystemView fsView;
 
   /**
    * Hadoop configuration.
@@ -194,7 +192,7 @@ public class WriteProfile {
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
       // initialize the filesystem view based on the commit metadata
-      initFSViewIfNecessary(commitTimeline);
+      initFileSystemView();
       List<HoodieBaseFile> allFiles = fsView
           .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
 
@@ -214,20 +212,14 @@ public class WriteProfile {
   }
 
   @VisibleForTesting
-  public void initFSViewIfNecessary(HoodieTimeline commitTimeline) {
+  public void initFileSystemView() {
     if (fsView == null) {
-      cleanMetadataCache(commitTimeline.getInstants());
-      List<HoodieCommitMetadata> metadataList = commitTimeline.getInstants()
-          .map(instant ->
-              this.metadataCache.computeIfAbsent(
-                  instant.getTimestamp(),
-                  k -> WriteProfiles.getCommitMetadataSafely(config.getTableName(), basePath, instant, commitTimeline)
-                      .orElse(null)))
-          .filter(Objects::nonNull)
-          .collect(Collectors.toList());
-      FileStatus[] commitFiles = WriteProfiles.getWritePathsOfInstants(basePath, hadoopConf, metadataList);
-      fsView = new HoodieTableFileSystemView(table.getMetaClient(), commitTimeline, commitFiles);
+      fsView = getFileSystemView();
     }
+  }
+
+  protected AbstractTableFileSystemView getFileSystemView() {
+    return (AbstractTableFileSystemView) this.table.getBaseFileOnlyView();
   }
 
   /**
@@ -261,8 +253,10 @@ public class WriteProfile {
       return;
     }
     this.table.getMetaClient().reloadActiveTimeline();
+    this.table.getHoodieView().sync();
     recordProfile();
     this.fsView = null;
+    cleanMetadataCache(this.table.getMetaClient().getCommitsTimeline().filterCompletedInstants().getInstants());
     this.smallFilesMap.clear();
     this.reloadedCheckpointId = checkpointId;
   }

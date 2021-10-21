@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 
@@ -52,5 +53,10 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;
+  }
+
+  @Override
+  protected String lastCompleteInstant() {
+    return TestUtils.getLastDeltaCompleteInstant(tempFile.getAbsolutePath());
   }
 }

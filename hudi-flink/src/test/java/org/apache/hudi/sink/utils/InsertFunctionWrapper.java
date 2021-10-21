@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.append.AppendWriteFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
@@ -96,11 +95,6 @@ public class InsertFunctionWrapper<I> {
 
   public OperatorEvent getNextEvent() {
     return this.gateway.getNextEvent();
-  }
-
-  @SuppressWarnings("rawtypes")
-  public HoodieFlinkWriteClient getWriteClient() {
-    return this.writeFunction.getWriteClient();
   }
 
   public void checkpointFunction(long checkpointId) throws Exception {

@@ -156,6 +156,8 @@
     <zk-curator.version>2.7.1</zk-curator.version>
     <antlr.version>4.7</antlr.version>
     <aws.sdk.version>1.12.22</aws.sdk.version>
+    <proto.version>3.17.3</proto.version>
+    <protoc.version>3.1.0</protoc.version>
   </properties>
 
   <scm>

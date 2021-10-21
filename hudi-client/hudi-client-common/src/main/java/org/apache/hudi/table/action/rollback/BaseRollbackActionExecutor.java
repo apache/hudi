@@ -262,7 +262,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   /**
    * Update metadata table if available. Any update to metadata table happens within data table lock.
-   * @param rollbackMetadata intance of {@link HoodieRollbackMetadata} to be applied to metadata.
+   * @param rollbackMetadata instance of {@link HoodieRollbackMetadata} to be applied to metadata.
    */
   private void writeToMetadata(HoodieRollbackMetadata rollbackMetadata) {
     try {

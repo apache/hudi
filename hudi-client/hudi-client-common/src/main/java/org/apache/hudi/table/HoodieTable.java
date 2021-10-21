@@ -55,7 +55,6 @@ import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -711,7 +710,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   public Option<HoodieTableMetadataWriter> getMetadataWriter() {
-    ValidationUtils.checkArgument(config.isMetadataTableEnabled(), "Metadata Table support not enabled in this Table");
+    // Each engine is expected to override this and provide the actual metadata writer if enabled.
     return Option.empty();
   }
 }
