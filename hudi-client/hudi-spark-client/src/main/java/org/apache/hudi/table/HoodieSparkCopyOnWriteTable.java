@@ -87,7 +87,8 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieSparkTable<T> {
+public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
+    extends HoodieSparkTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkCopyOnWriteTable.class);
 
@@ -157,7 +158,8 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
+  public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(
+      HoodieEngineContext context, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 
@@ -191,20 +193,22 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
-                                                              String instantTime,
-                                                              HoodieInstant instantToRollback, boolean skipTimelinePublish) {
+                                                     String instantTime,
+                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish) {
     return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
   }
 
-  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
-                                                  Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdate(
+      String instantTime, String partitionPath, String fileId,
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, instantTime, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String instantTime,
-      String fileId) throws IOException {
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
+                                                             String fileId) throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
@@ -241,9 +245,11 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
     }
   }
 
-  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
-                                                  Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
-    HoodieCreateHandle<?,?,?,?> createHandle =
+  @Override
+  public Iterator<List<WriteStatus>> handleInsert(
+      String instantTime, String partitionPath, String fileId,
+      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+    HoodieCreateHandle<?, ?, ?, ?> createHandle =
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();

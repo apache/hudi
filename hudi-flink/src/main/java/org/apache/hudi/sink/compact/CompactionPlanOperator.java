@@ -84,7 +84,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void notifyCheckpointComplete(long checkpointId) {
     try {
       table.getMetaClient().reloadActiveTimeline();
-      CompactionUtil.rollbackCompaction(table, writeClient, conf);
+      CompactionUtil.rollbackCompaction(table, conf);
       scheduleCompaction(table, checkpointId);
     } catch (Throwable throwable) {
       // make it fail-safe

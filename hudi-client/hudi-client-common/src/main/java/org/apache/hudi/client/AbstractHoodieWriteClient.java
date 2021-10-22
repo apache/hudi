@@ -776,19 +776,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
                                              HoodieTable<T, I, K, O> table, String compactionCommitTime);
 
   /**
-   * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file to the .requested file
-   * TODO : Deprecate this method and make it protected
-   * @param inflightInstant Inflight Compaction Instant
-   * @param table Hoodie Table
-   */
-  public void rollbackInflightCompaction(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
-    table.scheduleRollback(context, commitTime, inflightInstant, false);
-    table.rollback(context, commitTime, inflightInstant, false);
-    table.getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
-  }
-
-  /**
    * Get inflight time line exclude compaction and clustering.
    * @param metaClient
    * @return
