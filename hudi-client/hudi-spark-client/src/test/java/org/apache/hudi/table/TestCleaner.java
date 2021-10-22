@@ -1327,7 +1327,7 @@ public class TestCleaner extends HoodieClientTestBase {
     // Make a commit, although there are no partitionPaths.
     // Example use-case of this is when a client wants to create a table
     // with just some commit metadata, but no data/partitionPaths.
-    HoodieTestTable.of(metaClient).addCommit("000");
+    HoodieMetadataTestTable.of(metaClient).addCommit("000");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -1510,7 +1510,7 @@ public class TestCleaner extends HoodieClientTestBase {
     // multiple versions with pending compaction. File Slices (6 - 7) have multiple file-slices but not under
     // compactions
     // FileIds 2-5 will be under compaction
-    HoodieTestTable.of(metaClient)
+    HoodieMetadataTestTable.of(metaClient)
         .addCommit("000")
         .withBaseFilesInPartition(partition, "fileId1", "fileId2", "fileId3", "fileId4", "fileId5", "fileId6", "fileId7")
         .withLogFile(partition, "fileId1", 1, 2)
