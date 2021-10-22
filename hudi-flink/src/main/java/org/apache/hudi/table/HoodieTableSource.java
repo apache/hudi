@@ -180,8 +180,7 @@ public class HoodieTableSource implements
               conf, FilePathUtils.toFlinkPath(path), maxCompactionMemoryInBytes, getRequiredPartitionPaths());
           InputFormat<RowData, ?> inputFormat = getInputFormat(true);
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
-          SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction,
-              "split_monitor(table=[" + conf.getString(FlinkOptions.TABLE_NAME) + "], fields=" + schema.getColumnNames() + ")")
+          SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, getSourceOperatorName("split_monitor"))
               .setParallelism(1)
               .transform("split_reader", typeInfo, factory)
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
@@ -189,8 +188,7 @@ public class HoodieTableSource implements
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
           DataStreamSource<RowData> source = execEnv.addSource(func, asSummaryString(), typeInfo);
-          return source.name("bounded_source(table=[" + conf.getString(FlinkOptions.TABLE_NAME) + "], fields=" + schema.getColumnNames() + ")")
-              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
+          return source.name(getSourceOperatorName("bounded_source")).setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
         }
       }
     };
@@ -266,6 +264,16 @@ public class HoodieTableSource implements
       requiredPartitions = listPartitions().orElse(Collections.emptyList());
     }
     return requiredPartitions;
+  }
+
+  private String getSourceOperatorName(String operatorName) {
+    String[] schemaFieldNames = this.schema.getColumnNames().toArray(new String[0]);
+    List<String> fields = Arrays.stream(Arrays.stream(this.requiredPos)
+        .mapToObj(i -> schemaFieldNames[i])
+        .toArray(String[]::new))
+        .collect(Collectors.toList());
+    return operatorName + "(table=[" + conf.getString(FlinkOptions.TABLE_NAME) + "], "
+        + "fields=" + fields + ")";
   }
 
   @Nullable
