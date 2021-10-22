@@ -279,9 +279,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       final Option<HoodieInstant> latestMetadataInstant =
           metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
 
-      if (isBootstrapNeeded(latestMetadataInstant, actionMetadata)) {
-        rebootstrap = true;
-      }
+      rebootstrap = isBootstrapNeeded(latestMetadataInstant, actionMetadata);
     }
 
     if (rebootstrap) {
@@ -335,8 +333,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     if (dataMetaClient.getActiveTimeline().getAllCommitsTimeline().isBeforeTimelineStarts(
         latestMetadataInstant.get().getTimestamp())
-        && !isRollbackAction
-        && !rollbackedTimestamps.contains(latestMetadataInstantTimestamp)) {
+        && (!isRollbackAction || !rollbackedTimestamps.contains(latestMetadataInstantTimestamp))) {
       LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
           + " latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
           + ", latestDataInstant=" + dataMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
