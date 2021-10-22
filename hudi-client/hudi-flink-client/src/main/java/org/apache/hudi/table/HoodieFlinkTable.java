@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -98,11 +99,11 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public Option<HoodieTableMetadataWriter> getMetadataWriter() {
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
     synchronized (this) {
       if (!isMetadataAvailabilityUpdated) {
-        // this code assumes that if metadata availability is updated once it will not change. please revisit this logic if that's not the case.
-        // this is done to avoid repeated calls to fs.exists().
+        // This code assumes that if metadata availability is updated once it will not change.
+        // Please revisit this logic if that's not the case. This is done to avoid repeated calls to fs.exists().
         try {
           isMetadataTableAvailable = config.isMetadataTableEnabled()
               && metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())));
