@@ -19,12 +19,17 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.utils.SparkMemoryUtils;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.api.java.JavaRDD;
 
 /**
@@ -44,5 +49,10 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
       throw new IllegalStateException(
           "No Compaction request available at " + compactionInstantTime + " to run compaction");
     }
+  }
+
+  @Override
+  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config) {
+    HoodieJavaRDD.getJavaRDD(writeStatus).persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
   }
 }

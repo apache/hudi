@@ -19,11 +19,13 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;
@@ -47,5 +49,10 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
       table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();
     }
+  }
+
+  @Override
+  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config) {
+    // No OP
   }
 }

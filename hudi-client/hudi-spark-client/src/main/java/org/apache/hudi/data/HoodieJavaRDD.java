@@ -20,7 +20,6 @@
 package org.apache.hudi.data;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.function.SerializableFunction;
 
@@ -28,7 +27,6 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
 
 /**
  * Holds a {@link JavaRDD} of objects.
@@ -81,11 +79,6 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   @Override
   public boolean isEmpty() {
     return rddData.isEmpty();
-  }
-
-  @Override
-  public void persist(Properties properties) {
-    rddData.persist(SparkMemoryUtils.getWriteStatusStorageLevel(properties));
   }
 
   @Override

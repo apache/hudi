@@ -87,6 +87,13 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, String compactionInstantTime);
 
   /**
+   * Maybe persist write status.
+   *
+   * @param writeStatus {@link HoodieData} of {@link WriteStatus}.
+   */
+  public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config);
+
+  /**
    * Execute compaction operations and report back status.
    */
   public HoodieData<WriteStatus> compact(
@@ -131,7 +138,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
   /**
    * Execute a single compaction operation and report back status.
    */
-  public List<WriteStatus> compact(HoodieCompactionHandler copyOnWriteTableOperation,
+  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
                                    HoodieTableMetaClient metaClient,
                                    HoodieWriteConfig config,
                                    CompactionOperation operation,
@@ -184,11 +191,11 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     Iterator<List<WriteStatus>> result;
     // If the dataFile is present, perform updates else perform inserts into a new base file.
     if (oldDataFileOpt.isPresent()) {
-      result = copyOnWriteTableOperation.handleUpdate(instantTime, operation.getPartitionPath(),
+      result = compactionHandler.handleUpdate(instantTime, operation.getPartitionPath(),
           operation.getFileId(), scanner.getRecords(),
           oldDataFileOpt.get());
     } else {
-      result = copyOnWriteTableOperation.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
+      result = compactionHandler.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
           scanner.getRecords());
     }
     Iterable<List<WriteStatus>> resultIterable = () -> result;

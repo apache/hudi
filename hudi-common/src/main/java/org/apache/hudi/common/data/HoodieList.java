@@ -24,7 +24,6 @@ import org.apache.hudi.common.function.SerializableFunction;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -69,11 +68,6 @@ public class HoodieList<T> extends HoodieData<T> {
   @Override
   public boolean isEmpty() {
     return listData.isEmpty();
-  }
-
-  @Override
-  public void persist(Properties properties) {
-    // No OP
   }
 
   @Override

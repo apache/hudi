@@ -24,7 +24,6 @@ import org.apache.hudi.common.function.SerializableFunction;
 import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
 
 /**
  * An abstraction for a data collection of objects in type T to store the reference
@@ -42,13 +41,6 @@ public abstract class HoodieData<T> implements Serializable {
    * @return whether the collection is empty.
    */
   public abstract boolean isEmpty();
-
-  /**
-   * Caches the data.
-   *
-   * @param properties config in properties.
-   */
-  public abstract void persist(Properties properties);
 
   /**
    * @param func serializable map function.

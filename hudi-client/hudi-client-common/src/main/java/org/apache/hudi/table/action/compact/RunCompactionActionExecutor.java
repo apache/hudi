@@ -45,17 +45,17 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
     BaseActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata<HoodieData<WriteStatus>>> {
 
   private final HoodieCompactor compactor;
-  private final HoodieCompactionHandler copyOnWriteTableOperation;
+  private final HoodieCompactionHandler compactionHandler;
 
   public RunCompactionActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable table,
                                      String instantTime,
                                      HoodieCompactor compactor,
-                                     HoodieCompactionHandler copyOnWriteTableOperation) {
+                                     HoodieCompactionHandler compactionHandler) {
     super(context, config, table, instantTime);
     this.compactor = compactor;
-    this.copyOnWriteTableOperation = copyOnWriteTableOperation;
+    this.compactionHandler = compactionHandler;
   }
 
   @Override
@@ -71,9 +71,9 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
           CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime);
 
       HoodieData<WriteStatus> statuses = compactor.compact(
-          context, compactionPlan, table, config, instantTime, copyOnWriteTableOperation);
+          context, compactionPlan, table, config, instantTime, compactionHandler);
 
-      statuses.persist(config.getProps());
+      compactor.maybePersist(statuses, config);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata");
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
