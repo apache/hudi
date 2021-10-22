@@ -35,11 +35,11 @@ import java.util.Properties;
  *
  * @param <T> type of object.
  */
-public class HoodieJavaRDDData<T> extends HoodieData<T> {
+public class HoodieJavaRDD<T> extends HoodieData<T> {
 
   private final JavaRDD<T> rddData;
 
-  private HoodieJavaRDDData(JavaRDD<T> rddData) {
+  private HoodieJavaRDD(JavaRDD<T> rddData) {
     this.rddData = rddData;
   }
 
@@ -48,8 +48,8 @@ public class HoodieJavaRDDData<T> extends HoodieData<T> {
    * @param <T>     type of object.
    * @return a new instance containing the {@link JavaRDD<T>} reference.
    */
-  public static <T> HoodieJavaRDDData<T> of(JavaRDD<T> rddData) {
-    return new HoodieJavaRDDData<>(rddData);
+  public static <T> HoodieJavaRDD<T> of(JavaRDD<T> rddData) {
+    return new HoodieJavaRDD<>(rddData);
   }
 
   /**
@@ -59,18 +59,18 @@ public class HoodieJavaRDDData<T> extends HoodieData<T> {
    * @param <T>         type of object.
    * @return a new instance containing the {@link JavaRDD<T>} instance.
    */
-  public static <T> HoodieJavaRDDData<T> of(
+  public static <T> HoodieJavaRDD<T> of(
       List<T> data, HoodieSparkEngineContext context, int parallelism) {
-    return new HoodieJavaRDDData<>(context.getJavaSparkContext().parallelize(data, parallelism));
+    return new HoodieJavaRDD<>(context.getJavaSparkContext().parallelize(data, parallelism));
   }
 
   /**
-   * @param hoodieData {@link HoodieJavaRDDData<T>} instance containing the {@link JavaRDD} of objects.
+   * @param hoodieData {@link HoodieJavaRDD <T>} instance containing the {@link JavaRDD} of objects.
    * @param <T>        type of object.
    * @return the a {@link JavaRDD} of objects in type T.
    */
   public static <T> JavaRDD<T> getJavaRDD(HoodieData<T> hoodieData) {
-    return ((HoodieJavaRDDData<T>) hoodieData).get();
+    return ((HoodieJavaRDD<T>) hoodieData).get();
   }
 
   @Override
@@ -90,12 +90,12 @@ public class HoodieJavaRDDData<T> extends HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
-    return HoodieJavaRDDData.of(rddData.map(func::apply));
+    return HoodieJavaRDD.of(rddData.map(func::apply));
   }
 
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
-    return HoodieJavaRDDData.of(rddData.flatMap(func::apply));
+    return HoodieJavaRDD.of(rddData.flatMap(func::apply));
   }
 
   @Override

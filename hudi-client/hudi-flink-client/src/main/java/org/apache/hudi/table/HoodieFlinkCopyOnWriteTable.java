@@ -26,7 +26,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -76,7 +75,7 @@ import java.util.Map;
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
 public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
-    extends HoodieFlinkTable<T> implements HoodieDataCompactionHandler<T> {
+    extends HoodieFlinkTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCopyOnWriteTable.class);
 
@@ -268,7 +267,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> compact(
-      HoodieEngineContext context, String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
+      HoodieEngineContext context, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 

@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,7 +32,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
-import org.apache.hudi.table.HoodieDataCompactionHandler;
+import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -45,19 +44,16 @@ import java.util.List;
 public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
     BaseActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, HoodieWriteMetadata<HoodieData<WriteStatus>>> {
 
-  private final AbstractHoodieWriteClient writeClient;
   private final HoodieCompactor compactor;
-  private final HoodieDataCompactionHandler copyOnWriteTableOperation;
+  private final HoodieCompactionHandler copyOnWriteTableOperation;
 
   public RunCompactionActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable table,
                                      String instantTime,
-                                     AbstractHoodieWriteClient writeClient,
                                      HoodieCompactor compactor,
-                                     HoodieDataCompactionHandler copyOnWriteTableOperation) {
+                                     HoodieCompactionHandler copyOnWriteTableOperation) {
     super(context, config, table, instantTime);
-    this.writeClient = writeClient;
     this.compactor = compactor;
     this.copyOnWriteTableOperation = copyOnWriteTableOperation;
   }
@@ -65,7 +61,7 @@ public class RunCompactionActionExecutor<T extends HoodieRecordPayload> extends
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-    compactor.preCompact(table, pendingCompactionTimeline, instantTime, writeClient);
+    compactor.preCompact(table, pendingCompactionTimeline, instantTime);
 
     HoodieWriteMetadata<HoodieData<WriteStatus>> compactionMetadata = new HoodieWriteMetadata<>();
     try {

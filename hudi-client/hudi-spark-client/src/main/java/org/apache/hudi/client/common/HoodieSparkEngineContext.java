@@ -32,7 +32,7 @@ import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.data.HoodieJavaRDDData;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.exception.HoodieException;
 
@@ -79,20 +79,20 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public HoodieAccumulator createNewAccumulator() {
+  public HoodieAccumulator newAccumulator() {
     HoodieSparkLongAccumulator accumulator = HoodieSparkLongAccumulator.create();
     javaSparkContext.sc().register(accumulator.getAccumulator());
     return accumulator;
   }
 
   @Override
-  public <T> HoodieData<T> createEmptyHoodieData() {
-    return HoodieJavaRDDData.of(javaSparkContext.emptyRDD());
+  public <T> HoodieData<T> emptyHoodieData() {
+    return HoodieJavaRDD.of(javaSparkContext.emptyRDD());
   }
 
   @Override
   public <T> HoodieData<T> parallelize(List<T> data) {
-    return HoodieJavaRDDData.of(javaSparkContext.parallelize(data, data.size()));
+    return HoodieJavaRDD.of(javaSparkContext.parallelize(data, data.size()));
   }
 
   @Override

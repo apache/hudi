@@ -21,7 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -106,10 +105,9 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> compact(
-      HoodieEngineContext context, String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
+      HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
-        context, config, this, compactionInstantTime, writeClient,
-        new HoodieFlinkMergeOnReadTableCompactor(),
+        context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(),
         new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()));
     return convertMetadata(compactionExecutor.execute());
   }

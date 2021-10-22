@@ -35,11 +35,11 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  *
  * @param <T> type of object.
  */
-public class HoodieListData<T> extends HoodieData<T> {
+public class HoodieList<T> extends HoodieData<T> {
 
   private final List<T> listData;
 
-  private HoodieListData(List<T> listData) {
+  private HoodieList(List<T> listData) {
     this.listData = listData;
   }
 
@@ -48,17 +48,17 @@ public class HoodieListData<T> extends HoodieData<T> {
    * @param <T>      type of object.
    * @return a new instance containing the {@link List<T>} reference.
    */
-  public static <T> HoodieListData<T> of(List<T> listData) {
-    return new HoodieListData<>(listData);
+  public static <T> HoodieList<T> of(List<T> listData) {
+    return new HoodieList<>(listData);
   }
 
   /**
-   * @param hoodieData {@link HoodieListData<T>} instance containing the {@link List} of objects.
+   * @param hoodieData {@link HoodieList <T>} instance containing the {@link List} of objects.
    * @param <T>        type of object.
    * @return the a {@link List} of objects in type T.
    */
   public static <T> List<T> getList(HoodieData<T> hoodieData) {
-    return ((HoodieListData<T>) hoodieData).get();
+    return ((HoodieList<T>) hoodieData).get();
   }
 
   @Override
@@ -78,14 +78,14 @@ public class HoodieListData<T> extends HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
-    return HoodieListData.of(listData.stream().parallel()
+    return HoodieList.of(listData.stream().parallel()
         .map(throwingMapWrapper(func)).collect(Collectors.toList()));
   }
 
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     Function<T, Iterator<O>> throwableFunc = throwingMapWrapper(func);
-    return HoodieListData.of(listData.stream().flatMap(e -> {
+    return HoodieList.of(listData.stream().flatMap(e -> {
       List<O> result = new ArrayList<>();
       Iterator<O> iterator = throwableFunc.apply(e);
       iterator.forEachRemaining(result::add);

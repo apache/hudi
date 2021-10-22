@@ -19,7 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -348,7 +348,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       Option<Map<String, String>> extraMetadata) throws IOException {
     HoodieFlinkTable<T> table = getHoodieTable();
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
-        table, compactionInstantTime, HoodieListData.of(writeStatuses), config.getSchema());
+        table, compactionInstantTime, HoodieList.of(writeStatuses), config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeCompaction(metadata, writeStatuses, table, compactionInstantTime);
   }
@@ -385,7 +385,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // only used for metadata table, the compaction happens in single thread
     try {
       List<WriteStatus> writeStatuses =
-          getHoodieTable().compact(context, compactionInstantTime, this).getWriteStatuses();
+          getHoodieTable().compact(context, compactionInstantTime).getWriteStatuses();
       commitCompaction(compactionInstantTime, writeStatuses, Option.empty());
       return writeStatuses;
     } catch (IOException e) {

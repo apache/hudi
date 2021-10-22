@@ -43,7 +43,7 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.util.List;
 
-import static org.apache.hudi.common.data.HoodieListData.getList;
+import static org.apache.hudi.common.data.HoodieList.getList;
 
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>

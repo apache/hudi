@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -49,7 +48,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.IOUtils;
-import org.apache.hudi.table.HoodieDataCompactionHandler;
+import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
@@ -83,11 +82,9 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
    * @param table                     {@link HoodieTable} instance to use.
    * @param pendingCompactionTimeline pending compaction timeline.
    * @param compactionInstantTime     compaction instant
-   * @param writeClient               Write client.
    */
   public abstract void preCompact(
-      HoodieTable table, HoodieTimeline pendingCompactionTimeline,
-      String compactionInstantTime, AbstractHoodieWriteClient writeClient);
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline, String compactionInstantTime);
 
   /**
    * Execute compaction operations and report back status.
@@ -95,10 +92,10 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
   public HoodieData<WriteStatus> compact(
       HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
       HoodieTable table, HoodieWriteConfig config, String compactionInstantTime,
-      HoodieDataCompactionHandler copyOnWriteTableOperation) {
+      HoodieCompactionHandler compactionHandler) {
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
-      return context.createEmptyHoodieData();
+      return context.emptyHoodieData();
     }
     HoodieActiveTimeline timeline = table.getActiveTimeline();
     HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
@@ -127,14 +124,14 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices");
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
     return context.parallelize(operations).map(operation -> compact(
-        copyOnWriteTableOperation, metaClient, config, operation, compactionInstantTime, taskContextSupplier))
+        compactionHandler, metaClient, config, operation, compactionInstantTime, taskContextSupplier))
         .flatMap(List::iterator);
   }
 
   /**
    * Execute a single compaction operation and report back status.
    */
-  public List<WriteStatus> compact(HoodieDataCompactionHandler copyOnWriteTableOperation,
+  public List<WriteStatus> compact(HoodieCompactionHandler copyOnWriteTableOperation,
                                    HoodieTableMetaClient metaClient,
                                    HoodieWriteConfig config,
                                    CompactionOperation operation,
@@ -227,9 +224,9 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
       HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config,
       String compactionCommitTime, Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering) throws IOException {
     // Accumulator to keep track of total log files for a table
-    HoodieAccumulator totalLogFiles = context.createNewAccumulator();
+    HoodieAccumulator totalLogFiles = context.newAccumulator();
     // Accumulator to keep track of total log file slices for a table
-    HoodieAccumulator totalFileSlices = context.createNewAccumulator();
+    HoodieAccumulator totalFileSlices = context.newAccumulator();
 
     ValidationUtils.checkArgument(hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
         "Can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "

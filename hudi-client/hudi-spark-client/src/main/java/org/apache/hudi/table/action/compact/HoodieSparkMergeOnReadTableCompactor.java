@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.compact;
 
-import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,8 +38,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
   @Override
   public void preCompact(
-      HoodieTable table, HoodieTimeline pendingCompactionTimeline,
-      String compactionInstantTime, AbstractHoodieWriteClient writeClient) {
+      HoodieTable table, HoodieTimeline pendingCompactionTimeline, String compactionInstantTime) {
     HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
     if (!pendingCompactionTimeline.containsInstant(instant)) {
       throw new IllegalStateException(

@@ -26,7 +26,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -154,8 +153,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> compact(HoodieEngineContext context,
-                                                        String compactionInstantTime,
-                                                        final AbstractHoodieWriteClient writeClient) {
+                                                        String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compact is not supported yet");
   }
 

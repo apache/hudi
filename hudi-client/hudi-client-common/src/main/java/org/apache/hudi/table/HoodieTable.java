@@ -27,7 +27,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -368,11 +367,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    *
    * @param context               HoodieEngineContext
    * @param compactionInstantTime Instant Time
-   * @param writeClient           Write client
    */
   public abstract HoodieWriteMetadata<O> compact(HoodieEngineContext context,
-                                                 String compactionInstantTime,
-                                                 AbstractHoodieWriteClient writeClient);
+                                                 String compactionInstantTime);
 
   /**
    * Schedule clustering for the instant time.
@@ -474,10 +471,23 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                 String instantToRestore);
 
   /**
+   * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file
+   * to the .requested file.
+   *
+   * @param inflightInstant Inflight Compaction Instant
+   */
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    scheduleRollback(context, commitTime, inflightInstant, false);
+    rollback(context, commitTime, inflightInstant, false);
+    getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
+  }
+
+  /**
    * Finalize the written data onto storage. Perform any final cleanups.
    *
    * @param context HoodieEngineContext
-   * @param stats List of HoodieWriteStats
+   * @param stats   List of HoodieWriteStats
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {

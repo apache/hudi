@@ -61,9 +61,9 @@ public abstract class HoodieEngineContext {
     return taskContextSupplier;
   }
 
-  public abstract HoodieAccumulator createNewAccumulator();
+  public abstract HoodieAccumulator newAccumulator();
 
-  public abstract <T> HoodieData<T> createEmptyHoodieData();
+  public abstract <T> HoodieData<T> emptyHoodieData();
 
   public abstract <T> HoodieData<T> parallelize(List<T> data);
 

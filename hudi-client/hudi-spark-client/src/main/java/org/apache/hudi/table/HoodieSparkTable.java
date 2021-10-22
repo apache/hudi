@@ -43,7 +43,7 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 
-import static org.apache.hudi.data.HoodieJavaRDDData.getJavaRDD;
+import static org.apache.hudi.data.HoodieJavaRDD.getJavaRDD;
 
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
