@@ -160,6 +160,7 @@ public class HoodieTestDataGenerator {
     this.existingKeysBySchema = new HashMap<>();
     existingKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, keyPartitionMap);
     numKeysBySchema = new HashMap<>();
+    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, keyPartitionMap.size());
   }
 
   /**
@@ -844,8 +845,8 @@ public class HoodieTestDataGenerator {
 
   public static class KeyPartition implements Serializable {
 
-    HoodieKey key;
-    String partitionPath;
+    public HoodieKey key;
+    public String partitionPath;
   }
 
   public void close() {
