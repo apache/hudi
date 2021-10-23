@@ -268,12 +268,17 @@ public class HoodieTableSource implements
 
   private String getSourceOperatorName(String operatorName) {
     String[] schemaFieldNames = this.schema.getColumnNames().toArray(new String[0]);
-    List<String> fields = Arrays.stream(Arrays.stream(this.requiredPos)
+    List<String> fields = Arrays.stream(this.requiredPos)
         .mapToObj(i -> schemaFieldNames[i])
-        .toArray(String[]::new))
         .collect(Collectors.toList());
-    return operatorName + "(table=[" + conf.getString(FlinkOptions.TABLE_NAME) + "], "
-        + "fields=" + fields + ")";
+    StringBuilder sb = new StringBuilder();
+    sb.append(operatorName)
+        .append("(")
+        .append("table=").append(Collections.singletonList(conf.getString(FlinkOptions.TABLE_NAME)))
+        .append(", ")
+        .append("fields=").append(fields)
+        .append(")");
+    return sb.toString();
   }
 
   @Nullable
