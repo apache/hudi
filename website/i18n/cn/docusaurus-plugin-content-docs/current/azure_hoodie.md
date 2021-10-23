@@ -1,5 +1,4 @@
 ---
-version: 0.8.0
 title: Azure 文件系统
 keywords: [ hudi, hive, azure, spark, presto]
 summary: 在本页中，我们讨论如何在 Azure 文件系统中配置 Hudi 。
