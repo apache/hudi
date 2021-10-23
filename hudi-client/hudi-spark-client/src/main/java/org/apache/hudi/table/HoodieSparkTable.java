@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -111,11 +112,11 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public Option<HoodieTableMetadataWriter> getMetadataWriter() {
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
     synchronized (this) {
       if (!isMetadataAvailabilityUpdated) {
-        // this code assumes that if metadata availability is updated once it will not change. please revisit this logic if that's not the case.
-        // this is done to avoid repeated calls to fs.exists().
+        // This code assumes that if metadata availability is updated once it will not change.
+        // Please revisit this logic if that's not the case. This is done to avoid repeated calls to fs.exists().
         try {
           isMetadataTableAvailable = config.isMetadataTableEnabled()
               && metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())));
@@ -126,7 +127,8 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       }
     }
     if (isMetadataTableAvailable) {
-      return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context));
+      return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context,
+          actionMetadata));
     } else {
       return Option.empty();
     }

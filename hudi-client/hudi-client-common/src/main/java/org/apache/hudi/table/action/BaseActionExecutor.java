@@ -27,6 +27,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -72,7 +73,7 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * @param metadata rollback metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRollbackMetadata metadata) {
-    table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
+    table.getMetadataWriter(Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
   }
 
   /**

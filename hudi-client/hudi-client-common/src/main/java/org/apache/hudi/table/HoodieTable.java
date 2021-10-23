@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -718,11 +719,23 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
-   * Fetch instance of {@link HoodieTableMetadataWriter}.
+   * Get Table metadata writer.
+   *
+   * @return instance of {@link HoodieTableMetadataWriter
+   */
+  public final Option<HoodieTableMetadataWriter> getMetadataWriter() {
+    return getMetadataWriter(Option.empty());
+  }
+
+  /**
+   * Get Table metadata writer.
+   *
    * @return instance of {@link HoodieTableMetadataWriter}
    */
-  public Option<HoodieTableMetadataWriter> getMetadataWriter() {
-    // Each engine is expected to override this and provide the actual metadata writer if enabled.
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
+    // Each engine is expected to override this and
+    // provide the actual metadata writer, if enabled.
     return Option.empty();
   }
+
 }
