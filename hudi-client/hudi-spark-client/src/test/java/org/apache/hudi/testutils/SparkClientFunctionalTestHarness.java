@@ -176,8 +176,14 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     }
   }
 
+  /**
+   * To clean up Spark resources after all testcases have run in functional tests.
+   *
+   * Spark session and contexts were reused for testcases in the same test class. Some
+   * testcase may invoke this specifically to clean up in case of repeated test runs.
+   */
   @AfterAll
-  public static synchronized void cleanUpAfterAll() {
+  public static synchronized void resetSpark() {
     if (spark != null) {
       spark.close();
       spark = null;
