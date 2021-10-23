@@ -837,6 +837,7 @@ values={[
 ]}>
 <TabItem value="scala">
 Delete records for the HoodieKeys passed in.<br/>
+
 ```scala
 // spark-shell
 // fetch total records count
