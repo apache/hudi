@@ -5,35 +5,11 @@ summary: In this page, we will discuss some available tools for incrementally in
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
-In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables using the [DeltaStreamer](#deltastreamer) tool, as well as 
-speeding up large Spark jobs via upserts using the [Hudi datasource](#datasource-writer). Such tables can then be [queried](/docs/querying_data) using various query engines.
-
-
-## Write Operations
-
-Before that, it may be helpful to understand the 3 different write operations provided by Hudi datasource or the delta streamer tool and how best to leverage them. These operations
-can be chosen/changed across each commit/deltacommit issued against the table.
-
-
- - **UPSERT** : This is the default operation where the input records are first tagged as inserts or updates by looking up the index. 
- The records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
- This operation is recommended for use-cases like database change capture where the input almost certainly contains updates. The target table will never show duplicates.
- - **INSERT** : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
- for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the table can tolerate duplicates, but just 
- need the transactional writes/incremental pull/storage management capabilities of Hudi.
- - **BULK_INSERT** : Both upsert and insert operations keep input records in memory to speed up storage heuristics computations faster (among other things) and thus can be cumbersome for 
- initial loading/bootstrapping a Hudi table at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs 
- of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do. 
-
-### Use set command
-You can use the **set** command to set any custom hudi's config, which will work for the
-whole spark session scope.
-```sql
-set hoodie.insert.shuffle.parallelism = 100;
-set hoodie.upsert.shuffle.parallelism = 100;
-set hoodie.delete.shuffle.parallelism = 100;
-```
+In this section, we will cover ways to ingest new changes from external sources or even other Hudi tables.
+The two main tools available are the [DeltaStreamer](#deltastreamer) tool, as well as the [Spark Hudi datasource](#datasource-writer).
 
 ## DeltaStreamer
 
@@ -181,7 +157,7 @@ and then ingest it as follows.
 
 In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide). 
 
-## MultiTableDeltaStreamer
+### MultiTableDeltaStreamer
 
 `HoodieMultiTableDeltaStreamer`, a wrapper on top of `HoodieDeltaStreamer`, enables one to ingest multiple tables at a single go into hudi datasets. Currently it only supports sequential processing of tables to be ingested and COPY_ON_WRITE storage type. The command line options for `HoodieMultiTableDeltaStreamer` are pretty much similar to `HoodieDeltaStreamer` with the only exception that you are required to provide table wise configs in separate files in a dedicated config folder. The following command line options are introduced
 
@@ -219,7 +195,7 @@ Sample config files for table wise overridden properties can be found under `hud
 
 For detailed information on how to configure and use `HoodieMultiTableDeltaStreamer`, please refer [blog section](/blog/2020/08/22/ingest-multiple-tables-using-hudi).
 
-## Datasource Writer
+## Spark Datasource Writer
 
 The `hudi-spark` module offers the DataSource API to write (and read) a Spark DataFrame into a Hudi table. There are a number of options available:
 
@@ -269,6 +245,260 @@ inputDF.write()
        .save(basePath);
 ```
 
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+{ label: 'SparkSQL', value: 'sparksql', },
+]}>
+<TabItem value="scala">
+
+Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
+
+```scala
+// spark-shell
+val inserts = convertToStringList(dataGen.generateInserts(10))
+val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Overwrite).
+  save(basePath)
+```
+:::info
+`mode(Overwrite)` overwrites and recreates the table if it already exists.
+You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key
+(`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in
+[schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to
+[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
+Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+:::
+</TabItem>
+
+<TabItem value="python">
+Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi table as below.
+
+```python
+# pyspark
+inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10))
+df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+
+hudi_options = {
+    'hoodie.table.name': tableName,
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+    'hoodie.datasource.write.table.name': tableName,
+    'hoodie.datasource.write.operation': 'upsert',
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2
+}
+
+df.write.format("hudi").
+    options(**hudi_options).
+    mode("overwrite").
+    save(basePath)
+```
+:::info
+`mode(Overwrite)` overwrites and recreates the table if it already exists.
+You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<city>/`. We provided a record key
+(`uuid` in [schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)), partition field (`region/country/city`) and combine logic (`ts` in
+[schema](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)) to ensure trip records are unique within each partition. For more info, refer to
+[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
+Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
+:::
+</TabItem>
+
+<TabItem value="sparksql">
+
+```sql
+insert into h0 select 1, 'a1', 20;
+
+-- insert static partition
+insert into h_p0 partition(dt = '2021-01-02') select 1, 'a1';
+
+-- insert dynamic partition
+insert into h_p0 select 1, 'a1', dt;
+
+-- insert dynamic partition
+insert into h_p1 select 1 as id, 'a1', '2021-01-03' as dt, '19' as hh;
+
+-- insert overwrite table
+insert overwrite table h0 select 1, 'a1', 20;
+
+-- insert overwrite table with static partition
+insert overwrite h_p0 partition(dt = '2021-01-02') select 1, 'a1';
+
+-- insert overwrite table with dynamic partition
+  insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh;
+```
+
+**NOTICE**
+
+- Insert mode : Hudi supports two insert modes when inserting data to a table with primary key(we call it pk-table as followed):<br/>
+  Using `strict` mode, insert statement will keep the primary key uniqueness constraint for COW table which do not allow
+  duplicate records. If a record already exists during insert, a HoodieDuplicateKeyException will be thrown
+  for COW table. For MOR table, updates are allowed to existing record.<br/>
+  Using `non-strict` mode, hudi uses the same code path used by `insert` operation in spark data source for the pk-table. <br/>
+  One can set the insert mode by using the config: **hoodie.sql.insert.mode**
+
+- Bulk Insert : By default, hudi uses the normal insert operation for insert statements. Users can set **hoodie.sql.bulk.insert.enable**
+  to true to enable the bulk insert for insert statement.
+
+</TabItem>
+</Tabs>
+
+
+Checkout https://hudi.apache.org/blog/2021/02/13/hudi-key-generators for various key generator options, like Timestamp based,
+complex, custom, NonPartitioned Key gen, etc.
+
+
+### Insert Overwrite Table
+
+Generate some new trips, overwrite the table logically at the Hudi metadata level. The Hudi cleaner will eventually
+clean up the previous table snapshot's file groups. This can be faster than deleting the older table and recreating
+in `Overwrite` mode.
+
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'SparkSQL', value: 'sparksql', },
+]}>
+<TabItem value="scala">
+
+```scala
+// spark-shell
+spark.
+  read.format("hudi").
+  load(basePath).
+  select("uuid","partitionpath").
+  show(10, false)
+
+val inserts = convertToStringList(dataGen.generateInserts(10))
+val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(OPERATION_OPT_KEY,"insert_overwrite_table").
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
+
+// Should have different keys now, from query before.
+spark.
+  read.format("hudi").
+  load(basePath).
+  select("uuid","partitionpath").
+  show(10, false)
+
+``` 
+</TabItem>
+
+<TabItem value="sparksql">
+
+The insert overwrite non-partitioned table sql statement will convert to the ***insert_overwrite_table*** operation.
+e.g.
+```sql
+insert overwrite table h0 select 1, 'a1', 20;
+```
+</TabItem>
+</Tabs>
+
+### Insert Overwrite
+
+Generate some new trips, overwrite the all the partitions that are present in the input. This operation can be faster
+than `upsert` for batch ETL jobs, that are recomputing entire target partitions at once (as opposed to incrementally
+updating the target tables). This is because, we are able to bypass indexing, precombining and other repartitioning
+steps in the upsert write path completely.
+
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'SparkSQL', value: 'sparksql', },
+]}>
+<TabItem value="scala">
+
+```scala
+// spark-shell
+spark.
+  read.format("hudi").
+  load(basePath).
+  select("uuid","partitionpath").
+  sort("partitionpath","uuid").
+  show(100, false)
+
+val inserts = convertToStringList(dataGen.generateInserts(10))
+val df = spark.
+  read.json(spark.sparkContext.parallelize(inserts, 2)).
+  filter("partitionpath = 'americas/united_states/san_francisco'")
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(OPERATION_OPT_KEY,"insert_overwrite").
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
+
+// Should have different keys now for San Francisco alone, from query before.
+spark.
+  read.format("hudi").
+  load(basePath).
+  select("uuid","partitionpath").
+  sort("partitionpath","uuid").
+  show(100, false)
+```
+</TabItem>
+
+<TabItem value="sparksql">
+
+The insert overwrite partitioned table sql statement will convert to the ***insert_overwrite*** operation.
+e.g.
+```sql
+insert overwrite table h_p1 select 2 as id, 'a2', '2021-01-03' as dt, '19' as hh;
+```
+</TabItem>
+</Tabs>
+
+### Deletes
+
+Hudi supports implementing two types of deletes on data stored in Hudi tables, by enabling the user to specify a different record payload implementation.
+For more info refer to [Delete support in Hudi](https://cwiki.apache.org/confluence/x/6IqvC).
+
+- **Soft Deletes** : Retain the record key and just null out the values for all the other fields.
+  This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
+
+- **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways.
+
+    1) Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
+
+    2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted.
+
+    3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
+
+Example using hard delete method 2, remove all the records from the table that exist in the DataSet `deleteDF`:
+```java
+ deleteDF // dataframe containing just records to be deleted
+   .write().format("org.apache.hudi")
+   .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
+   // specify record_key, partition_key, precombine_fieldkey & usual params
+   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
+ 
+```
+
 ## Flink SQL Writer
 The hudi-flink module defines the Flink SQL connector for both hudi source and sink.
 There are a number of options available for the sink table:
@@ -302,11 +532,11 @@ INSERT INTO hudi_table select ... from ...;
 ```
 
 **Note**: INSERT OVERWRITE is not supported yet but already on the roadmap.
- 
-## Syncing to Hive
+
+## Syncing to Hive (Optional)
 
 Both tools above support syncing of the table's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
-In case, its preferable to run this from commandline or in an independent jvm, Hudi provides a `HiveSyncTool`, which can be invoked as below, 
+In case, it's preferable to run this from commandline or in an independent jvm, Hudi provides a `HiveSyncTool`, which can be invoked as below,
 once you have built the hudi-hive module. Following is how we sync the above Datasource Writer written table to Hive metastore.
 
 ```java
@@ -320,30 +550,4 @@ Starting with Hudi 0.5.1 version read optimized version of merge-on-read tables 
 cd hudi-hive
 ./run_sync_tool.sh
  [hudi-hive]$ ./run_sync_tool.sh --help
-```
-
-## Deletes 
-
-Hudi supports implementing two types of deletes on data stored in Hudi tables, by enabling the user to specify a different record payload implementation. 
-For more info refer to [Delete support in Hudi](https://cwiki.apache.org/confluence/x/6IqvC).
-
- - **Soft Deletes** : Retain the record key and just null out the values for all the other fields. 
- This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
- 
- - **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways.
-
-   1) Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
-   
-   2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
-   
-   3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
-    
-Example using hard delete method 2, remove all the records from the table that exist in the DataSet `deleteDF`:
-```java
- deleteDF // dataframe containing just records to be deleted
-   .write().format("org.apache.hudi")
-   .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
-   // specify record_key, partition_key, precombine_fieldkey & usual params
-   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
- 
 ```

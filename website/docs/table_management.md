@@ -203,3 +203,12 @@ Example:
 ```sql
  alter table h3 set serdeproperties (hoodie.keep.max.commits = '10') 
 ```
+
+### Use set command
+You can use the **set** command to set any custom hudi's config, which will work for the
+whole spark session scope.
+```sql
+set hoodie.insert.shuffle.parallelism = 100;
+set hoodie.upsert.shuffle.parallelism = 100;
+set hoodie.delete.shuffle.parallelism = 100;
+```

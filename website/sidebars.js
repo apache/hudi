@@ -20,9 +20,10 @@ module.exports = {
         },
         {
             type: 'category',
-            label: 'Design (Concepts)',
+            label: 'Concepts',
             items: [
                 'table_types',
+                'write_operations',
                 'concurrency_control',
                 'schema_evolution',
                 'key_generation'
@@ -33,7 +34,6 @@ module.exports = {
             label: 'How To',
             items: [
                 'table_management',
-                'insert_data',
                 'writing_data',
                 'querying_data',
             ],
