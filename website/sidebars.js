@@ -22,9 +22,9 @@ module.exports = {
             type: 'category',
             label: 'How To',
             items: [
-                'table_management',
                 'writing_data',
                 'querying_data',
+                'table_management',
             ],
         },
         {
