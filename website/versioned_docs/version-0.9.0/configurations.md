@@ -109,10 +109,10 @@ You can pass down any of the WriteClient level configs directly using `options()
 inputDF.write()
 .format("org.apache.hudi")
 .options(clientOpts) // any of the Hudi client opts can be passed in as well
-.option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-.option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-.option(HoodieWriteConfig.TABLE_NAME, tableName)
+.option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "_row_key")
+.option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partition")
+.option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "timestamp")
+.option(HoodieWriteConfig.TBL_NAME.key(), tableName)
 .mode(SaveMode.Append)
 .save(basePath);
 ```
@@ -843,7 +843,7 @@ By default insert will accept duplicates, to gain extra performance<br></br>
 > #### hoodie.table.name
 > Table name to register to Hive metastore<br></br>
 > **Default Value**: N/A (Required)<br></br>
-> `Config Param: TABLE_NAME`<br></br>
+> `Config Param: TBL_NAME`<br></br>
 
 ---
 
