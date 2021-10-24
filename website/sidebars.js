@@ -31,17 +31,19 @@ module.exports = {
             type: 'category',
             label: 'Concepts',
             items: [
-                'table_types',
                 'write_operations',
                 'concurrency_control',
                 'schema_evolution',
-                'key_generation'
+                'key_generation',
+                'compaction',
+                'clustering'
             ],
         },
         {
             type: 'category',
             label: 'Guides',
             items: [
+                'migration_guide',
                 'performance',
                 'deployment',
                 'metrics',
