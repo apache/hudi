@@ -20,6 +20,15 @@ module.exports = {
         },
         {
             type: 'category',
+            label: 'How To',
+            items: [
+                'table_management',
+                'writing_data',
+                'querying_data',
+            ],
+        },
+        {
+            type: 'category',
             label: 'Concepts',
             items: [
                 'table_types',
@@ -27,15 +36,6 @@ module.exports = {
                 'concurrency_control',
                 'schema_evolution',
                 'key_generation'
-            ],
-        },
-        {
-            type: 'category',
-            label: 'How To',
-            items: [
-                'table_management',
-                'writing_data',
-                'querying_data',
             ],
         },
         {
