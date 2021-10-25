@@ -157,11 +157,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @Override
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
   }
 
+  @Override
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
@@ -869,18 +871,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return config;
   }
 
-  @Test
-  public void testHoodieAsyncClusteringJob() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testHoodieAsyncClusteringJob(boolean shouldPassInClusteringInstantTime) throws Exception {
     String tableBasePath = dfsBasePath + "/asyncClustering";
 
     HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 3000, "true");
-    HoodieClusteringJob scheduleClusteringJob = initialHoodieClusteringJob(tableBasePath, null, true, null);
 
     deltaStreamerTestRunner(ds, (r) -> {
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
 
       Option<String> scheduleClusteringInstantTime = Option.empty();
       try {
+        HoodieClusteringJob scheduleClusteringJob =
+            initialHoodieClusteringJob(tableBasePath, null, true, null);
         scheduleClusteringInstantTime = scheduleClusteringJob.doSchedule();
       } catch (Exception e) {
         LOG.warn("Schedule clustering failed", e);
@@ -889,7 +893,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       if (scheduleClusteringInstantTime.isPresent()) {
         LOG.info("Schedule clustering success, now cluster with instant time " + scheduleClusteringInstantTime.get());
         HoodieClusteringJob.Config clusterClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
-            scheduleClusteringInstantTime.get(), false);
+            shouldPassInClusteringInstantTime ? scheduleClusteringInstantTime.get() : null, false);
         HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
         clusterClusteringJob.cluster(clusterClusteringConfig.retry);
         LOG.info("Cluster success");
@@ -988,7 +992,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"schedule", "execute", "scheduleAndExecute"})
+  @ValueSource(strings = {"execute", "schedule", "scheduleAndExecute"})
   public void testHoodieAsyncClusteringJobWithScheduleAndExecute(String runningMode) throws Exception {
     String tableBasePath = dfsBasePath + "/asyncClustering2";
     HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 3000, "false");
@@ -1003,7 +1007,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           LOG.info("Cluster success");
         } else {
           LOG.warn("Import failed");
-          return false;
+          if (!runningMode.toLowerCase().equals(HoodieClusteringJob.EXECUTE)) {
+            return false;
+          }
         }
       } catch (Exception e) {
         LOG.warn("ScheduleAndExecute clustering failed", e);
@@ -1023,8 +1029,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           return true;
         }
         case HoodieClusteringJob.EXECUTE: {
-          assertNotNull(exception);
-          assertEquals(exception.getMessage(), "--instant-time couldn't be null when executing clustering plan.");
+          TestHelpers.assertNoReplaceCommits(0, tableBasePath, dfs);
           return true;
         }
         default:
