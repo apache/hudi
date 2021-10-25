@@ -23,7 +23,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -41,7 +40,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -146,53 +144,14 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
   }
 
   private boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
-    boolean compactable;
+
+    if (compactionTriggerStrategy == null) {
+      throw new HoodieCompactionException("Unsupported compaction trigger strategy: {}"
+          + config.getInlineCompactTriggerStrategy());
+    }
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
     Pair<Integer, String> latestDeltaCommitInfo = getLatestDeltaCommitInfo();
-    int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
-    int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
-    switch (compactionTriggerStrategy) {
-      case NUM_COMMITS:
-        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
-        if (compactable) {
-          LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
-        }
-        break;
-      case TIME_ELAPSED:
-        compactable = inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
-        if (compactable) {
-          LOG.info(String.format("The elapsed time >=%ss, trigger compaction scheduler.", inlineCompactDeltaSecondsMax));
-        }
-        break;
-      case NUM_OR_TIME:
-        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
-            || inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
-        if (compactable) {
-          LOG.info(String.format("The delta commits >= %s or elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
-              inlineCompactDeltaSecondsMax));
-        }
-        break;
-      case NUM_AND_TIME:
-        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
-            && inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
-        if (compactable) {
-          LOG.info(String.format("The delta commits >= %s and elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
-              inlineCompactDeltaSecondsMax));
-        }
-        break;
-      default:
-        throw new HoodieCompactionException("Unsupported compaction trigger strategy: " + config.getInlineCompactTriggerStrategy());
-    }
-    return compactable;
-  }
 
-  private Long parsedToSeconds(String time) {
-    long timestamp;
-    try {
-      timestamp = HoodieActiveTimeline.parseDateFromInstantTime(time).getTime() / 1000;
-    } catch (ParseException e) {
-      throw new HoodieCompactionException(e.getMessage(), e);
-    }
-    return timestamp;
+    return compactionTriggerStrategy.isCompactable(config, latestDeltaCommitInfo, instantTime);
   }
 }
