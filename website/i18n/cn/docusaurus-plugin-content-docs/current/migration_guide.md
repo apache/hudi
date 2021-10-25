@@ -1,47 +1,37 @@
 ---
-title: Migration Guide
-keywords: [ hudi, migration, use case]
-summary: In this page, we will discuss some available tools for migrating your existing dataset into a Hudi dataset
+title: 迁移指南
+keywords: [ hudi, migration, use case, 迁移, 用例]
+summary: 在本页中，我们将讨论有效的工具，他们能将你的现有数据集迁移到 Hudi 数据集。
 last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
 
-Hudi maintains metadata such as commit timeline and indexes to manage a dataset. The commit timelines helps to understand the actions happening on a dataset as well as the current state of a dataset. Indexes are used by Hudi to maintain a record key to file id mapping to efficiently locate a record. At the moment, Hudi supports writing only parquet columnar formats.
-To be able to start using Hudi for your existing dataset, you will need to migrate your existing dataset into a Hudi managed dataset. There are a couple of ways to achieve this.
+Hudi 维护了元数据，包括提交的时间线和索引，来管理一个数据集。提交的时间线帮助理解一个数据集上发生的操作，以及数据集的当前状态。索引则被 Hudi 用来维护一个映射到文件 ID 的记录键，它能高效地定位一条记录。目前， Hudi 仅支持写 Parquet 列式格式 。
+
+为了在你的现有数据集上开始使用 Hudi ，你需要将你的现有数据集迁移到 Hudi 管理的数据集中。以下有多种方法实现这个目的。
 
 
-## Approaches
+## 方法
 
 
-### Use Hudi for new partitions alone
+### 将 Hudi 仅用于新分区
 
-Hudi can be used to manage an existing dataset without affecting/altering the historical data already present in the
-dataset. Hudi has been implemented to be compatible with such a mixed dataset with a caveat that either the complete
-Hive partition is Hudi managed or not. Thus the lowest granularity at which Hudi manages a dataset is a Hive
-partition. Start using the datasource API or the WriteClient to write to the dataset and make sure you start writing
-to a new partition or convert your last N partitions into Hudi instead of the entire table. Note, since the historical
- partitions are not managed by HUDI, none of the primitives provided by HUDI work on the data in those partitions. More concretely, one cannot perform upserts or incremental pull on such older partitions not managed by the HUDI dataset.
-Take this approach if your dataset is an append only type of dataset and you do not expect to perform any updates to existing (or non Hudi managed) partitions.
+Hudi 可以被用来在不影响/改变数据集历史数据的情况下管理一个现有的数据集。 Hudi 已经实现为能够兼容这样的数据集，不论整个 Hive 分区是否由 Hudi 管理。因此， Hudi 管理一个数据集的最低粒度是一个 Hive 分区。使用数据源 API 或 WriteClient 来写入数据集，并确保你开始写入的是一个新分区，或者将过去的 N 个分区而非整张表转换为 Hudi 。需要注意的是，由于历史分区不是由 Hudi 管理的， Hudi 提供的任何操作在那些分区上都不生效。更具体地说，无法在这些非 Hudi 管理的旧分区上进行插入更新或增量拉取。
 
+如果你的数据集是追加型的数据集，并且你不指望在已经存在的（或者非 Hudi 管理的）分区上进行更新操作，就使用这个方法。
 
-### Convert existing dataset to Hudi
+### 将现有的数据集转换为 Hudi
 
-Import your existing dataset into a Hudi managed dataset. Since all the data is Hudi managed, none of the limitations
- of Approach 1 apply here. Updates spanning any partitions can be applied to this dataset and Hudi will efficiently
- make the update available to queries. Note that not only do you get to use all Hudi primitives on this dataset,
- there are other additional advantages of doing this. Hudi automatically manages file sizes of a Hudi managed dataset
- . You can define the desired file size when converting this dataset and Hudi will ensure it writes out files
- adhering to the config. It will also ensure that smaller files later get corrected by routing some new inserts into
- small files rather than writing new small ones thus maintaining the health of your cluster.
+将你的现有数据集导入到一个 Hudi 管理的数据集。由于全部数据都是 Hudi 管理的，方法 1 的任何限制在这里都无效了。跨分区的更新可以被应用到这个数据集，而 Hudi 会高效地让这些更新对查询可用。值得注意的是，你不仅可以在这个数据集上使用所有 Hudi 提供的操作，这样做还有额外的好处。 Hudi 会自动管理受管数据集的文件大小。你可以在转换数据集的时候设置期望的文件大小， Hudi 将确保它写出的文件符合这个配置。Hudi 还会确保小文件在后续被修正，这个过程是通过将新的插入引导到这些小文件而不是写入新的小文件来实现的，这样能维持你的集群的健康度。
 
-There are a few options when choosing this approach.
+选择这个方法后，有几种选择。
 
-**Option 1**
-Use the HDFSParquetImporter tool. As the name suggests, this only works if your existing dataset is in parquet file format.
-This tool essentially starts a Spark Job to read the existing parquet dataset and converts it into a HUDI managed dataset by re-writing all the data.
+**选择 1**
+使用 HDFSParquetImporter 工具。正如名字表明的那样，这仅仅适用于你的现有数据集是 Parquet 文件格式的。
+这个工具本质上是启动一个 Spark 作业来读取现有的 Parquet 数据集，并通过重写全部记录的方式将它转换为 HUDI 管理的数据集。
 
-**Option 2**
-For huge datasets, this could be as simple as : 
+**选择 2**
+对于大数据集，这可以简单地： 
 ```java
 for partition in [list of partitions in source dataset] {
         val inputDF = spark.read.format("any_input_format").load("partition_path")
@@ -49,10 +39,8 @@ for partition in [list of partitions in source dataset] {
 }
 ```  
 
-**Option 3**
-Write your own custom logic of how to load an existing dataset into a Hudi managed one. Please read about the RDD API
- [here](/cn/docs/quick-start-guide). Using the HDFSParquetImporter Tool. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
-fired by via `cd hudi-cli && ./hudi-cli.sh`.
+**选择 3**
+写下你自定义的逻辑来定义如何将现有数据集加载到一个 Hudi 管理的数据集中。请在 [这里](/cn/docs/quick-start-guide) 阅读 RDD API 的相关资料。使用 HDFSParquetImporter 工具。一旦 Hudi 通过 `mvn clean install -DskipTests` 被构建了， Shell 将被 `cd hudi-cli && ./hudi-cli.sh` 调启。
 
 ```java
 hudi->hdfsparquetimport

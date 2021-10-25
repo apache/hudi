@@ -1,24 +1,25 @@
 ---
-title: S3 Filesystem
+title: S3 文件系统
 keywords: [ hudi, hive, aws, s3, spark, presto]
-summary: In this page, we go over how to configure Hudi with S3 filesystem.
+summary: 在本页中，我们将讨论如何在 S3 文件系统中配置 Hudi 。
 last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
-In this page, we explain how to get your Hudi spark job to store into AWS S3.
+在本页中，我们将解释如何让你的 Hudi Spark 作业存储到 AWS S3 。
 
-## AWS configs
+## AWS 配置
 
-There are two configurations required for Hudi-S3 compatibility:
 
-- Adding AWS Credentials for Hudi
-- Adding required Jars to classpath
+Hudi 与 S3 的适配需要两项配置：
 
-### AWS Credentials
+- 为 Hudi 加 AWS 凭证
+- 将需要的 jar 包添加到类路径
 
-Simplest way to use Hudi with S3, is to configure your `SparkSession` or `SparkContext` with S3 credentials. Hudi will automatically pick this up and talk to S3.
+### AWS 凭证
 
-Alternatively, add the required configs in your core-site.xml from where Hudi can fetch them. Replace the `fs.defaultFS` with your S3 bucket name and Hudi should be able to read/write from the bucket.
+在 S3 上使用 Hudi 的最简单的办法，是为你的 `SparkSession` 或 `SparkContext` 设置 S3 凭证。 Hudi 将自动拾取并通知 S3 。
+
+或者，将需要的配置添加到你的 core-site.xml 文件中， Hudi 可以从那里获取它们。用你的 S3 Bucket 名称替换 `fs.defaultFS` ，之后 Hudi 应该能够从 Bucket 中读取/写入.
 
 ```xml
   <property>
@@ -53,8 +54,7 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
 ```
 
 
-Utilities such as hudi-cli or deltastreamer tool, can pick up s3 creds via environmental variable prefixed with `HOODIE_ENV_`. For e.g below is a bash snippet to setup
-such variables and then have cli be able to work on datasets stored in s3
+`hudi-cli` 或 DeltaStreamer 这些工具集能通过 `HOODIE_ENV_` 前缀的环境变量拾取。以下是一个作为示例的基础代码片段，它设置了这些变量并让 CLI 能够在保存在 S3 上的数据集上工作。
 
 ```java
 export HOODIE_ENV_fs_DOT_s3a_DOT_access_DOT_key=$accessKey
@@ -68,14 +68,14 @@ export HOODIE_ENV_fs_DOT_s3n_DOT_impl=org.apache.hadoop.fs.s3a.S3AFileSystem
 
 
 
-### AWS Libs
+### AWS 库
 
-AWS hadoop libraries to add to our classpath
+将 AWS Hadoop 库添加到我们的类路径。
 
  - com.amazonaws:aws-java-sdk:1.10.34
  - org.apache.hadoop:hadoop-aws:2.7.3
 
-AWS glue data libraries are needed if AWS glue data is used
+如果使用了 AWS Glue 的数据，则需要 AWS Glue 库。
 
  - com.amazonaws.glue:aws-glue-datacatalog-hive2-client:1.11.0
  - com.amazonaws:aws-java-sdk-glue:1.11.475
