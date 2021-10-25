@@ -963,8 +963,9 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     deltaStreamerTestRunner(ds, null, condition);
   }
 
-  @Test
-  public void testInlineClustering() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"true", "false"})
+  public void testInlineClustering(String preserveCommitMetadata) throws Exception {
     String tableBasePath = dfsBasePath + "/inlineClustering";
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -973,7 +974,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     cfg.continuousMode = true;
     cfg.tableType = HoodieTableType.MERGE_ON_READ.name();
-    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "2", "", ""));
+    cfg.configs.addAll(getAsyncServicesConfigs(totalRecords, "false", "true", "2", "", "", preserveCommitMetadata));
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
