@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.simple.SparkHoodieBroadcastSimpleIndex;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkV2UpsertCommitActionExecutor;
@@ -52,6 +53,7 @@ public class HoodieSparkV2CopyOnWriteTable extends HoodieSparkV2Table<Dataset<Ro
 
   protected HoodieSparkV2CopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+    this.indexDelegate = new SparkHoodieBroadcastSimpleIndex();
   }
 
   @Override
