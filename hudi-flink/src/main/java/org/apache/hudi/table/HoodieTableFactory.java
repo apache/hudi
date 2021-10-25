@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -27,7 +27,6 @@ import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -252,11 +251,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
       conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
     }
-    if (StreamerUtil.allowDuplicateInserts(conf)) {
-      // no need for compaction if insert duplicates is allowed
-      conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-      conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
-    }
   }
 
   /**
@@ -284,7 +278,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private static void setupWriteOptions(Configuration conf) {
     if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)
-        && HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)) == HoodieTableType.COPY_ON_WRITE) {
+        && OptionsResolver.isCowTable(conf)) {
       conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
     }
   }

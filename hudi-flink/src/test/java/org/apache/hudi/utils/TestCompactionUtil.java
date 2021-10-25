@@ -78,7 +78,7 @@ public class TestCompactionUtil {
     HoodieInstant instant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().orElse(null);
     assertThat(instant.getTimestamp(), is(instantTime));
 
-    CompactionUtil.rollbackCompaction(table, writeClient, conf);
+    CompactionUtil.rollbackCompaction(table, conf);
     HoodieInstant rollbackInstant = table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().get();
     assertThat(rollbackInstant.getState(), is(HoodieInstant.State.REQUESTED));
     assertThat(rollbackInstant.getTimestamp(), is(instantTime));

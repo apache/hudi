@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.StreamerUtil;
@@ -63,9 +64,9 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
     return (DataStreamSinkProvider) dataStream -> {
 
       // setup configuration
-      long ckpInterval = dataStream.getExecutionEnvironment()
-          .getCheckpointConfig().getCheckpointInterval();
-      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpInterval * 5); // five checkpoints interval
+      long ckpTimeout = dataStream.getExecutionEnvironment()
+          .getCheckpointConfig().getCheckpointTimeout();
+      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
       RowType rowType = (RowType) schema.toSourceRowDataType().notNull().getLogicalType();
 
@@ -76,7 +77,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       }
 
       // Append mode
-      if (StreamerUtil.allowDuplicateInserts(conf)) {
+      if (OptionsResolver.isAppendMode(conf)) {
         return Pipelines.append(conf, rowType, dataStream);
       }
 

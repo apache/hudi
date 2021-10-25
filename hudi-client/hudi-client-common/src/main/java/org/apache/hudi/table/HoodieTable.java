@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -365,12 +366,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access.
    *
-   * @param context HoodieEngineContext
+   * @param context               HoodieEngineContext
    * @param compactionInstantTime Instant Time
    */
   public abstract HoodieWriteMetadata<O> compact(HoodieEngineContext context,
-                                              String compactionInstantTime);
-
+                                                 String compactionInstantTime);
 
   /**
    * Schedule clustering for the instant time.
@@ -472,10 +472,23 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                 String instantToRestore);
 
   /**
+   * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file
+   * to the .requested file.
+   *
+   * @param inflightInstant Inflight Compaction Instant
+   */
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    scheduleRollback(context, commitTime, inflightInstant, false);
+    rollback(context, commitTime, inflightInstant, false);
+    getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
+  }
+
+  /**
    * Finalize the written data onto storage. Perform any final cleanups.
    *
    * @param context HoodieEngineContext
-   * @param stats List of HoodieWriteStats
+   * @param stats   List of HoodieWriteStats
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
@@ -706,11 +719,23 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
-   * Fetch instance of {@link HoodieTableMetadataWriter}.
+   * Get Table metadata writer.
+   *
+   * @return instance of {@link HoodieTableMetadataWriter
+   */
+  public final Option<HoodieTableMetadataWriter> getMetadataWriter() {
+    return getMetadataWriter(Option.empty());
+  }
+
+  /**
+   * Get Table metadata writer.
+   *
    * @return instance of {@link HoodieTableMetadataWriter}
    */
-  public Option<HoodieTableMetadataWriter> getMetadataWriter() {
-    // Each engine is expected to override this and provide the actual metadata writer if enabled.
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
+    // Each engine is expected to override this and
+    // provide the actual metadata writer, if enabled.
     return Option.empty();
   }
+
 }

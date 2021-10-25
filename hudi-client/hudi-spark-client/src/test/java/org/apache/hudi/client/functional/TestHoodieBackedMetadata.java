@@ -460,6 +460,39 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   // Some operations are not feasible with test table infra. hence using write client to test those cases.
 
   /**
+   * Rollback of the first commit should not trigger bootstrap errors at the metadata table.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testFirstCommitRollback(HoodieTableType tableType) throws Exception {
+    init(tableType);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+
+      // Write 1
+      String commitTime = "0000001";
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
+      client.startCommitWithTime(commitTime);
+      List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+
+      // Rollback the first commit
+      client.rollback(commitTime);
+
+      // Write 2
+      commitTime = "0000002";
+      records = dataGen.generateInserts(commitTime, 10);
+      client.startCommitWithTime(commitTime);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+    }
+  }
+
+
+  /**
    * Test several table operations with restore. This test uses SparkRDDWriteClient.
    * Once the restore support is ready in HoodieTestTable, then rewrite this test.
    */

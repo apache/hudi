@@ -69,8 +69,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ.", required = true)
   public String tableType;
 
-  @Parameter(names = {"--insert-dedup"}, description = "Whether to deduplicate for INSERT operation, if disabled, writes the base files directly.", required = true)
-  public Boolean insertDedup = true;
+  @Parameter(names = {"--insert-cluster"}, description = "Whether to merge small files for insert mode, "
+      + "if true, the write throughput will decrease because the read/write of existing small file, default false.")
+  public Boolean insertCluster = false;
 
   @Parameter(names = {"--props"}, description = "Path to properties file on localfs or dfs, with configurations for "
       + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
@@ -308,7 +309,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.TABLE_NAME, config.targetTableName);
     // copy_on_write works same as COPY_ON_WRITE
     conf.setString(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());
-    conf.setBoolean(FlinkOptions.INSERT_DEDUP, config.insertDedup);
+    conf.setBoolean(FlinkOptions.INSERT_CLUSTER, config.insertCluster);
     conf.setString(FlinkOptions.OPERATION, config.operation.value());
     conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);

@@ -31,11 +31,9 @@ import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SmallFile;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -99,11 +97,6 @@ public class WriteProfile {
   protected AbstractTableFileSystemView fsView;
 
   /**
-   * Hadoop configuration.
-   */
-  private final Configuration hadoopConf;
-
-  /**
    * Metadata cache to reduce IO of metadata files.
    */
   private final Map<String, HoodieCommitMetadata> metadataCache;
@@ -114,7 +107,6 @@ public class WriteProfile {
     this.smallFilesMap = new HashMap<>();
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
     this.table = HoodieFlinkTable.create(config, context);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
     this.metadataCache = new HashMap<>();
     // profile the record statistics on construction
     recordProfile();

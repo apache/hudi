@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -543,17 +542,15 @@ public class TestData {
     // 1. init flink table
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath.getAbsolutePath());
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath.getAbsolutePath()).build();
-    FlinkTaskContextSupplier supplier = new FlinkTaskContextSupplier(null);
-    HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(supplier);
-    HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
+    HoodieFlinkTable table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
 
     // 2. check each partition data
     expected.forEach((partition, partitionDataSet) -> {
 
       List<String> readBuffer = new ArrayList<>();
 
-      table.getFileSystemView().getAllFileGroups(partition)
-          .forEach(v -> v.getLatestDataFile().ifPresent(baseFile -> {
+      table.getBaseFileOnlyView().getLatestBaseFiles(partition)
+          .forEach(baseFile -> {
             String path = baseFile.getPath();
             try {
               ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(new Path(path)).build();
@@ -565,7 +562,7 @@ public class TestData {
             } catch (IOException e) {
               throw new RuntimeException(e);
             }
-          }));
+          });
 
       assertTrue(partitionDataSet.size() == readBuffer.size() && partitionDataSet.containsAll(readBuffer));
 

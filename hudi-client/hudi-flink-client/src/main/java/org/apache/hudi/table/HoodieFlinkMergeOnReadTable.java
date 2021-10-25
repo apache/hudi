@@ -30,14 +30,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertPreppedDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.compact.BaseScheduleCompactionActionExecutor;
-import org.apache.hudi.table.action.compact.FlinkScheduleCompactionActionExecutor;
+import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
+import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
+import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
 
@@ -97,15 +97,19 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
       HoodieEngineContext context,
       String instantTime,
       Option<Map<String, String>> extraMetadata) {
-    BaseScheduleCompactionActionExecutor scheduleCompactionExecutor = new FlinkScheduleCompactionActionExecutor(
-        context, config, this, instantTime, extraMetadata);
+    ScheduleCompactionActionExecutor scheduleCompactionExecutor = new ScheduleCompactionActionExecutor(
+        context, config, this, instantTime, extraMetadata,
+        new HoodieFlinkMergeOnReadTableCompactor());
     return scheduleCompactionExecutor.execute();
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
-    throw new HoodieNotSupportedException("Compaction is supported as a separate pipeline, "
-        + "should not invoke directly through HoodieFlinkMergeOnReadTable");
+  public HoodieWriteMetadata<List<WriteStatus>> compact(
+      HoodieEngineContext context, String compactionInstantTime) {
+    RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
+        context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(),
+        new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()));
+    return convertMetadata(compactionExecutor.execute());
   }
 
   @Override
