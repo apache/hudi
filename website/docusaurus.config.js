@@ -408,8 +408,20 @@ module.exports = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
-          editUrl:
-            'https://github.com/apache/hudi/edit/asf-site/website/docs/',
+          editUrl: ({ version, versionDocsDirPath, docPath, locale }) => {
+            if (locale != this.defaultLocale) {
+              return `https://github.com/apache/hudi/tree/asf-site/website/${versionDocsDirPath}/${docPath}`
+            } else {
+              return `https://github.com/apache/hudi/tree/asf-site/website/i18n/${locale}/docusaurus-plugin-content-${versionDocsDirPath}/${version}/${docPath}`
+            }
+          },
+          // type EditUrlFunction = (params: {
+          //   version: string;
+          //   versionDocsDirPath: string;
+          //   docPath: string;
+          //   permalink: string;
+          //   locale: string;
+          // }) => string | undefined;
           includeCurrentVersion: true,
           versions: {
             current: {
