@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
@@ -59,11 +60,14 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
     try {
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
       Schema sourceSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
-      assertEquals(
-              sourceSchema.toString().toUpperCase(),
-              new Schema.Parser().parse(
-                      UtilitiesTestBase.Helpers.readFile("delta-streamer-config/hive_schema_provider_source.avsc")
-              ).toString().toUpperCase());
+
+      Schema originalSchema= new Schema.Parser().parse(
+              UtilitiesTestBase.Helpers.readFile("delta-streamer-config/hive_schema_provider_source.avsc")
+      );
+      for (Schema.Field field : sourceSchema.getFields()) {
+        Schema.Field originalField = originalSchema.getField(field.name());
+        assertTrue(originalField != null);
+      }
     } catch (HoodieException e) {
       LOG.error("Failed to get source schema. ", e);
     }
@@ -78,11 +82,12 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
       createSchemaTable(TARGET_SCHEMA_TABLE_NAME);
       Schema targetSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getTargetSchema();
-      assertEquals(
-              targetSchema.toString().toUpperCase(),
-              new Schema.Parser().parse(
-                      UtilitiesTestBase.Helpers.readFile("delta-streamer-config/hive_schema_provider_target.avsc")
-              ).toString().toUpperCase());
+      Schema originalSchema = new Schema.Parser().parse(
+              UtilitiesTestBase.Helpers.readFile("delta-streamer-config/hive_schema_provider_target.avsc"));
+      for (Schema.Field field : targetSchema.getFields()) {
+        Schema.Field originalField = originalSchema.getField(field.name());
+        assertTrue(originalField != null);
+      }
     } catch (HoodieException e) {
       LOG.error("Failed to get source/target schema. ", e);
     }
