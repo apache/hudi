@@ -124,7 +124,7 @@ public class TransactionUtils {
 
   /**
    * Generic method allowing us to override the current metadata with the metadata from
-   * the latest instant for the specified key prefixes
+   * the latest instant for the specified key prefixes.
    * @param metaClient
    * @param thisMetadata
    * @param keyPrefixes The key prefixes to merge from the previous commit
