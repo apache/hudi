@@ -47,7 +47,6 @@ import java.text.SimpleDateFormat
 import scala.collection.immutable.Map
 
 object HoodieSqlUtils extends SparkAdapterSupport {
-  private val defaultDateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
   private val defaultDateFormat = new SimpleDateFormat("yyyy-MM-dd")
 
   def isHoodieTable(table: CatalogTable): Boolean = {
@@ -253,9 +252,10 @@ object HoodieSqlUtils extends SparkAdapterSupport {
    * 3、yyyyMMddHHmmss
    */
   def formatQueryInstant(queryInstant: String): String = {
-    if (queryInstant.length == 19) { // for yyyy-MM-dd HH:mm:ss
-      HoodieActiveTimeline.getInstantForDate(defaultDateTimeFormat.parse(queryInstant))
-    } else if (queryInstant.length == 14) { // for yyyyMMddHHmmss
+    val instantLength = queryInstant.length
+    if (instantLength == 19 || instantLength == 23) { // for yyyy-MM-dd HH:mm:ss[:SSS]
+      HoodieActiveTimeline.getInstantForDateString(queryInstant)
+    } else if (instantLength == 14 || instantLength == 17) { // for yyyyMMddHHmmss[SSS]
       HoodieActiveTimeline.parseDateFromInstantTime(queryInstant) // validate the format
       queryInstant
     } else if (queryInstant.length == 10) { // for yyyy-MM-dd

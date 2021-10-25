@@ -64,6 +64,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private static final int INSTANT_ID_LENGTH = COMMIT_FORMAT.length();
   private static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat(COMMIT_FORMAT);
 
+  private static final String MILLIS_GRANULARITY_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss:SSS";
+  private static final SimpleDateFormat MS_GRANULARITY_DATE_FORMATTER = new SimpleDateFormat(MILLIS_GRANULARITY_DATE_FORMAT);
+
+  // The default number of milliseconds that we add if they are not present
+  // We prefer the max timestamp as it mimics the current behavior with second granularity
+  private static final String DEFAULT_MILLIS_EXT = "999";
+
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
       DELTA_COMMIT_EXTENSION, INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION,
@@ -95,6 +102,23 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public static String getInstantForDate(Date instantDate) {
     return COMMIT_FORMATTER.format(instantDate);
+  }
+
+  /**
+   * Creates an instant string given a valid date-time string.
+   * @param dateString A date-time string in the format yyyy-MM-dd HH:mm:ss[:SSS]
+   * @return A timeline instant
+   * @throws ParseException If we cannot parse the date string
+   */
+  public static String getInstantForDateString(String dateString) throws ParseException {
+    try {
+      return getInstantForDate(MS_GRANULARITY_DATE_FORMATTER.parse(dateString));
+    } catch (ParseException e) {
+      // Attempt to add the milliseconds in order to complete parsing
+      return getInstantForDate(MS_GRANULARITY_DATE_FORMATTER.parse(
+              String.format("%s:%s", dateString, DEFAULT_MILLIS_EXT)
+      ));
+    }
   }
 
   /**
