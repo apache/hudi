@@ -261,7 +261,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
    * {@link org.apache.hudi.common.testutils.HoodieTestDataGenerator} using
    * {@link org.apache.hudi.common.testutils.HoodieTestDataGenerator#TRIP_EXAMPLE_SCHEMA}.
    *
-   * The COW fixture test table has 3000 unique records in 7 compaction commits.
+   * The COW fixture test table has 3000 unique records in 7 commits.
    * The MOR fixture test table has 3000 unique records in 9 deltacommits and 1 compaction commit.
    */
   private void setUpTestTable(HoodieTableType tableType) throws IOException {
