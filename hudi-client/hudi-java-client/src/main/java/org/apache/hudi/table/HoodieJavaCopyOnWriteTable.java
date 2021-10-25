@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -39,10 +40,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
+import org.apache.hudi.table.action.cluster.JavaClusteringPlanActionExecutor;
+import org.apache.hudi.table.action.cluster.JavaExecuteClusteringCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
@@ -57,10 +61,14 @@ import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieJavaTable<T> {
+public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
+    extends HoodieJavaTable<T> implements HoodieCompactionHandler<T> {
   protected HoodieJavaCopyOnWriteTable(HoodieWriteConfig config,
                                        HoodieEngineContext context,
                                        HoodieTableMetaClient metaClient) {
@@ -160,23 +168,23 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context,
                                                          String instantTime,
                                                          Option<Map<String, String>> extraMetadata) {
-    throw new HoodieNotSupportedException("ScheduleCompaction is not supported yet");
+    throw new HoodieNotSupportedException("ScheduleCompaction is not supported on a CopyOnWrite table");
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> compact(HoodieEngineContext context,
                                                         String compactionInstantTime) {
-    throw new HoodieNotSupportedException("Compact is not supported yet");
+    throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 
   @Override
   public Option<HoodieClusteringPlan> scheduleClustering(final HoodieEngineContext context, final String instantTime, final Option<Map<String, String>> extraMetadata) {
-    throw new HoodieNotSupportedException("Clustering is not supported yet");
+    return new JavaClusteringPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final HoodieEngineContext context, final String clusteringInstantTime) {
-    throw new HoodieNotSupportedException("Clustering is not supported yet");
+    return new JavaExecuteClusteringCommitActionExecutor<>(context, config, this, clusteringInstantTime).execute();
   }
 
   @Override
@@ -234,5 +242,19 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                        String instantToRestore) {
     return new CopyOnWriteRestoreActionExecutor(
         context, config, this, restoreInstantTime, instantToRestore).execute();
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId, Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile)
+      throws IOException {
+    throw new HoodieNotSupportedException("Update is not supported for compaction yet");
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId, Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+    HoodieCreateHandle<?, ?, ?, ?> createHandle =
+        new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
+    createHandle.write();
+    return Collections.singletonList(createHandle.close()).iterator();
   }
 }
