@@ -184,6 +184,10 @@ public abstract class ITTestBase {
     }
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
+    LOG.warn("\n\n :::::: Original Command : " +  Arrays.asList(command));
+    LOG.warn("\n\n :::::: Stderr of timed-out command ::::::\n" + callback.getStderr().toString());
+    LOG.warn("\n\n :::::: stdout of timed-out command ::::::\n" + callback.getStdout().toString());
+
     if (expectedToSucceed) {
       assertEquals(0, exitCode, "Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")");
     } else {
