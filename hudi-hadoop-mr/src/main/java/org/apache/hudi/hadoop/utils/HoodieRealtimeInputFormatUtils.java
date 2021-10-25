@@ -43,7 +43,6 @@ import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
@@ -131,8 +130,8 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
           dataFileSplits.forEach(split -> {
             try {
-              List<FileStatus> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getFileStatus()).collect(Collectors.toList());
+              List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
               if (split instanceof BootstrapBaseFileSplit) {
                 BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
                 String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())

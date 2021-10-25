@@ -20,14 +20,12 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.util.Option;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Filesplit that wraps the base split and a list of log files to merge deltas from.
@@ -35,7 +33,6 @@ import java.util.stream.Collectors;
 public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
 
   private List<String> deltaLogPaths;
-  private List<FileStatus> deltaLogFileStatus;
 
   private String maxCommitTime;
 
@@ -47,12 +44,11 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
     super();
   }
 
-  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<FileStatus> deltaLogFileStatus, String maxCommitTime,
+  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths, String maxCommitTime,
                                  Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo)
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
-    this.deltaLogFileStatus = deltaLogFileStatus;
-    this.deltaLogPaths = deltaLogFileStatus.stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
+    this.deltaLogPaths = deltaLogPaths;
     this.maxCommitTime = maxCommitTime;
     this.basePath = basePath;
     this.hoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
@@ -60,10 +56,6 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
 
   public List<String> getDeltaLogPaths() {
     return deltaLogPaths;
-  }
-
-  public List<FileStatus> getDeltaLogFileStatus() {
-    return deltaLogFileStatus;
   }
 
   public String getMaxCommitTime() {
