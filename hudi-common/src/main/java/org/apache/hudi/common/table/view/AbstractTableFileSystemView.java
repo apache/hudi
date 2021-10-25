@@ -315,7 +315,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @throws IOException
    */
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    //return metaClient.getFs().listStatus(partitionPath);
     // Create the path if it does not exist already
     if (!metaClient.getFs().exists(partitionPath)) {
       metaClient.getFs().mkdirs(partitionPath);
