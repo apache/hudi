@@ -20,8 +20,6 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -33,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -61,9 +58,12 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
   /**
    * Buffer to collect the event from each compact task {@code CompactFunction}.
-   * The key is the instant time.
+   *
+   * <p>Stores the mapping of instant_time -> file_id -> event. Use a map to collect the
+   * events because the rolling back of intermediate compaction tasks generates corrupt
+   * events.
    */
-  private transient Map<String, List<CompactionCommitEvent>> commitBuffer;
+  private transient Map<String, Map<String, CompactionCommitEvent>> commitBuffer;
 
   public CompactionCommitSink(Configuration conf) {
     super(conf);
@@ -82,9 +82,9 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   @Override
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
     final String instant = event.getInstant();
-    commitBuffer.computeIfAbsent(instant, k -> new ArrayList<>())
-        .add(event);
-    commitIfNecessary(instant, commitBuffer.get(instant));
+    commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
+        .put(event.getFileId(), event);
+    commitIfNecessary(instant, commitBuffer.get(instant).values());
   }
 
   /**
@@ -94,39 +94,38 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    * @param instant Compaction commit instant time
    * @param events  Commit events ever received for the instant
    */
-  private void commitIfNecessary(String instant, List<CompactionCommitEvent> events) throws IOException {
+  private void commitIfNecessary(String instant, Collection<CompactionCommitEvent> events) throws IOException {
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
         this.writeClient.getHoodieTable().getMetaClient(), instant);
     boolean isReady = compactionPlan.getOperations().size() == events.size();
     if (!isReady) {
       return;
     }
+    try {
+      doCommit(instant, events);
+    } catch (Throwable throwable) {
+      // make it fail-safe
+      LOG.error("Error while committing compaction instant: " + instant, throwable);
+    } finally {
+      // reset the status
+      reset(instant);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private void doCommit(String instant, Collection<CompactionCommitEvent> events) throws IOException {
     List<WriteStatus> statuses = events.stream()
         .map(CompactionCommitEvent::getWriteStatuses)
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 
-    if (this.writeClient.getConfig().shouldAutoCommit()) {
-      // Prepare the commit metadata.
-      List<HoodieWriteStat> updateStatusMap = statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
-      for (HoodieWriteStat stat : updateStatusMap) {
-        metadata.addWriteStat(stat.getPartitionPath(), stat);
-      }
-      metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, writeClient.getConfig().getSchema());
-      this.writeClient.completeCompaction(
-          metadata, statuses, this.writeClient.getHoodieTable(), instant);
-    }
     // commit the compaction
     this.writeClient.commitCompaction(instant, statuses, Option.empty());
 
-    // Whether to cleanup the old log file when compaction
+    // Whether to clean up the old log file when compaction
     if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       this.writeClient.clean();
     }
-
-    // reset the status
-    reset(instant);
   }
 
   private void reset(String instant) {

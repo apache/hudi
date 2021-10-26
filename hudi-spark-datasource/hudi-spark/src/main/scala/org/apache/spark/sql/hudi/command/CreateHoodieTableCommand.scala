@@ -100,12 +100,12 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
      var upgrateConfig = Map.empty[String, String]
      // If this is a non-hive-styled partition table, disable the hive style config.
      // (By default this config is enable for spark sql)
-     upgrateConfig = if (isNotHiveStyledPartitionTable(allPartitionPaths, table)) {
+     upgrateConfig = if (!isHiveStyledPartitioning(allPartitionPaths, table)) {
         upgrateConfig + (DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "false")
      } else {
        upgrateConfig
      }
-      upgrateConfig = if (isUrlEncodeDisable(allPartitionPaths, table)) {
+      upgrateConfig = if (!isUrlEncodeEnabled(allPartitionPaths, table)) {
         upgrateConfig + (DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key -> "false")
       } else {
         upgrateConfig
@@ -314,45 +314,6 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
           s"'${HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_MOR}'")
     }
   }
-
-  /**
-   * This method is used to compatible with the old non-hive-styled partition table.
-   * By default we enable the "hoodie.datasource.write.hive_style_partitioning"
-   * when writing data to hudi table by spark sql by default.
-   * If the exist table is a non-hive-styled partitioned table, we should
-   * disable the "hoodie.datasource.write.hive_style_partitioning" when
-   * merge or update the table. Or else, we will get an incorrect merge result
-   * as the partition path mismatch.
-   */
-  private def isNotHiveStyledPartitionTable(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
-    if (table.partitionColumnNames.nonEmpty) {
-      val isHiveStylePartitionPath = (path: String) => {
-        val fragments = path.split("/")
-        if (fragments.size != table.partitionColumnNames.size) {
-          false
-        } else {
-          fragments.zip(table.partitionColumnNames).forall {
-            case (pathFragment, partitionColumn) => pathFragment.startsWith(s"$partitionColumn=")
-          }
-        }
-      }
-      !partitionPaths.forall(isHiveStylePartitionPath)
-    } else {
-      false
-    }
-  }
-
-  /**
-   * If this table has disable the url encode, spark sql should also disable it when writing to the table.
-   */
-  private def isUrlEncodeDisable(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
-    if (table.partitionColumnNames.nonEmpty) {
-      !partitionPaths.forall(partitionPath => partitionPath.split("/").length == table.partitionColumnNames.size)
-    } else {
-      false
-    }
-  }
-
 }
 
 object CreateHoodieTableCommand extends Logging {

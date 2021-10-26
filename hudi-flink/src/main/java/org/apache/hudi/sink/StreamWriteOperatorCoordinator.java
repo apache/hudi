@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
@@ -41,6 +42,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,7 +59,6 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
@@ -94,6 +95,11 @@ public class StreamWriteOperatorCoordinator
    * Write client.
    */
   private transient HoodieFlinkWriteClient writeClient;
+
+  /**
+   * Meta client.
+   */
+  private transient HoodieTableMetaClient metaClient;
 
   /**
    * Current REQUESTED instant, for validation.
@@ -153,10 +159,11 @@ public class StreamWriteOperatorCoordinator
     // initialize event buffer
     reset();
     this.gateways = new SubtaskGateway[this.parallelism];
+    // init table, create if not exists.
+    this.metaClient = initTableIfNotExists(this.conf);
+    // the write client must create after the table creation
     this.writeClient = StreamerUtil.createWriteClient(conf);
     this.tableState = TableState.create(conf);
-    // init table, create it if not exists.
-    initTableIfNotExists(this.conf);
     // start the executor
     this.executor = new CoordinatorExecutor(this.context, LOG);
     // start the executor if required
@@ -171,14 +178,16 @@ public class StreamWriteOperatorCoordinator
   @Override
   public void close() throws Exception {
     // teardown the resource
-    if (writeClient != null) {
-      writeClient.close();
-    }
     if (executor != null) {
       executor.close();
     }
     if (hiveSyncExecutor != null) {
       hiveSyncExecutor.close();
+    }
+    // the write client must close after the executor service
+    // because the task in the service may send requests to the embedded timeline service.
+    if (writeClient != null) {
+      writeClient.close();
     }
     this.eventBuffer = null;
   }
@@ -212,8 +221,8 @@ public class StreamWriteOperatorCoordinator
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
           final boolean committed = commitInstant(this.instant);
           if (committed) {
-            // if async compaction is on, schedule the compaction
             if (tableState.scheduleCompaction) {
+              // if async compaction is on, schedule the compaction
               writeClient.scheduleCompaction(Option.empty());
             }
             // start new instant.
@@ -223,6 +232,14 @@ public class StreamWriteOperatorCoordinator
           }
         }, "commits the instant %s", this.instant
     );
+  }
+
+  @Override
+  public void notifyCheckpointAborted(long checkpointId) {
+    // once the checkpoint was aborted, unblock the writer tasks to
+    // reuse the last instant.
+    executor.execute(this::sendCommitAckEvents,
+        "unblock data write with aborted checkpoint %s", checkpointId);
   }
 
   @Override
@@ -316,7 +333,7 @@ public class StreamWriteOperatorCoordinator
     final String instant = HoodieActiveTimeline.createNewInstantTime();
     this.writeClient.startCommitWithTime(instant, tableState.commitAction);
     this.instant = instant;
-    this.writeClient.transitionRequestedToInflight(tableState.commitAction, this.instant);
+    this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     this.writeClient.upgradeDowngrade(this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
@@ -382,14 +399,26 @@ public class StreamWriteOperatorCoordinator
    * sends the commit ack events to unblock the flushing.
    */
   private void sendCommitAckEvents() {
-    CompletableFuture<?>[] futures = IntStream.range(0, this.parallelism)
-        .mapToObj(taskID -> this.gateways[taskID].sendEvent(CommitAckEvent.getInstance()))
+    CompletableFuture<?>[] futures = Arrays.stream(this.gateways).filter(Objects::nonNull)
+        .map(gw -> gw.sendEvent(CommitAckEvent.getInstance()))
         .toArray(CompletableFuture<?>[]::new);
     try {
       CompletableFuture.allOf(futures).get();
-    } catch (Exception e) {
-      throw new HoodieException("Error while waiting for the commit ack events to finish sending", e);
+    } catch (Throwable throwable) {
+      if (!sendToFinishedTasks(throwable)) {
+        throw new HoodieException("Error while waiting for the commit ack events to finish sending", throwable);
+      }
     }
+  }
+
+  /**
+   * Decides whether the given exception is caused by sending events to FINISHED tasks.
+   *
+   * <p>Ugly impl: the exception may change in the future.
+   */
+  private static boolean sendToFinishedTasks(Throwable throwable) {
+    return throwable.getCause() instanceof TaskNotRunningException
+        || throwable.getCause().getMessage().contains("running");
   }
 
   /**
@@ -472,12 +501,6 @@ public class StreamWriteOperatorCoordinator
   @VisibleForTesting
   public String getInstant() {
     return instant;
-  }
-
-  @VisibleForTesting
-  @SuppressWarnings("rawtypes")
-  public HoodieFlinkWriteClient getWriteClient() {
-    return writeClient;
   }
 
   @VisibleForTesting

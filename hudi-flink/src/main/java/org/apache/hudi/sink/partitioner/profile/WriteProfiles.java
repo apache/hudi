@@ -21,11 +21,13 @@ package org.apache.hudi.sink.partitioner.profile;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.core.fs.Path;
@@ -37,11 +39,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -83,57 +83,67 @@ public class WriteProfiles {
   }
 
   /**
-   * Returns all the incremental write file path statuses with the given commits metadata.
+   * Returns all the incremental write file statuses with the given commits metadata.
    *
    * @param basePath     Table base path
    * @param hadoopConf   The hadoop conf
    * @param metadataList The commits metadata
-   * @return the file statuses array
+   * @param tableType    The table type
+   * @return the file status array
    */
   public static FileStatus[] getWritePathsOfInstants(
       Path basePath,
       Configuration hadoopConf,
-      List<HoodieCommitMetadata> metadataList) {
+      List<HoodieCommitMetadata> metadataList,
+      HoodieTableType tableType) {
     FileSystem fs = FSUtils.getFs(basePath.toString(), hadoopConf);
-    return metadataList.stream().map(metadata -> getWritePathsOfInstant(basePath, metadata, fs))
-        .flatMap(Collection::stream).toArray(FileStatus[]::new);
+    Map<String, FileStatus> uniqueIdToFileStatus = new HashMap<>();
+    metadataList.forEach(metadata ->
+            uniqueIdToFileStatus.putAll(getFilesToReadOfInstant(basePath, metadata, fs, tableType)));
+    return uniqueIdToFileStatus.values().toArray(new FileStatus[0]);
   }
 
   /**
-   * Returns the commit file paths with given metadata.
+   * Returns the commit file status info with given metadata.
    *
-   * @param basePath Table base path
-   * @param metadata The metadata
-   * @param fs       The filesystem
-   * @return the commit file status list
+   * @param basePath  Table base path
+   * @param metadata  The metadata
+   * @param fs        The filesystem
+   * @param tableType The table type
+   * @return the commit file status info grouping by specific ID
    */
-  private static List<FileStatus> getWritePathsOfInstant(Path basePath, HoodieCommitMetadata metadata, FileSystem fs) {
-    return metadata.getFileIdAndFullPaths(basePath.toString()).values().stream()
-        .map(org.apache.hadoop.fs.Path::new)
+  private static Map<String, FileStatus> getFilesToReadOfInstant(
+      Path basePath,
+      HoodieCommitMetadata metadata,
+      FileSystem fs,
+      HoodieTableType tableType) {
+    return getFilesToRead(metadata, basePath.toString(), tableType).entrySet().stream()
         // filter out the file paths that does not exist, some files may be cleaned by
         // the cleaner.
-        .filter(path -> {
+        .filter(entry -> {
           try {
-            return fs.exists(path);
+            return fs.exists(entry.getValue().getPath());
           } catch (IOException e) {
-            LOG.error("Checking exists of path: {} error", path);
-            throw new HoodieException(e);
-          }
-        }).map(path -> {
-          try {
-            return fs.getFileStatus(path);
-          } catch (FileNotFoundException fe) {
-            LOG.warn("File {} was deleted by the cleaner, ignore", path);
-            return null;
-          } catch (IOException e) {
-            LOG.error("Get write status of path: {} error", path);
+            LOG.error("Checking exists of path: {} error", entry.getValue().getPath());
             throw new HoodieException(e);
           }
         })
-        // filter out crushed files
-        .filter(Objects::nonNull)
-        .filter(StreamerUtil::isValidFile)
-        .collect(Collectors.toList());
+        .filter(entry -> StreamerUtil.isValidFile(entry.getValue()))
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  }
+
+  private static Map<String, FileStatus> getFilesToRead(
+      HoodieCommitMetadata metadata,
+      String basePath,
+      HoodieTableType tableType) {
+    switch (tableType) {
+      case COPY_ON_WRITE:
+        return metadata.getFileIdToFileStatus(basePath);
+      case MERGE_ON_READ:
+        return metadata.getFullPathToFileStatus(basePath);
+      default:
+        throw new AssertionError();
+    }
   }
 
   /**
@@ -178,9 +188,8 @@ public class WriteProfiles {
       Path basePath,
       HoodieInstant instant,
       HoodieTimeline timeline) {
-    byte[] data = timeline.getInstantDetails(instant).get();
     try {
-      return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
+      return HoodieInputFormatUtils.getCommitMetadata(instant, timeline);
     } catch (IOException e) {
       LOG.error("Get write metadata for table {} with instant {} and path: {} error",
           tableName, instant.getTimestamp(), basePath);

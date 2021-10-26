@@ -112,7 +112,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--filter-dupes"},
       description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert.")
-  public Boolean filterDupes = false;
+  public Boolean preCombine = false;
 
   @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written.")
   public Boolean commitOnErrors = false;
@@ -184,8 +184,8 @@ public class FlinkStreamerConfig extends Configuration {
   public Double writeTaskMaxSize = 1024D;
 
   @Parameter(names = {"--write-batch-size"},
-      description = "Batch buffer size in MB to flush data into the underneath filesystem, default 64MB")
-  public Double writeBatchSize = 64D;
+      description = "Batch buffer size in MB to flush data into the underneath filesystem, default 256MB")
+  public Double writeBatchSize = 256D;
 
   @Parameter(names = {"--write-log-block-size"}, description = "Max log block size in MB for log file, default 128MB")
   public Integer writeLogBlockSize = 128;
@@ -220,8 +220,8 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB")
   public Integer compactionMaxMemory = 100;
 
-  @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write), default 5 GB")
-  public Long compactionTargetIo = 5120L;
+  @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write), default 500 GB")
+  public Long compactionTargetIo = 512000L;
 
   @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default")
   public Boolean cleanAsyncEnabled = true;
@@ -312,7 +312,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.OPERATION, config.operation.value());
     conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
-    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, config.filterDupes);
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, config.preCombine);
     conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
     conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));
     conf.setBoolean(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);

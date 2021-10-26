@@ -405,6 +405,11 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case CreateDataSourceTableCommand(table, ignoreIfExists)
         if isHoodieTable(table) =>
         CreateHoodieTableCommand(table, ignoreIfExists)
+      // Rewrite the AlterTableDropPartitionCommand to AlterHoodieTableDropPartitionCommand
+      case AlterTableDropPartitionCommand(tableName, specs, _, _, _)
+        if isHoodieTable(tableName, sparkSession) =>
+          AlterHoodieTableDropPartitionCommand(tableName, specs)
+      // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
       // Rewrite the AlterTableAddColumnsCommand to AlterHoodieTableAddColumnsCommand
       case AlterTableAddColumnsCommand(tableId, colsToAdd)
         if isHoodieTable(tableId, sparkSession) =>

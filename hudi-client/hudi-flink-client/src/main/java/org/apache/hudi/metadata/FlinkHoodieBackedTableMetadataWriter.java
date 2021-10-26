@@ -85,7 +85,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
         writeClient.startCommitWithTime(instantTime);
-        writeClient.transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+        metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
       } else {
         // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
         // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
