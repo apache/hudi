@@ -457,7 +457,7 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
            |  TS long,
            |  DT string
            |) using hudi
-           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "/")}/$tableName'
+           | location '${tmp.getCanonicalPath}/$tableName'
            | options (
            |  primaryKey ='ID',
            |  preCombineField = 'TS'
@@ -534,7 +534,7 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
            |  preCombineField = 'ts'
            | )
            | partitioned by(dt)
-           | location '${tmp.getCanonicalPath.replaceAll("\\\\", "/")}/$tableName'
+           | location '${tmp.getCanonicalPath}/$tableName'
          """.stripMargin)
 
       // Test ignoring case when column name matches
