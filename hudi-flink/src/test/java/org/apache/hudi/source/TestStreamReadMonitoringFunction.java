@@ -89,7 +89,7 @@ public class TestStreamReadMonitoringFunction {
 
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All the instants should have range limit");
-      String latestCommit = TestUtils.getLatestCommit(tempFile.getAbsolutePath());
+      String latestCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getLatestCommit().equals(latestCommit)),
           "All the splits should be with latestCommit instant time");
 
@@ -143,7 +143,7 @@ public class TestStreamReadMonitoringFunction {
     // all the splits should come from the second commit.
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
-    String specifiedCommit = TestUtils.getLatestCommit(tempFile.getAbsolutePath());
+    String specifiedCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.READ_START_COMMIT, specifiedCommit);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
@@ -174,7 +174,7 @@ public class TestStreamReadMonitoringFunction {
     // all the splits should come from the earliest commit.
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
-    String specifiedCommit = TestUtils.getLatestCommit(tempFile.getAbsolutePath());
+    String specifiedCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {

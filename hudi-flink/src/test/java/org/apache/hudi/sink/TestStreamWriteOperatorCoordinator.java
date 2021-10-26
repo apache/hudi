@@ -20,7 +20,6 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -30,6 +29,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -41,7 +41,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -95,8 +94,8 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(1, event1);
 
     coordinator.notifyCheckpointComplete(1);
-    String inflight = coordinator.getWriteClient().getLastPendingInstant(HoodieTableType.COPY_ON_WRITE);
-    String lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(HoodieTableType.COPY_ON_WRITE);
+    String inflight = TestUtils.getLastPendingInstant(tempFile.getAbsolutePath());
+    String lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     assertThat("Instant should be complete", lastCompleted, is(instant));
     assertNotEquals("", inflight, "Should start a new instant");
     assertNotEquals(instant, inflight, "Should start a new instant");
@@ -146,7 +145,7 @@ public class TestStreamWriteOperatorCoordinator {
 
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
         "Returns early for empty write results");
-    String lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(HoodieTableType.COPY_ON_WRITE);
+    String lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     assertNull(lastCompleted, "Returns early for empty write results");
     assertNull(coordinator.getEventBuffer()[0]);
 
@@ -154,7 +153,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(1, event1);
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(2),
         "Commits the instant with partial events anyway");
-    lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(HoodieTableType.COPY_ON_WRITE);
+    lastCompleted = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
     assertThat("Commits the instant with partial events anyway", lastCompleted, is(instant));
   }
 
@@ -181,7 +180,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1));
   }
 
-  @Disabled
+  @Test
   void testSyncMetadataTable() throws Exception {
     // reset
     reset();
@@ -193,7 +192,6 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator = new StreamWriteOperatorCoordinator(conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
-    coordinator.setMetadataSyncExecutor(new MockCoordinatorExecutor(context));
 
     final WriteMetadataEvent event0 = WriteMetadataEvent.emptyBootstrap(0);
 
@@ -209,7 +207,7 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is("0000000000000"));
 
     // test metadata table compaction
-    // write another 4 commits
+    // write another 3 commits
     for (int i = 1; i < 4; i++) {
       instant = mockWriteWithMetadata();
       metadataTableMetaClient.reloadActiveTimeline();
@@ -247,7 +245,13 @@ public class TestStreamWriteOperatorCoordinator {
       double failureFraction) {
     final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction);
     writeStatus.setPartitionPath(partitionPath);
-    writeStatus.setStat(new HoodieWriteStat());
+
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partitionPath);
+    writeStat.setFileId("fileId123");
+    writeStat.setPath("path123");
+
+    writeStatus.setStat(writeStat);
 
     return WriteMetadataEvent.builder()
         .taskID(taskId)

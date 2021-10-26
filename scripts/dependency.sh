@@ -17,86 +17,26 @@
 #
 
 set -eou pipefail
-set -x
-
+#set -x
 export LC_ALL=C
 
 PWD=$(cd "$(dirname "$0")"/.. || exit; pwd)
 
-function printUsage() {
-  echo "Usage: $(basename "${0}") [-p <artifactId>] -r " 2>&1
-  echo '   -r   [OPTIONAL] to replace the old dependencyList file with new dependencies'
-  echo '   -p   [MUST] to generate new dependencyList file for the specified module'
+function generate_dependencies() {
+  mvn --also-make dependency:tree -P $PROFILE | \
+  grep maven-dependency-plugin | \
+  grep bundle | \
+  awk '{
+    print $(NF-1);
+  }' | \
+  while read line; do
+    FILE_NAME="${PWD}"/dependencies/"$line".txt
+    build_classpath "$line" "-P "$PROFILE $FILE_NAME
+  done
 }
 
 function build_classpath() {
-  mvn dependency:build-classpath -pl :${PL} -Dmdep.localRepoProperty=EMPTY_REPO |\
-    grep -E -v "INFO|WARNING" | \
-    tr ":" "\n" | \
-    awk -F '/' '{
-      artifact_id=$(NF-2);
-      version=$(NF-1);
-      jar_name=$NF;
-      group_start_index=length("EMPTY_REPO/") + 1;
-      group_end_index=length($0) - (length(jar_name) + length(version) + length(artifact_id) + 3);
-      group=substr($0, group_start_index, group_end_index - group_start_index + 1);
-      gsub(/\//, ".", group);
-      classifier_start_index=length(artifact_id"-"version"-") + 1;
-      classifier_end_index=index(jar_name, ".jar") - 1;
-      classifier=substr(jar_name, classifier_start_index, classifier_end_index - classifier_start_index + 1);
-      print artifact_id"/"group"/"version"/"classifier"/"jar_name
-    }' | grep -v "hudi" | sort >> "${DEP_PR}"
-}
-
-function check_diff() {
-    set +e
-    the_diff=$(diff ${DEP} ${DEP_PR})
-    set -e
-    rm -rf "${DEP_PR}"
-    if [[ -n $the_diff ]]; then
-        echo "Dependency List Changed Detected: "
-        echo ${the_diff}
-        echo "To update the dependency file, refer to the usage:"
-        printUsage
-        exit 1
-    fi
-}
-
-if [[ ${#} -eq 0 ]]; then
-  printUsage
-fi
-
-PL=''
-REPLACE='false'
-
-while getopts "rp:" arg; do
-  case "${arg}" in
-    r)
-      REPLACE="true"
-      ;;
-    p)
-      PL=$OPTARG
-      ;;
-    ?)
-      printUsage
-      ;;
-  esac
-done
-
-shift "$(( OPTIND - 1 ))"
-
-# check must option
-if [ -z "$PL" ]; then
-  echo 'Missing -p argument' >&2
-  exit 1
-fi
-
-DEP_PR="${PWD}"/dev/dependencyList"${PL}".txt.tmp
-DEP="${PWD}"/dev/dependencyList_"${PL}".txt
-
-rm -rf "${DEP_PR}"
-
-cat >"${DEP_PR}"<<EOF
+  cat >"$3"<<EOF
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -116,12 +56,87 @@ cat >"${DEP_PR}"<<EOF
 
 EOF
 
-build_classpath
+  mvn dependency:build-classpath -pl :$1 $2 -Dmdep.localRepoProperty=EMPTY_REPO |\
+  grep -E -v "INFO|WARNING" | \
+  tr ":" "\n" | \
+  awk -F '/' '{
+    artifact_id=$(NF-2);
+    version=$(NF-1);
+    jar_name=$NF;
+    group_start_index=length("EMPTY_REPO/") + 1;
+    group_end_index=length($0) - (length(jar_name) + length(version) + length(artifact_id) + 3);
+    group=substr($0, group_start_index, group_end_index - group_start_index + 1);
+    gsub(/\//, ".", group);
+    classifier_start_index=length(artifact_id"-"version"-") + 1;
+    classifier_end_index=index(jar_name, ".jar") - 1;
+    classifier=substr(jar_name, classifier_start_index, classifier_end_index - classifier_start_index + 1);
+    print artifact_id"/"group"/"version"/"classifier"/"jar_name
+  }' | grep -v "hudi" | sort >> "$3"
+}
 
-if [ $REPLACE == "true" ]; then
-  rm -rf "${DEP}"
-  mv "${DEP_PR}" "${DEP}"
-  exit 0
+function check_diff() {
+  mvn --also-make dependency:tree -P $PROFILE | \
+  grep maven-dependency-plugin | \
+  grep bundle | \
+  awk '{
+    print $(NF-1);
+  }' | \
+  while read line; do
+    FILE_NAME="${PWD}"/dependencies/"$line".txt
+    BACKUP_FILE_NAME=$FILE_NAME".bkp"
+    mv $FILE_NAME $BACKUP_FILE_NAME
+    build_classpath "$line" "-P "$PROFILE $FILE_NAME
+    set +e
+    the_diff=$(diff $FILE_NAME $BACKUP_FILE_NAME)
+    set -e
+    rm -rf "$BACKUP_FILE_NAME"
+    if [[ -n $the_diff ]]; then
+      echo "Dependency List Changed Detected [$line]: "
+      echo ${the_diff}
+      echo "To update the dependency file, refer to the usage:"
+      printUsage
+      exit 1
+    fi
+  done
+}
+
+function printUsage() {
+  echo "Usage: $(basename "${0}") [-p <profile>] -c " 2>&1
+  echo '   -c   [OPTIONAL] to check the dependencies diff'
+  echo '   -p   [MUST] to generate new dependencyList file for all bundle module with given profile list'
+}
+
+if [[ ${#} -eq 0 ]]; then
+  printUsage
 fi
 
-check_diff
+PROFILE=''
+CHECK_DIFF='false'
+
+while getopts "cp:" arg; do
+  case "${arg}" in
+    c)
+      CHECK_DIFF="true"
+      ;;
+    p)
+      PROFILE=$OPTARG
+      ;;
+    ?)
+      printUsage
+      ;;
+  esac
+done
+
+shift "$(( OPTIND - 1 ))"
+
+# check must option
+if [ -z "$PROFILE" ]; then
+  echo 'Missing -p argument' >&2
+  exit 1
+fi
+
+if [ $CHECK_DIFF == "true" ]; then
+  check_diff
+else
+  generate_dependencies
+fi

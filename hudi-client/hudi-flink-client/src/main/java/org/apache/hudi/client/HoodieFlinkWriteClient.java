@@ -19,7 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -36,7 +36,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -46,17 +45,21 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndex;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FlinkAppendHandle;
+import org.apache.hudi.io.FlinkConcatAndReplaceHandle;
+import org.apache.hudi.io.FlinkConcatHandle;
 import org.apache.hudi.io.FlinkCreateHandle;
 import org.apache.hudi.io.FlinkMergeAndReplaceHandle;
 import org.apache.hudi.io.FlinkMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.MiniBatchHandle;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.FlinkCompactHelpers;
+import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
@@ -69,7 +72,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -86,22 +88,16 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * FileID to write handle mapping in order to record the write handles for each file group,
    * so that we can append the mini-batch data buffer incrementally.
    */
-  private Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles;
+  private final Map<String, HoodieWriteHandle<?, ?, ?, ?>> bucketToHandles;
 
-  public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    this(context, clientConfig, false);
-  }
+  /**
+   * Cached metadata writer for coordinator to reuse for each commit.
+   */
+  private Option<HoodieBackedTableMetadataWriter> metadataWriterOption = Option.empty();
 
-  @Deprecated
-  public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending) {
+  public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig);
     this.bucketToHandles = new HashMap<>();
-  }
-
-  @Deprecated
-  public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending,
-                                Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, timelineService);
   }
 
   /**
@@ -260,6 +256,24 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     // remove the async cleaning
   }
 
+  @Override
+  protected void preCommit(String instantTime, HoodieCommitMetadata metadata) {
+    this.metadataWriterOption.ifPresent(w -> {
+      w.initTableMetadata(); // refresh the timeline
+      w.update(metadata, instantTime);
+    });
+  }
+
+  /**
+   * Initialize the table metadata writer, for e.g, bootstrap the metadata table
+   * from the filesystem if it does not exist.
+   */
+  public void initMetadataWriter() {
+    HoodieBackedTableMetadataWriter metadataWriter = (HoodieBackedTableMetadataWriter) FlinkHoodieBackedTableMetadataWriter.create(
+        FlinkClientUtil.getHadoopConf(), this.config, HoodieFlinkEngineContext.DEFAULT);
+    this.metadataWriterOption = Option.of(metadataWriter);
+  }
+
   /**
    * Starts async cleaning service for finished commits.
    *
@@ -333,8 +347,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       List<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) throws IOException {
     HoodieFlinkTable<T> table = getHoodieTable();
-    HoodieCommitMetadata metadata = FlinkCompactHelpers.newInstance().createCompactionMetadata(
-        table, compactionInstantTime, writeStatuses, config.getSchema());
+    HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
+        table, compactionInstantTime, HoodieList.of(writeStatuses), config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeCompaction(metadata, writeStatuses, table, compactionInstantTime);
   }
@@ -347,9 +361,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+    writeTableMetadata(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime));
+    // commit to data table after committing to metadata table.
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
-    FlinkCompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+    CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
 
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
@@ -368,7 +384,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   protected List<WriteStatus> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     try {
-      List<WriteStatus> writeStatuses = FlinkCompactHelpers.compact(compactionInstantTime, this);
+      List<WriteStatus> writeStatuses =
+          getHoodieTable().compact(context, compactionInstantTime).getWriteStatuses();
       commitCompaction(compactionInstantTime, writeStatuses, Option.empty());
       return writeStatuses;
     } catch (IOException e) {
@@ -379,6 +396,19 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
     throw new HoodieNotSupportedException("Clustering is not supported yet");
+  }
+
+  private void writeTableMetadata(HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+                                  HoodieCommitMetadata commitMetadata,
+                                  HoodieInstant hoodieInstant) {
+    try {
+      this.txnManager.beginTransaction(Option.of(hoodieInstant), Option.empty());
+      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
+      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
+      table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp()));
+    } finally {
+      this.txnManager.endTransaction();
+    }
   }
 
   @Override
@@ -439,13 +469,16 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     final HoodieRecordLocation loc = record.getCurrentLocation();
     final String fileID = loc.getFileId();
     final String partitionPath = record.getPartitionPath();
+    final boolean insertClustering = config.allowDuplicateInserts();
 
     if (bucketToHandles.containsKey(fileID)) {
       MiniBatchHandle lastHandle = (MiniBatchHandle) bucketToHandles.get(fileID);
       if (lastHandle.shouldReplace()) {
-        HoodieWriteHandle<?, ?, ?, ?> writeHandle = new FlinkMergeAndReplaceHandle<>(
-            config, instantTime, table, recordItr, partitionPath, fileID, table.getTaskContextSupplier(),
-            lastHandle.getWritePath());
+        HoodieWriteHandle<?, ?, ?, ?> writeHandle = insertClustering
+            ? new FlinkConcatAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileID,
+                table.getTaskContextSupplier(), lastHandle.getWritePath())
+            : new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileID,
+                table.getTaskContextSupplier(), lastHandle.getWritePath());
         this.bucketToHandles.put(fileID, writeHandle); // override with new replace handle
         return writeHandle;
       }
@@ -460,8 +493,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       writeHandle = new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
           fileID, table.getTaskContextSupplier());
     } else {
-      writeHandle = new FlinkMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
-          fileID, table.getTaskContextSupplier());
+      writeHandle = insertClustering
+          ? new FlinkConcatHandle<>(config, instantTime, table, recordItr, partitionPath,
+              fileID, table.getTaskContextSupplier())
+          : new FlinkMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
+              fileID, table.getTaskContextSupplier());
     }
     this.bucketToHandles.put(fileID, writeHandle);
     return writeHandle;
@@ -479,41 +515,6 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       writeTimer = metrics.getDeltaCommitCtx();
     }
     return table;
-  }
-
-  public String getLastPendingInstant(HoodieTableType tableType) {
-    final String actionType = CommitUtils.getCommitActionType(tableType);
-    return getLastPendingInstant(actionType);
-  }
-
-  public String getLastPendingInstant(String actionType) {
-    HoodieTimeline unCompletedTimeline = FlinkClientUtil.createMetaClient(basePath)
-        .getCommitsTimeline().filterInflightsAndRequested();
-    return unCompletedTimeline.getInstants()
-        .filter(x -> x.getAction().equals(actionType) && x.isInflight())
-        .map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList()).stream()
-        .max(Comparator.naturalOrder())
-        .orElse(null);
-  }
-
-  public String getLastCompletedInstant(HoodieTableType tableType) {
-    final String commitType = CommitUtils.getCommitActionType(tableType);
-    HoodieTimeline completedTimeline = FlinkClientUtil.createMetaClient(basePath)
-        .getCommitsTimeline().filterCompletedInstants();
-    return completedTimeline.getInstants()
-        .filter(x -> x.getAction().equals(commitType))
-        .map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList()).stream()
-        .max(Comparator.naturalOrder())
-        .orElse(null);
-  }
-
-  public void transitionRequestedToInflight(String commitType, String inFlightInstant) {
-    HoodieActiveTimeline activeTimeline = FlinkClientUtil.createMetaClient(basePath).getActiveTimeline();
-    HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, commitType, inFlightInstant);
-    activeTimeline.transitionRequestedToInflight(requested, Option.empty(),
-        config.shouldAllowMultiWriteOnSameInstant());
   }
 
   public HoodieFlinkTable<T> getHoodieTable() {

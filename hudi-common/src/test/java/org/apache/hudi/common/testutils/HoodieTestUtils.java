@@ -112,7 +112,7 @@ public class HoodieTestUtils {
   }
 
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
-    // Using Kyro as the default serializer in Spark Jobs
+    // Using Kryo as the default serializer in Spark Jobs
     Kryo kryo = new Kryo();
     kryo.register(HoodieTableMetaClient.class, new JavaSerializer());
 
@@ -122,9 +122,9 @@ public class HoodieTestUtils {
     output.close();
 
     Input input = new Input(new ByteArrayInputStream(baos.toByteArray()));
-    T deseralizedObject = kryo.readObject(input, clazz);
+    T deserializedObject = kryo.readObject(input, clazz);
     input.close();
-    return deseralizedObject;
+    return deserializedObject;
   }
 
   public static List<HoodieWriteStat> generateFakeHoodieWriteStat(int limit) {

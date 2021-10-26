@@ -51,6 +51,7 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -114,6 +115,10 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return jsc.hadoopConfiguration();
   }
 
+  public FileSystem fs() {
+    return FSUtils.getFs(basePath(), hadoopConf());
+  }
+
   @Override
   public HoodieSparkEngineContext context() {
     return context;
@@ -171,8 +176,14 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     }
   }
 
+  /**
+   * To clean up Spark resources after all testcases have run in functional tests.
+   *
+   * Spark session and contexts were reused for testcases in the same test class. Some
+   * testcase may invoke this specifically to clean up in case of repeated test runs.
+   */
   @AfterAll
-  public static synchronized void cleanUpAfterAll() {
+  public static synchronized void resetSpark() {
     if (spark != null) {
       spark.close();
       spark = null;

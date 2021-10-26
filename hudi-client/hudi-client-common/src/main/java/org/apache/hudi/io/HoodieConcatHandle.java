@@ -16,15 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
@@ -34,6 +35,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -44,21 +46,21 @@ import java.util.Map;
  * Simplified Logic:
  * For every existing record
  *     Write the record as is
- * For all incoming records, write to file as is.
+ * For all incoming records, write to file as is, without de-duplicating based on the record key.
  *
  * Illustration with simple data.
  * Incoming data:
- *     rec1_2, rec4_2, rec5_1, rec6_1
+ *     rec1_2, rec1_3, rec4_2, rec5_1, rec6_1
  * Existing data:
  *     rec1_1, rec2_1, rec3_1, rec4_1
  *
  * For every existing record, write to storage as is.
  *    => rec1_1, rec2_1, rec3_1 and rec4_1 is written to storage
  * Write all records from incoming set to storage
- *    => rec1_2, rec4_2, rec5_1 and rec6_1
+ *    => rec1_2, rec1_3, rec4_2, rec5_1 and rec6_1
  *
  * Final snapshot in storage
- * rec1_1, rec2_1, rec3_1, rec4_1, rec1_2, rec4_2, rec5_1, rec6_1
+ * rec1_1, rec2_1, rec3_1, rec4_1, rec1_2, rec1_3, rec4_2, rec5_1, rec6_1
  *
  * Users should ensure there are no duplicates when "insert" operation is used and if the respective config is enabled. So, above scenario should not
  * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
@@ -66,16 +68,22 @@ import java.util.Map;
 public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConcatHandle.class);
+  // a representation of incoming records that tolerates duplicate keys
+  private final Iterator<HoodieRecord<T>> recordItr;
 
-  public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, Iterator recordItr,
-                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+  public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                            TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, Collections.emptyIterator(), partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+    this.recordItr = recordItr;
   }
 
-  public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, Map keyToNewRecords, String partitionPath, String fileId,
-      HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier,
+  public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
+                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
+    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, dataFileToBeMerged, taskContextSupplier,
         Option.empty());
+    this.recordItr = keyToNewRecords.values().iterator();
   }
 
   /**
@@ -93,5 +101,18 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
       throw new HoodieUpsertException(errMsg, e);
     }
     recordsWritten++;
+  }
+
+  @Override
+  protected void writeIncomingRecords() throws IOException {
+    while (recordItr.hasNext()) {
+      HoodieRecord<T> record = recordItr.next();
+      if (needsUpdateLocation()) {
+        record.unseal();
+        record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+        record.seal();
+      }
+      writeInsertRecord(record);
+    }
   }
 }

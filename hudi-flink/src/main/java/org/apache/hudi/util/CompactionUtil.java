@@ -18,7 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -111,7 +110,7 @@ public class CompactionUtil {
     }
   }
 
-  public static void rollbackCompaction(HoodieFlinkTable<?> table, HoodieFlinkWriteClient writeClient, Configuration conf) {
+  public static void rollbackCompaction(HoodieFlinkTable<?> table, Configuration conf) {
     String curInstantTime = HoodieActiveTimeline.createNewInstantTime();
     int deltaSeconds = conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS);
     HoodieTimeline inflightCompactionTimeline = table.getActiveTimeline()
@@ -121,7 +120,7 @@ public class CompactionUtil {
                 && StreamerUtil.instantTimeDiffSeconds(curInstantTime, instant.getTimestamp()) >= deltaSeconds);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
       LOG.info("Rollback the pending compaction instant: " + inflightInstant);
-      writeClient.rollbackInflightCompaction(inflightInstant, table);
+      table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();
     });
   }
