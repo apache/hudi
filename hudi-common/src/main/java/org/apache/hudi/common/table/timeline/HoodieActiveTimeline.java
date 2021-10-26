@@ -96,7 +96,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       return COMMIT_FORMATTER.parse(instant);
     } else {
       // Add milliseconds to the instant in order to parse successfully
-      return COMMIT_FORMATTER.parse(instant + "000");
+      return COMMIT_FORMATTER.parse(instant + DEFAULT_MILLIS_EXT);
     }
   }
 
