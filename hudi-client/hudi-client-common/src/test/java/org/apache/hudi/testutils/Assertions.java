@@ -19,7 +19,7 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.ReportsWrite;
 import org.apache.hudi.common.testutils.CheckedFunction;
 
 import java.util.List;
@@ -36,7 +36,7 @@ public class Assertions {
   /**
    * Assert no failures in writing hoodie files.
    */
-  public static void assertNoWriteErrors(List<WriteStatus> statuses) {
+  public static void assertNoWriteErrors(List<? extends ReportsWrite> statuses) {
     assertAll(statuses.stream().map(status -> () ->
         assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId())));
   }
@@ -46,7 +46,7 @@ public class Assertions {
    *
    * @param fileSizeGetter to retrieve the source of truth of file size.
    */
-  public static void assertFileSizesEqual(List<WriteStatus> statuses, CheckedFunction<WriteStatus, Long> fileSizeGetter) {
+  public static void assertFileSizesEqual(List<? extends ReportsWrite> statuses, CheckedFunction<ReportsWrite, Long> fileSizeGetter) {
     assertAll(statuses.stream().map(status -> () ->
         assertEquals(fileSizeGetter.apply(status), status.getStat().getFileSizeInBytes())));
   }
