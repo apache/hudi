@@ -60,15 +60,16 @@ import java.util.function.Function;
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
-  private static final String COMMIT_FORMAT = "yyyyMMddHHmmssSSS";
-  private static final int INSTANT_ID_LENGTH = COMMIT_FORMAT.length();
-  private static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat(COMMIT_FORMAT);
+  private static final String MILLIS_COMMIT_FORMAT = "yyyyMMddHHmmssSSS";
+  private static final int MILLIS_INSTANT_ID_LENGTH = MILLIS_COMMIT_FORMAT.length();
+  private static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat(MILLIS_COMMIT_FORMAT);
 
   private static final String MILLIS_GRANULARITY_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss:SSS";
-  private static final SimpleDateFormat MS_GRANULARITY_DATE_FORMATTER = new SimpleDateFormat(MILLIS_GRANULARITY_DATE_FORMAT);
+  private static final SimpleDateFormat MILLIS_GRANULARITY_DATE_FORMATTER = new SimpleDateFormat(MILLIS_GRANULARITY_DATE_FORMAT);
 
   // The default number of milliseconds that we add if they are not present
   // We prefer the max timestamp as it mimics the current behavior with second granularity
+  // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
   private static final String DEFAULT_MILLIS_EXT = "999";
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
@@ -112,10 +113,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public static String getInstantForDateString(String dateString) throws ParseException {
     try {
-      return getInstantForDate(MS_GRANULARITY_DATE_FORMATTER.parse(dateString));
+      return getInstantForDate(MILLIS_GRANULARITY_DATE_FORMATTER.parse(dateString));
     } catch (ParseException e) {
       // Attempt to add the milliseconds in order to complete parsing
-      return getInstantForDate(MS_GRANULARITY_DATE_FORMATTER.parse(
+      return getInstantForDate(MILLIS_GRANULARITY_DATE_FORMATTER.parse(
               String.format("%s:%s", dateString, DEFAULT_MILLIS_EXT)
       ));
     }
@@ -241,7 +242,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private static boolean isMillisecondGranularity(String instant) {
-    return instant.length() == INSTANT_ID_LENGTH;
+    return instant.length() == MILLIS_INSTANT_ID_LENGTH;
   }
 
   private void deleteInstantFileIfExists(HoodieInstant instant) {
