@@ -21,7 +21,6 @@ package org.apache.hudi.data;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
-import org.apache.hudi.common.function.FunctionWrapper;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
@@ -32,7 +31,6 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.storage.StorageLevel;
 
 import java.util.Map;
-import java.util.function.Function;
 
 import scala.Tuple2;
 
@@ -113,10 +111,8 @@ public class HoodieJavaPairRDD<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
-    Function<Pair<K, V>, Pair<L, W>> throwableMapToPairFunc =
-        FunctionWrapper.throwingMapToPairWrapper(mapToPairFunc);
     return HoodieJavaPairRDD.of(pairRDDData.mapToPair(pair -> {
-      Pair<L, W> newPair = throwableMapToPairFunc.apply(new ImmutablePair<>(pair._1, pair._2));
+      Pair<L, W> newPair = mapToPairFunc.call(new ImmutablePair<>(pair._1, pair._2));
       return new Tuple2<>(newPair.getLeft(), newPair.getRight());
     }));
   }

@@ -200,7 +200,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected JavaRDD<WriteStatus> updateLocation(
       HoodieIndex index, JavaRDD<WriteStatus> writeStatus, HoodieTable table) {
     return HoodieJavaRDD.getJavaRDD(
-        index.tagLocation(HoodieJavaRDD.of(writeStatus), context, table));
+        index.updateLocation(HoodieJavaRDD.of(writeStatus), context, table));
   }
 
   protected void insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {

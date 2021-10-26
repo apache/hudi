@@ -109,7 +109,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
-    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -344,10 +344,10 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   }
 
   // convert list to map to avoid sorting order dependencies
-  private static Map<String, BloomIndexFileInfo> toFileMap(List<Tuple2<String, BloomIndexFileInfo>> filesList) {
+  private static Map<String, BloomIndexFileInfo> toFileMap(List<Pair<String, BloomIndexFileInfo>> filesList) {
     Map<String, BloomIndexFileInfo> filesMap = new HashMap<>();
-    for (Tuple2<String, BloomIndexFileInfo> t : filesList) {
-      filesMap.put(t._1() + "/" + t._2().getFileId(), t._2());
+    for (Pair<String, BloomIndexFileInfo> t : filesList) {
+      filesMap.put(t.getKey() + "/" + t.getValue().getFileId(), t.getValue());
     }
     return filesMap;
   }
