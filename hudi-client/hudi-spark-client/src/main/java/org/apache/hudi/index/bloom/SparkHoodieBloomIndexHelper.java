@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.data.HoodieJavaPairRDDData;
+import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieTable;
 
@@ -73,7 +73,7 @@ public class SparkHoodieBloomIndexHelper extends HoodieBloomIndexHelper {
     Map<String, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
         config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
     int inputParallelism =
-        HoodieJavaPairRDDData.getJavaPairRDD(partitionRecordKeyPairs).partitions().size();
+        HoodieJavaPairRDD.getJavaPairRDD(partitionRecordKeyPairs).partitions().size();
     int joinParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
     LOG.info("InputParallelism: ${" + inputParallelism + "}, IndexParallelism: ${"
         + config.getBloomIndexParallelism() + "}");
@@ -88,7 +88,7 @@ public class SparkHoodieBloomIndexHelper extends HoodieBloomIndexHelper {
       fileComparisonsRDD = fileComparisonsRDD.sortBy(Tuple2::_1, true, joinParallelism);
     }
 
-    return HoodieJavaPairRDDData.of(fileComparisonsRDD.mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true)
+    return HoodieJavaPairRDD.of(fileComparisonsRDD.mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true)
         .flatMap(List::iterator).filter(lr -> lr.getMatchingRecordKeys().size() > 0)
         .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
             .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),

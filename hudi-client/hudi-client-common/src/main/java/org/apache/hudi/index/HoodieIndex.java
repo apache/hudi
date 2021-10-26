@@ -39,9 +39,12 @@ import java.io.Serializable;
  * Base class for different types of indexes to determine the mapping from uuid.
  *
  * @param <T> Sub type of HoodieRecordPayload
+ * @param <I> Type of inputs for deprecated APIs
+ * @param <K> Type of keys for deprecated APIs
+ * @param <O> Type of outputs for deprecated APIs
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public abstract class HoodieIndex<T extends HoodieRecordPayload<T>, I, K, O> implements Serializable {
+public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
 

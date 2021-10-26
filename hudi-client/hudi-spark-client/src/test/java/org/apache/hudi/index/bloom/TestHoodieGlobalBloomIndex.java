@@ -26,7 +26,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.data.HoodieJavaPairRDDData;
+import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -160,7 +160,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
     List<ImmutablePair<String, HoodieKey>> comparisonKeyList = HoodieJavaRDD.getJavaRDD(
         index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo,
-            HoodieJavaPairRDDData.of(partitionRecordKeyPairRDD))).collect();
+            HoodieJavaPairRDD.of(partitionRecordKeyPairRDD))).collect();
 
     /*
      * expecting: f4, HoodieKey { recordKey=003 partitionPath=2017/10/23} f1, HoodieKey { recordKey=003

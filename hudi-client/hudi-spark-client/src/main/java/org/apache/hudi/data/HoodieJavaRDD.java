@@ -108,7 +108,7 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
 
   @Override
   public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> mapToPairFunc) {
-    return HoodieJavaPairRDDData.of(rddData.mapToPair(input -> {
+    return HoodieJavaPairRDD.of(rddData.mapToPair(input -> {
       Pair<K, V> pair = mapToPairFunc.call(input);
       return new Tuple2<>(pair.getLeft(), pair.getRight());
     }));

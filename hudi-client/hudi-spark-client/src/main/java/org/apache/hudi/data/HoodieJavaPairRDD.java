@@ -42,11 +42,11 @@ import scala.Tuple2;
  * @param <K> type of key.
  * @param <V> type of value.
  */
-public class HoodieJavaPairRDDData<K, V> extends HoodiePairData<K, V> {
+public class HoodieJavaPairRDD<K, V> extends HoodiePairData<K, V> {
 
   private final JavaPairRDD<K, V> pairRDDData;
 
-  private HoodieJavaPairRDDData(JavaPairRDD<K, V> pairRDDData) {
+  private HoodieJavaPairRDD(JavaPairRDD<K, V> pairRDDData) {
     this.pairRDDData = pairRDDData;
   }
 
@@ -56,18 +56,18 @@ public class HoodieJavaPairRDDData<K, V> extends HoodiePairData<K, V> {
    * @param <V>         type of value.
    * @return a new instance containing the {@link JavaPairRDD<K, V>} reference.
    */
-  public static <K, V> HoodieJavaPairRDDData<K, V> of(JavaPairRDD<K, V> pairRDDData) {
-    return new HoodieJavaPairRDDData<>(pairRDDData);
+  public static <K, V> HoodieJavaPairRDD<K, V> of(JavaPairRDD<K, V> pairRDDData) {
+    return new HoodieJavaPairRDD<>(pairRDDData);
   }
 
   /**
-   * @param hoodiePairData {@link HoodieJavaPairRDDData<K, V>} instance containing the {@link JavaPairRDD} of pairs.
+   * @param hoodiePairData {@link HoodieJavaPairRDD <K, V>} instance containing the {@link JavaPairRDD} of pairs.
    * @param <K>            type of key.
    * @param <V>            type of value.
    * @return the {@link JavaPairRDD} of pairs.
    */
   public static <K, V> JavaPairRDD<K, V> getJavaPairRDD(HoodiePairData<K, V> hoodiePairData) {
-    return ((HoodieJavaPairRDDData<K, V>) hoodiePairData).get();
+    return ((HoodieJavaPairRDD<K, V>) hoodiePairData).get();
   }
 
   @Override
@@ -115,7 +115,7 @@ public class HoodieJavaPairRDDData<K, V> extends HoodiePairData<K, V> {
   public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
     Function<Pair<K, V>, Pair<L, W>> throwableMapToPairFunc =
         FunctionWrapper.throwingMapToPairWrapper(mapToPairFunc);
-    return HoodieJavaPairRDDData.of(pairRDDData.mapToPair(pair -> {
+    return HoodieJavaPairRDD.of(pairRDDData.mapToPair(pair -> {
       Pair<L, W> newPair = throwableMapToPairFunc.apply(new ImmutablePair<>(pair._1, pair._2));
       return new Tuple2<>(newPair.getLeft(), newPair.getRight());
     }));
@@ -123,8 +123,8 @@ public class HoodieJavaPairRDDData<K, V> extends HoodiePairData<K, V> {
 
   @Override
   public <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other) {
-    return HoodieJavaPairRDDData.of(JavaPairRDD.fromJavaRDD(
-        pairRDDData.leftOuterJoin(HoodieJavaPairRDDData.getJavaPairRDD(other))
+    return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(
+        pairRDDData.leftOuterJoin(HoodieJavaPairRDD.getJavaPairRDD(other))
             .map(tuple -> new Tuple2<>(tuple._1,
                 new ImmutablePair<>(tuple._2._1, Option.ofNullable(tuple._2._2.orElse(null)))))));
   }

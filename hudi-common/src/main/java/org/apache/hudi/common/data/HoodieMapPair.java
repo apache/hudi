@@ -44,11 +44,11 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper
  * @param <K> type of key.
  * @param <V> type of value.
  */
-public class HoodieMapPairData<K, V> extends HoodiePairData<K, V> {
+public class HoodieMapPair<K, V> extends HoodiePairData<K, V> {
 
   private final Map<K, List<V>> mapPairData;
 
-  private HoodieMapPairData(Map<K, List<V>> mapPairData) {
+  private HoodieMapPair(Map<K, List<V>> mapPairData) {
     this.mapPairData = mapPairData;
   }
 
@@ -58,18 +58,18 @@ public class HoodieMapPairData<K, V> extends HoodiePairData<K, V> {
    * @param <V>         type of value.
    * @return a new instance containing the {@link Map<K, List<V>>} reference.
    */
-  public static <K, V> HoodieMapPairData<K, V> of(Map<K, List<V>> mapPairData) {
-    return new HoodieMapPairData<>(mapPairData);
+  public static <K, V> HoodieMapPair<K, V> of(Map<K, List<V>> mapPairData) {
+    return new HoodieMapPair<>(mapPairData);
   }
 
   /**
-   * @param hoodiePairData {@link HoodieMapPairData<K, V>} instance containing the {@link Map} of pairs.
+   * @param hoodiePairData {@link HoodieMapPair <K, V>} instance containing the {@link Map} of pairs.
    * @param <K>            type of key.
    * @param <V>            type of value.
    * @return the {@link Map} of pairs.
    */
   public static <K, V> Map<K, List<V>> getMapPair(HoodiePairData<K, V> hoodiePairData) {
-    return ((HoodieMapPairData<K, V>) hoodiePairData).get();
+    return ((HoodieMapPair<K, V>) hoodiePairData).get();
   }
 
   @Override
@@ -126,12 +126,12 @@ public class HoodieMapPairData<K, V> extends HoodiePairData<K, V> {
       List<W> list = newMap.computeIfAbsent(newPair.getKey(), k -> new ArrayList<>());
       list.add(newPair.getValue());
     });
-    return HoodieMapPairData.of(newMap);
+    return HoodieMapPair.of(newMap);
   }
 
   @Override
   public <W> HoodiePairData<K, Pair<V, Option<W>>> leftOuterJoin(HoodiePairData<K, W> other) {
-    Map<K, List<W>> otherMapPairData = HoodieMapPairData.getMapPair(other);
+    Map<K, List<W>> otherMapPairData = HoodieMapPair.getMapPair(other);
     Stream<ImmutablePair<K, ImmutablePair<V, Option<List<W>>>>> pairs = streamAllPairs()
         .map(pair -> new ImmutablePair<>(pair.getKey(), new ImmutablePair<>(
             pair.getValue(), Option.ofNullable(otherMapPairData.get(pair.getKey())))));
@@ -147,7 +147,7 @@ public class HoodieMapPairData<K, V> extends HoodiePairData<K, V> {
             w -> new ImmutablePair<>(valuePair.getLeft(), Option.of(w))).collect(Collectors.toList()));
       }
     });
-    return HoodieMapPairData.of(resultMap);
+    return HoodieMapPair.of(resultMap);
   }
 
   private Stream<ImmutablePair<K, V>> streamAllPairs() {

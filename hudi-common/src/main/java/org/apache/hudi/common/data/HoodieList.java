@@ -114,7 +114,7 @@ public class HoodieList<T> extends HoodieData<T> {
       List<V> list = mapOfPairs.computeIfAbsent(pair.getKey(), k -> new ArrayList<>());
       list.add(pair.getValue());
     });
-    return HoodieMapPairData.of(mapOfPairs);
+    return HoodieMapPair.of(mapOfPairs);
   }
 
   @Override
