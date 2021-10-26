@@ -126,4 +126,28 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record2);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
   }
+  @Test
+  public void testNullColumn() throws IOException {
+    Schema avroSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"hoodie_source\",\"fields\":[{\"name\":\"id\",\"type\":[\"string\",\"null\"]},{\"name\":\"name\",\"type\":[\"string\",\"null\"]},{\"name\":\"age\",\"type\":[\"string\",\"null\"]},{\"name\":\"job\",\"type\":[\"string\",\"null\"]}]}");
+    GenericRecord record1 = new GenericData.Record(avroSchema);
+    record1.put("id", "1");
+    record1.put("name", "aa");
+    record1.put("age", "1");
+    record1.put("job", "1");
+
+    GenericRecord record2 = new GenericData.Record(avroSchema);
+    record2.put("id", "1");
+    record2.put("name", "bb");
+    record2.put("age", "2");
+    record2.put("job", null);
+
+    GenericRecord record3 = new GenericData.Record(avroSchema);
+    record3.put("id", "1");
+    record3.put("name", "bb");
+    record3.put("age", "2");
+    record3.put("job", "1");
+
+    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 1);
+    assertEquals(payload2.combineAndGetUpdateValue(record1, avroSchema).get(), record3);
+  }
 }
