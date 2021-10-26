@@ -45,7 +45,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   T preCombine(T oldValue);
 
   /**
-   * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to insert/upsert by taking in a property map.
+   * When more than one HoodieRecord have the same HoodieKey in the incoming batch, this function combines them before attempting to insert/upsert by taking in a property map.
    * Implementation can leverage the property to decide their business logic to do preCombine.
    *
    * @param oldValue   instance of the old {@link HoodieRecordPayload} to be combined with.
