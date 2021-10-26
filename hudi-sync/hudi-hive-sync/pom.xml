@@ -96,6 +96,7 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
+      <scope>test</scope>
     </dependency>
 
     <!-- Hive -->

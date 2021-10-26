@@ -96,9 +96,7 @@ hadoop-annotations/org.apache.hadoop/2.7.3//hadoop-annotations-2.7.3.jar
 hadoop-auth/org.apache.hadoop/2.7.3//hadoop-auth-2.7.3.jar
 hadoop-client/org.apache.hadoop/2.7.3//hadoop-client-2.7.3.jar
 hadoop-common/org.apache.hadoop/2.7.3//hadoop-common-2.7.3.jar
-hadoop-common/org.apache.hadoop/2.7.3/tests/hadoop-common-2.7.3-tests.jar
 hadoop-hdfs/org.apache.hadoop/2.7.3//hadoop-hdfs-2.7.3.jar
-hadoop-hdfs/org.apache.hadoop/2.7.3/tests/hadoop-hdfs-2.7.3-tests.jar
 hadoop-mapreduce-client-app/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-app-2.7.3.jar
 hadoop-mapreduce-client-common/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-common-2.7.3.jar
 hadoop-mapreduce-client-core/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-core-2.7.3.jar
@@ -149,10 +147,10 @@ httpclient/org.apache.httpcomponents/4.4.1//httpclient-4.4.1.jar
 httpcore/org.apache.httpcomponents/4.4.1//httpcore-4.4.1.jar
 ion-java/software.amazon.ion/1.0.2//ion-java-1.0.2.jar
 ivy/org.apache.ivy/2.4.0//ivy-2.4.0.jar
-jackson-annotations/com.fasterxml.jackson.core/2.10.0//jackson-annotations-2.10.0.jar
+jackson-annotations/com.fasterxml.jackson.core/2.6.7//jackson-annotations-2.6.7.jar
 jackson-core-asl/org.codehaus.jackson/1.9.13//jackson-core-asl-1.9.13.jar
-jackson-core/com.fasterxml.jackson.core/2.10.0//jackson-core-2.10.0.jar
-jackson-databind/com.fasterxml.jackson.core/2.10.0//jackson-databind-2.10.0.jar
+jackson-core/com.fasterxml.jackson.core/2.6.7//jackson-core-2.6.7.jar
+jackson-databind/com.fasterxml.jackson.core/2.6.7.3//jackson-databind-2.6.7.3.jar
 jackson-dataformat-cbor/com.fasterxml.jackson.dataformat/2.12.3//jackson-dataformat-cbor-2.12.3.jar
 jackson-dataformat-csv/com.fasterxml.jackson.dataformat/2.6.7//jackson-dataformat-csv-2.6.7.jar
 jackson-jaxrs/org.codehaus.jackson/1.9.13//jackson-jaxrs-1.9.13.jar
@@ -280,7 +278,7 @@ simpleclient_dropwizard/io.prometheus/0.8.0//simpleclient_dropwizard-0.8.0.jar
 simpleclient_httpserver/io.prometheus/0.8.0//simpleclient_httpserver-0.8.0.jar
 simpleclient_pushgateway/io.prometheus/0.8.0//simpleclient_pushgateway-0.8.0.jar
 slf4j-api/org.slf4j/1.7.15//slf4j-api-1.7.15.jar
-slf4j-log4j12/org.slf4j/1.7.10//slf4j-log4j12-1.7.10.jar
+slf4j-log4j12/org.slf4j/1.6.1//slf4j-log4j12-1.6.1.jar
 slider-core/org.apache.slider/0.90.2-incubating//slider-core-0.90.2-incubating.jar
 snappy-java/org.xerial.snappy/1.1.7.1//snappy-java-1.1.7.1.jar
 spark-core_2.11/org.apache.spark/2.4.4//spark-core_2.11-2.4.4.jar
