@@ -48,7 +48,8 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
  *
  * @param <T> type of {@link HoodieRecordPayload}
  */
-public class HoodieSimpleIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T> {
+public class HoodieSimpleIndex<T extends HoodieRecordPayload<T>>
+    extends HoodieIndex<T, Object, Object, Object> {
 
   private final Option<BaseKeyGenerator> keyGeneratorOpt;
 

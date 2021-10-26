@@ -85,7 +85,8 @@ import scala.Tuple2;
 /**
  * Hoodie Index implementation backed by HBase.
  */
-public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T> {
+public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
+    extends HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   public static final String DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME = "spark.executor.instances";
   public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME = "spark.dynamicAllocation.enabled";

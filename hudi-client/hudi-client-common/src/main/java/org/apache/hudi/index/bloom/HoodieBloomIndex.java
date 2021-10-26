@@ -53,7 +53,8 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
  */
-public class HoodieBloomIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T> {
+public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
+    extends HoodieIndex<T, Object, Object, Object> {
   private static final Logger LOG = LogManager.getLogger(HoodieBloomIndex.class);
 
   private final HoodieBloomIndexHelper bloomIndexHelper;

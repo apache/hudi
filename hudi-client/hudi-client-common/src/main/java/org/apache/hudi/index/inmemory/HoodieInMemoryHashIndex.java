@@ -41,7 +41,8 @@ import java.util.concurrent.ConcurrentMap;
  * <p>
  * ONLY USE FOR LOCAL TESTING
  */
-public class HoodieInMemoryHashIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T> {
+public class HoodieInMemoryHashIndex<T extends HoodieRecordPayload<T>>
+    extends HoodieIndex<T, Object, Object, Object> {
 
   private static ConcurrentMap<HoodieKey, HoodieRecordLocation> recordLocationMap;
 

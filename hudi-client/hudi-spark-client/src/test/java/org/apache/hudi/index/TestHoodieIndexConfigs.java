@@ -20,8 +20,8 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
@@ -37,6 +37,7 @@ import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -125,23 +126,23 @@ public class TestHoodieIndexConfigs {
     assertTrue(thrown2.getMessage().contains("Unable to instantiate class"));
   }
 
-  public static class DummyHoodieIndex<T extends HoodieRecordPayload<T>> extends HoodieIndex<T> {
+  public static class DummyHoodieIndex<T extends HoodieRecordPayload<T>> extends SparkHoodieIndex<T> {
 
     public DummyHoodieIndex(HoodieWriteConfig config) {
       super(config);
     }
 
     @Override
-    public HoodieData<WriteStatus> updateLocation(
-        HoodieData<WriteStatus> writeStatus, HoodieEngineContext context,
-        HoodieTable hoodieTable) throws HoodieIndexException {
+    public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
+                                               HoodieEngineContext context,
+                                               HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) throws HoodieIndexException {
       return null;
     }
 
     @Override
-    public HoodieData<HoodieRecord<T>> tagLocation(
-        HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
-        HoodieTable hoodieTable) throws HoodieIndexException {
+    public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> records,
+                                                HoodieEngineContext context,
+                                                HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) throws HoodieIndexException {
       return null;
     }
 
