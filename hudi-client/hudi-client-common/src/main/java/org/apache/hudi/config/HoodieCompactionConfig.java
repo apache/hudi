@@ -70,7 +70,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "(scheduled). This also directly translates into how much data retention the table supports for incremental queries.");
 
   public static final ConfigProperty<String> CLEANER_HOURS_RETAINED = ConfigProperty.key("hoodie.cleaner.hours.retained")
-          .defaultValue("5")
+          .defaultValue("24")
           .withDocumentation("Number of hours for which commits need to be retained. This config provides a more flexible option as"
           + "compared to number of commits retained for cleaning service");
 
@@ -517,8 +517,8 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder retainNumberOfHours(int numberOfHours) {
-      compactionConfig.setValue(CLEANER_HOURS_RETAINED, String.valueOf(numberOfHours));
+    public Builder retainNumberOfHours(int cleanerHoursRetained) {
+      compactionConfig.setValue(CLEANER_HOURS_RETAINED, String.valueOf(cleanerHoursRetained));
       return this;
     }
 

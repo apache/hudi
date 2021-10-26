@@ -1256,7 +1256,7 @@ public class TestCleaner extends HoodieClientTestBase {
                     .withIncrementalCleaningMode(enableIncrementalClean)
                     .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
                     .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
-                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LAST_X_HOURS).retainNumberOfHours(2).build())
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).retainNumberOfHours(2).build())
             .build();
 
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
@@ -1329,7 +1329,7 @@ public class TestCleaner extends HoodieClientTestBase {
                     .withIncrementalCleaningMode(enableIncrementalClean)
                     .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
                     .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
-                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LAST_X_HOURS).retainNumberOfHours(2).build())
+                    .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).retainNumberOfHours(2).build())
             .build();
 
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
