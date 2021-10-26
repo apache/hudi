@@ -1023,24 +1023,24 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   public void testHiveSyncOfKerberosEnvironment() throws Exception {
     // Path to the krb5 file
-    String KER5_PATH = "/krb5.conf";
+    String ker5Path = "/krb5.conf";
     // Path to the user keytab file
-    String PRINCIPAL = "/test.keytab";
+    String principal = "/test.keytab";
     // User Principal
-    String KEYTAB_PATH = "test@HADOOP";
+    String keytabPath = "test@HADOOP";
     // Kerberos authentication of the client
-    System.setProperty("java.security.krb5.conf", KER5_PATH);
+    System.setProperty("java.security.krb5.conf", ker5Path);
     Configuration conf = new Configuration();
     conf.set("hadoop.security.authentication", "kerberos");
     UserGroupInformation.setConfiguration(conf);
-    UserGroupInformation.loginUserFromKeytab(PRINCIPAL, KEYTAB_PATH);
+    UserGroupInformation.loginUserFromKeytab(principal, keytabPath);
     // If flink or Spark is used, you need to use the Kerberos authentication method recommended by Flink or Spark
 
     // Setting Kerberos Parameters
     // Hive Principal
-    String HIVE_PRINCIPAL = "hive@HADOOP";
+    String hivePrincipal = "hive@HADOOP";
     HiveTestUtil.hiveSyncConfig.useKerberos = true;
-    HiveTestUtil.hiveSyncConfig.kerberosPrincipal = HIVE_PRINCIPAL;
+    HiveTestUtil.hiveSyncConfig.kerberosPrincipal = hivePrincipal;
     HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     HoodieHiveClient hoodieHiveClient = hiveSyncTool.hoodieHiveClient;
 
