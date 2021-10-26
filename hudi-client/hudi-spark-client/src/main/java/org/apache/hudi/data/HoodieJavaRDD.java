@@ -27,6 +27,7 @@ import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.storage.StorageLevel;
 
 import java.util.Iterator;
 import java.util.List;
@@ -82,6 +83,16 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
+  public void persist(String storageLevel) {
+    rddData.persist(StorageLevel.fromString(storageLevel));
+  }
+
+  @Override
+  public void unpersist() {
+    rddData.unpersist();
+  }
+
+  @Override
   public boolean isEmpty() {
     return rddData.isEmpty();
   }
@@ -103,7 +114,7 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
 
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
-    return HoodieJavaRDD.of(rddData.flatMap(func::apply));
+    return HoodieJavaRDD.of(rddData.flatMap(e -> func.apply(e)));
   }
 
   @Override

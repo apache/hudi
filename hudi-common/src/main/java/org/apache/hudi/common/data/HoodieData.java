@@ -39,6 +39,18 @@ public abstract class HoodieData<T> implements Serializable {
   public abstract Object get();
 
   /**
+   * Caches the data.
+   *
+   * @param cacheConfig config value for caching.
+   */
+  public abstract void persist(String cacheConfig);
+
+  /**
+   * Removes the cached data.
+   */
+  public abstract void unpersist();
+
+  /**
    * @return whether the collection is empty.
    */
   public abstract boolean isEmpty();

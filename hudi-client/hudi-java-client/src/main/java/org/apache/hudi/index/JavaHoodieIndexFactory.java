@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
-import org.apache.hudi.index.bloom.HoodieBloomIndexHelper;
+import org.apache.hudi.index.bloom.ListBasedHoodieBloomIndexHelper;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 
 /**
@@ -46,7 +46,7 @@ public final class JavaHoodieIndexFactory {
       case INMEMORY:
         return new HoodieInMemoryHashIndex<>(config);
       case BLOOM:
-        return new HoodieBloomIndex<>(config, HoodieBloomIndexHelper.getInstance());
+        return new HoodieBloomIndex<>(config, ListBasedHoodieBloomIndexHelper.getInstance());
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

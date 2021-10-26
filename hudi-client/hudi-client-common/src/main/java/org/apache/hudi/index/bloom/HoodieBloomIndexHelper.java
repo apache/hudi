@@ -20,41 +20,22 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.ImmutablePair;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.HoodieKeyLookupHandle.KeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.stream.Collectors.toList;
-
 /**
- * Helper for {@link HoodieBloomIndex} containing engine-specific logic,
- * with default logic supporting Java engines.
+ * Helper for {@link HoodieBloomIndex} containing engine-specific logic.
  */
-public class HoodieBloomIndexHelper implements Serializable {
-
-  private static final HoodieBloomIndexHelper SINGLETON_INSTANCE = new HoodieBloomIndexHelper();
-
-  protected HoodieBloomIndexHelper() {
-  }
-
-  public static HoodieBloomIndexHelper getInstance() {
-    return SINGLETON_INSTANCE;
-  }
-
+public abstract class HoodieBloomIndexHelper implements Serializable {
   /**
    * Find out <RowKey, filename> pair.
    *
@@ -67,36 +48,10 @@ public class HoodieBloomIndexHelper implements Serializable {
    * @param recordsPerPartition     Number of records per partition in a map.
    * @return {@link HoodiePairData} of {@link HoodieKey} and {@link HoodieRecordLocation} pairs.
    */
-  public HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
+  public abstract HoodiePairData<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       HoodieWriteConfig config, HoodieEngineContext context, HoodieTable hoodieTable,
       HoodiePairData<String, String> partitionRecordKeyPairs,
       HoodieData<ImmutablePair<String, HoodieKey>> fileComparisonPairs,
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
-      Map<String, Long> recordsPerPartition) {
-
-    List<Pair<String, HoodieKey>> fileComparisonPairList =
-        HoodieList.getList(fileComparisonPairs).stream()
-            .sorted(Comparator.comparing(ImmutablePair::getLeft)).collect(toList());
-
-    List<KeyLookupResult> keyLookupResults = new ArrayList<>();
-
-    Iterator<List<KeyLookupResult>> iterator = new HoodieBaseBloomIndexCheckFunction(
-        hoodieTable, config).apply(fileComparisonPairList.iterator());
-    while (iterator.hasNext()) {
-      keyLookupResults.addAll(iterator.next());
-    }
-
-    keyLookupResults = keyLookupResults.stream().filter(
-        lr -> lr.getMatchingRecordKeys().size() > 0).collect(toList());
-    return context.parallelize(keyLookupResults).flatMap(lookupResult ->
-        lookupResult.getMatchingRecordKeys().stream()
-            .map(recordKey -> new ImmutablePair<>(lookupResult, recordKey)).iterator()
-    ).mapToPair(pair -> {
-      KeyLookupResult lookupResult = pair.getLeft();
-      String recordKey = pair.getRight();
-      return new ImmutablePair<>(
-          new HoodieKey(recordKey, lookupResult.getPartitionPath()),
-          new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId()));
-    });
-  }
+      Map<String, Long> recordsPerPartition);
 }

@@ -88,7 +88,7 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
 
   @Override
   public List<HoodieRecord<T>> deduplicateRecords(
-      List<HoodieRecord<T>> records, HoodieIndex index, int parallelism) {
+      List<HoodieRecord<T>> records, HoodieIndex<T, ?, ?, ?> index, int parallelism) {
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
       // If index used is global, then records are expected to differ in their partitionPath
       final Object key = record.getKey().getRecordKey();

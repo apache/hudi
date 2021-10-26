@@ -72,6 +72,16 @@ public class HoodieList<T> extends HoodieData<T> {
   }
 
   @Override
+  public void persist(String cacheConfig) {
+    // No OP
+  }
+
+  @Override
+  public void unpersist() {
+    // No OP
+  }
+
+  @Override
   public boolean isEmpty() {
     return listData.isEmpty();
   }

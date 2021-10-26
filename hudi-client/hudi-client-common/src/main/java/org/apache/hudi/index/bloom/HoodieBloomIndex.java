@@ -20,6 +20,7 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
@@ -70,8 +72,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
       HoodieTable hoodieTable) {
     // Step 0: cache the input records if needed
     if (config.getBloomIndexUseCaching()) {
-      // records.persist(new HoodieConfig(config.getProps())
-      //    .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+      records.persist(new HoodieConfig(config.getProps())
+          .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
 
     // Step 1: Extract out thinner pairs of (partitionPath, recordKey)
@@ -95,7 +97,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     HoodieData<HoodieRecord<T>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
 
     if (config.getBloomIndexUseCaching()) {
-      // records.unpersist(); // unpersist the input Record RDD
+      records.unpersist();
       keyFilenamePairs.unpersist();
     }
 

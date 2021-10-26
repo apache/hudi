@@ -55,7 +55,7 @@ public class JavaWriteHelper<T extends HoodieRecordPayload,R> extends AbstractWr
 
   @Override
   public List<HoodieRecord<T>> deduplicateRecords(
-      List<HoodieRecord<T>> records, HoodieIndex index, int parallelism) {
+      List<HoodieRecord<T>> records, HoodieIndex<T, ?, ?, ?> index, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
       HoodieKey hoodieKey = record.getKey();

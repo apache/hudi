@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
-import org.apache.hudi.index.bloom.HoodieBloomIndexHelper;
+import org.apache.hudi.index.bloom.ListBasedHoodieBloomIndexHelper;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.index.state.FlinkInMemoryStateIndex;
 
@@ -48,7 +48,7 @@ public final class FlinkHoodieIndexFactory {
       case INMEMORY:
         return new FlinkInMemoryStateIndex<>(context, config);
       case BLOOM:
-        return new HoodieBloomIndex<>(config, HoodieBloomIndexHelper.getInstance());
+        return new HoodieBloomIndex<>(config, ListBasedHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
         return new HoodieSimpleIndex<>(config, Option.empty());
       default:

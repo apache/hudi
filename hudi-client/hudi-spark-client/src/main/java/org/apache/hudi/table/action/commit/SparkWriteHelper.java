@@ -58,7 +58,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
 
   @Override
   public JavaRDD<HoodieRecord<T>> deduplicateRecords(
-      JavaRDD<HoodieRecord<T>> records, HoodieIndex index, int parallelism) {
+      JavaRDD<HoodieRecord<T>> records, HoodieIndex<T, ?, ?, ?> index, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
