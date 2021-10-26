@@ -21,6 +21,7 @@ module.exports = {
         {
             type: 'category',
             label: 'How To',
+            collapsed: false,
             items: [
                 'writing_data',
                 'querying_data',
@@ -65,7 +66,8 @@ module.exports = {
                 },
             ],
         },
-        //'use_cases',
+        'use_cases',
+        'faq',
         'privacy',
     ],
     quick_links: [
