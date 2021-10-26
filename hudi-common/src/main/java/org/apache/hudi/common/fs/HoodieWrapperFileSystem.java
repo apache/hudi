@@ -21,6 +21,7 @@ package org.apache.hudi.common.fs;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -122,6 +123,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   public HoodieWrapperFileSystem(FileSystem fileSystem, ConsistencyGuard consistencyGuard) {
     this.fileSystem = fileSystem;
+    this.uri = fileSystem.getUri();
+    this.consistencyGuard = consistencyGuard;
+  }
+
+  public HoodieWrapperFileSystem(FileSystem fileSystem, ConsistencyGuard consistencyGuard, RetryHelper retryHelper) {
+    this.fileSystem = new HoodieRetryWrapperFileSystem(fileSystem, retryHelper);
     this.uri = fileSystem.getUri();
     this.consistencyGuard = consistencyGuard;
   }
