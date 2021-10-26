@@ -20,6 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.hadoop.conf.Configuration;
+
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -168,5 +170,26 @@ public class CollectionUtils {
 
   private static Object checkElementNotNull(Object element, int index) {
     return Objects.requireNonNull(element, "Element is null at index " + index);
+  }
+
+  public static Map<String, String> toMap(Configuration hadoopConf) {
+    Map<String, String> map = new HashMap<>();
+    hadoopConf.iterator().forEachRemaining(e -> map.put(e.getKey(), e.getValue()));
+    return map;
+  }
+
+  public static Map<String, String> toMap(Properties props) {
+    return props.entrySet().stream()
+        .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+  }
+
+  public static Configuration fromProps(Properties props) {
+    return fromMap(toMap(props));
+  }
+
+  public static Configuration fromMap(Map<String, String> props) {
+    Configuration hadoopConf = new Configuration();
+    props.forEach(hadoopConf::set);
+    return hadoopConf;
   }
 }
