@@ -41,7 +41,6 @@ import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -188,7 +187,7 @@ public class TestHoodieRealtimeRecordReader {
         HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
             new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + baseInstant + ".parquet"), 0, 1, baseJobConf),
             basePath.toUri().toString(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-            .map(h -> new FileStatus(0L, false, 0, 0L, 0, h.getPath())).collect(Collectors.toList()),
+            .map(h -> h.getPath().toString()).collect(Collectors.toList()),
             instantTime, Option.empty());
 
         // create a RecordReader to be used by HoodieRealtimeRecordReader
@@ -257,10 +256,10 @@ public class TestHoodieRealtimeRecordReader {
     FileCreateUtils.createDeltaCommit(basePath.toString(), newCommitTime);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
-    FileStatus logFileFileStatus = new FileStatus(0L, false, 0, 0L, 0, writer.getLogFile().getPath());
+    String logFilePath = writer.getLogFile().getPath().toString();
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
         new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + instantTime + ".parquet"), 0, 1, baseJobConf),
-        basePath.toUri().toString(), Collections.singletonList(logFileFileStatus), newCommitTime, Option.empty());
+        basePath.toUri().toString(), Collections.singletonList(logFilePath), newCommitTime, Option.empty());
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
     RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
@@ -337,10 +336,10 @@ public class TestHoodieRealtimeRecordReader {
     InputFormatTestUtil.deltaCommit(basePath, newCommitTime);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
-    FileStatus logFileStatus = new FileStatus(0L, false, 0, 0L, 0, writer.getLogFile().getPath());
+    String logFilePath = writer.getLogFile().getPath().toString();
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
         new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + instantTime + ".parquet"), 0, 1, baseJobConf),
-        basePath.toUri().toString(), Collections.singletonList(logFileStatus), newCommitTime, Option.empty());
+        basePath.toUri().toString(), Collections.singletonList(logFilePath), newCommitTime, Option.empty());
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
     RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
@@ -450,7 +449,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testSchemaEvolutionAndRollbackBlockInLastLogFile(ExternalSpillableMap.DiskMapType diskMapType,
                                                                boolean isCompressionEnabled) throws Exception {
     // initial commit
-    List<FileStatus> logFilePaths = new ArrayList<>();
+    List<String> logFilePaths = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
@@ -471,7 +470,7 @@ public class TestHoodieRealtimeRecordReader {
         InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
             numberOfLogRecords, 0, 1);
     long size = writer.getCurrentSize();
-    logFilePaths.add(new FileStatus(0L, false, 0, 0L, 0, writer.getLogFile().getPath()));
+    logFilePaths.add(writer.getLogFile().getPath().toString());
     writer.close();
     assertTrue(size > 0, "block - size should be > 0");
 
@@ -479,7 +478,7 @@ public class TestHoodieRealtimeRecordReader {
     newCommitTime = "102";
     writer = InputFormatTestUtil.writeRollbackBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime,
         newCommitTime, "101", 1);
-    logFilePaths.add(new FileStatus(0L, false, 0, 0L, 0, writer.getLogFile().getPath()));
+    logFilePaths.add(writer.getLogFile().getPath().toString());
     writer.close();
     InputFormatTestUtil.deltaCommit(basePath, newCommitTime);
 
