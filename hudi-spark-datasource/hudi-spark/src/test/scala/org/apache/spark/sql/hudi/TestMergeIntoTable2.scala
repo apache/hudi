@@ -353,19 +353,7 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
            |""".stripMargin
 
       if (HoodieSqlUtils.isSpark3) {
-        checkException(mergeSql)(
-            "\nColumns aliases are not allowed in MERGE.(line 5, pos 5)\n\n" +
-            "== SQL ==\n\r\n" +
-            s" merge into $tableName\r\n" +
-            " using (\r\n" +
-            "  select 1, 'a1', 10, 1000, '1'\r\n" +
-            " ) s0(id,name,price,ts,flag)\r\n" +
-            "-----^^^\n" +
-            s" on s0.id = $tableName.id\r\n" +
-            " when matched and flag = '1' then update set\r\n" +
-            " id = s0.id, name = s0.name, price = s0.price, ts = s0.ts\r\n" +
-            " when not matched and flag = '1' then insert *\r\n"
-        )
+        checkExceptionContain(mergeSql)("Columns aliases are not allowed in MERGE")
       } else {
         spark.sql(mergeSql)
         checkAnswer(s"select id, name, price, ts from $tableName")(
@@ -452,8 +440,8 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
         s"""
            |create table $tableName (
            |  ID int,
-           |  NAME string,
-           |  PRICE double,
+           |  name string,
+           |  price double,
            |  TS long,
            |  DT string
            |) using hudi
@@ -469,11 +457,11 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
         s"""
            | merge into $tableName
            | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '2021-05-05' as dt, '1' as flag
+           |  select 1 as id, 'a1' as name, 10 as PRICE, 1000 as ts, '2021-05-05' as dt, '1' as flag
            | ) s0
            | on s0.id = $tableName.id
            | when matched and flag = '1' then update set
-           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, dt = s0.dt
+           | id = s0.id, name = s0.name, PRICE = s0.price, ts = s0.ts, dt = s0.dt
            | when not matched and flag = '1' then insert *
        """.stripMargin)
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
@@ -485,11 +473,11 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
         s"""
            | merge into $tableName
            | using (
-           |  select 1 as id, 'a1' as name, 20 as price, '2021-05-05' as dt, 1001 as ts
+           |  select 1 as id, 'a1' as name, 20 as PRICE, '2021-05-05' as dt, 1001 as ts
            | ) s0
            | on s0.id = $tableName.id
            | when matched then update set
-           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, dt = s0.dt
+           | id = s0.id, name = s0.name, PRICE = s0.price, ts = s0.ts, dt = s0.dt
            | when not matched then insert *
        """.stripMargin)
       checkAnswer(s"select id, name, price, ts, dt from $tableName")(
@@ -501,8 +489,8 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 1111 as ts, '2021-05-05' as dt, 111 as price union all
-           |  select 2 as id, 'a2' as name, 1112 as ts, '2021-05-05' as dt, 112 as price
+           |  select 1 as id, 'a1' as name, 1111 as ts, '2021-05-05' as dt, 111 as PRICE union all
+           |  select 2 as id, 'a2' as name, 1112 as ts, '2021-05-05' as dt, 112 as PRICE
            | ) as s0
            | on t0.id = s0.id
            | when matched then update set *
@@ -522,16 +510,16 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
       spark.sql(
         s"""
            | create table $tableName (
-           |  id int,
-           |  name string,
+           |  ID int,
+           |  NAME string,
            |  price double,
-           |  ts long,
+           |  TS long,
            |  dt string
            | ) using hudi
            | options (
            |  type = 'mor',
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  primaryKey = 'ID',
+           |  preCombineField = 'TS'
            | )
            | partitioned by(dt)
            | location '${tmp.getCanonicalPath}/$tableName'
@@ -542,7 +530,7 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
         s"""
            | merge into $tableName as t0
            | using (
-           |  select 1 as id, 'a1' as name, 1111 as ts, '2021-05-05' as dt, 111 as price
+           |  select 1 as id, 'a1' as NAME, 1111 as ts, '2021-05-05' as DT, 111 as price
            | ) as s0
            | on t0.id = s0.id
            | when matched then update set *
