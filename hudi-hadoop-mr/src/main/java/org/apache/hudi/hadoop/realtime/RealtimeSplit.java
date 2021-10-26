@@ -21,7 +21,6 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.InputSplitUtils;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.InputSplitWithLocationInfo;
 
@@ -41,8 +40,6 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    * @return
    */
   List<String> getDeltaLogPaths();
-
-  List<FileStatus> getDeltaLogFileStatus();
 
   /**
    * Return Max Instant Time.
