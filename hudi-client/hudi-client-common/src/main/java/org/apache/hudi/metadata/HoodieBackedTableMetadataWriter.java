@@ -158,7 +158,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
     int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
 
-    // Create the write config for the metadata table by borrowing options from the main write config.
+    // Create the writer config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
@@ -191,7 +191,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)
         .withFinalizeWriteParallelism(parallelism)
-        .withAllowMultiWriteOnSameInstant(true);
+        .withAllowMultiWriteOnSameInstant(true)
+        .withPopulateMetaFields(false);
 
     if (writeConfig.isMetricsOn()) {
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
