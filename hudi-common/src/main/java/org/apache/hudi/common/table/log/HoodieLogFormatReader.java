@@ -105,8 +105,12 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
           this.prevReadersInOpenState.add(currentReader);
         }
         this.currentReader =
-            new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
-                enableInlineReading, recordKeyField);
+//<<<<<<< HEAD
+  //          new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
+    //            enableInlineReading, recordKeyField);
+//=======
+            new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false, enableInlineReading, recordKeyField);
+//>>>>>>> 6035d6452 (Removing direct fs call in HoodieLogFileReader)
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }

@@ -21,12 +21,14 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Realtime File Split with external base file.
@@ -34,6 +36,7 @@ import java.util.List;
 public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
 
   private List<String> deltaLogPaths;
+  private List<FileStatus> deltaLogFileStatus;
 
   private String maxInstantTime;
 
@@ -43,11 +46,12 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
     super();
   }
 
-  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths,
+  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit, String basePath, List<FileStatus> deltaLogFileStatus,
                                         String maxInstantTime, FileSplit externalFileSplit) throws IOException {
     super(baseSplit, externalFileSplit);
     this.maxInstantTime = maxInstantTime;
-    this.deltaLogPaths = deltaLogPaths;
+    this.deltaLogFileStatus = deltaLogFileStatus;
+    this.deltaLogPaths = deltaLogFileStatus.stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
     this.basePath = basePath;
   }
 
@@ -66,6 +70,11 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   @Override
   public List<String> getDeltaLogPaths() {
     return deltaLogPaths;
+  }
+
+  @Override
+  public List<FileStatus> getDeltaLogFileStatus() {
+    return deltaLogFileStatus;
   }
 
   @Override
