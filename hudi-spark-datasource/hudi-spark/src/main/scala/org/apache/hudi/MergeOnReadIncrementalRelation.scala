@@ -113,7 +113,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       // config to ensure the push down filter for parquet will be applied.
       sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
       sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
-      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "true")
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
       sqlContext.sparkSession.sessionState.conf.setConfString("parquet.filter.columnindex.enabled", "false")
       val pushDownFilter = {
         val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
