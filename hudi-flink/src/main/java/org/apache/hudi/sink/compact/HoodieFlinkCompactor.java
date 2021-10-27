@@ -99,7 +99,7 @@ public class HoodieFlinkCompactor {
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (timeline.containsInstant(inflightInstant)) {
       LOG.info("Rollback inflight compaction instant: [" + compactionInstantTime + "]");
-      writeClient.rollbackInflightCompaction(inflightInstant, table);
+      table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();
     }
 

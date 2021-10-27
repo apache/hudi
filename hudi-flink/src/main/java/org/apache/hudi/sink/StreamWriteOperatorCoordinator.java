@@ -219,7 +219,7 @@ public class StreamWriteOperatorCoordinator
           // for streaming mode, commits the ever received events anyway,
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
-          final boolean committed = commitInstant(this.instant);
+          final boolean committed = commitInstant(this.instant, checkpointId);
           if (committed) {
             if (tableState.scheduleCompaction) {
               // if async compaction is on, schedule the compaction
@@ -238,7 +238,7 @@ public class StreamWriteOperatorCoordinator
   public void notifyCheckpointAborted(long checkpointId) {
     // once the checkpoint was aborted, unblock the writer tasks to
     // reuse the last instant.
-    executor.execute(this::sendCommitAckEvents,
+    executor.execute(() -> sendCommitAckEvents(checkpointId),
         "unblock data write with aborted checkpoint %s", checkpointId);
   }
 
@@ -398,9 +398,9 @@ public class StreamWriteOperatorCoordinator
    * The coordinator reuses the instant if there is no data for this round of checkpoint,
    * sends the commit ack events to unblock the flushing.
    */
-  private void sendCommitAckEvents() {
+  private void sendCommitAckEvents(long checkpointId) {
     CompletableFuture<?>[] futures = Arrays.stream(this.gateways).filter(Objects::nonNull)
-        .map(gw -> gw.sendEvent(CommitAckEvent.getInstance()))
+        .map(gw -> gw.sendEvent(CommitAckEvent.getInstance(checkpointId)))
         .toArray(CompletableFuture<?>[]::new);
     try {
       CompletableFuture.allOf(futures).get();
@@ -423,10 +423,17 @@ public class StreamWriteOperatorCoordinator
 
   /**
    * Commits the instant.
+   */
+  private void commitInstant(String instant) {
+    commitInstant(instant, -1);
+  }
+
+  /**
+   * Commits the instant.
    *
    * @return true if the write statuses are committed successfully.
    */
-  private boolean commitInstant(String instant) {
+  private boolean commitInstant(String instant, long checkpointId) {
     if (Arrays.stream(eventBuffer).allMatch(Objects::isNull)) {
       // The last checkpoint finished successfully.
       return false;
@@ -442,7 +449,7 @@ public class StreamWriteOperatorCoordinator
       // No data has written, reset the buffer and returns early
       reset();
       // Send commit ack event to the write function to unblock the flushing
-      sendCommitAckEvents();
+      sendCommitAckEvents(checkpointId);
       return false;
     }
     doCommit(instant, writeResults);

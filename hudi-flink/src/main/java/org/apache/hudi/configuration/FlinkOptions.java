@@ -227,11 +227,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
-  public static final ConfigOption<Boolean> INSERT_DEDUP = ConfigOptions
-      .key("write.insert.deduplicate")
+  public static final ConfigOption<Boolean> INSERT_CLUSTER = ConfigOptions
+      .key("write.insert.cluster")
       .booleanType()
-      .defaultValue(true)
-      .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
+      .defaultValue(false)
+      .withDescription("Whether to merge small files for insert mode, "
+          + "if true, the write throughput will decrease because the read/write of existing small file, "
+          + "only valid for COW table, default false");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
