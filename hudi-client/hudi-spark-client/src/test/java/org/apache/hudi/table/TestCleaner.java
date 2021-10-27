@@ -1327,7 +1327,9 @@ public class TestCleaner extends HoodieClientTestBase {
     // Make a commit, although there are no partitionPaths.
     // Example use-case of this is when a client wants to create a table
     // with just some commit metadata, but no data/partitionPaths.
-    HoodieMetadataTestTable.of(metaClient).addCommit("000");
+    HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    testTable.doWriteOperation("001", WriteOperationType.INSERT, Collections.emptyList(), 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -1365,7 +1367,7 @@ public class TestCleaner extends HoodieClientTestBase {
   public void testKeepLatestVersionsWithPendingCompactions(boolean retryFailure) throws Exception {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).enable(true).build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build())
             .build();
@@ -1510,7 +1512,7 @@ public class TestCleaner extends HoodieClientTestBase {
     // multiple versions with pending compaction. File Slices (6 - 7) have multiple file-slices but not under
     // compactions
     // FileIds 2-5 will be under compaction
-    HoodieMetadataTestTable.of(metaClient)
+    HoodieTestTable.of(metaClient)
         .addCommit("000")
         .withBaseFilesInPartition(partition, "fileId1", "fileId2", "fileId3", "fileId4", "fileId5", "fileId6", "fileId7")
         .withLogFile(partition, "fileId1", 1, 2)
