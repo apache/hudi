@@ -1034,7 +1034,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // With next commit the table should be deleted (as part of upgrade) and partial commit should be rolled back.
     metaClient.reloadActiveTimeline();
     commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
-    Thread.sleep(1000);
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       records = dataGen.generateInserts(commitTimestamp, 5);
       client.startCommitWithTime(commitTimestamp);
@@ -1051,6 +1050,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       writeStatuses = client.insert(jsc.parallelize(records, 1), commitTimestamp);
       assertNoWriteErrors(writeStatuses.collect());
     }
+    assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
 
     initMetaClient();
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.THREE.versionCode());

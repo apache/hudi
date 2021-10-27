@@ -581,6 +581,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * will be removed in future in favor of {@link AbstractHoodieWriteClient#restoreToInstant(String)}
    *
    * @param commitInstantTime Instant time of the commit
+   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    * @throws HoodieRollbackException if rollback cannot be performed successfully
    */
   @Deprecated
@@ -595,7 +596,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
           .findFirst());
       if (commitInstantOpt.isPresent()) {
         LOG.info("Scheduling Rollback at instant time :" + rollbackInstantTime);
-        Option<HoodieRollbackPlan> rollbackPlanOption = table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false);
+        Option<HoodieRollbackPlan> rollbackPlanOption = table.scheduleRollback(context, rollbackInstantTime,
+            commitInstantOpt.get(), false);
         if (rollbackPlanOption.isPresent()) {
           // execute rollback
           HoodieRollbackMetadata rollbackMetadata = table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true,
@@ -657,6 +659,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned)
+   * @param cleanInstantTime instant time for clean.
+   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
+   * @return instance of {@link HoodieCleanMetadata}.
    */
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean skipLocking) throws HoodieIOException {
     return clean(cleanInstantTime, true, skipLocking);
@@ -668,6 +673,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * cleaned). This API provides the flexibility to schedule clean instant asynchronously via
    * {@link AbstractHoodieWriteClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
    * of clean.
+   * @param cleanInstantTime instant time for clean.
+   * @param scheduleInline true if needs to be scheduled inline. false otherwise.
+   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    */
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
     if (scheduleInline) {
@@ -693,6 +701,12 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     return clean(false);
   }
 
+  /**
+   * Triggers clean for the table. This refers to Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
+   *    * configurations and CleaningPolicy used.
+   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
+   * @return instance of {@link HoodieCleanMetadata}.
+   */
   public HoodieCleanMetadata clean(boolean skipLocking) {
     return clean(HoodieActiveTimeline.createNewInstantTime(), skipLocking);
   }
@@ -821,6 +835,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   /**
    * Rollback all failed writes.
+   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    */
   public Boolean rollbackFailedWrites(boolean skipLocking) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
