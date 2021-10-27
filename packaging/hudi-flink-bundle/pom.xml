@@ -333,6 +333,12 @@
       <artifactId>flink-parquet_${scala.binary.version}</artifactId>
       <version>${flink.version}</version>
       <scope>compile</scope>
+        <exclusions>
+            <exclusion>
+                <artifactId>parquet-hadoop</artifactId>
+                <groupId>org.apache.parquet</groupId>
+            </exclusion>
+        </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.flink</groupId>
