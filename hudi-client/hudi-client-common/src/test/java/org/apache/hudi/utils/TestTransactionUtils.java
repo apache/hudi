@@ -38,62 +38,61 @@ import java.nio.charset.StandardCharsets;
 
 public class TestTransactionUtils extends HoodieCommonTestHarness {
 
+  @BeforeEach
+  public void setUp() throws Exception {
+    init();
+  }
 
-    @BeforeEach
-    public void setUp() throws Exception {
-        init();
+  public void init() throws Exception {
+    initPath();
+    initMetaClient();
+    metaClient.getFs().mkdirs(new Path(basePath));
+  }
+
+  @Test
+  public void testCheckpointStateMerge() throws IOException {
+    HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
+
+    // Create completed commit with deltastreamer checkpoint state
+    HoodieInstant commitInstantWithCheckpointState = new HoodieInstant(
+        true,
+        HoodieTimeline.COMMIT_ACTION,
+        HoodieActiveTimeline.createNewInstantTime()
+    );
+    timeline.createNewInstant(commitInstantWithCheckpointState);
+
+    HoodieCommitMetadata metadataWithCheckpoint = new HoodieCommitMetadata();
+    String checkpointVal = "00001";
+    metadataWithCheckpoint.addMetadata(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, checkpointVal);
+    timeline.saveAsComplete(
+        commitInstantWithCheckpointState,
+        Option.of(metadataWithCheckpoint.toJsonString().getBytes(StandardCharsets.UTF_8))
+    );
+
+    // Inflight commit without checkpoint metadata
+    HoodieInstant commitInstantWithoutCheckpointState = new HoodieInstant(
+        true,
+        HoodieTimeline.COMMIT_ACTION,
+        HoodieActiveTimeline.createNewInstantTime()
+    );
+    timeline.createNewInstant(commitInstantWithoutCheckpointState);
+    HoodieCommitMetadata metadataWithoutCheckpoint = new HoodieCommitMetadata();
+
+    // Ensure that checkpoint state is merged in from previous completed commit
+    MockTransactionUtils.assertCheckpointStateWasMerged(metaClient, metadataWithoutCheckpoint, checkpointVal);
+  }
+
+  private static class MockTransactionUtils extends TransactionUtils {
+
+    public static void assertCheckpointStateWasMerged(
+        HoodieTableMetaClient metaClient,
+        HoodieCommitMetadata currentMetadata,
+        String expectedCheckpointState) {
+      TransactionUtils.mergeCheckpointStateFromPreviousCommit(metaClient, Option.of(currentMetadata));
+      assertEquals(
+          expectedCheckpointState,
+          currentMetadata.getExtraMetadata().get(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY)
+      );
     }
-
-    public void init() throws Exception {
-        initPath();
-        initMetaClient();
-        metaClient.getFs().mkdirs(new Path(basePath));
-    }
-
-    @Test
-    public void testCheckpointStateMerge() throws IOException {
-        HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
-
-        // Create completed commit with deltastreamer checkpoint state
-        HoodieInstant commitInstantWithCheckpointState = new HoodieInstant(
-                true,
-                HoodieTimeline.COMMIT_ACTION,
-                HoodieActiveTimeline.createNewInstantTime()
-        );
-        timeline.createNewInstant(commitInstantWithCheckpointState);
-
-        HoodieCommitMetadata metadataWithCheckpoint = new HoodieCommitMetadata();
-        String checkpointVal = "00001";
-        metadataWithCheckpoint.addMetadata(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, checkpointVal);
-        timeline.saveAsComplete(
-                commitInstantWithCheckpointState,
-                Option.of(metadataWithCheckpoint.toJsonString().getBytes(StandardCharsets.UTF_8))
-        );
-
-        // Inflight commit without checkpoint metadata
-        HoodieInstant commitInstantWithoutCheckpointState = new HoodieInstant(
-                true,
-                HoodieTimeline.COMMIT_ACTION,
-                HoodieActiveTimeline.createNewInstantTime()
-        );
-        timeline.createNewInstant(commitInstantWithoutCheckpointState);
-        HoodieCommitMetadata metadataWithoutCheckpoint = new HoodieCommitMetadata();
-
-        // Ensure that checkpoint state is merged in from previous completed commit
-        MockTransactionUtils.assertCheckpointStateWasMerged(metaClient, metadataWithoutCheckpoint, checkpointVal);
-    }
-
-    private static class MockTransactionUtils extends TransactionUtils {
-
-        public static void assertCheckpointStateWasMerged(
-                HoodieTableMetaClient metaClient,
-                HoodieCommitMetadata currentMetadata,
-                String expectedCheckpointState) {
-            TransactionUtils.mergeCheckpointStateFromPreviousCommit(metaClient, Option.of(currentMetadata));
-            assertEquals(
-                    expectedCheckpointState,
-                    currentMetadata.getExtraMetadata().get(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY)
-            );
-        }
-    }
+  }
 }
