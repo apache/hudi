@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.functional;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
@@ -35,6 +37,7 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.spark.sql.SaveMode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -70,6 +73,8 @@ import static org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource
 
 @Tag("functional")
 public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctionalTestHarness {
+
+  private static final String COW_TEST_TABLE_NAME = "testtable_COPY_ON_WRITE";
 
   String basePath;
   String propsFilePath;
@@ -171,36 +176,60 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()));
     cfgBackfillJob.continuousMode = false;
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
+
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadataForFirstInstant = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
-
-    // get current checkpoint after preparing base dataset with some commits
-    HoodieCommitMetadata commitMetadataForLastInstant = HoodieCommitMetadata
-        .fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
-    String lastCheckpointBeforeParallelBackfill = commitMetadataForLastInstant.getMetadata(CHECKPOINT_KEY);
 
     // run the backfill job, enable overriding checkpoint from the latest commit
     props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
-    props.setProperty("hoodie.write.meta.key.prefixes", CHECKPOINT_KEY);
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
-    // reset checkpoint to first instant to simulate a random checkpoint for backfill job
-    // checkpoint will move from 00000 to 00001 for this backfill job
-    cfgBackfillJob.checkpoint = commitMetadataForFirstInstant.getMetadata(CHECKPOINT_KEY);
+    // get current checkpoint after preparing base dataset with some commits
+    HoodieCommitMetadata commitMetadataForLastInstant = getLatestMetadata(meta);
+
+    // Set checkpoint to the last successful position
+    cfgBackfillJob.checkpoint = commitMetadataForLastInstant.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
     HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
     backfillJob.sync();
 
-    // check if the checkpoint is carried over
-    timeline = meta.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    commitMetadataForLastInstant = HoodieCommitMetadata
-        .fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
-    String lastCheckpointAfterParallelBackfill = commitMetadataForLastInstant.getMetadata(CHECKPOINT_KEY);
-    Assertions.assertEquals(lastCheckpointBeforeParallelBackfill, lastCheckpointAfterParallelBackfill);
+    // Save the checkpoint information from the deltastreamer run and perform next write
+    String checkpointAfterDeltaSync = getLatestMetadata(meta).getMetadata(CHECKPOINT_KEY);
+    performWriteWithDeltastreamerStateMerge();
+
+    // Verify that the checkpoint is carried over
+    HoodieCommitMetadata commitMetaAfterDatasourceWrite = getLatestMetadata(meta);
+    Assertions.assertEquals(checkpointAfterDeltaSync, commitMetaAfterDatasourceWrite.getMetadata(CHECKPOINT_KEY));
+  }
+
+  /**
+   * Performs a hudi datasource write with deltastreamer state merge enabled
+   */
+  private void performWriteWithDeltastreamerStateMerge() {
+    spark().read()
+            .format("hudi")
+            .load(tableBasePath + "/*/*.parquet")
+            .limit(1)
+            .write()
+            .format("hudi")
+            .option(HoodieWriteConfig.TBL_NAME.key(), COW_TEST_TABLE_NAME)
+            .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())
+            .option(DataSourceWriteOptions.INSERT_DROP_DUPS().key(), "true")
+            .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
+            .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
+            .option(HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key(), "true")
+            .mode(SaveMode.Append)
+            .save(tableBasePath + "/*/*.parquet");
+  }
+
+  private static HoodieCommitMetadata getLatestMetadata(HoodieTableMetaClient meta) throws IOException {
+    HoodieTimeline timeline = meta.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    return HoodieCommitMetadata
+            .fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
   }
 
   private static TypedProperties prepareMultiWriterProps(FileSystem fs, String basePath, String propsFilePath) throws IOException {
