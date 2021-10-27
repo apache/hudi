@@ -85,14 +85,14 @@ object HoodieSparkSqlWriter {
     var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig)
 
-    val parameters = DataSourceWriteOptions.translateSqlOptions(HoodieWriterUtils.parametersWithWriteDefaults(optParams))
-    val hoodieConfig = mergeAndGetHoodieConfig(parameters, tableConfig)
+    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig)
+    val tblName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME,
+      s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.").trim
     assert(!StringUtils.isNullOrEmpty(hoodieConfig.getString(HoodieWriteConfig.TBL_NAME)),
       s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.")
 
     asyncCompactionTriggerFnDefined = asyncCompactionTriggerFn.isDefined
     asyncClusteringTriggerFnDefined = asyncClusteringTriggerFn.isDefined
-    val tblName = hoodieConfig.getString(HoodieWriteConfig.TBL_NAME)
     sparkContext.getConf.getOption("spark.serializer") match {
       case Some(ser) if ser.equals("org.apache.spark.serializer.KryoSerializer") =>
       case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
@@ -337,16 +337,16 @@ object HoodieSparkSqlWriter {
                 hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
                 hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty): Boolean = {
 
-    val parameters = DataSourceWriteOptions.translateSqlOptions(HoodieWriterUtils.parametersWithWriteDefaults(optParams))
-    val sparkContext = sqlContext.sparkContext
-    val path = parameters.getOrElse("path", throw new HoodieException("'path' must be set."))
+    assert(optParams.get("path").exists(!StringUtils.isNullOrEmpty(_)), "'path' must be set")
+    val path = optParams("path")
     val basePath = new Path(path)
+    val sparkContext = sqlContext.sparkContext
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
-    val tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
+    var tableConfig = getHoodieTableConfig(sparkContext, path, hoodieTableConfigOpt)
     validateTableConfig(sqlContext.sparkSession, optParams, tableConfig)
 
-    val hoodieConfig = mergeAndGetHoodieConfig(parameters, tableConfig)
+    val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig)
     val tableName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME, s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.")
     val tableType = hoodieConfig.getStringOrDefault(TABLE_TYPE)
     val bootstrapBasePath = hoodieConfig.getStringOrThrow(BASE_PATH,
@@ -727,15 +727,21 @@ object HoodieSparkSqlWriter {
     }
   }
 
-  private def mergeAndGetHoodieConfig(params: Map[String, String],
-      tableConfig: HoodieTableConfig): HoodieConfig = {
-    val mergedParams = mutable.Map.empty ++ params
+  private def mergeParamsAndGetHoodieConfig(optParams: Map[String, String],
+      tableConfig: HoodieTableConfig): (Map[String, String], HoodieConfig) = {
+    val mergedParams = mutable.Map.empty ++
+      DataSourceWriteOptions.translateSqlOptions(HoodieWriterUtils.parametersWithWriteDefaults(optParams))
+    if (!mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
+      && mergedParams.contains(KEYGENERATOR_CLASS_NAME.key)) {
+      mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(KEYGENERATOR_CLASS_NAME.key)
+    }
     if (null != tableConfig) {
       tableConfig.getProps.foreach { case (key, value) =>
         mergedParams(key) = value
       }
     }
-    HoodieWriterUtils.convertMapToHoodieConfig(mergedParams.toMap)
+    val params = mergedParams.toMap
+    (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
   }
 
   private def getStringFromTableConfigWithAlternatives(tableConfig: HoodieTableConfig, key: String): String = {

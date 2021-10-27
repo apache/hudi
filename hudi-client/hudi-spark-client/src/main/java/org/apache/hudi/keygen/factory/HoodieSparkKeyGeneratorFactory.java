@@ -62,6 +62,7 @@ public class HoodieSparkKeyGeneratorFactory {
 
     if (StringUtils.isNullOrEmpty(keyGeneratorClass)) {
       String keyGeneratorType = props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), KeyGeneratorType.SIMPLE.name());
+      LOG.info("The value of {} is empty, use SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE.key());
       KeyGeneratorType keyGeneratorTypeEnum;
       try {
         keyGeneratorTypeEnum = KeyGeneratorType.valueOf(keyGeneratorType.toUpperCase(Locale.ROOT));
