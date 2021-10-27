@@ -110,8 +110,12 @@ public class FormatUtils {
     List<Schema.Field> requiredFields = requiredSchema.getFields();
     assert (requiredFields.size() == requiredPos.length);
     Iterator<Integer> positionIterator = Arrays.stream(requiredPos).iterator();
-    requiredFields.forEach(f -> recordBuilder.set(f, record.get(positionIterator.next())));
+    requiredFields.forEach(f -> recordBuilder.set(f, getVal(record, positionIterator.next())));
     return recordBuilder.build();
+  }
+
+  private static Object getVal(IndexedRecord record, int pos) {
+    return pos == -1 ? null : record.get(pos);
   }
 
   public static HoodieMergedLogRecordScanner logScanner(
