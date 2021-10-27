@@ -67,10 +67,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   private static final String MILLIS_GRANULARITY_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss:SSS";
   private static final SimpleDateFormat MILLIS_GRANULARITY_DATE_FORMATTER = new SimpleDateFormat(MILLIS_GRANULARITY_DATE_FORMAT);
 
-  // The default number of milliseconds that we add if they are not present
-  // We prefer the max timestamp as it mimics the current behavior with second granularity
-  // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
-  private static final String DEFAULT_MILLIS_EXT = "999";
+  // Millisecond extensions available when converting from second -> millisecond granularity
+  // You may prefer the max timestamp as it mimics the current behavior with second granularity
+  // when performing comparisons such as LESS_THAN_OR_EQUAL_TO but there are times where the min is desirable.
+  private static final String MIN_MILLIS_INSTANT_EXT = "000";
+  private static final String MAX_MILLIS_INSTANT_EXT = "999";
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
@@ -88,17 +89,24 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   /**
    * Parses the given instant ID to return a date instance.
    * @param instant The instant ID
+   * @param preferMaxDefaultMillis If true and dateString is missing milliseconds then
+   *                               append the max number of milliseconds. If false it will be min
    * @return A date
    * @throws ParseException If the instant ID is malformed
    */
-  public static Date parseDateFromInstantTime(String instant) throws ParseException {
+  public static Date parseDateFromInstantTime(String instant, boolean preferMaxDefaultMillis) throws ParseException {
     // Enables backwards compatibility with non-millisecond granularity instants
     if (isMillisecondGranularity(instant)) {
       return COMMIT_FORMATTER.parse(instant);
     } else {
       // Add milliseconds to the instant in order to parse successfully
-      return COMMIT_FORMATTER.parse(instant + DEFAULT_MILLIS_EXT);
+      String ext = preferMaxDefaultMillis ? MAX_MILLIS_INSTANT_EXT : MIN_MILLIS_INSTANT_EXT;
+      return COMMIT_FORMATTER.parse(instant + ext);
     }
+  }
+
+  public static Date parseDateFromInstantTime(String instant) throws ParseException {
+    return parseDateFromInstantTime(instant, true);
   }
 
   public static String getInstantForDate(Date instantDate) {
@@ -108,18 +116,25 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   /**
    * Creates an instant string given a valid date-time string.
    * @param dateString A date-time string in the format yyyy-MM-dd HH:mm:ss[:SSS]
+   * @param preferMaxDefaultMillis If true and dateString is missing milliseconds then
+   *                               append the max number of milliseconds. If false it will be min
    * @return A timeline instant
    * @throws ParseException If we cannot parse the date string
    */
-  public static String getInstantForDateString(String dateString) throws ParseException {
+  public static String getInstantForDateString(String dateString, boolean preferMaxDefaultMillis) throws ParseException {
     try {
       return getInstantForDate(MILLIS_GRANULARITY_DATE_FORMATTER.parse(dateString));
     } catch (ParseException e) {
       // Attempt to add the milliseconds in order to complete parsing
+      String ext = preferMaxDefaultMillis ? MAX_MILLIS_INSTANT_EXT : MIN_MILLIS_INSTANT_EXT;
       return getInstantForDate(MILLIS_GRANULARITY_DATE_FORMATTER.parse(
-              String.format("%s:%s", dateString, DEFAULT_MILLIS_EXT)
+              String.format("%s:%s", dateString, ext)
       ));
     }
+  }
+
+  public static String getInstantForDateString(String dateString) throws ParseException {
+    return getInstantForDateString(dateString, true);
   }
 
   /**

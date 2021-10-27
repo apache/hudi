@@ -81,7 +81,8 @@ public class TestStreamerUtil {
     String higher = "20210705125921";
     String lower = "20210705125806";
     String median1 = StreamerUtil.medianInstantTime(higher, lower);
-    assertThat(median1, is("20210705125843500"));
+    String expectedMedianWithMillis = "20210705125844499";
+    assertThat(median1, is(expectedMedianWithMillis));
     // test symmetry
     assertThrows(IllegalArgumentException.class,
         () -> StreamerUtil.medianInstantTime(lower, higher),
