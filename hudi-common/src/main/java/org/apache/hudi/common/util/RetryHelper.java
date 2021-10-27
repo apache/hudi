@@ -22,15 +22,19 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.Random;
-import java.util.function.Supplier;
 
 public class RetryHelper<T> {
     private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
     private HoodieWrapperFileSystem.CheckedFunction<T> func;
     private int num;
     private long maxIntervalTime;
-    private String taskInfo;
+    private long initialIntervalTime = 100L;
+    private String taskInfo = "N/A";
+
+    public RetryHelper() {
+    }
 
     public RetryHelper(String taskInfo) {
         this.taskInfo = taskInfo;
@@ -46,12 +50,22 @@ public class RetryHelper<T> {
         return this;
     }
 
-    public RetryHelper tryInterval(long time) {
+    public RetryHelper tryTaskInfo(String taskInfo) {
+        this.taskInfo = taskInfo;
+        return this;
+    }
+
+    public RetryHelper tryMaxInterval(long time) {
         maxIntervalTime = time;
         return this;
     }
 
-    public T start() throws Exception {
+    public RetryHelper tryInitialInterval(long time) {
+        initialIntervalTime = time;
+        return this;
+    }
+
+    public T start() throws IOException {
         int retries = 0;
         boolean success = false;
         RuntimeException exception = null;
@@ -89,9 +103,9 @@ public class RetryHelper<T> {
     private long getWaitTimeExp(int retryCount) {
         Random random = new Random();
         if (0 == retryCount) {
-            return 100L;
+            return initialIntervalTime;
         }
 
-        return (long) Math.pow(2, retryCount) * 100L + random.nextInt(100);
+        return (long) Math.pow(2, retryCount) * initialIntervalTime + random.nextInt(100);
     }
 }

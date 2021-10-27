@@ -127,12 +127,6 @@ public class HoodieWrapperFileSystem extends FileSystem {
     this.consistencyGuard = consistencyGuard;
   }
 
-  public HoodieWrapperFileSystem(FileSystem fileSystem, ConsistencyGuard consistencyGuard, RetryHelper retryHelper) {
-    this.fileSystem = new HoodieRetryWrapperFileSystem(fileSystem, retryHelper);
-    this.uri = fileSystem.getUri();
-    this.consistencyGuard = consistencyGuard;
-  }
-
   public static Path convertToHoodiePath(Path file, Configuration conf) {
     try {
       String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
