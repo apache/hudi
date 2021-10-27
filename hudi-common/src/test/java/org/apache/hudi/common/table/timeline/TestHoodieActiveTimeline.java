@@ -434,11 +434,11 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   public void testMillisGranularityInstantDateParsing() throws ParseException {
     // Old second granularity instant ID
     String secondGranularityInstant = "20210101120101";
-    Date secondGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
+    Date defaultMsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
     // New ms granularity instant ID
-    String msGranularityInstant = secondGranularityInstant + "009";
-    Date msGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(msGranularityInstant);
-    assertEquals(0, secondGranularityDate.getTime() % 1000, "Expected the ms part to be 0");
+    String specificMsGranularityInstant = secondGranularityInstant + "009";
+    Date msGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(specificMsGranularityInstant);
+    assertEquals(999, defaultMsGranularityDate.getTime() % 1000, "Expected the ms part to be 999");
     assertEquals(9, msGranularityDate.getTime() % 1000, "Expected the ms part to be 9");
 
     // Ensure that any date math which expects second granularity still works
