@@ -852,17 +852,12 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       if (HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS,
           HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
         rollbackFailedBootstrap();
+        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, instant, config);
         break;
       } else {
         rollback(instant, skipLocking);
+        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, instant, config);
       }
-    }
-    // Delete any heartbeat files for already rolled back commits
-    try {
-      HeartbeatUtils.cleanExpiredHeartbeats(this.heartbeatClient.getAllExistingHeartbeatInstants(),
-          createMetaClient(true), basePath);
-    } catch (IOException io) {
-      LOG.error("Unable to delete heartbeat files", io);
     }
   }
 
