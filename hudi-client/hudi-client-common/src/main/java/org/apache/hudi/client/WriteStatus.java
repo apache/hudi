@@ -43,7 +43,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_E
  * Status of a write operation.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
-public class WriteStatus implements Serializable {
+public class WriteStatus implements ReportsWrite, Serializable {
 
   private static final Logger LOG = LogManager.getLogger(WriteStatus.class);
   private static final long serialVersionUID = 1L;
