@@ -1354,7 +1354,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testSimpleClustering(boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1)
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
         .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build();
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
@@ -1365,7 +1365,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringSortColumns(populateMetaFields ? "_hoodie_record_key" : "_row_key")
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1)
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
         .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build();
     testInsertAndClustering(clusteringConfig, populateMetaFields, true, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
@@ -1375,7 +1375,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testPendingClusteringRollback(boolean populateMetaFields) throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true).build();
 
     // start clustering, but don't commit
     List<HoodieRecord> allRecords = testInsertAndClustering(clusteringConfig, populateMetaFields, false);
@@ -1406,7 +1406,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testClusteringWithFailingValidator() throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringSortColumns("_hoodie_record_key")
+        .withClusteringSortColumns("_hoodie_record_key").withInlineClustering(true)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
     try {
       testInsertAndClustering(clusteringConfig, true, true, FailingPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
@@ -1420,7 +1420,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testClusteringInvalidConfigForSqlQueryValidator() throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true).build();
     try {
       testInsertAndClustering(clusteringConfig, false, true, SqlQueryEqualityPreCommitValidator.class.getName(), "", "");
       fail("expected pre-commit clustering validation to fail because sql query is not configured");
@@ -1433,7 +1433,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testClusteringInvalidConfigForSqlQuerySingleResultValidator() throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true).build();
 
     testInsertAndClustering(clusteringConfig, false, true, SqlQuerySingleResultPreCommitValidator.class.getName(),
         "", COUNT_SQL_QUERY_FOR_VALIDATION + "#400");
@@ -1443,7 +1443,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testClusteringInvalidConfigForSqlQuerySingleResultValidatorFailure() throws Exception {
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true).build();
 
     try {
       testInsertAndClustering(clusteringConfig, false, true, SqlQuerySingleResultPreCommitValidator.class.getName(),

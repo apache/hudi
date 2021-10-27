@@ -46,13 +46,19 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Number of partitions to list to create ClusteringPlan");
 
+  public static final ConfigProperty<String> PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
+      .defaultValue(String.valueOf(600 * 1024 * 1024L))
+      .sinceVersion("0.7.0")
+      .withDocumentation("Files smaller than the size specified here are candidates for clustering");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
-      .defaultValue("org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy")
+      .defaultValue("org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy")
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
-          + "i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by "
-          + DAYBASED_LOOKBACK_PARTITIONS.key() + ") day based partitions picks the small file slices within those partitions.");
+          + "i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by "
+          + PLAN_STRATEGY_SMALL_FILE_LIMIT.key() + ") to pick the small file slices within partitions for clustering.");
 
   public static final ConfigProperty<String> EXECUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.execution.strategy.class")
@@ -85,12 +91,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue("0")
       .sinceVersion("0.9.0")
       .withDocumentation("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
-
-  public static final ConfigProperty<String> PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
-      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
-      .defaultValue(String.valueOf(600 * 1024 * 1024L))
-      .sinceVersion("0.7.0")
-      .withDocumentation("Files smaller than the size specified here are candidates for clustering");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -133,7 +133,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.clustering.preserve.commit.metadata")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.9.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 

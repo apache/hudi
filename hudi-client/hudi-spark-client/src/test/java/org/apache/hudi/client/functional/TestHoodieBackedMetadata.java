@@ -676,7 +676,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
-        .withClusteringSortColumns("_row_key")
+        .withClusteringSortColumns("_row_key").withInlineClustering(true)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
 
     HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
