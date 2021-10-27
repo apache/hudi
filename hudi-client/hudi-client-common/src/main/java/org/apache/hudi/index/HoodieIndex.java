@@ -65,8 +65,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
 
   /**
    * Extracts the location of written records, and updates the index.
-   * <p>
-   * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
   @Deprecated
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
@@ -86,8 +84,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
 
   /**
    * Extracts the location of written records, and updates the index.
-   * <p>
-   * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract HoodieData<WriteStatus> updateLocation(

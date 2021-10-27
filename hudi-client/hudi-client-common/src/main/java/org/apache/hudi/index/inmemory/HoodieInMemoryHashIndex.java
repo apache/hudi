@@ -76,9 +76,9 @@ public class HoodieInMemoryHashIndex<T extends HoodieRecordPayload<T>>
 
   @Override
   public HoodieData<WriteStatus> updateLocation(
-      HoodieData<WriteStatus> writeStatusRDD, HoodieEngineContext context,
+      HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
       HoodieTable hoodieTable) {
-    return writeStatusRDD.map(writeStatus -> {
+    return writeStatuses.map(writeStatus -> {
       for (HoodieRecord record : writeStatus.getWrittenRecords()) {
         if (!writeStatus.isErrored(record.getKey())) {
           HoodieKey key = record.getKey();

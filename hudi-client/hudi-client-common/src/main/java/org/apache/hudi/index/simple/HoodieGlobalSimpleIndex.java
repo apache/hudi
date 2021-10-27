@@ -57,9 +57,9 @@ public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload<T>> extends H
 
   @Override
   public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> recordRDD, HoodieEngineContext context,
+      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
-    return tagLocationInternal(recordRDD, context, hoodieTable);
+    return tagLocationInternal(records, context, hoodieTable);
   }
 
   /**
@@ -75,11 +75,11 @@ public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload<T>> extends H
       HoodieData<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
       HoodieTable hoodieTable) {
 
-    HoodiePairData<String, HoodieRecord<T>> keyedInputRecordRDD =
+    HoodiePairData<String, HoodieRecord<T>> keyedInputRecords =
         inputRecords.mapToPair(entry -> new ImmutablePair<>(entry.getRecordKey(), entry));
     HoodiePairData<HoodieKey, HoodieRecordLocation> allRecordLocationsInTable =
         fetchAllRecordLocations(context, hoodieTable, config.getGlobalSimpleIndexParallelism());
-    return getTaggedRecords(keyedInputRecordRDD, allRecordLocationsInTable);
+    return getTaggedRecords(keyedInputRecords, allRecordLocationsInTable);
   }
 
   /**

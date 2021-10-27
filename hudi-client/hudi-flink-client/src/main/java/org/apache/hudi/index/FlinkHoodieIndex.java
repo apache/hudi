@@ -36,7 +36,6 @@ import java.util.List;
 
 /**
  * Base flink implementation of {@link HoodieIndex}.
- *
  * @param <T> payload type
  */
 @Deprecated

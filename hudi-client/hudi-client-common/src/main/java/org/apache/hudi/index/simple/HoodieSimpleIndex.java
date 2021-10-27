@@ -116,7 +116,7 @@ public class HoodieSimpleIndex<T extends HoodieRecordPayload<T>>
         fetchRecordLocationsForAffectedPartitions(keyedInputRecords.keys(), context, hoodieTable,
             config.getSimpleIndexParallelism());
 
-    HoodieData<HoodieRecord<T>> taggedRecordRDD =
+    HoodieData<HoodieRecord<T>> taggedRecords =
         keyedInputRecords.leftOuterJoin(existingLocationsOnTable).map(entry -> {
           final HoodieRecord<T> untaggedRecord = entry.getRight().getLeft();
           final Option<HoodieRecordLocation> location = Option.ofNullable(entry.getRight().getRight().orElse(null));
@@ -126,7 +126,7 @@ public class HoodieSimpleIndex<T extends HoodieRecordPayload<T>>
     if (config.getSimpleIndexUseCaching()) {
       inputRecords.unpersist();
     }
-    return taggedRecordRDD;
+    return taggedRecords;
   }
 
   /**

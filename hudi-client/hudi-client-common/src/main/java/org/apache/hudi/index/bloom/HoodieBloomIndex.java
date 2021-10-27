@@ -223,7 +223,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
       HoodieData<HoodieRecord<T>> records) {
     HoodiePairData<HoodieKey, HoodieRecord<T>> keyRecordPairs =
         records.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
-    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
+    // Here as the records might have more data than keyFilenamePairs (some row keys' fileId is null),
     // so we do left outer join.
     return keyRecordPairs.leftOuterJoin(keyFilenamePair).values()
         .map(v -> HoodieIndexUtils.getTaggedRecord(v.getLeft(), Option.ofNullable(v.getRight().orElse(null))));

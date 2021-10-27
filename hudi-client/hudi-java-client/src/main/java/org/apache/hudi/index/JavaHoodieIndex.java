@@ -42,14 +42,14 @@ public abstract class JavaHoodieIndex<T extends HoodieRecordPayload> extends Hoo
 
   @Override
   @Deprecated
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   public abstract List<WriteStatus> updateLocation(List<WriteStatus> writeStatuses,
                                                    HoodieEngineContext context,
                                                    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) throws HoodieIndexException;
 
   @Override
   @Deprecated
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   public abstract List<HoodieRecord<T>> tagLocation(List<HoodieRecord<T>> records,
                                                     HoodieEngineContext context,
                                                     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) throws HoodieIndexException;

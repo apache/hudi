@@ -52,7 +52,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload<T>> extends Ho
   }
 
   /**
-   * Load all involved files as <Partition, filename> pair RDD from all partitions in the table.
+   * Load all involved files as <Partition, filename> pairs from all partitions in the table.
    */
   @Override
   List<Pair<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
@@ -68,20 +68,20 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload<T>> extends Ho
    * to be compared gets cut down a lot from range pruning.
    * <p>
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
-   * recordKey ranges in the index info. the partition path of the incoming record (partitionRecordKeyPairRDD._2()) will
+   * recordKey ranges in the index info. the partition path of the incoming record (partitionRecordKeyPairs._2()) will
    * be ignored since the search scope should be bigger than that
    */
 
   @Override
   HoodieData<ImmutablePair<String, HoodieKey>> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
-      HoodiePairData<String, String> partitionRecordKeyPairRDD) {
+      HoodiePairData<String, String> partitionRecordKeyPairs) {
 
     IndexFileFilter indexFileFilter =
         config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedGlobalIndexFileFilter(partitionToFileIndexInfo);
 
-    return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
+    return partitionRecordKeyPairs.map(partitionRecordKeyPair -> {
       String recordKey = partitionRecordKeyPair.getRight();
       String partitionPath = partitionRecordKeyPair.getLeft();
 
@@ -107,7 +107,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload<T>> extends Ho
         keyLocationPairs.mapToPair(p -> new ImmutablePair<>(
             p.getKey().getRecordKey(), new ImmutablePair<>(p.getValue(), p.getKey())));
 
-    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer join.
+    // Here as the records might have more data than rowKeys (some rowKeys' fileId is null), so we do left outer join.
     return incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
       final HoodieRecord<T> hoodieRecord = record.getLeft();
       final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
