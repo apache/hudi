@@ -38,7 +38,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
@@ -61,7 +60,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
       Schema sourceSchema = UtilHelpers.createSchemaProvider(HiveSchemaProvider.class.getName(), PROPS, jsc()).getSourceSchema();
 
-      Schema originalSchema= new Schema.Parser().parse(
+      Schema originalSchema = new Schema.Parser().parse(
               UtilitiesTestBase.Helpers.readFile("delta-streamer-config/hive_schema_provider_source.avsc")
       );
       for (Schema.Field field : sourceSchema.getFields()) {
@@ -119,8 +118,8 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
   }
 
   private void createSchemaTable(String fullName) throws IOException {
-    String createTableSQL = UtilitiesTestBase.Helpers.readFile(String.format("delta-streamer-config/%s.sql", fullName));
     SparkSession spark = spark();
+    String createTableSQL = UtilitiesTestBase.Helpers.readFile(String.format("delta-streamer-config/%s.sql", fullName));
     Pair<String, String> dbAndTableName = getDBAndTableName(fullName);
     spark.sql(String.format("CREATE DATABASE IF NOT EXISTS %s", dbAndTableName.getLeft()));
     spark.sql(createTableSQL);
