@@ -960,6 +960,44 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     assertRowsEquals(result, TestData.dataSetInsert(5, 6));
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testReadWithWiderSchema(HoodieTableType tableType) throws Exception {
+    TableEnvironment tableEnv = batchTableEnv;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
+
+    // write a batch of data set
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    String hoodieTableDDL = sql("t1")
+        .field("uuid varchar(20)")
+        .field("name varchar(10)")
+        .field("age int")
+        .field("salary double")
+        .field("ts timestamp(3)")
+        .field("`partition` varchar(10)")
+        .pkField("uuid")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "+I[id1, Danny, 23, null, 1970-01-01T00:00:00.001, par1], "
+        + "+I[id2, Stephen, 33, null, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id3, Julian, 53, null, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 31, null, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id5, Sophia, 18, null, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, null, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, null, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, null, 1970-01-01T00:00:00.008, par4]]";
+    assertRowsEquals(result, expected);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
