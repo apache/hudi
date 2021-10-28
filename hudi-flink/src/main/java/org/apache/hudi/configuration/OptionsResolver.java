@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 
 import org.apache.flink.configuration.Configuration;
@@ -66,5 +67,21 @@ public class OptionsResolver {
     return conf.getString(FlinkOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+  }
+
+  /**
+   * Returns whether the payload clazz is {@link DefaultHoodieRecordPayload}.
+   */
+  public static boolean isDefaultHoodieRecordPayloadClazz(Configuration conf) {
+    return conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME).contains(DefaultHoodieRecordPayload.class.getSimpleName());
+  }
+
+  /**
+   * Returns the preCombine field
+   * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
+   */
+  public static String getPreCombineField(Configuration conf) {
+    final String preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
+    return preCombineField.equals(FlinkOptions.NO_PRE_COMBINE) ? null : preCombineField;
   }
 }

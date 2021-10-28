@@ -245,8 +245,10 @@ public class StreamWriteOperatorCoordinator
   public void notifyCheckpointAborted(long checkpointId) {
     // once the checkpoint was aborted, unblock the writer tasks to
     // reuse the last instant.
-    executor.execute(() -> sendCommitAckEvents(checkpointId),
-        "unblock data write with aborted checkpoint %s", checkpointId);
+    if (!WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
+      executor.execute(() -> sendCommitAckEvents(checkpointId),
+          "unblock data write with aborted checkpoint %s", checkpointId);
+    }
   }
 
   @Override
