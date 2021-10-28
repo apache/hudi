@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
-  private static final Logger LOG = LogManager.getLogger(TestJdbcbasedSchemaProvider.class);
+  private static final Logger LOG = LogManager.getLogger(TestHiveSchemaProvider.class);
   private static final TypedProperties PROPS = new TypedProperties();
   private static final String SOURCE_SCHEMA_TABLE_NAME = "schema_registry.source_schema_tab";
   private static final String TARGET_SCHEMA_TABLE_NAME = "schema_registry.target_schema_tab";
