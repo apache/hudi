@@ -91,8 +91,8 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <T> HoodieData<T> parallelize(List<T> data) {
-    return HoodieJavaRDD.of(javaSparkContext.parallelize(data, data.size()));
+  public <T> HoodieData<T> parallelize(List<T> data, int parallelism) {
+    return HoodieJavaRDD.of(javaSparkContext.parallelize(data, parallelism));
   }
 
   @Override
