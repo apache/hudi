@@ -37,7 +37,7 @@ public class FileSystemGuardConfig  extends HoodieConfig {
 
     public static final ConfigProperty<String> FILESYSTEM_RETRY_ENABLE = ConfigProperty
             .key("hoodie.filesystem.action.retry.enabled")
-            .defaultValue("false")
+            .defaultValue("true")
             .sinceVersion("0.10.0")
             .withDocumentation("Enabled to handle S3 list/get/delete etc performance issue.");
 
