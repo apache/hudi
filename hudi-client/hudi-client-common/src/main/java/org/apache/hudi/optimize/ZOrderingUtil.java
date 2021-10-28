@@ -18,23 +18,9 @@
 
 package org.apache.hudi.optimize;
 
-import sun.misc.Unsafe;
-
 import java.nio.charset.Charset;
 
 public class ZOrderingUtil {
-
-  static final Unsafe THEUNSAFE;
-  public static final int SIZEOF_LONG = Long.SIZE / Byte.SIZE;
-
-  static {
-    THEUNSAFE = UnsafeAccess.THEUNSAFE;
-
-    // sanity check - this should never fail
-    if (THEUNSAFE.arrayIndexScale(byte[].class) != 1) {
-      throw new AssertionError();
-    }
-  }
 
   /**
    * Lexicographically compare two arrays.
@@ -50,45 +36,17 @@ public class ZOrderingUtil {
   public static int compareTo(byte[] buffer1, int offset1, int length1,
                               byte[] buffer2, int offset2, int length2) {
     // Short circuit equal case
-    if (buffer1 == buffer2 && offset1 == offset2 && length1 == length2) {
+    if (buffer1 == buffer2
+        && offset1 == offset2
+        && length1 == length2) {
       return 0;
     }
-    final int stride = 8;
-    final int minLength = Math.min(length1, length2);
-    int strideLimit = minLength & ~(stride - 1);
-    final long offset1Adj = offset1 + UnsafeAccess.BYTE_ARRAY_BASE_OFFSET;
-    final long offset2Adj = offset2 + UnsafeAccess.BYTE_ARRAY_BASE_OFFSET;
-    int i;
-
-    /*
-     * Compare 8 bytes at a time. Benchmarking on x86 shows a stride of 8 bytes is no slower
-     * than 4 bytes even on 32-bit. On the other hand, it is substantially faster on 64-bit.
-     */
-    for (i = 0; i < strideLimit; i += stride) {
-      long lw = THEUNSAFE.getLong(buffer1, offset1Adj + i);
-      long rw = THEUNSAFE.getLong(buffer2, offset2Adj + i);
-      if (lw != rw) {
-        if (!UnsafeAccess.LITTLE_ENDIAN) {
-          return ((lw + Long.MIN_VALUE) < (rw + Long.MIN_VALUE)) ? -1 : 1;
-        }
-
-        /*
-         * We want to compare only the first index where left[index] != right[index]. This
-         * corresponds to the least significant nonzero byte in lw ^ rw, since lw and rw are
-         * little-endian. Long.numberOfTrailingZeros(diff) tells us the least significant
-         * nonzero bit, and zeroing out the first three bits of L.nTZ gives us the shift to get
-         * that least significant nonzero byte. This comparison logic is based on UnsignedBytes
-         * comparator from guava v21
-         */
-        int n = Long.numberOfTrailingZeros(lw ^ rw) & ~0x7;
-        return ((int) ((lw >>> n) & 0xFF)) - ((int) ((rw >>> n) & 0xFF));
-      }
-    }
-
-    // The epilogue to cover the last (minLength % stride) elements.
-    for (; i < minLength; i++) {
-      int a = (buffer1[offset1 + i] & 0xFF);
-      int b = (buffer2[offset2 + i] & 0xFF);
+    // Bring WritableComparator code local
+    int end1 = offset1 + length1;
+    int end2 = offset2 + length2;
+    for (int i = offset1, j = offset2; i < end1 && j < end2; i++, j++) {
+      int a = (buffer1[i] & 0xff);
+      int b = (buffer2[j] & 0xff);
       if (a != b) {
         return a - b;
       }
@@ -96,7 +54,7 @@ public class ZOrderingUtil {
     return length1 - length2;
   }
 
-  private static byte[] paddingTo8Byte(byte[] a) {
+  public static byte[] paddingTo8Byte(byte[] a) {
     if (a.length == 8) {
       return a;
     }

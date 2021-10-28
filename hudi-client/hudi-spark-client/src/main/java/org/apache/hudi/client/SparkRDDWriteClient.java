@@ -381,9 +381,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     finalizeWrite(table, clusteringCommitTime, writeStats);
     try {
       // try to save statistics info to hudi
-      if (config.getOptimizeEnableDataSkipping()
-          && config.getSpaceFillingCurveDataOptimizeEnable()
-          && !config.getClusteringSortColumns().isEmpty()) {
+      if (config.isDataSkippingEnabled() && config.isLayoutOptimizationEnabled() && !config.getClusteringSortColumns().isEmpty()) {
         table.updateStatistics(context, writeStats, clusteringCommitTime, true);
       }
       LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);

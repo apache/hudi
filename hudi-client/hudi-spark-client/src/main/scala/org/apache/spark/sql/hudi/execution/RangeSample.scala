@@ -20,9 +20,15 @@ package org.apache.spark.sql.hudi.execution
 
 import java.util
 
+import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.spark.rdd.{PartitionPruningRDD, RDD}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, BoundReference, SortOrder, UnsafeProjection, UnsafeRow}
 import org.apache.hudi.optimize.ZOrderingUtil
+import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.codegen.LazilyGeneratedOrdering
+import org.apache.spark.sql.types._
+import org.apache.spark.util.MutablePair
 import org.apache.spark.util.random.SamplingUtils
 
 import scala.collection.mutable
@@ -234,6 +240,287 @@ case class ZorderingBinarySort(b: Array[Byte]) extends Ordered[ZorderingBinarySo
   override def compare(that: ZorderingBinarySort): Int = {
     val len = this.b.length
     ZOrderingUtil.compareTo(this.b, 0, len, that.b, 0, len)
+  }
+}
+
+object RangeSampleSort {
+
+  /**
+    * create z-order DataFrame by sample
+    * support all col types
+    */
+  def sortDataFrameBySampleSupportAllTypes(df: DataFrame, zCols: Seq[String], fileNum: Int): DataFrame = {
+    val spark = df.sparkSession
+    val internalRdd = df.queryExecution.toRdd
+    val schema = df.schema
+    val outputAttributes = df.queryExecution.analyzed.output
+    val sortingExpressions = outputAttributes.filter(p => zCols.contains(p.name))
+    if (sortingExpressions.length == 0 || sortingExpressions.length != zCols.size) {
+      df
+    } else {
+      val zOrderBounds = df.sparkSession.sessionState.conf.getConfString(
+        HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.key,
+        HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.defaultValue.toString).toInt
+
+      val sampleRdd = internalRdd.mapPartitionsInternal { iter =>
+        val projection = UnsafeProjection.create(sortingExpressions, outputAttributes)
+        val mutablePair = new MutablePair[InternalRow, Null]()
+        // Internally, RangePartitioner runs a job on the RDD that samples keys to compute
+        // partition bounds. To get accurate samples, we need to copy the mutable keys.
+        iter.map(row => mutablePair.update(projection(row).copy(), null))
+      }
+
+      val orderings = sortingExpressions.map(SortOrder(_, Ascending)).zipWithIndex.map { case (ord, i) =>
+        ord.copy(child = BoundReference(i, ord.dataType, ord.nullable))
+      }
+
+      val lazyGeneratedOrderings = orderings.map(ord => new LazilyGeneratedOrdering(Seq(ord)))
+
+      val sample = new RangeSample(zOrderBounds, sampleRdd)
+
+      val rangeBounds = sample.getRangeBounds()
+
+      implicit val ordering1 = lazyGeneratedOrderings(0)
+
+      val sampleBounds = sample.determineRowBounds(rangeBounds, math.min(zOrderBounds, rangeBounds.length), lazyGeneratedOrderings, sortingExpressions)
+
+      val origin_orderings = sortingExpressions.map(SortOrder(_, Ascending)).map { ord =>
+        ord.copy(child = BoundReference(0, ord.dataType, ord.nullable))
+      }
+
+      val origin_lazyGeneratedOrderings = origin_orderings.map(ord => new LazilyGeneratedOrdering(Seq(ord)))
+
+      // expand bounds.
+      // maybe it's better to use the value of "spark.zorder.bounds.number" as maxLength,
+      // however this will lead to extra time costs when all zorder cols distinct count values are less then "spark.zorder.bounds.number"
+      val maxLength = sampleBounds.map(_.length).max
+      val expandSampleBoundsWithFactor = sampleBounds.map { bound =>
+        val fillFactor = maxLength / bound.size.toDouble
+        (bound, fillFactor)
+      }
+
+      val boundBroadCast = spark.sparkContext.broadcast(expandSampleBoundsWithFactor)
+
+      val indexRdd = internalRdd.mapPartitionsInternal { iter =>
+        val boundsWithFactor = boundBroadCast.value
+        import java.util.concurrent.ThreadLocalRandom
+        val threadLocalRandom = ThreadLocalRandom.current
+        val maxBoundNum = boundsWithFactor.map(_._1.length).max
+        val origin_Projections = sortingExpressions.map { se =>
+          UnsafeProjection.create(Seq(se), outputAttributes)
+        }
+
+        iter.map { unsafeRow =>
+          val interleaveValues = origin_Projections.zip(origin_lazyGeneratedOrderings).zipWithIndex.map { case ((rowProject, lazyOrdering), index) =>
+            val row = rowProject(unsafeRow)
+            val decisionBound = new RawDecisionBound(lazyOrdering)
+            if (row.isNullAt(0)) {
+              maxBoundNum + 1
+            } else {
+              val (bound, factor) = boundsWithFactor(index)
+              if (factor > 1) {
+                val currentRank = decisionBound.getBound(row, bound.asInstanceOf[Array[InternalRow]])
+                currentRank*factor.toInt + threadLocalRandom.nextInt(factor.toInt)
+              } else {
+                decisionBound.getBound(row, bound.asInstanceOf[Array[InternalRow]])
+              }
+            }
+          }.toArray.map(ZOrderingUtil.intTo8Byte(_))
+          val zValues = ZOrderingUtil.interleaving(interleaveValues, 8)
+          val mutablePair = new MutablePair[InternalRow, Array[Byte]]()
+
+          mutablePair.update(unsafeRow, zValues)
+        }
+      }.sortBy(x => ZorderingBinarySort(x._2), numPartitions = fileNum).map(_._1)
+      spark.internalCreateDataFrame(indexRdd, schema)
+    }
+  }
+
+  /**
+    * create z-order DataFrame by sample
+    * first, sample origin data to get z-cols bounds, then create z-order DataFrame
+    * support all type data.
+    * this method need more resource and cost more time than createZIndexedDataFrameByMapValue
+    */
+  def sortDataFrameBySample(df: DataFrame, zCols: Seq[String], fileNum: Int): DataFrame = {
+    val spark = df.sparkSession
+    val columnsMap = df.schema.fields.map(item => (item.name, item)).toMap
+    val fieldNum = df.schema.fields.length
+    val checkCols = zCols.filter(col => columnsMap(col) != null)
+
+    if (zCols.isEmpty || checkCols.isEmpty) {
+      df
+    } else {
+      val zFields = zCols.map { col =>
+        val newCol = columnsMap(col)
+        if (newCol == null) {
+          (-1, null)
+        } else {
+          newCol.dataType match {
+            case LongType | DoubleType | FloatType | StringType | IntegerType | DateType | TimestampType | ShortType | ByteType =>
+              (df.schema.fields.indexOf(newCol), newCol)
+            case d: DecimalType =>
+              (df.schema.fields.indexOf(newCol), newCol)
+            case _ =>
+              (-1, null)
+          }
+        }
+      }.filter(_._1 != -1)
+      // Complex type found, use createZIndexedDataFrameByRange
+      if (zFields.length != zCols.length) {
+        return sortDataFrameBySampleSupportAllTypes(df, zCols, fieldNum)
+      }
+
+      val rawRdd = df.rdd
+      val sampleRdd = rawRdd.map { row =>
+        val values = zFields.map { case (index, field) =>
+          field.dataType match {
+            case LongType =>
+              if (row.isNullAt(index)) Long.MaxValue else row.getLong(index)
+            case DoubleType =>
+              if (row.isNullAt(index)) Long.MaxValue else java.lang.Double.doubleToLongBits(row.getDouble(index))
+            case IntegerType =>
+              if (row.isNullAt(index)) Long.MaxValue else row.getInt(index).toLong
+            case FloatType =>
+              if (row.isNullAt(index)) Long.MaxValue else java.lang.Double.doubleToLongBits(row.getFloat(index).toDouble)
+            case StringType =>
+              if (row.isNullAt(index)) "" else row.getString(index)
+            case DateType =>
+              if (row.isNullAt(index)) Long.MaxValue else row.getDate(index).getTime
+            case TimestampType =>
+              if (row.isNullAt(index)) Long.MaxValue else row.getTimestamp(index).getTime
+            case ByteType =>
+              if (row.isNullAt(index)) Long.MaxValue else row.getByte(index).toLong
+            case ShortType =>
+              if (row.isNullAt(index)) Long.MaxValue else row.getShort(index).toLong
+            case d: DecimalType =>
+              if (row.isNullAt(index)) Long.MaxValue else row.getDecimal(index).longValue()
+            case _ =>
+              null
+          }
+        }.filter(v => v != null).toArray
+        (values, null)
+      }
+      val zOrderBounds = df.sparkSession.sessionState.conf.getConfString(
+        HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.key,
+        HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE.defaultValue.toString).toInt
+      val sample = new RangeSample(zOrderBounds, sampleRdd)
+      val rangeBounds = sample.getRangeBounds()
+      val sampleBounds = {
+        val candidateColNumber = rangeBounds.head._1.length
+        (0 to candidateColNumber - 1).map { i =>
+          val colRangeBound = rangeBounds.map(x => (x._1(i), x._2))
+
+          if (colRangeBound.head._1.isInstanceOf[String]) {
+            sample.determineBound(colRangeBound.asInstanceOf[ArrayBuffer[(String, Float)]], math.min(zOrderBounds, rangeBounds.length), Ordering[String])
+          } else {
+            sample.determineBound(colRangeBound.asInstanceOf[ArrayBuffer[(Long, Float)]], math.min(zOrderBounds, rangeBounds.length), Ordering[Long])
+          }
+        }
+      }
+
+      // expand bounds.
+      // maybe it's better to use the value of "spark.zorder.bounds.number" as maxLength,
+      // however this will lead to extra time costs when all zorder cols distinct count values are less then "spark.zorder.bounds.number"
+      val maxLength = sampleBounds.map(_.length).max
+      val expandSampleBoundsWithFactor = sampleBounds.map { bound =>
+        val fillFactor = maxLength / bound.size
+        val newBound = new Array[Double](bound.length * fillFactor)
+        if (bound.isInstanceOf[Array[Long]] && fillFactor > 1) {
+          val longBound = bound.asInstanceOf[Array[Long]]
+          for (i <- 0 to bound.length - 1) {
+            for (j <- 0 to fillFactor - 1) {
+              // sample factor shoud not be too large, so it's ok to use 1 / fillfactor as slice
+              newBound(j + i*(fillFactor)) = longBound(i) + (j + 1) * (1 / fillFactor.toDouble)
+            }
+          }
+          (newBound, fillFactor)
+        } else {
+          (bound, 0)
+        }
+      }
+
+      val boundBroadCast = spark.sparkContext.broadcast(expandSampleBoundsWithFactor)
+
+      val indexRdd = rawRdd.mapPartitions { iter =>
+        val expandBoundsWithFactor = boundBroadCast.value
+        val maxBoundNum = expandBoundsWithFactor.map(_._1.length).max
+        val longDecisionBound = new RawDecisionBound(Ordering[Long])
+        val doubleDecisionBound = new RawDecisionBound(Ordering[Double])
+        val stringDecisionBound = new RawDecisionBound(Ordering[String])
+        import java.util.concurrent.ThreadLocalRandom
+        val threadLocalRandom = ThreadLocalRandom.current
+
+        def getRank(rawIndex: Int, value: Long, isNull: Boolean): Int = {
+          val (expandBound, factor) = expandBoundsWithFactor(rawIndex)
+          if (isNull) {
+            expandBound.length + 1
+          } else {
+            if (factor > 1) {
+              doubleDecisionBound.getBound(value + (threadLocalRandom.nextInt(factor) + 1)*(1 / factor.toDouble), expandBound.asInstanceOf[Array[Double]])
+            } else {
+              longDecisionBound.getBound(value, expandBound.asInstanceOf[Array[Long]])
+            }
+          }
+        }
+
+        iter.map { row =>
+          val values = zFields.zipWithIndex.map { case ((index, field), rawIndex) =>
+            field.dataType match {
+              case LongType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else row.getLong(index), isNull)
+              case DoubleType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else java.lang.Double.doubleToLongBits(row.getDouble(index)), isNull)
+              case IntegerType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else row.getInt(index).toLong, isNull)
+              case FloatType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else java.lang.Double.doubleToLongBits(row.getFloat(index).toDouble), isNull)
+              case StringType =>
+                val factor = maxBoundNum.toDouble / expandBoundsWithFactor(rawIndex)._1.length
+                if (row.isNullAt(index)) {
+                  maxBoundNum + 1
+                } else {
+                  val currentRank = stringDecisionBound.getBound(row.getString(index), expandBoundsWithFactor(rawIndex)._1.asInstanceOf[Array[String]])
+                  if (factor > 1) {
+                    (currentRank*factor).toInt + threadLocalRandom.nextInt(factor.toInt)
+                  } else {
+                    currentRank
+                  }
+                }
+              case DateType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else row.getDate(index).getTime, isNull)
+              case TimestampType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else row.getTimestamp(index).getTime, isNull)
+              case ByteType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else row.getByte(index).toLong, isNull)
+              case ShortType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else row.getShort(index).toLong, isNull)
+              case d: DecimalType =>
+                val isNull = row.isNullAt(index)
+                getRank(rawIndex, if (isNull) 0 else row.getDecimal(index).longValue(), isNull)
+              case _ =>
+                -1
+            }
+          }.filter(v => v != -1).map(ZOrderingUtil.intTo8Byte(_)).toArray
+          val zValues = ZOrderingUtil.interleaving(values, 8)
+          Row.fromSeq(row.toSeq ++ Seq(zValues))
+        }
+      }.sortBy(x => ZorderingBinarySort(x.getAs[Array[Byte]](fieldNum)), numPartitions = fileNum)
+      val newDF = df.sparkSession.createDataFrame(indexRdd, StructType(
+        df.schema.fields ++ Seq(
+          StructField(s"zindex",
+            BinaryType, false))
+      ))
+      newDF.drop("zindex")
+    }
   }
 }
 

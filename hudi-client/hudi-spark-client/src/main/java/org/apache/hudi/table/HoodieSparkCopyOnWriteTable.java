@@ -73,8 +73,8 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.ZCurveOptimizeHelper;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.Zoptimize$;
 import scala.collection.JavaConversions;
 
 import java.io.IOException;
@@ -177,9 +177,9 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
       return;
     }
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
-    Zoptimize$.MODULE$.saveStatisticsInfo(sparkEngineContext
+    ZCurveOptimizeHelper.saveStatisticsInfo(sparkEngineContext
         .getSqlContext().sparkSession().read().load(JavaConversions.asScalaBuffer(touchFiles)),
-        cols, indexPath, instantTime, JavaConversions.asScalaBuffer(validateCommits));
+        cols, indexPath, instantTime, validateCommits);
     LOG.info(String.format("save statistic info sucessfully at commitTime: %s", instantTime));
   }
 

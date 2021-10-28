@@ -19,6 +19,7 @@
 package org.apache.hudi
 
 import java.util.Properties
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -35,6 +36,7 @@ import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -282,5 +284,44 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
+  }
+
+  /**
+    * Create merge sql to merge leftTable and right table.
+    *
+    * @param leftTable table name.
+    * @param rightTable table name.
+    * @param cols merged cols.
+    * @return merge sql.
+    */
+  def createMergeSql(leftTable: String, rightTable: String, cols: Seq[String]): String = {
+    var selectsql = ""
+    for (i <- (0 to cols.size-1)) {
+      selectsql = selectsql + s" if (${leftTable}.${cols(0)} is null, ${rightTable}.${cols(i)}, ${leftTable}.${cols(i)}) as ${cols(i)} ,"
+    }
+    "select " + selectsql.dropRight(1) + s" from ${leftTable} full join ${rightTable} on ${leftTable}.${cols(0)} = ${rightTable}.${cols(0)}"
+  }
+
+  /**
+    * Collect min/max statistics for candidate cols.
+    * support all col types.
+    *
+    * @param df dataFrame holds read files.
+    * @param cols candidate cols to collect statistics.
+    * @return
+    */
+  def getMinMaxValueSpark(df: DataFrame, cols: Seq[String]): DataFrame = {
+    val sqlContext = df.sparkSession.sqlContext
+    import sqlContext.implicits._
+
+    val values = cols.flatMap(c => Seq( min(col(c)).as(c + "_minValue"), max(col(c)).as(c + "_maxValue"), count(c).as(c + "_noNullCount")))
+    val valueCounts = count("*").as("totalNum")
+    val projectValues = Seq(col("file")) ++ cols.flatMap(c =>
+      Seq(col(c + "_minValue"), col(c + "_maxValue"), expr(s"totalNum - ${c + "_noNullCount"}").as(c + "_num_nulls")))
+
+    val result = df.select(input_file_name() as "file", col("*"))
+      .groupBy($"file")
+      .agg(valueCounts,  values: _*).select(projectValues:_*)
+    result
   }
 }

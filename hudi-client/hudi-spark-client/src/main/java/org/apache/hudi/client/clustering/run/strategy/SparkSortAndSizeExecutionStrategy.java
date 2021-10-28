@@ -79,7 +79,7 @@ public class SparkSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
    * Create BulkInsertPartitioner based on strategy params.
    */
   protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
-    if (getWriteConfig().getSpaceFillingCurveDataOptimizeEnable()) {
+    if (getWriteConfig().isLayoutOptimizationEnabled()) {
       // sort input records by z-order/hilbert
       return Option.of(new RDDSpatialCurveOptimizationSortPartitioner((HoodieSparkEngineContext) getEngineContext(),
           getWriteConfig(), HoodieAvroUtils.addMetadataFields(schema)));

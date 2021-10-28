@@ -28,18 +28,18 @@ import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTab
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{SparkSession, Zoptimize, Column}
+import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.HoodieSqlUtils
+import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieSqlUtils}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
-
 import java.util.Properties
+
 import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -88,8 +88,8 @@ case class HoodieFileIndex(
   /**
     * Get all completeCommits.
     */
-  lazy val completeCommits = metaClient.getCommitsTimeline()
-    .filterCompletedInstants().getInstants().iterator().toList.map(_.getTimestamp)
+  lazy val completedCommits = metaClient.getCommitsTimeline
+    .filterCompletedInstants().getInstants.iterator().toList.map(_.getTimestamp)
 
   /**
    * Get the schema of the table.
@@ -154,6 +154,11 @@ case class HoodieFileIndex(
 
   override def rootPaths: Seq[Path] = queryPath :: Nil
 
+  def enableDataSkipping(): Boolean = {
+    options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
+      spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
+  }
+
   private def createFilterFiles(dataFilters: Seq[Expression]): Set[String] = {
     var allFiles: Set[String] = Set.empty
     var candidateFiles: Set[String] = Set.empty
@@ -162,7 +167,7 @@ case class HoodieFileIndex(
     if (fs.exists(new Path(indexPath)) && dataFilters.nonEmpty) {
       // try to load latest index table from index path
       val candidateIndexTables = fs.listStatus(new Path(indexPath)).filter(_.isDirectory)
-        .map(_.getPath.getName).filter(f => completeCommits.contains(f)).sortBy(x => x)
+        .map(_.getPath.getName).filter(f => completedCommits.contains(f)).sortBy(x => x)
       if (candidateIndexTables.nonEmpty) {
         val dataFrameOpt = try {
           Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
@@ -174,12 +179,12 @@ case class HoodieFileIndex(
 
         if (dataFrameOpt.isDefined) {
           val indexSchema = dataFrameOpt.get.schema
-          val indexFiles = Zoptimize.getIndexFiles(spark.sparkContext.hadoopConfiguration, indexPath)
-          val indexFilter = dataFilters.map(Zoptimize.createZindexFilter(_, indexSchema)).reduce(And)
+          val indexFiles = DataSkippingUtils.getIndexFiles(spark.sparkContext.hadoopConfiguration, new Path(indexPath, candidateIndexTables.last).toString)
+          val indexFilter = dataFilters.map(DataSkippingUtils.createZindexFilter(_, indexSchema)).reduce(And)
           logInfo(s"index filter condition: ${indexFilter}")
           dataFrameOpt.get.persist()
           if (indexFiles.size <= 4) {
-            allFiles = Zoptimize.readParquetFile(spark, indexFiles)
+            allFiles = DataSkippingUtils.readParquetFile(spark, indexFiles)
           } else {
             allFiles = dataFrameOpt.get.select("file").collect().map(_.getString(0)).toSet
           }
@@ -201,7 +206,11 @@ case class HoodieFileIndex(
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     // try to load filterFiles from index
-    val filterFiles: Set[String] = createFilterFiles(dataFilters)
+    val filterFiles: Set[String] = if (enableDataSkipping) {
+      createFilterFiles(dataFilters)
+    } else {
+      Set.empty
+    }
     if (queryAsNonePartitionedTable) { // Read as Non-Partitioned table.
       val candidateFiles = if (!filterFiles.isEmpty) {
         allFiles.filterNot(fileStatus => filterFiles.contains(fileStatus.getPath.getName))

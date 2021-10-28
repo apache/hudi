@@ -33,10 +33,10 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.ZCurveOptimizeHelper;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.Zoptimize$;
 
 /**
  * A partitioner that does spartial curve optimization sorting based on specified column values for each RDD partition.
@@ -77,12 +77,12 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
     Dataset<Row> originDF =  AvroConversionUtils.createDataFrame(genericRecordJavaRDD.rdd(), schema.toString(), sparkEngineContext.getSqlContext().sparkSession());
     Dataset<Row> zDataFrame;
 
-    switch (config.getOptimizeBuildCurveMethod()) {
+    switch (config.getLayoutOptimizationCurveBuildMethod()) {
       case DIRECT:
-        zDataFrame = Zoptimize$.MODULE$.createZIndexedDataFrameByMapValue(originDF, config.getClusteringSortColumns(), numOutputGroups);
+        zDataFrame = ZCurveOptimizeHelper.createZIndexedDataFrameByMapValue(originDF, config.getClusteringSortColumns(), numOutputGroups);
         break;
       case SAMPLE:
-        zDataFrame = Zoptimize$.MODULE$.createZIndexedDataFrameBySample(originDF, config.getClusteringSortColumns(), numOutputGroups);
+        zDataFrame = ZCurveOptimizeHelper.createZIndexedDataFrameBySample(originDF, config.getClusteringSortColumns(), numOutputGroups);
         break;
       default:
         throw new HoodieException("Not a valid build curve method for doWriteOperation: ");

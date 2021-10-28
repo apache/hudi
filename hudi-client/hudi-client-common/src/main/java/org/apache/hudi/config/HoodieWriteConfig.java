@@ -1231,25 +1231,25 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * Data layout optimize properties.
    */
-  public boolean getSpaceFillingCurveDataOptimizeEnable() {
-    return getBoolean(HoodieClusteringConfig.SPACE_FILLING_CURVE_DATA_OPTIMIZE_ENABLE);
+  public boolean isLayoutOptimizationEnabled() {
+    return getBoolean(HoodieClusteringConfig.LAYOUT_OPTIMIZE_ENABLE);
   }
 
-  public String getDataOptimizeStrategy() {
-    return getString(HoodieClusteringConfig.DATA_OPTIMIZE_STRATEGY);
+  public String getLayoutOptimizationStrategy() {
+    return getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_STRATEGY);
   }
 
-  public HoodieClusteringConfig.BuildCurveStrategyType getOptimizeBuildCurveMethod() {
+  public HoodieClusteringConfig.BuildCurveStrategyType getLayoutOptimizationCurveBuildMethod() {
     return HoodieClusteringConfig.BuildCurveStrategyType.fromValue(
-        getString(HoodieClusteringConfig.DATA_OPTIMIZE_BUILD_CURVE_STRATEGY));
+        getString(HoodieClusteringConfig.LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD));
   }
 
-  public int getOptimizeSampleNumber() {
-    return getInt(HoodieClusteringConfig.DATA_OPTIMIZE_BUILD_CURVE_SAMPLE_NUMBER);
+  public int getLayoutOptimizationSampleSize() {
+    return getInt(HoodieClusteringConfig.LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE);
   }
 
-  public boolean getOptimizeEnableDataSkipping() {
-    return getBoolean(HoodieClusteringConfig.DATA_OPTIMIZE_DATA_SKIPPING_ENABLE);
+  public boolean isDataSkippingEnabled() {
+    return getBoolean(HoodieClusteringConfig.LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE);
   }
 
   /**
