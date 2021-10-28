@@ -1,5 +1,5 @@
 ---
-title: Table Management
+title: SQL DDL
 summary: "In this page, we introduce how to create tables with Hudi."
 toc: true
 last_modified_at: 
@@ -9,7 +9,7 @@ import TabItem from '@theme/TabItem';
 
 The following are SparkSQL table management actions available:
 
-## Create Table
+## Spark Create Table
 :::note
 Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or Python. The first batch of a [Write](https://hudi.apache.org/docs/writing_data) to a table will create the table if it does not exist.
 :::
@@ -176,7 +176,7 @@ options (
 );
 ```
 
-## Alter Table
+## Spark Alter Table
 ### Syntax
 ```sql
 -- Alter table name
@@ -211,4 +211,27 @@ whole spark session scope.
 set hoodie.insert.shuffle.parallelism = 100;
 set hoodie.upsert.shuffle.parallelism = 100;
 set hoodie.delete.shuffle.parallelism = 100;
+```
+
+## Flink 
+### Create Table
+
+The following is a Flink example to create a table. [Read the Flink Quick Start](https://hudi.apache.org/docs/flink-quick-start-guide) guide for more examples.
+
+```sql 
+CREATE TABLE hudi_table2(
+  id int, 
+  name string, 
+  price double
+)
+WITH (
+'connector' = 'hudi',
+'path' = 's3://bucket-name/hudi/',
+'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, by default is COPY_ON_WRITE
+);
+```
+
+### Alter Table
+```sql
+alter table h0 rename to h0_1;
 ```

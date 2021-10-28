@@ -23,9 +23,20 @@ module.exports = {
             label: 'How To',
             collapsed: false,
             items: [
-                'writing_data',
-                'querying_data',
                 'table_management',
+                'writing_data',
+                'hoodie_deltastreamer',
+                'querying_data',
+                'syncing_metastore',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Services',
+            items: [
+                'migration_guide',
+                'compaction',
+                'clustering'
             ],
         },
         {
@@ -35,16 +46,14 @@ module.exports = {
                 'write_operations',
                 'concurrency_control',
                 'schema_evolution',
-                'key_generation',
-                'compaction',
-                'clustering'
+                'key_generation'
             ],
         },
         {
             type: 'category',
             label: 'Guides',
             items: [
-                'migration_guide',
+                'query_engine_setup',
                 'performance',
                 'deployment',
                 'cli',
