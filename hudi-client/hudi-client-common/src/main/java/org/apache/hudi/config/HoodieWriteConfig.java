@@ -66,6 +66,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -384,6 +385,9 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " but for the case the write schema is not equal to the specified table schema, we can"
           + " specify the write schema by this parameter. Used by MergeIntoHoodieTableCommand");
 
+  public static final String UPDATE_JOIN_FIELDS = "hoodie.update.join.fields";
+  public static final String UPDATE_NULL_FIELDS = "hoodie.update.null.fields";
+  public static final String UPDATE_PARTITION_PATHS = "hoodie.update.partition.paths";
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
@@ -939,6 +943,26 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldRollbackUsingMarkers() {
     return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
+  }
+
+  public List<String> getUpdateJoinFields() {
+    List<String> updateJoinFields = Arrays.asList(props.getProperty(UPDATE_JOIN_FIELDS).split(","));
+    if (updateJoinFields.size() > 1) {
+      // TODO remove this constraint
+      throw new UnsupportedOperationException("More than one update join field is not supported yet.");
+    }
+    return updateJoinFields;
+  }
+
+  public List<String> getUpdateNullFields() {
+    if (props.getProperty(UPDATE_NULL_FIELDS, null) == null) {
+      return Collections.emptyList();
+    }
+    return Arrays.asList(props.getProperty(UPDATE_NULL_FIELDS).split(","));
+  }
+
+  public List<String> getUpdatePartitionPaths() {
+    return Arrays.asList(props.getProperty(UPDATE_PARTITION_PATHS).split(","));
   }
 
   public int getWriteBufferLimitBytes() {

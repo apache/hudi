@@ -31,7 +31,11 @@ class Spark3RowSerDe(val encoder: ExpressionEncoder[Row]) extends SparkRowSerDe 
     deserializer.apply(internalRow)
   }
 
+<<<<<<< HEAD:hudi-spark-datasource/hudi-spark3/src/main/scala/org/apache/hudi/Spark3RowSerDe.scala
   override def serializeRow(row: Row): InternalRow = {
+=======
+  def serializeRow(row: Row): InternalRow = {
+>>>>>>> 616c49a3a (OLAP-3874. Support BulkInsert & Update Operation for tables without record key):hudi-spark-datasource/hudi-spark3/src/main/scala/org/apache/hudi/Spark3RowDeserializer.scala
     serializer.apply(row)
   }
 }

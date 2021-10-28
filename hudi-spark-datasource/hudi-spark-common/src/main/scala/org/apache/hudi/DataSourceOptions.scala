@@ -170,6 +170,7 @@ object DataSourceWriteOptions {
   val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
   val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.value
   val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.value
+  val UPDATE_OPERATION_OPT_VAL = WriteOperationType.UPDATE.value
   val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.value
   val DELETE_PARTITION_OPERATION_OPT_VAL = WriteOperationType.DELETE_PARTITION.value
   val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.value

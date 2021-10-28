@@ -27,6 +27,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
+import org.apache.spark.sql.execution.datasources.parquet.{Spark2ParquetInputUtil, SparkParquetInputUtil}
 import org.apache.spark.sql.execution.datasources.{Spark2ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
@@ -78,6 +79,8 @@ class Spark2Adapter extends SparkAdapter {
   }
 
   override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = new Spark2ParsePartitionUtil
+
+  override def createSparkParquetInputUtil(conf: SQLConf): SparkParquetInputUtil = new Spark2ParquetInputUtil
 
   override def createLike(left: Expression, right: Expression): Expression = {
     Like(left, right)

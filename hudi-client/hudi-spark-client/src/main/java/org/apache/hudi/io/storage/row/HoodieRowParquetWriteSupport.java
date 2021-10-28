@@ -73,6 +73,9 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   }
 
   public void add(String recordKey) {
+    if (recordKey == null) {
+      return;
+    }
     this.bloomFilter.add(recordKey);
     if (minRecordKey != null) {
       minRecordKey = minRecordKey.compareTo(recordKey) <= 0 ? minRecordKey : recordKey;

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -120,6 +121,12 @@ public class HoodieDatasetBulkInsertHelper {
         originalFields.stream()).collect(Collectors.toList());
     Dataset<Row> colOrderedDataset = dedupedDf.select(
         JavaConverters.collectionAsScalaIterableConverter(orderedFields).asScala().toSeq());
+
+    if (config.getIndexType() == HoodieIndex.IndexType.NON_INDEX) {
+      // TODO: Add coalesce if needed
+      return colOrderedDataset
+          .sortWithinPartitions(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    }
 
     return bulkInsertPartitionerRows.repartitionRecords(colOrderedDataset, config.getBulkInsertShuffleParallelism());
   }

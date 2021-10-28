@@ -47,6 +47,11 @@ object AvroConversionUtils {
       }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
     }
   }
+  
+  def convertStructTypeToAvroSchema(structType: StructType, tableName: String): Schema = {
+    val (structName, namespace) = getAvroRecordNameAndNamespace(tableName)
+    convertStructTypeToAvroSchema(structType, structName, namespace)
+  }
 
   /**
     *

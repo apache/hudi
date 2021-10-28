@@ -182,11 +182,19 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
-    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
-        extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, table.getMetaClient().getCommitActionType(), instantTime)),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+
+    String writeSchema = config.getSchema();
+    if (extraMetadata.isPresent() && extraMetadata.get().containsKey(HoodieCommitMetadata.SCHEMA_KEY)) {
+      LOG.info("Use schema in extra metadata instead of write config.");
+      writeSchema = extraMetadata.get().get(HoodieCommitMetadata.SCHEMA_KEY);
+    }
+
+    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
+        extraMetadata, operationType, writeSchema, commitActionType);
+
     try {
       preCommit(instantTime, metadata);
       commit(table, commitActionType, instantTime, metadata, stats);

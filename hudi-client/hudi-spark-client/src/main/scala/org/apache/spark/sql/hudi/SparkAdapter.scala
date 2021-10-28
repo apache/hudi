@@ -27,6 +27,7 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
+import org.apache.spark.sql.execution.datasources.parquet.SparkParquetInputUtil
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Row, SparkSession}
 
@@ -77,6 +78,11 @@ trait SparkAdapter extends Serializable {
    * Create the hoodie's extended spark sql parser.
    */
   def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = None
+
+  /**
+   * Create the SparkParquetInputUtil.
+   */
+  def createSparkParquetInputUtil(conf: SQLConf): SparkParquetInputUtil
 
   /**
    * Create the SparkParsePartitionUtil.
