@@ -59,9 +59,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     extends HoodieIndex<T, Object, Object, Object> {
   private static final Logger LOG = LogManager.getLogger(HoodieBloomIndex.class);
 
-  private final HoodieBloomIndexHelper bloomIndexHelper;
+  private final BaseHoodieBloomIndexHelper bloomIndexHelper;
 
-  public HoodieBloomIndex(HoodieWriteConfig config, HoodieBloomIndexHelper bloomIndexHelper) {
+  public HoodieBloomIndex(HoodieWriteConfig config, BaseHoodieBloomIndexHelper bloomIndexHelper) {
     super(config);
     this.bloomIndexHelper = bloomIndexHelper;
   }

@@ -34,7 +34,6 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;
 
-@Deprecated
 @SuppressWarnings("checkstyle:LineLength")
 public abstract class SparkHoodieIndex<T extends HoodieRecordPayload<T>>
     extends HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {

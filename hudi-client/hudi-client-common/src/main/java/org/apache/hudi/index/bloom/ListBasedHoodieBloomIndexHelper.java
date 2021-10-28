@@ -42,7 +42,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * Helper for {@link HoodieBloomIndex} containing Java {@link List}-based logic.
  */
-public class ListBasedHoodieBloomIndexHelper extends HoodieBloomIndexHelper {
+public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
   private static final ListBasedHoodieBloomIndexHelper SINGLETON_INSTANCE = new ListBasedHoodieBloomIndexHelper();
 

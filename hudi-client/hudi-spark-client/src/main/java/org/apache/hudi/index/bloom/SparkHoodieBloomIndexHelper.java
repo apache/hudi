@@ -46,7 +46,7 @@ import scala.Tuple2;
 /**
  * Helper for {@link HoodieBloomIndex} containing Spark-specific logic.
  */
-public class SparkHoodieBloomIndexHelper extends HoodieBloomIndexHelper {
+public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
   private static final Logger LOG = LogManager.getLogger(SparkHoodieBloomIndexHelper.class);
 

@@ -35,7 +35,7 @@ import java.util.Map;
 /**
  * Helper for {@link HoodieBloomIndex} containing engine-specific logic.
  */
-public abstract class HoodieBloomIndexHelper implements Serializable {
+public abstract class BaseHoodieBloomIndexHelper implements Serializable {
   /**
    * Find out <RowKey, filename> pair.
    *

@@ -38,7 +38,6 @@ import java.util.List;
  * Base flink implementation of {@link HoodieIndex}.
  * @param <T> payload type
  */
-@Deprecated
 public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
   protected FlinkHoodieIndex(HoodieWriteConfig config) {
     super(config);

@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
  * with .hoodie_partition_metadata file in it.
  */
 public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload<T>> extends HoodieBloomIndex<T> {
-  public HoodieGlobalBloomIndex(HoodieWriteConfig config, HoodieBloomIndexHelper bloomIndexHelper) {
+  public HoodieGlobalBloomIndex(HoodieWriteConfig config, BaseHoodieBloomIndexHelper bloomIndexHelper) {
     super(config, bloomIndexHelper);
   }
 
