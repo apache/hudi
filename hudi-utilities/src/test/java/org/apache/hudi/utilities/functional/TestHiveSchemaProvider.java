@@ -49,7 +49,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
 
   @BeforeAll
   public static void init() {
-    Pair<String, String> dbAndTableName = getDBAndTableName(SOURCE_SCHEMA_TABLE_NAME);
+    Pair<String, String> dbAndTableName = paresDBAndTableName(SOURCE_SCHEMA_TABLE_NAME);
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.hive.database", dbAndTableName.getLeft());
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.hive.table", dbAndTableName.getRight());
   }
@@ -69,13 +69,14 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
       }
     } catch (HoodieException e) {
       LOG.error("Failed to get source schema. ", e);
+      throw e;
     }
   }
 
   @Test
   public void testTargetSchema() throws Exception {
     try {
-      Pair<String, String> dbAndTableName = getDBAndTableName(TARGET_SCHEMA_TABLE_NAME);
+      Pair<String, String> dbAndTableName = paresDBAndTableName(TARGET_SCHEMA_TABLE_NAME);
       PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.hive.database", dbAndTableName.getLeft());
       PROPS.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.hive.table", dbAndTableName.getRight());
       createSchemaTable(SOURCE_SCHEMA_TABLE_NAME);
@@ -89,6 +90,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
       }
     } catch (HoodieException e) {
       LOG.error("Failed to get source/target schema. ", e);
+      throw e;
     }
   }
 
@@ -108,7 +110,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
     });
   }
 
-  private static Pair<String, String> getDBAndTableName(String fullName) {
+  private static Pair<String, String> paresDBAndTableName(String fullName) {
     String[] dbAndTableName = fullName.split("\\.");
     if (dbAndTableName.length > 1) {
       return new ImmutablePair<>(dbAndTableName[0], dbAndTableName[1]);
@@ -120,9 +122,8 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
   private void createSchemaTable(String fullName) throws IOException {
     SparkSession spark = spark();
     String createTableSQL = UtilitiesTestBase.Helpers.readFile(String.format("delta-streamer-config/%s.sql", fullName));
-    Pair<String, String> dbAndTableName = getDBAndTableName(fullName);
+    Pair<String, String> dbAndTableName = paresDBAndTableName(fullName);
     spark.sql(String.format("CREATE DATABASE IF NOT EXISTS %s", dbAndTableName.getLeft()));
     spark.sql(createTableSQL);
-    spark.sql(String.format("SHOW CREATE TABLE %s.%s", dbAndTableName.getLeft(), dbAndTableName.getRight())).show(false);
   }
 }

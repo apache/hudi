@@ -106,5 +106,4 @@ public class HiveSchemaProvider extends SchemaProvider {
       return super.getTargetSchema();
     }
   }
-
 }
