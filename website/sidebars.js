@@ -47,8 +47,9 @@ module.exports = {
                 'migration_guide',
                 'performance',
                 'deployment',
+                'cli',
                 'metrics',
-                'configurations',
+                'troubleshooting',
                 {
                     type: 'category',
                     label: 'Storage Configurations',
@@ -66,6 +67,7 @@ module.exports = {
                 },
             ],
         },
+        'configurations',
         'use_cases',
         'faq',
         'privacy',
