@@ -68,12 +68,14 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
   public Option<HoodieCompactionPlan> execute() {
     if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
         && !config.getFailedWritesCleanPolicy().isLazy()) {
+      /*
       // if there are inflight writes, their instantTime must not be less than that of compaction instant time
       table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
           .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
               HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
               "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
                   + ", Compaction scheduled at " + instantTime));
+       */
       // Committed and pending compaction instants should have strictly lower timestamps
       List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
           .getWriteTimeline().filterCompletedAndCompactionInstants().getInstants()
