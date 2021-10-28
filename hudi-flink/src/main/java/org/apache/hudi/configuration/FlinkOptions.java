@@ -241,6 +241,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("upsert")
       .withDescription("The write operation, that this write should do");
 
+  public static final String NO_PRE_COMBINE = "no_precombine";
   public static final ConfigOption<String> PRECOMBINE_FIELD = ConfigOptions
       .key("write.precombine.field")
       .stringType()
