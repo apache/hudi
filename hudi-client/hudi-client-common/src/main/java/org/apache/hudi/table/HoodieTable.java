@@ -424,7 +424,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    *
    * @return information on cleaned file slices
    */
-  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime);
+  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking);
 
   /**
    * Schedule rollback for the instant time.
@@ -452,7 +452,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieRollbackMetadata rollback(HoodieEngineContext context,
                                                   String rollbackInstantTime,
                                                   HoodieInstant commitInstant,
-                                                  boolean deleteInstants);
+                                                  boolean deleteInstants,
+                                                  boolean skipLocking);
 
   /**
    * Create a savepoint at the specified instant, so that the table can be restored
@@ -480,7 +481,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
     String commitTime = HoodieActiveTimeline.createNewInstantTime();
     scheduleRollback(context, commitTime, inflightInstant, false);
-    rollback(context, commitTime, inflightInstant, false);
+    rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }
 

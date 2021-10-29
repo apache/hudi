@@ -192,7 +192,7 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
 
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context,
-                                   String cleanInstantTime) {
+                                   String cleanInstantTime, boolean skipLocking) {
     return new CleanActionExecutor(context, config, this, cleanInstantTime).execute();
   }
 
@@ -200,9 +200,10 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   public HoodieRollbackMetadata rollback(HoodieEngineContext context,
                                          String rollbackInstantTime,
                                          HoodieInstant commitInstant,
-                                         boolean deleteInstants) {
+                                         boolean deleteInstants,
+                                         boolean skipLocking) {
     return new CopyOnWriteRollbackActionExecutor(
-        context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
+        context, config, this, rollbackInstantTime, commitInstant, deleteInstants, skipLocking).execute();
   }
 
   @Override
