@@ -61,7 +61,7 @@ public class FileSystemGuardConfig  extends HoodieConfig {
       .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");
 
   private FileSystemGuardConfig() {
-      super();
+    super();
   }
 
   public long getInitialRetryIntervalMs() {
