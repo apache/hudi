@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -47,11 +46,9 @@ import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPar
 /**
  * A simple index which reads interested fields(record key and partition path) from base files and
  * joins with incoming records to find the tagged location.
- *
- * @param <T> type of {@link HoodieRecordPayload}
  */
-public class HoodieSimpleIndex<T extends HoodieRecordPayload<T>>
-    extends HoodieIndex<T, Object, Object, Object> {
+public class HoodieSimpleIndex
+    extends HoodieIndex<Object, Object> {
 
   private final Option<BaseKeyGenerator> keyGeneratorOpt;
 
@@ -88,8 +85,8 @@ public class HoodieSimpleIndex<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return tagLocationInternal(records, context, hoodieTable);
   }
@@ -102,23 +99,23 @@ public class HoodieSimpleIndex<T extends HoodieRecordPayload<T>>
    * @param hoodieTable  instance of {@link HoodieTable} to use
    * @return {@link HoodieData} of records with record locations set
    */
-  protected HoodieData<HoodieRecord<T>> tagLocationInternal(
-      HoodieData<HoodieRecord<T>> inputRecords, HoodieEngineContext context,
+  protected <R> HoodieData<HoodieRecord<R>> tagLocationInternal(
+      HoodieData<HoodieRecord<R>> inputRecords, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     if (config.getSimpleIndexUseCaching()) {
       inputRecords.persist(new HoodieConfig(config.getProps())
           .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
 
-    HoodiePairData<HoodieKey, HoodieRecord<T>> keyedInputRecords =
+    HoodiePairData<HoodieKey, HoodieRecord<R>> keyedInputRecords =
         inputRecords.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingLocationsOnTable =
         fetchRecordLocationsForAffectedPartitions(keyedInputRecords.keys(), context, hoodieTable,
             config.getSimpleIndexParallelism());
 
-    HoodieData<HoodieRecord<T>> taggedRecords =
+    HoodieData<HoodieRecord<R>> taggedRecords =
         keyedInputRecords.leftOuterJoin(existingLocationsOnTable).map(entry -> {
-          final HoodieRecord<T> untaggedRecord = entry.getRight().getLeft();
+          final HoodieRecord<R> untaggedRecord = entry.getRight().getLeft();
           final Option<HoodieRecordLocation> location = Option.ofNullable(entry.getRight().getRight().orElse(null));
           return HoodieIndexUtils.getTaggedRecord(untaggedRecord, location);
         });

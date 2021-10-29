@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -85,7 +86,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
       }
 
       // This is a new insert
-      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(keyToPreWrite));
+      HoodieRecord<T> hoodieRecord = new HoodieAvroRecord<>(keyToNewRecords.get(keyToPreWrite));
       if (writtenRecordKeys.contains(keyToPreWrite)) {
         throw new HoodieUpsertException("Insert/Update not in sorted order");
       }

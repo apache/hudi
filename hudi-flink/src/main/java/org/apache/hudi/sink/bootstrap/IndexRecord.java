@@ -18,16 +18,22 @@
 
 package org.apache.hudi.sink.bootstrap;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 
 /**
  * The index record.
  */
-public class IndexRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
+public class IndexRecord<T extends HoodieRecordPayload> extends HoodieAvroRecord<T> {
   private static final long serialVersionUID = 1L;
 
   public IndexRecord(HoodieRecord<T> record) {
     super(record);
+  }
+
+  @Override
+  public HoodieRecord<T> newInstance() {
+    return new IndexRecord<>(this);
   }
 }

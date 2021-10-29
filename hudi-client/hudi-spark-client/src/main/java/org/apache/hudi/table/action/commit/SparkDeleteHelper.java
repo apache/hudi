@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -93,7 +94,7 @@ public class SparkDeleteHelper<T extends HoodieRecordPayload,R> extends
       }
 
       JavaRDD<HoodieRecord<T>> dedupedRecords =
-          dedupedKeys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
+          dedupedKeys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
       JavaRDD<HoodieRecord<T>> taggedRecords = HoodieJavaRDD.getJavaRDD(

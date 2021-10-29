@@ -17,19 +17,34 @@
  * under the License.
  */
 
-package org.apache.hudi.functional;
+package org.apache.hudi.common.model;
 
-import org.junit.platform.runner.JUnitPlatform;
-import org.junit.platform.suite.api.IncludeTags;
-import org.junit.platform.suite.api.SelectPackages;
-import org.junit.runner.RunWith;
+public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
+  public HoodieAvroRecord(HoodieKey key, T data) {
+    super(key, data);
+  }
 
-@RunWith(JUnitPlatform.class)
-@SelectPackages({
-    "org.apache.hudi.client.functional",
-    "org.apache.hudi.table.functional",
-    "org.apache.hudi.index.hbase"})
-@IncludeTags("functional")
-public class SparkClientFunctionalTestSuite {
+  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation operation) {
+    super(key, data, operation);
+  }
 
+  public HoodieAvroRecord(HoodieRecord<T> record) {
+    super(record);
+  }
+
+  public HoodieAvroRecord() {
+  }
+
+  @Override
+  public HoodieRecord<T> newInstance() {
+    return new HoodieAvroRecord<>(this);
+  }
+
+  @Override
+  public T getData() {
+    if (data == null) {
+      throw new IllegalStateException("Payload already deflated for record.");
+    }
+    return data;
+  }
 }

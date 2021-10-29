@@ -36,6 +36,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -438,15 +439,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String recordKey = UUID.randomUUID().toString();
     HoodieKey keyOne = new HoodieKey(recordKey, "2018-01-01");
     HoodieRecord<RawTripTestPayload> recordOne =
-        new HoodieRecord(keyOne, dataGen.generateRandomValue(keyOne, newCommitTime));
+        new HoodieAvroRecord(keyOne, dataGen.generateRandomValue(keyOne, newCommitTime));
 
     HoodieKey keyTwo = new HoodieKey(recordKey, "2018-02-01");
     HoodieRecord recordTwo =
-        new HoodieRecord(keyTwo, dataGen.generateRandomValue(keyTwo, newCommitTime));
+        new HoodieAvroRecord(keyTwo, dataGen.generateRandomValue(keyTwo, newCommitTime));
 
     // Same key and partition as keyTwo
     HoodieRecord recordThree =
-        new HoodieRecord(keyTwo, dataGen.generateRandomValue(keyTwo, newCommitTime));
+        new HoodieAvroRecord(keyTwo, dataGen.generateRandomValue(keyTwo, newCommitTime));
 
     JavaRDD<HoodieRecord<RawTripTestPayload>> records =
         jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);
@@ -973,8 +974,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         throw new IllegalStateException("Unknown partition path " + rec.getPartitionPath());
       }
       recordsToUpsert.add(
-          new HoodieRecord(new HoodieKey(rec.getRecordKey(), newPartitionPath),
-              rec.getData()));
+          new HoodieAvroRecord(new HoodieKey(rec.getRecordKey(), newPartitionPath),
+              (HoodieRecordPayload) rec.getData()));
       // populate expected partition path and record keys
       expectedPartitionPathRecKeyPairs.add(Pair.of(newPartitionPath, rec.getRecordKey()));
     }

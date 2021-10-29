@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -204,7 +205,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
         fileInfo);
-    return new HoodieRecord<>(key, payload);
+    return new HoodieAvroRecord<>(key, payload);
   }
 
   /**
@@ -225,7 +226,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
-    return new HoodieRecord<>(key, payload);
+    return new HoodieAvroRecord<>(key, payload);
   }
 
   /**

@@ -24,6 +24,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -132,7 +133,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
       header.put(HeaderMetadataType.SCHEMA, schema.toString());
       logWriter.appendBlock(new HoodieAvroDataBlock(groupedRecords.stream().map(r -> {
         try {
-          GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
+          GenericRecord val = (GenericRecord) ((HoodieAvroRecord) r).getData().getInsertValue(schema).get();
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
           return (IndexedRecord) val;
         } catch (IOException e) {
