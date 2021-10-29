@@ -23,9 +23,9 @@ module.exports = {
             label: 'Concepts',
             items: [
                 'write_operations',
-                'concurrency_control',
                 'schema_evolution',
-                'key_generation'
+                'key_generation',
+                'concurrency_control',
             ],
         },
         {
