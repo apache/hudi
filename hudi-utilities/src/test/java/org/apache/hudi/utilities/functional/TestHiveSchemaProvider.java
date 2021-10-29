@@ -40,6 +40,9 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Basic tests against {@link HiveSchemaProvider}.
+ */
 @Tag("functional")
 public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarness {
   private static final Logger LOG = LogManager.getLogger(TestHiveSchemaProvider.class);
