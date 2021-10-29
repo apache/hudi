@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.bootstrap.index.HoodieKVComparator;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -102,7 +103,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
 
     HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).create();
+        .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieKVComparator()).create();
 
     // Serialize records into bytes
     Map<String, byte[]> sortedRecordsMap = new TreeMap<>();

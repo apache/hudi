@@ -577,10 +577,4 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     }
   }
 
-  /**
-   * This class is explicitly used as Key Comparator to workaround hard coded
-   * legacy format class names inside HBase. Otherwise we will face issues with shading.
-   */
-  public static class HoodieKVComparator extends KeyValue.KVComparator {
-  }
 }

@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bootstrap.index.HoodieKVComparator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
@@ -85,14 +86,18 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.taskContextSupplier = taskContextSupplier;
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
-          .withCompression(hfileConfig.getCompressionAlgorithm())
-          .build();
+        .withCompression(hfileConfig.getCompressionAlgorithm())
+        .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
     conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
-    this.writer = HFile.getWriterFactory(conf, cacheConfig).withPath(this.fs, this.file).withFileContext(context).create();
+    this.writer = HFile.getWriterFactory(conf, cacheConfig)
+        .withPath(this.fs, this.file)
+        .withFileContext(context)
+        .withComparator(new HoodieKVComparator())
+        .create();
 
     writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
   }
