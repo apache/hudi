@@ -612,19 +612,22 @@ public class HoodieCompactionConfig extends HoodieConfig {
       // commit instant on timeline, that still has not been cleaned. Could miss some data via incr pull
       int minInstantsToKeep = Integer.parseInt(compactionConfig.getStringOrDefault(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP));
       int maxInstantsToKeep = Integer.parseInt(compactionConfig.getStringOrDefault(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP));
-      int cleanerCommitsRetained =
-          Integer.parseInt(compactionConfig.getStringOrDefault(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED));
       ValidationUtils.checkArgument(maxInstantsToKeep > minInstantsToKeep,
           String.format(
               "Increase %s=%d to be greater than %s=%d.",
               HoodieCompactionConfig.MAX_COMMITS_TO_KEEP.key(), maxInstantsToKeep,
               HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep));
-      ValidationUtils.checkArgument(minInstantsToKeep > cleanerCommitsRetained,
-          String.format(
-              "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
-                  + "missing data from few instants.",
-              HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
-              HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained));
+
+      if (Boolean.parseBoolean(compactionConfig.getStringOrDefault(HoodieCompactionConfig.AUTO_CLEAN))) {
+        int cleanerCommitsRetained =
+            Integer.parseInt(compactionConfig.getStringOrDefault(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED));
+        ValidationUtils.checkArgument(minInstantsToKeep > cleanerCommitsRetained,
+            String.format(
+                "Increase %s=%d to be greater than %s=%d. Otherwise, there is risk of incremental pull "
+                    + "missing data from few instants.",
+                HoodieCompactionConfig.MIN_COMMITS_TO_KEEP.key(), minInstantsToKeep,
+                HoodieCompactionConfig.CLEANER_COMMITS_RETAINED.key(), cleanerCommitsRetained));
+      }
       return compactionConfig;
     }
   }
