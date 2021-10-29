@@ -1458,10 +1458,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // verify inflight clustering was rolled back
     metaClient.reloadActiveTimeline();
     pendingClusteringPlans = ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
-    assertEquals(1, pendingClusteringPlans.size());
-    pendingClusteringInstant = pendingClusteringPlans.get(0).getLeft();
-    System.out.println(">>> pendingClusteringInstant: " + pendingClusteringInstant);
-    assertEquals(pendingClusteringInstant.getState(), REQUESTED);
+    assertEquals(0, pendingClusteringPlans.size());
   }
 
   @Test
