@@ -20,8 +20,17 @@ module.exports = {
         },
         {
             type: 'category',
+            label: 'Concepts',
+            items: [
+                'write_operations',
+                'concurrency_control',
+                'schema_evolution',
+                'key_generation'
+            ],
+        },
+        {
+            type: 'category',
             label: 'How To',
-            collapsed: false,
             items: [
                 'table_management',
                 'writing_data',
@@ -39,16 +48,7 @@ module.exports = {
                 'clustering'
             ],
         },
-        {
-            type: 'category',
-            label: 'Concepts',
-            items: [
-                'write_operations',
-                'concurrency_control',
-                'schema_evolution',
-                'key_generation'
-            ],
-        },
+        'configurations',
         {
             type: 'category',
             label: 'Guides',
@@ -76,7 +76,6 @@ module.exports = {
                 },
             ],
         },
-        'configurations',
         'use_cases',
         'faq',
         'privacy',

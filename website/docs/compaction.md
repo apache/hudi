@@ -1,5 +1,5 @@
 ---
-title: Async Compaction
+title: Compaction
 summary: "In this page, we describe async compaction in Hudi."
 toc: true
 last_modified_at:
