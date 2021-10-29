@@ -74,11 +74,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, false);
-  }
-
-  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     this.logFile = logFile;
@@ -87,9 +82,14 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.readBlockLazily = readBlockLazily;
     this.reverseReader = reverseReader;
     if (this.reverseReader) {
-      this.reverseLogFilePosition = this.lastReverseLogFilePosition = logFile.getFileSize();
+      this.reverseLogFilePosition = this.lastReverseLogFilePosition = fs.getFileStatus(logFile.getPath()).getLen();
     }
     addShutDownHook();
+  }
+
+  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean readBlockLazily,
+      boolean reverseReader) throws IOException {
+    this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE, readBlockLazily, reverseReader);
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema) throws IOException {

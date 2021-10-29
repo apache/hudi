@@ -56,9 +56,7 @@ hadoop-annotations/org.apache.hadoop/2.7.3//hadoop-annotations-2.7.3.jar
 hadoop-auth/org.apache.hadoop/2.7.3//hadoop-auth-2.7.3.jar
 hadoop-client/org.apache.hadoop/2.7.3//hadoop-client-2.7.3.jar
 hadoop-common/org.apache.hadoop/2.7.3//hadoop-common-2.7.3.jar
-hadoop-common/org.apache.hadoop/2.7.3/tests/hadoop-common-2.7.3-tests.jar
 hadoop-hdfs/org.apache.hadoop/2.7.3//hadoop-hdfs-2.7.3.jar
-hadoop-hdfs/org.apache.hadoop/2.7.3/tests/hadoop-hdfs-2.7.3-tests.jar
 hadoop-mapreduce-client-app/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-app-2.7.3.jar
 hadoop-mapreduce-client-common/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-common-2.7.3.jar
 hadoop-mapreduce-client-core/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-core-2.7.3.jar
@@ -87,9 +85,7 @@ jackson-annotations/com.fasterxml.jackson.core/2.6.7//jackson-annotations-2.6.7.
 jackson-core-asl/org.codehaus.jackson/1.9.13//jackson-core-asl-1.9.13.jar
 jackson-core/com.fasterxml.jackson.core/2.6.7//jackson-core-2.6.7.jar
 jackson-databind/com.fasterxml.jackson.core/2.6.7.3//jackson-databind-2.6.7.3.jar
-jackson-jaxrs/org.codehaus.jackson/1.9.13//jackson-jaxrs-1.9.13.jar
 jackson-mapper-asl/org.codehaus.jackson/1.9.13//jackson-mapper-asl-1.9.13.jar
-jackson-xc/org.codehaus.jackson/1.9.13//jackson-xc-1.9.13.jar
 jamon-runtime/org.jamon/2.4.1//jamon-runtime-2.4.1.jar
 java-xmlbuilder/com.jamesmurty.utils/0.4//java-xmlbuilder-0.4.jar
 javax.inject/javax.inject/1//javax.inject-1.jar
@@ -104,12 +100,8 @@ jersey-json/com.sun.jersey/1.9//jersey-json-1.9.jar
 jersey-server/com.sun.jersey/1.9//jersey-server-1.9.jar
 jets3t/net.java.dev.jets3t/0.9.0//jets3t-0.9.0.jar
 jettison/org.codehaus.jettison/1.1//jettison-1.1.jar
-jetty-util/org.mortbay.jetty/6.1.26//jetty-util-6.1.26.jar
-jetty/org.mortbay.jetty/6.1.26//jetty-6.1.26.jar
 joni/org.jruby.joni/2.1.2//joni-2.1.2.jar
 jsch/com.jcraft/0.1.42//jsch-0.1.42.jar
-jsp-api/javax.servlet.jsp/2.1//jsp-api-2.1.jar
-jsr305/com.google.code.findbugs/3.0.0//jsr305-3.0.0.jar
 junit/junit/4.12//junit-4.12.jar
 kryo-shaded/com.esotericsoftware/4.0.2//kryo-shaded-4.0.2.jar
 leveldbjni-all/org.fusesource.leveldbjni/1.8//leveldbjni-all-1.8.jar
@@ -117,7 +109,6 @@ log4j/log4j/1.2.17//log4j-1.2.17.jar
 metrics-core/com.yammer.metrics/2.2.0//metrics-core-2.2.0.jar
 minlog/com.esotericsoftware/1.3.0//minlog-1.3.0.jar
 netty-all/io.netty/4.0.23.Final//netty-all-4.0.23.Final.jar
-netty/io.netty/3.6.2.Final//netty-3.6.2.Final.jar
 objenesis/org.objenesis/2.5.1//objenesis-2.5.1.jar
 orc-core/org.apache.orc/1.6.0/nohive/orc-core-1.6.0-nohive.jar
 orc-shims/org.apache.orc/1.6.0//orc-shims-1.6.0.jar
@@ -131,9 +122,8 @@ parquet-hadoop/org.apache.parquet/1.10.1//parquet-hadoop-1.10.1.jar
 parquet-jackson/org.apache.parquet/1.10.1//parquet-jackson-1.10.1.jar
 protobuf-java/com.google.protobuf/2.5.0//protobuf-java-2.5.0.jar
 rocksdbjni/org.rocksdb/5.17.2//rocksdbjni-5.17.2.jar
-servlet-api/javax.servlet/2.5//servlet-api-2.5.jar
 slf4j-api/org.slf4j/1.7.7//slf4j-api-1.7.7.jar
-slf4j-log4j12/org.slf4j/1.7.10//slf4j-log4j12-1.7.10.jar
+slf4j-log4j12/org.slf4j/1.6.1//slf4j-log4j12-1.6.1.jar
 snappy-java/org.xerial.snappy/1.1.1.3//snappy-java-1.1.1.3.jar
 xercesImpl/xerces/2.9.1//xercesImpl-2.9.1.jar
 xml-apis/xml-apis/1.3.04//xml-apis-1.3.04.jar

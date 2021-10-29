@@ -7,17 +7,20 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -27,13 +30,11 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.spark.api.java.JavaPairRDD;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.Optional;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,24 +42,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import scala.Tuple2;
-
 /**
- * This filter will only work with hoodie table since it will only load partitions with .hoodie_partition_metadata
- * file in it.
+ * This filter will only work with hoodie table since it will only load partitions
+ * with .hoodie_partition_metadata file in it.
  */
-public class SparkHoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends SparkHoodieBloomIndex<T> {
-
-  public SparkHoodieGlobalBloomIndex(HoodieWriteConfig config) {
-    super(config);
+public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload<T>> extends HoodieBloomIndex<T> {
+  public HoodieGlobalBloomIndex(HoodieWriteConfig config, BaseHoodieBloomIndexHelper bloomIndexHelper) {
+    super(config, bloomIndexHelper);
   }
 
   /**
-   * Load all involved files as <Partition, filename> pair RDD from all partitions in the table.
+   * Load all involved files as <Partition, filename> pairs from all partitions in the table.
    */
   @Override
-  List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
-                                                             final HoodieTable hoodieTable) {
+  List<Pair<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
+                                                           final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
     return super.loadInvolvedFiles(allPartitionPaths, context, hoodieTable);
@@ -70,25 +68,25 @@ public class SparkHoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends 
    * to be compared gets cut down a lot from range pruning.
    * <p>
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
-   * recordKey ranges in the index info. the partition path of the incoming record (partitionRecordKeyPairRDD._2()) will
+   * recordKey ranges in the index info. the partition path of the incoming record (partitionRecordKeyPairs._2()) will
    * be ignored since the search scope should be bigger than that
    */
 
   @Override
-  JavaRDD<Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
+  HoodieData<ImmutablePair<String, HoodieKey>> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
-      JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
+      HoodiePairData<String, String> partitionRecordKeyPairs) {
 
     IndexFileFilter indexFileFilter =
         config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedGlobalIndexFileFilter(partitionToFileIndexInfo);
 
-    return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
-      String recordKey = partitionRecordKeyPair._2();
-      String partitionPath = partitionRecordKeyPair._1();
+    return partitionRecordKeyPairs.map(partitionRecordKeyPair -> {
+      String recordKey = partitionRecordKeyPair.getRight();
+      String partitionPath = partitionRecordKeyPair.getLeft();
 
       return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
-          .map(partitionFileIdPair -> new Tuple2<>(partitionFileIdPair.getRight(),
+          .map(partitionFileIdPair -> new ImmutablePair<>(partitionFileIdPair.getRight(),
               new HoodieKey(recordKey, partitionFileIdPair.getLeft())))
           .collect(Collectors.toList());
     }).flatMap(List::iterator);
@@ -98,27 +96,29 @@ public class SparkHoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends 
    * Tagging for global index should only consider the record key.
    */
   @Override
-  protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(
-      JavaPairRDD<HoodieKey, HoodieRecordLocation> keyLocationPairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
+  protected HoodieData<HoodieRecord<T>> tagLocationBacktoRecords(
+      HoodiePairData<HoodieKey, HoodieRecordLocation> keyLocationPairs,
+      HoodieData<HoodieRecord<T>> records) {
 
-    JavaPairRDD<String, HoodieRecord<T>> incomingRowKeyRecordPairRDD =
-        recordRDD.mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
+    HoodiePairData<String, HoodieRecord<T>> incomingRowKeyRecordPairs =
+        records.mapToPair(record -> new ImmutablePair<>(record.getRecordKey(), record));
 
-    JavaPairRDD<String, Tuple2<HoodieRecordLocation, HoodieKey>> existingRecordKeyToRecordLocationHoodieKeyMap =
-        keyLocationPairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), new Tuple2<>(p._2, p._1)));
+    HoodiePairData<String, Pair<HoodieRecordLocation, HoodieKey>> existingRecordKeyToRecordLocationHoodieKeyMap =
+        keyLocationPairs.mapToPair(p -> new ImmutablePair<>(
+            p.getKey().getRecordKey(), new ImmutablePair<>(p.getValue(), p.getKey())));
 
-    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer join.
-    return incomingRowKeyRecordPairRDD.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
-      final HoodieRecord<T> hoodieRecord = record._1;
-      final Optional<Tuple2<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record._2;
+    // Here as the records might have more data than rowKeys (some rowKeys' fileId is null), so we do left outer join.
+    return incomingRowKeyRecordPairs.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().flatMap(record -> {
+      final HoodieRecord<T> hoodieRecord = record.getLeft();
+      final Option<Pair<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record.getRight();
       if (recordLocationHoodieKeyPair.isPresent()) {
         // Record key matched to file
         if (config.getBloomIndexUpdatePartitionPath()
-            && !recordLocationHoodieKeyPair.get()._2.getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
+            && !recordLocationHoodieKeyPair.get().getRight().getPartitionPath().equals(hoodieRecord.getPartitionPath())) {
           // Create an empty record to delete the record in the old partition
-          HoodieRecord<T> deleteRecord = new HoodieRecord(recordLocationHoodieKeyPair.get()._2,
+          HoodieRecord<T> deleteRecord = new HoodieRecord(recordLocationHoodieKeyPair.get().getRight(),
               new EmptyHoodieRecordPayload());
-          deleteRecord.setCurrentLocation(recordLocationHoodieKeyPair.get()._1());
+          deleteRecord.setCurrentLocation(recordLocationHoodieKeyPair.get().getLeft());
           deleteRecord.seal();
           // Tag the incoming record for inserting to the new partition
           HoodieRecord<T> insertRecord = HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty());
@@ -127,8 +127,8 @@ public class SparkHoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends 
           // Ignore the incoming record's partition, regardless of whether it differs from its old partition or not.
           // When it differs, the record will still be updated at its old partition.
           return Collections.singletonList(
-              (HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, hoodieRecord.getData()),
-                  Option.ofNullable(recordLocationHoodieKeyPair.get()._1))).iterator();
+              (HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get().getRight(), hoodieRecord.getData()),
+                  Option.ofNullable(recordLocationHoodieKeyPair.get().getLeft()))).iterator();
         }
       } else {
         return Collections.singletonList((HoodieRecord<T>) HoodieIndexUtils.getTaggedRecord(hoodieRecord, Option.empty())).iterator();

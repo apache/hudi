@@ -37,7 +37,6 @@ import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
-import org.apache.hudi.index.SparkHoodieIndex
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.sync.common.AbstractSyncTool
@@ -49,9 +48,11 @@ import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkContext}
-
 import java.util
 import java.util.Properties
+
+import org.apache.hudi.index.SparkHoodieIndexFactory
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
 
@@ -439,7 +440,7 @@ object HoodieSparkSqlWriter {
     val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted();
     parameters.updated(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, arePartitionRecordsSorted.toString)
     val isGlobalIndex = if (populateMetaFields) {
-      SparkHoodieIndex.isGlobalIndex(writeConfig)
+      SparkHoodieIndexFactory.isGlobalIndex(writeConfig)
     } else {
       false
     }

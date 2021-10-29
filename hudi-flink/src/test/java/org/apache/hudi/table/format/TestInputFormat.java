@@ -25,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
+import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -443,6 +444,20 @@ public class TestInputFormat {
     List<RowData> actual4 = readData(inputFormat4);
     final List<RowData> expected4 = TestData.dataSetInsert(3, 4);
     TestData.assertRowDataEquals(actual4, expected4);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testReadWithWiderSchema(HoodieTableType tableType) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.SOURCE_AVRO_SCHEMA.key(),
+        AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_WIDER).toString());
+    beforeEach(tableType, options);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    List<RowData> result = readData(inputFormat);
+    TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
 
   // -------------------------------------------------------------------------
