@@ -290,6 +290,16 @@
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
+        <exclusions>
+            <exclusion>
+                <artifactId>parquet-column</artifactId>
+                <groupId>org.apache.parquet</groupId>
+            </exclusion>
+            <exclusion>
+                <artifactId>parquet-hadoop</artifactId>
+                <groupId>org.apache.parquet</groupId>
+            </exclusion>
+        </exclusions>
     </dependency>
 
     <dependency>
@@ -302,6 +312,16 @@
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <classifier>tests</classifier>
       <scope>test</scope>
+        <exclusions>
+            <exclusion>
+                <artifactId>parquet-column</artifactId>
+                <groupId>org.apache.parquet</groupId>
+            </exclusion>
+            <exclusion>
+                <artifactId>parquet-hadoop</artifactId>
+                <groupId>org.apache.parquet</groupId>
+            </exclusion>
+        </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
