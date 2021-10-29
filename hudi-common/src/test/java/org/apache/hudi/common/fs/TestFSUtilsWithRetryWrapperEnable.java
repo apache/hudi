@@ -29,7 +29,7 @@ import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hudi.common.util.RetryHelper;
-import org.junit.Assert;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -38,6 +38,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests file system utils with retry wrapper enable.
@@ -68,14 +70,13 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, retryHelper);
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     metaClient.setFs(fs);
-
     List<String> folders =
             Arrays.asList("2016/04/15", ".hoodie/.temp/2/2016/04/15");
-    folders.forEach(f -> Assert.assertThrows(RuntimeException.class, () -> metaClient.getFs().mkdirs(new Path(new Path(basePath), f))));
+    folders.forEach(f -> assertThrows(RuntimeException.class, () -> metaClient.getFs().mkdirs(new Path(new Path(basePath), f))));
   }
 
   /**
-   * Fake remote FileSystem which will throw RuntimeException something like AmazonS3Exception 503
+   * Fake remote FileSystem which will throw RuntimeException something like AmazonS3Exception 503.
    */
   class FakeRemoteFileSystem extends FileSystem {
 
@@ -96,10 +97,10 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public FSDataInputStream open(Path f, int bufferSize) throws IOException {
       if (count % loop == 0) {
-        count ++;
+        count++;
         return fs.open(f, bufferSize);
       } else {
-        count ++;
+        count++;
         throw new RuntimeException(EXCEPTION_MESSAGE);
       }
     }
@@ -107,10 +108,10 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
       if (count % loop == 0) {
-        count ++;
+        count++;
         return fs.create(f, permission, overwrite, bufferSize, replication, blockSize, progress);
       } else {
-        count ++;
+        count++;
         throw new RuntimeException(EXCEPTION_MESSAGE);
       }
     }
@@ -118,10 +119,10 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
       if (count % loop == 0) {
-        count ++;
+        count++;
         return fs.append(f, bufferSize, progress);
       } else {
-        count ++;
+        count++;
         throw new RuntimeException(EXCEPTION_MESSAGE);
       }
     }
@@ -129,10 +130,10 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public boolean rename(Path src, Path dst) throws IOException {
       if (count % loop == 0) {
-        count ++;
+        count++;
         return fs.rename(src, dst);
       } else {
-        count ++;
+        count++;
         throw new RuntimeException(EXCEPTION_MESSAGE);
       }
     }
@@ -140,10 +141,10 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public boolean delete(Path f, boolean recursive) throws IOException {
       if (count % loop == 0) {
-        count ++;
+        count++;
         return fs.delete(f, recursive);
       } else {
-        count ++;
+        count++;
         throw new RuntimeException(EXCEPTION_MESSAGE);
       }
     }
@@ -151,17 +152,17 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public FileStatus[] listStatus(Path f) throws FileNotFoundException, IOException {
       if (count % loop == 0) {
-        count ++;
+        count++;
         return fs.listStatus(f);
       } else {
-        count ++;
+        count++;
         throw new RuntimeException(EXCEPTION_MESSAGE);
       }
     }
 
     @Override
-    public void setWorkingDirectory(Path new_dir) {
-      fs.setWorkingDirectory(new_dir);
+    public void setWorkingDirectory(Path newDir) {
+      fs.setWorkingDirectory(newDir);
     }
 
     @Override
@@ -172,10 +173,10 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public boolean mkdirs(Path f, FsPermission permission) throws IOException {
       if (count % loop == 0) {
-        count ++;
+        count++;
         return fs.mkdirs(f, permission);
       } else {
-        count ++;
+        count++;
         throw new RuntimeException(EXCEPTION_MESSAGE);
       }
     }
@@ -183,10 +184,10 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public FileStatus getFileStatus(Path f) throws IOException {
       if (count % loop == 0) {
-        count ++;
+        count++;
         return fs.getFileStatus(f);
       } else {
-        count ++;
+        count++;
         throw new RuntimeException(EXCEPTION_MESSAGE);
       }
     }

@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.ConfigClassProperty;
@@ -35,101 +36,96 @@ import java.util.Properties;
         description = "The filesystem guard related config options, to help deal with runtime exception like s3 list/get/put/delete performance issues.")
 public class FileSystemGuardConfig  extends HoodieConfig {
 
-    public static final ConfigProperty<String> FILESYSTEM_RETRY_ENABLE = ConfigProperty
-            .key("hoodie.filesystem.action.retry.enabled")
-            .defaultValue("false")
-            .sinceVersion("0.10.0")
-            .withDocumentation("Enabled to handle S3 list/get/delete etc file system performance issue.");
+  public static final ConfigProperty<String> FILESYSTEM_RETRY_ENABLE = ConfigProperty
+      .key("hoodie.filesystem.action.retry.enabled")
+      .defaultValue("false")
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enabled to handle S3 list/get/delete etc file system performance issue.");
 
-    public static final ConfigProperty<Long> INITIAL_RETRY_INTERVAL_MS = ConfigProperty
-            .key("hoodie.filesystem.action.retry.initial_interval_ms")
-            .defaultValue(100L)
-            .sinceVersion("0.10.0")
-            .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on storage.");
+  public static final ConfigProperty<Long> INITIAL_RETRY_INTERVAL_MS = ConfigProperty
+      .key("hoodie.filesystem.action.retry.initial_interval_ms")
+      .defaultValue(100L)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on storage.");
 
-    public static final ConfigProperty<Long> MAX_RETRY_INTERVAL_MS = ConfigProperty
-            .key("hoodie.filesystem.action.retry.max_interval_ms")
-            .defaultValue(2000L)
-            .sinceVersion("0.10.0")
-            .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
+  public static final ConfigProperty<Long> MAX_RETRY_INTERVAL_MS = ConfigProperty
+      .key("hoodie.filesystem.action.retry.max_interval_ms")
+      .defaultValue(2000L)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
 
-    public static final ConfigProperty<Integer> MAX_RETRY_NUMBERS = ConfigProperty
-            .key("hoodie.filesystem.action.retry.max_numbers")
-            .defaultValue(4)
-            .sinceVersion("0.10.0")
-            .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");
+  public static final ConfigProperty<Integer> MAX_RETRY_NUMBERS = ConfigProperty
+      .key("hoodie.filesystem.action.retry.max_numbers")
+      .defaultValue(4)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");
 
-    private FileSystemGuardConfig() {
-        super();
+  private FileSystemGuardConfig() {
+      super();
+  }
+
+  public long getInitialRetryIntervalMs() {
+    return getLong(INITIAL_RETRY_INTERVAL_MS);
+  }
+
+  public long getMaxRetryIntervalMs() {
+    return getLong(MAX_RETRY_INTERVAL_MS);
+  }
+
+  public int getMaxRetryNumbers() {
+    return getInt(MAX_RETRY_NUMBERS);
+  }
+
+  public boolean isFileSystemActionRetryEnable() {
+    return Boolean.parseBoolean(getStringOrDefault(FILESYSTEM_RETRY_ENABLE));
+  }
+
+  public static FileSystemGuardConfig.Builder newBuilder() {
+    return new Builder();
+  }
+
+  /**
+   * The builder used to build filesystem configurations.
+   */
+  public static class Builder {
+
+    private final FileSystemGuardConfig fileSystemGuardConfig = new FileSystemGuardConfig();
+
+    public Builder fromFile(File propertiesFile) throws IOException {
+      try (FileReader reader = new FileReader(propertiesFile)) {
+        fileSystemGuardConfig.getProps().load(reader);
+        return this;
+      }
     }
 
-
-    public long getInitialRetryIntervalMs() {
-        return getLong(INITIAL_RETRY_INTERVAL_MS);
+    public Builder fromProperties(Properties props) {
+      this.fileSystemGuardConfig.getProps().putAll(props);
+      return this;
     }
 
-    public long getMaxRetryIntervalMs() {
-        return getLong(MAX_RETRY_INTERVAL_MS);
+    public Builder withMaxRetryNumbers(int numbers) {
+      fileSystemGuardConfig.setValue(MAX_RETRY_NUMBERS, String.valueOf(numbers));
+      return this;
     }
 
-
-    public int getMaxRetryNumbers() {
-        return getInt(MAX_RETRY_NUMBERS);
+    public Builder withInitialRetryIntervalMs(long intervalMs) {
+      fileSystemGuardConfig.setValue(INITIAL_RETRY_INTERVAL_MS, String.valueOf(intervalMs));
+      return this;
     }
 
-    public boolean isFileSystemActionRetryEnable() {
-        return Boolean.parseBoolean(getStringOrDefault(FILESYSTEM_RETRY_ENABLE));
+    public Builder withMaxRetryIntervalMs(long intervalMs) {
+      fileSystemGuardConfig.setValue(MAX_RETRY_INTERVAL_MS, String.valueOf(intervalMs));
+      return this;
     }
 
-    public static FileSystemGuardConfig.Builder newBuilder() {
-        return new Builder();
+    public Builder withFileSystemActionRetryEnabled(boolean enabled) {
+      fileSystemGuardConfig.setValue(FILESYSTEM_RETRY_ENABLE, String.valueOf(enabled));
+      return this;
     }
 
-    /**
-     * The builder used to build filesystem configurations.
-     */
-    public static class Builder {
-
-        private final FileSystemGuardConfig fileSystemGuardConfig = new FileSystemGuardConfig();
-
-        public Builder fromFile(File propertiesFile) throws IOException {
-            try (FileReader reader = new FileReader(propertiesFile)) {
-                fileSystemGuardConfig.getProps().load(reader);
-                return this;
-            }
-        }
-
-        public Builder fromProperties(Properties props) {
-            this.fileSystemGuardConfig.getProps().putAll(props);
-            return this;
-        }
-
-        public Builder withMaxRetryNumbers(int numbers) {
-            fileSystemGuardConfig.setValue(MAX_RETRY_NUMBERS, String.valueOf(numbers));
-            return this;
-        }
-
-
-        public Builder withInitialRetryIntervalMs(long intervalMs) {
-            fileSystemGuardConfig.setValue(INITIAL_RETRY_INTERVAL_MS, String.valueOf(intervalMs));
-            return this;
-        }
-
-        public Builder withMaxRetryIntervalMs(long intervalMs) {
-            fileSystemGuardConfig.setValue(MAX_RETRY_INTERVAL_MS, String.valueOf(intervalMs));
-            return this;
-        }
-
-
-        public Builder withFileSystemActionRetryEnabled(boolean enabled) {
-            fileSystemGuardConfig.setValue(FILESYSTEM_RETRY_ENABLE, String.valueOf(enabled));
-            return this;
-        }
-
-        public FileSystemGuardConfig build() {
-            fileSystemGuardConfig.setDefaults(FileSystemGuardConfig.class.getName());
-            return fileSystemGuardConfig;
-        }
+    public FileSystemGuardConfig build() {
+      fileSystemGuardConfig.setDefaults(FileSystemGuardConfig.class.getName());
+      return fileSystemGuardConfig;
     }
-
+  }
 }
