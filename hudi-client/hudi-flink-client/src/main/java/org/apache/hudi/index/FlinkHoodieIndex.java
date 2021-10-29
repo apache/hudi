@@ -59,10 +59,11 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
 
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException {
-    return HoodieList.of(tagLocation(HoodieList.getList(records), context, hoodieTable));
+    return HoodieList.of(tagLocation(
+        HoodieList.getList(records.map(record -> (HoodieRecord<T>) record)), context, hoodieTable));
   }
 
   @Override

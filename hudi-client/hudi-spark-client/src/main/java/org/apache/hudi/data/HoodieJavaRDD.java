@@ -83,8 +83,8 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
-  public void persist(String storageLevel) {
-    rddData.persist(StorageLevel.fromString(storageLevel));
+  public void persist(String cacheConfig) {
+    rddData.persist(StorageLevel.fromString(cacheConfig));
   }
 
   @Override

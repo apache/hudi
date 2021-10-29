@@ -56,13 +56,13 @@ public class HoodieInMemoryHashIndex<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     return records.mapPartitions(hoodieRecordIterator -> {
-      List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
+      List<HoodieRecord<R>> taggedRecords = new ArrayList<>();
       while (hoodieRecordIterator.hasNext()) {
-        HoodieRecord<T> record = hoodieRecordIterator.next();
+        HoodieRecord<R> record = hoodieRecordIterator.next();
         if (recordLocationMap.containsKey(record.getKey())) {
           record.unseal();
           record.setCurrentLocation(recordLocationMap.get(record.getKey()));

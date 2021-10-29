@@ -24,6 +24,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -66,7 +67,7 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
       String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
       String partition = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
       HoodieKey hoodieKey = new HoodieKey(key, partition);
-      HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, new RewriteAvroPayload(record));
+      HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, new RewriteAvroPayload(record));
       return hoodieRecord;
     });
   }

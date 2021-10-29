@@ -23,8 +23,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -196,7 +198,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     List<HoodieRecord> oldRecords = new LinkedList();
     for (HoodieRecord newRecord: newRecords) {
       HoodieKey key = new HoodieKey(newRecord.getRecordKey(), oldPartitionPath);
-      HoodieRecord hoodieRecord = new HoodieRecord(key, newRecord.getData());
+      HoodieRecord hoodieRecord = new HoodieAvroRecord(key, (HoodieRecordPayload) newRecord.getData());
       oldRecords.add(hoodieRecord);
     }
 
@@ -291,7 +293,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       List<HoodieRecord> oldRecords = new LinkedList();
       for (HoodieRecord newRecord: newRecords) {
         HoodieKey key = new HoodieKey(newRecord.getRecordKey(), oldPartitionPath);
-        HoodieRecord hoodieRecord = new HoodieRecord(key, newRecord.getData());
+        HoodieRecord hoodieRecord = new HoodieAvroRecord(key, (HoodieRecordPayload) newRecord.getData());
         oldRecords.add(hoodieRecord);
       }
       JavaRDD<HoodieRecord> newWriteRecords = jsc().parallelize(newRecords, 1);
@@ -764,7 +766,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       // is not implemented via HoodieWriteClient
       JavaRDD<WriteStatus> deleteWriteStatues = writeStatues.map(w -> {
         WriteStatus newWriteStatus = new WriteStatus(true, 1.0);
-        w.getWrittenRecords().forEach(r -> newWriteStatus.markSuccess(new HoodieRecord(r.getKey(), null), Option.empty()));
+        w.getWrittenRecords().forEach(r -> newWriteStatus.markSuccess(new HoodieAvroRecord(r.getKey(), null), Option.empty()));
         assertEquals(w.getTotalRecords(), newWriteStatus.getTotalRecords());
         newWriteStatus.setStat(new HoodieWriteStat());
         return newWriteStatus;

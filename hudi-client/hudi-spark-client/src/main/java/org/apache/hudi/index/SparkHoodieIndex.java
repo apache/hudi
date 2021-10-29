@@ -57,10 +57,11 @@ public abstract class SparkHoodieIndex<T extends HoodieRecordPayload<T>>
 
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) throws HoodieIndexException {
-    return HoodieJavaRDD.of(tagLocation(HoodieJavaRDD.getJavaRDD(records), context, hoodieTable));
+    return HoodieJavaRDD.of(tagLocation(
+        HoodieJavaRDD.getJavaRDD(records.map(record -> (HoodieRecord<T>) record)), context, hoodieTable));
   }
 
   @Override

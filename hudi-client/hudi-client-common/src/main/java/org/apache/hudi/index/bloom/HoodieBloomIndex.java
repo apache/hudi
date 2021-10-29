@@ -67,8 +67,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> tagLocation(
-      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+  public <R> HoodieData<HoodieRecord<R>> tagLocation(
+      HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     // Step 0: cache the input records if needed
     if (config.getBloomIndexUseCaching()) {
@@ -94,7 +94,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     }
 
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys
-    HoodieData<HoodieRecord<T>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
+    HoodieData<HoodieRecord<R>> taggedRecords = tagLocationBacktoRecords(keyFilenamePairs, records);
 
     if (config.getBloomIndexUseCaching()) {
       records.unpersist();
@@ -218,10 +218,10 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
   /**
    * Tag the <rowKey, filename> back to the original HoodieRecord List.
    */
-  protected HoodieData<HoodieRecord<T>> tagLocationBacktoRecords(
+  protected <R> HoodieData<HoodieRecord<R>> tagLocationBacktoRecords(
       HoodiePairData<HoodieKey, HoodieRecordLocation> keyFilenamePair,
-      HoodieData<HoodieRecord<T>> records) {
-    HoodiePairData<HoodieKey, HoodieRecord<T>> keyRecordPairs =
+      HoodieData<HoodieRecord<R>> records) {
+    HoodiePairData<HoodieKey, HoodieRecord<?>> keyRecordPairs =
         records.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     // Here as the records might have more data than keyFilenamePairs (some row keys' fileId is null),
     // so we do left outer join.
