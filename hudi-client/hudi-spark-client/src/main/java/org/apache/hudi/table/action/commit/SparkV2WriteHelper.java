@@ -20,16 +20,22 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.HoodieRowWriteStatus;
+import org.apache.hudi.client.model.HoodieRowRecord;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.table.HoodieBaseTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.StructType;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SparkV2WriteHelper {
 
@@ -47,24 +53,35 @@ public class SparkV2WriteHelper {
 
   public HoodieWriteMetadata<Dataset<HoodieRowWriteStatus>> write(
       String instantTime,
-      Dataset<Row> inputDf,
+      Dataset<Row> rowRecords,
       HoodieEngineContext context,
       HoodieBaseTable<Dataset<Row>, Dataset<HoodieKey>, Dataset<HoodieRowWriteStatus>> table,
       boolean shouldCombine,
       int shuffleParallelism,
       SparkV2UpsertCommitActionExecutor executor,
       boolean performTagging) {
-    Dataset<Row> dedupedDf = combineOnCondition(shouldCombine, inputDf, shuffleParallelism, table);
+    Dataset<Row> deduped = combineOnCondition(shouldCombine, rowRecords, shuffleParallelism, table);
     Instant lookupBegin = Instant.now();
-    Dataset<Row> taggedDf = tagOnCondition(performTagging, dedupedDf, context, table);
+    Dataset<Row> tagged = tagOnCondition(performTagging, deduped, context, table);
     Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
-    HoodieWriteMetadata<Dataset<HoodieRowWriteStatus>> result = executor.execute(taggedDf);
+
+    StructType hoodieSchema = tagged.schema();
+    Dataset<HoodieRowRecord> taggedDs = tagged.mapPartitions((MapPartitionsFunction<Row, HoodieRowRecord>) taggedRows -> {
+      List<HoodieRowRecord> l = new ArrayList<>();
+      while (taggedRows.hasNext()) {
+        Row r = taggedRows.next();
+        HoodieRowRecord rr = HoodieRowRecord.fromHoodieRow(r);
+        l.add(rr);
+      }
+      return l.iterator();
+    }, Encoders.kryo(HoodieRowRecord.class));
+    HoodieWriteMetadata<Dataset<HoodieRowWriteStatus>> result = executor.execute(taggedDs, hoodieSchema);
     result.setIndexLookupDuration(indexLookupDuration);
     return result;
   }
 
   private Dataset<Row> combineOnCondition(
-      boolean condition, Dataset<Row> df, int parallelism, HoodieBaseTable<Dataset<Row>, Dataset<HoodieKey>, Dataset<HoodieRowWriteStatus>> table) {
+      boolean condition, Dataset<Row> df, int parallelism, HoodieBaseTable table) {
     return condition ? deduplicateRecords(df) : df;
   }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.HoodieRowWriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
+import org.apache.hudi.client.model.HoodieRowRecord;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,12 +39,11 @@ import org.apache.parquet.hadoop.api.ReadSupport;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.sql.Column;
-import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -81,8 +81,8 @@ public class HoodieRowMergeHandle implements Serializable, AutoCloseable {
   private int numFilesWritten;
   private int sequence;
   /* <{partitionPath, existingFileName}, <key, incoming record>> */
-  private Map<Tuple2<String, String>, Map<String, InternalRow>> existingFileAndUpdateRecords;
-  private Tuple2<String, List<InternalRow>> newFileAndInsertRecords;
+  private Map<Tuple2<String, String>, Map<String, HoodieRowRecord>> existingFileAndUpdateRecords;
+  private Tuple2<String, List<HoodieRowRecord>> newFileAndInsertRecords;
   private final HoodieRowWriteStatus writeStatus;
   private final HoodieTimer timer;
 
@@ -107,29 +107,28 @@ public class HoodieRowMergeHandle implements Serializable, AutoCloseable {
     this.timer = new HoodieTimer().startTimer();
   }
 
-  public void handle(Row row) {
-    HoodieInternalRow record = getHoodieInternalRow(row, schema);
-    String partitionPath = record.getUTF8String(PARTITION_PATH_POS).toString();
-    if (isUpdate(record)) {
-      String existingFileName = record.getUTF8String(FILENAME_POS).toString();
+  public void handle(HoodieRowRecord rr) {
+    String partitionPath = rr.getPartitionPath();
+    if (isUpdate(rr)) {
+      String existingFileName = rr.getFileName();
       if (!existingFileAndUpdateRecords.containsKey(Tuple2.apply(partitionPath, existingFileName))) {
         existingFileAndUpdateRecords.put(Tuple2.apply(partitionPath, existingFileName), new HashMap<>());
       }
-      String key = record.getUTF8String(RECORD_KEY_POS).toString();
+      String key = rr.getRecordKey();
       String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, sequence++);
       String fileGroupId = fileGroupId(existingFileName);
       String newFileName = FSUtils.makeDataFileName(instantTime, writeToken,
           fileGroupId + "-" + numFilesWritten++, ".parquet");
-      InternalRow recordWithMetaCols = updateMetaCols(record, schema, instantTime, seqId, key, partitionPath, newFileName);
+      HoodieRowRecord recordWithMetaCols = updateMetaCols(rr, instantTime, seqId, key, partitionPath, newFileName);
       existingFileAndUpdateRecords.get(Tuple2.apply(partitionPath, existingFileName)).put(key, recordWithMetaCols);
     } else {
       if (newFileAndInsertRecords == null) {
         String newFileName = getFileName(UUID.randomUUID().toString());
         newFileAndInsertRecords = Tuple2.apply(newFileName, new ArrayList<>());
       }
-      String key = record.getUTF8String(RECORD_KEY_POS).toString();
+      String key = rr.getRecordKey();
       String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, sequence++);
-      InternalRow recordWithMetaCols = updateMetaCols(record, schema, instantTime, seqId, key, partitionPath,
+      HoodieRowRecord recordWithMetaCols = updateMetaCols(rr, instantTime, seqId, key, partitionPath,
           newFileAndInsertRecords._1);
       newFileAndInsertRecords._2.add(recordWithMetaCols);
     }
@@ -153,10 +152,10 @@ public class HoodieRowMergeHandle implements Serializable, AutoCloseable {
     // write new files for inserts
     if (newFileAndInsertRecords != null) {
       String newFileName = newFileAndInsertRecords._1;
-      String partitionPath = newFileAndInsertRecords._2.get(0).getUTF8String(PARTITION_PATH_POS).toString();
+      String partitionPath = newFileAndInsertRecords._2.get(0).getPartitionPath();
       try (HoodieInternalRowFileWriter writer = newWriter(partitionPath, newFileName)) {
-        for (InternalRow r : newFileAndInsertRecords._2) {
-          writeRow(writer, r, writeStatus);
+        for (HoodieRowRecord rr : newFileAndInsertRecords._2) {
+          writeRow(writer, rr, writeStatus);
         }
       }
       writeStatus.getStat().setNumInserts(newFileAndInsertRecords._2.size());
@@ -168,28 +167,28 @@ public class HoodieRowMergeHandle implements Serializable, AutoCloseable {
       String partitionPath = partitionAndFileName._1;
       String existingFileName = partitionAndFileName._2;
       try (ParquetReader<InternalRow> r = newReader(partitionPath, existingFileName)) {
-        List<InternalRow> mergedRecords = new ArrayList<>();
+        List<HoodieRowRecord> mergedRecords = new ArrayList<>();
         Map<String, InternalRow> existingRecords = readRows(r);
-        for (Map.Entry<String, InternalRow> e : existingFileAndUpdateRecords.get(partitionAndFileName).entrySet()) {
+        for (Map.Entry<String, HoodieRowRecord> e : existingFileAndUpdateRecords.get(partitionAndFileName).entrySet()) {
           String key = e.getKey();
-          InternalRow incomingRecord = e.getValue();
-          InternalRow existingRecord = existingRecords.get(key);
+          HoodieRowRecord incomingRecord = e.getValue();
+          HoodieRowRecord existingRecord = HoodieRowRecord.fromHoodieInternalRow(existingRecords.get(key), schema);
           mergedRecords.add(merge(incomingRecord, existingRecord, schema, writeConfig));
           existingRecords.remove(key);
         }
 
         // records from the same existing file are written to the same new file
-        String newFileName = mergedRecords.get(0).getUTF8String(FILENAME_POS).toString();
+        String newFileName = mergedRecords.get(0).getFileName();
         try (HoodieInternalRowFileWriter w = newWriter(partitionPath, newFileName)) {
-          for (InternalRow row : mergedRecords) {
-            writeRow(w, row, writeStatus);
+          for (HoodieRowRecord rr : mergedRecords) {
+            writeRow(w, rr, writeStatus);
           }
           long currentUpdates = writeStatus.getStat().getNumUpdateWrites();
           writeStatus.getStat().setNumUpdateWrites(currentUpdates + mergedRecords.size());
           // rewrite non-updating records with new meta info
-          for (InternalRow row : existingRecords.values()) {
-            HoodieInternalRow hoodieInternalRow = getHoodieInternalRow(row, schema);
-            writeRow(w, updateMetaCols(hoodieInternalRow, schema, instantTime, HoodieRecord
+          for (InternalRow ir : existingRecords.values()) {
+            HoodieRowRecord rr = HoodieRowRecord.fromHoodieInternalRow(ir, schema);
+            writeRow(w, updateMetaCols(rr, instantTime, HoodieRecord
                 .generateSequenceId(instantTime, partitionId, sequence++), newFileName), writeStatus);
           }
         }
@@ -203,7 +202,7 @@ public class HoodieRowMergeHandle implements Serializable, AutoCloseable {
   private void writePartitionMetadata() {
     String partitionPath;
     if (newFileAndInsertRecords != null) {
-      partitionPath = newFileAndInsertRecords._2.get(0).getUTF8String(PARTITION_PATH_POS).toString();
+      partitionPath = newFileAndInsertRecords._2.get(0).getPartitionPath();
     } else if (!existingFileAndUpdateRecords.isEmpty()) {
       partitionPath = existingFileAndUpdateRecords.keySet().iterator().next()._1;
     } else {
@@ -224,7 +223,7 @@ public class HoodieRowMergeHandle implements Serializable, AutoCloseable {
         fileId + "-" + numFilesWritten++, ".parquet");
   }
 
-  private static InternalRow merge(InternalRow incoming, InternalRow existing, StructType schema, HoodieWriteConfig writeConfig) {
+  private static HoodieRowRecord merge(HoodieRowRecord incoming, HoodieRowRecord existing, StructType schema, HoodieWriteConfig writeConfig) {
     // TODO(rxu) allow custom merge behavior
     return incoming;
   }
@@ -263,18 +262,18 @@ public class HoodieRowMergeHandle implements Serializable, AutoCloseable {
     return HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(file, table, writeConfig, schema);
   }
 
-  private static void writeRow(HoodieInternalRowFileWriter writer, InternalRow r, HoodieRowWriteStatus writeStatus) {
-    String k = r.getUTF8String(RECORD_KEY_POS).toString();
+  private static void writeRow(HoodieInternalRowFileWriter writer, HoodieRowRecord rr, HoodieRowWriteStatus writeStatus) {
+    String k = rr.getRecordKey();
     try {
-      writer.writeRow(k, r);
+      writer.writeRow(k, rr.toInternalRow());
       writeStatus.markSuccess(k);
     } catch (Throwable t) {
       writeStatus.markFailure(k, t);
     }
   }
 
-  private static boolean isUpdate(InternalRow record) {
-    return !record.isNullAt(FILENAME_POS);
+  private static boolean isUpdate(HoodieRowRecord record) {
+    return record.getFileName() != null;
   }
 
   private static String fileGroupId(String fileName) {
@@ -298,24 +297,19 @@ public class HoodieRowMergeHandle implements Serializable, AutoCloseable {
     );
   }
 
-  private static HoodieInternalRow getHoodieInternalRow(Row row, StructType schema) {
-    return getHoodieInternalRow(GenericInternalRow.fromSeq(row.toSeq()), schema);
+  private static HoodieRowRecord updateMetaCols(HoodieRowRecord rr, String commitTime, String seqId, String fileName) {
+    rr.setCommitTime(commitTime);
+    rr.setCommitSeqNumber(seqId);
+    rr.setFileName(fileName);
+    return rr;
   }
 
-  private static InternalRow updateMetaCols(InternalRow record, StructType schema, String commitTime, String seqId, String fileName) {
-    record.update(COMMIT_TIME_POS, UTF8String.fromString(commitTime));
-    record.update(COMMIT_SEQNO_POS, UTF8String.fromString(seqId));
-    record.update(FILENAME_POS, UTF8String.fromString(fileName));
-    return record;
-  }
-
-  private static InternalRow updateMetaCols(InternalRow record, StructType schema, String commitTime, String seqId, String key,
-      String partitionPath, String fileName) {
-    record.update(COMMIT_TIME_POS, UTF8String.fromString(commitTime));
-    record.update(COMMIT_SEQNO_POS, UTF8String.fromString(seqId));
-    record.update(RECORD_KEY_POS, UTF8String.fromString(key));
-    record.update(PARTITION_PATH_POS, UTF8String.fromString(partitionPath));
-    record.update(FILENAME_POS, UTF8String.fromString(fileName));
-    return record;
+  private static HoodieRowRecord updateMetaCols(HoodieRowRecord rr, String commitTime, String seqId, String key, String partitionPath, String fileName) {
+    rr.setCommitTime(commitTime);
+    rr.setCommitSeqNumber(seqId);
+    rr.setRecordKey(key);
+    rr.setPartitionPath(partitionPath);
+    rr.setFileName(fileName);
+    return rr;
   }
 }

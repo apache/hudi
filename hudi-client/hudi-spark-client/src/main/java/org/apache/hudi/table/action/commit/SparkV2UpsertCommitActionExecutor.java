@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.HoodieRowWriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.model.HoodieRowRecord;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.config.TypedProperties;
@@ -111,16 +112,15 @@ public class SparkV2UpsertCommitActionExecutor implements Serializable {
         config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, true);
   }
 
-  public HoodieWriteMetadata<Dataset<HoodieRowWriteStatus>> execute(Dataset<Row> inputDf) {
-    inputDf.cache();
+  public HoodieWriteMetadata<Dataset<HoodieRowWriteStatus>> execute(Dataset<HoodieRowRecord> taggedDs, StructType schema) {
+    taggedDs.cache();
 
-    final StructType schema = inputDf.schema();
     final Map<String, String> options = toMap(config.getProps());
     if (extraMetadata.isPresent()) {
       options.putAll(extraMetadata.get());
     }
-    Dataset<HoodieRowWriteStatus> writeStatuses = clusteringHandleUpdate(inputDf)
-        .mapPartitions((MapPartitionsFunction<Row, HoodieRowWriteStatus>) rows -> {
+    Dataset<HoodieRowWriteStatus> writeStatuses = clusteringHandleUpdate(taggedDs)
+        .mapPartitions((MapPartitionsFunction<HoodieRowRecord, HoodieRowWriteStatus>) rows -> {
           try (HoodieRowMergeHandle mergeHandle = new HoodieRowMergeHandle(
               table,
               schema,
@@ -139,7 +139,7 @@ public class SparkV2UpsertCommitActionExecutor implements Serializable {
     return result;
   }
 
-  private Dataset<Row> clusteringHandleUpdate(Dataset<Row> inputDf) {
+  private Dataset<HoodieRowRecord> clusteringHandleUpdate(Dataset<HoodieRowRecord> inputDf) {
     if (config.isClusteringEnabled()) {
       Set<HoodieFileGroupId> fileGroupsInPendingClustering =
           table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
