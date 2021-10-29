@@ -54,7 +54,7 @@ import java.util.Map;
  * This results in two I/O passes over the log file.
  */
 
-public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
+public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     implements Iterable<HoodieRecord<? extends HoodieRecordPayload>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
@@ -77,8 +77,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          boolean reverseReader, int bufferSize, String spillableMapBasePath,
                                          Option<InstantRange> instantRange, boolean autoScan,
                                          ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
-                                         boolean withOperationField) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField);
+                                         boolean withOperationField, boolean enableFullScan) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField,
+        enableFullScan);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -166,7 +167,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   /**
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
-  public static class Builder extends AbstractHoodieLogRecordScanner.Builder {
+  public static class Builder extends AbstractHoodieLogRecordReader.Builder {
     protected FileSystem fs;
     protected String basePath;
     protected List<String> logFilePaths;
@@ -276,7 +277,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true);
     }
   }
 }
