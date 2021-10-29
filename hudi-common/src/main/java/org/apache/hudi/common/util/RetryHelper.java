@@ -18,7 +18,6 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -76,13 +75,10 @@ public class RetryHelper<T> {
                 t = func.get();
                 success = true;
                 break;
-            } catch (HoodieException hoodieException) {
-                // ignore hoodieException here
-                throw hoodieException;
             } catch (RuntimeException e) {
-                // deal with other RuntimeExceptions such like AmazonS3Exception 503
+                // deal with RuntimeExceptions such like AmazonS3Exception 503
                 exception = e;
-                LOG.warn("Catch RuntimeException" + taskInfo + ", will retry after " + waitTime + " ms.", e);
+                LOG.warn("Catch RuntimeException " + taskInfo + ", will retry after " + waitTime + " ms.", e);
                 try {
                     Thread.sleep(waitTime);
                 } catch (InterruptedException ex) {
@@ -93,10 +89,13 @@ public class RetryHelper<T> {
         } while (retries <= num);
 
         if (!success) {
-            LOG.error("Still failed to " + taskInfo + " after retried " + num + "times.", exception);
+            LOG.error("Still failed to " + taskInfo + " after retried " + num + " times.", exception);
             throw exception;
         }
-        LOG.info("Success to " + taskInfo + " after retried " + retries + " times." );
+
+        if (retries > 0) {
+            LOG.info("Success to " + taskInfo + " after retried " + retries + " times." );
+        }
         return t;
     }
 

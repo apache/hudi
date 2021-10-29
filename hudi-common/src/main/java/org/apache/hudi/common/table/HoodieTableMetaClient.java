@@ -277,6 +277,10 @@ public class HoodieTableMetaClient implements Serializable {
     return fs;
   }
 
+  public void setFs(HoodieWrapperFileSystem fs) {
+    this.fs = fs;
+  }
+
   /**
    * Return raw file-system.
    * 
