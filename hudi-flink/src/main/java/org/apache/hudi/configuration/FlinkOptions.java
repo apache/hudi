@@ -453,6 +453,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(3600) // default 1 hour
       .withDescription("Max delta seconds time needed to trigger compaction, default 1 hour");
 
+  public static final ConfigOption<Integer> COMPACTION_TIMEOUT_SECONDS = ConfigOptions
+      .key("compaction.timeout.seconds")
+      .intType()
+      .defaultValue(1200) // default 20 minutes
+      .withDescription("Max timeout time in seconds for online compaction to rollback, default 20 minutes");
+
   public static final ConfigOption<Integer> COMPACTION_MAX_MEMORY = ConfigOptions
       .key("compaction.max_memory")
       .intType()

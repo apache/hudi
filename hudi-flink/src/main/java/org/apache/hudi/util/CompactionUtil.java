@@ -18,7 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -111,19 +110,34 @@ public class CompactionUtil {
     }
   }
 
-  public static void rollbackCompaction(HoodieFlinkTable<?> table, HoodieFlinkWriteClient writeClient, Configuration conf) {
+  public static void rollbackCompaction(HoodieFlinkTable<?> table, Configuration conf) {
     String curInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    int deltaSeconds = conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS);
+    int deltaSeconds = conf.getInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
     HoodieTimeline inflightCompactionTimeline = table.getActiveTimeline()
         .filterPendingCompactionTimeline()
         .filter(instant ->
             instant.getState() == HoodieInstant.State.INFLIGHT
                 && StreamerUtil.instantTimeDiffSeconds(curInstantTime, instant.getTimestamp()) >= deltaSeconds);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
-      LOG.info("Rollback the pending compaction instant: " + inflightInstant);
-      writeClient.rollbackInflightCompaction(inflightInstant, table);
+      LOG.info("Rollback the inflight compaction instant: " + inflightInstant + " for timeout(" + deltaSeconds + "s)");
+      table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();
     });
+  }
+
+  /**
+   * Rolls back the earliest compaction if there exists.
+   */
+  public static void rollbackEarliestCompaction(HoodieFlinkTable<?> table) {
+    Option<HoodieInstant> earliestInflight = table.getActiveTimeline()
+        .filterPendingCompactionTimeline()
+        .filter(instant ->
+            instant.getState() == HoodieInstant.State.INFLIGHT).firstInstant();
+    if (earliestInflight.isPresent()) {
+      LOG.info("Rollback the inflight compaction instant: " + earliestInflight.get() + " for failover");
+      table.rollbackInflightCompaction(earliestInflight.get());
+      table.getMetaClient().reloadActiveTimeline();
+    }
   }
 
   /**

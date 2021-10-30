@@ -450,6 +450,16 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                 String instantToRestore);
 
   /**
+   * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file to the .requested file
+   *
+   * @param inflightInstant Inflight Compaction Instant
+   */
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
+    rollback(context, HoodieActiveTimeline.createNewInstantTime(), inflightInstant, false);
+    getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
+  }
+
+  /**
    * Finalize the written data onto storage. Perform any final cleanups.
    *
    * @param context HoodieEngineContext
