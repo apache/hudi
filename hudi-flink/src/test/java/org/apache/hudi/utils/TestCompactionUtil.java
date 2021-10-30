@@ -70,7 +70,6 @@ public class TestCompactionUtil {
 
   @Test
   void rollbackCompaction() {
-    conf.setInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS, 0);
     List<String> oriInstants = IntStream.range(0, 3)
         .mapToObj(i -> generateCompactionPlan()).collect(Collectors.toList());
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
@@ -79,7 +78,7 @@ public class TestCompactionUtil {
         .getInstants()
         .collect(Collectors.toList());
     assertThat("all the instants should be in pending state", instants.size(), is(3));
-    CompactionUtil.rollbackCompaction(table, conf);
+    CompactionUtil.rollbackCompaction(table);
     boolean allRolledBack = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants()
         .allMatch(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     assertTrue(allRolledBack, "all the instants should be rolled back");
@@ -90,6 +89,7 @@ public class TestCompactionUtil {
 
   @Test
   void rollbackEarliestCompaction() {
+    conf.setInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS, 0);
     List<String> oriInstants = IntStream.range(0, 3)
         .mapToObj(i -> generateCompactionPlan()).collect(Collectors.toList());
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
@@ -98,7 +98,7 @@ public class TestCompactionUtil {
         .getInstants()
         .collect(Collectors.toList());
     assertThat("all the instants should be in pending state", instants.size(), is(3));
-    CompactionUtil.rollbackEarliestCompaction(table);
+    CompactionUtil.rollbackEarliestCompaction(table, conf);
     long requestedCnt = metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).count();
     assertThat("Only the first instant expects to be rolled back", requestedCnt, is(1L));
