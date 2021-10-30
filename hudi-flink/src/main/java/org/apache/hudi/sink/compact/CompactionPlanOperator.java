@@ -67,10 +67,10 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void open() throws Exception {
     super.open();
     this.table = FlinkTables.createTable(conf, getRuntimeContext());
-    // when starting up, rolls back the first inflight compaction instant if there exists,
-    // the instant is the next one to schedule for scheduling task because the compaction instants are
+    // when starting up, rolls back all the inflight compaction instants if there exists,
+    // these instants are in priority for scheduling task because the compaction instants are
     // scheduled from earliest(FIFO sequence).
-    CompactionUtil.rollbackEarliestCompaction(this.table);
+    CompactionUtil.rollbackCompaction(table);
   }
 
   @Override
@@ -85,9 +85,11 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       // There is no good way to infer when the compaction task for an instant crushed
       // or is still undergoing. So we use a configured timeout threshold to control the rollback:
       // {@code FlinkOptions.COMPACTION_TIMEOUT_SECONDS},
-      // when the threshold hits, but an instant is still in pending(inflight) state, assumes it has failed
-      // already and just roll it back.
-      CompactionUtil.rollbackCompaction(table, conf);
+      // when the earliest inflight instant has timed out, assumes it has failed
+      // already and just rolls it back.
+
+      // comment out: do we really need the timeout rollback ?
+      // CompactionUtil.rollbackEarliestCompaction(table, conf);
       scheduleCompaction(table, checkpointId);
     } catch (Throwable throwable) {
       // make it fail-safe

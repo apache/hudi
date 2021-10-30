@@ -77,7 +77,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
     if (this.asyncCompaction) {
-      this.executor = new NonThrownExecutor(LOG);
+      this.executor = NonThrownExecutor.builder(LOG).build();
     }
   }
 
@@ -89,6 +89,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
           () -> doCompaction(instantTime, compactionOperation, collector),
+          (errMsg, t) -> collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID)),
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
