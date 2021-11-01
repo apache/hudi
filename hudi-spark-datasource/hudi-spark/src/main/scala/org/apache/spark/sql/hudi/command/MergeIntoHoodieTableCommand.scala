@@ -37,7 +37,6 @@ import org.apache.spark.sql.hudi.{HoodieOptionConfig, SerDeUtils}
 import org.apache.spark.sql.types.{BooleanType, StructType}
 import java.util.Base64
 
-
 /**
  * The Command for hoodie MergeIntoTable.
  * The match on condition must contain the row key fields currently, so that we can use Hoodie

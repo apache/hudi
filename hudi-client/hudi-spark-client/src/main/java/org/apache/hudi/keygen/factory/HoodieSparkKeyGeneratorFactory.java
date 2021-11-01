@@ -36,7 +36,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Factory help to create {@link org.apache.hudi.keygen.KeyGenerator}.
@@ -47,6 +49,22 @@ import java.util.Locale;
 public class HoodieSparkKeyGeneratorFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkKeyGeneratorFactory.class);
+
+  private static final Map<String, String> COMMON_TO_SPARK_KEYGENERATOR = new HashMap<>();
+  static {
+    COMMON_TO_SPARK_KEYGENERATOR.put("org.apache.hudi.keygen.ComplexAvroKeyGenerator",
+        "org.apache.hudi.keygen.ComplexKeyGenerator");
+    COMMON_TO_SPARK_KEYGENERATOR.put("org.apache.hudi.keygen.CustomAvroKeyGenerator",
+        "org.apache.hudi.keygen.CustomKeyGenerator");
+    COMMON_TO_SPARK_KEYGENERATOR.put("org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator",
+        "org.apache.hudi.keygen.GlobalDeleteKeyGenerator");
+    COMMON_TO_SPARK_KEYGENERATOR.put("org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator",
+        "org.apache.hudi.keygen.NonpartitionedKeyGenerator");
+    COMMON_TO_SPARK_KEYGENERATOR.put("org.apache.hudi.keygen.SimpleAvroKeyGenerator",
+        "org.apache.hudi.keygen.SimpleKeyGenerator");
+    COMMON_TO_SPARK_KEYGENERATOR.put("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator",
+        "org.apache.hudi.keygen.TimestampBasedKeyGenerator");
+  }
 
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     String keyGeneratorClass = getKeyGeneratorClassName(props);
@@ -99,21 +117,6 @@ public class HoodieSparkKeyGeneratorFactory {
    * Convert hoodie-common KeyGenerator to SparkKeyGeneratorInterface implement.
    */
   public static String convertToSparkKeyGenerator(String keyGeneratorClassName) {
-    switch (keyGeneratorClassName) {
-      case "org.apache.hudi.keygen.ComplexAvroKeyGenerator":
-        return "org.apache.hudi.keygen.ComplexKeyGenerator";
-      case "org.apache.hudi.keygen.CustomAvroKeyGenerator":
-        return "org.apache.hudi.keygen.CustomKeyGenerator";
-      case "org.apache.hudi.keygen.GlobalAvroDeleteKeyGenerator":
-        return "org.apache.hudi.keygen.GlobalDeleteKeyGenerator";
-      case "org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator":
-        return "org.apache.hudi.keygen.NonpartitionedKeyGenerator";
-      case "org.apache.hudi.keygen.SimpleAvroKeyGenerator":
-        return "org.apache.hudi.keygen.SimpleKeyGenerator";
-      case "org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator":
-        return "org.apache.hudi.keygen.TimestampBasedKeyGenerator";
-      default:
-        return keyGeneratorClassName;
-    }
+    return COMMON_TO_SPARK_KEYGENERATOR.getOrDefault(keyGeneratorClassName, keyGeneratorClassName);
   }
 }
