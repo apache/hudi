@@ -1064,10 +1064,6 @@
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
     </repository>
-    <!--<repository>
-      <id>pentaho.org</id>
-      <url>https://public.nexus.pentaho.org/repository/proxy-public-3rd-party-release/</url>
-    </repository>-->
   </repositories>
 
   <profiles>
