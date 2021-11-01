@@ -20,7 +20,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bootstrap.index.HoodieKVComparator;
+import org.apache.hudi.common.util.HoodieKVComparator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;

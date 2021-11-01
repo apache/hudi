@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.bootstrap.index;
+package org.apache.hudi.common.util;
 
 import org.apache.hadoop.hbase.KeyValue;
 

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.fs.inline;
 
-import org.apache.hudi.common.bootstrap.index.HoodieKVComparator;
+import org.apache.hudi.common.util.HoodieKVComparator;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 
 import org.apache.hadoop.conf.Configuration;

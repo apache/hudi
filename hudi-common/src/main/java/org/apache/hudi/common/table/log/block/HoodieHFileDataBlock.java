@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
-import org.apache.hudi.common.bootstrap.index.HoodieKVComparator;
+import org.apache.hudi.common.util.HoodieKVComparator;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
