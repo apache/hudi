@@ -18,6 +18,8 @@
 
 package org.apache.hudi.connect.transaction;
 
+import org.apache.hudi.connect.ControlMessage;
+
 import org.apache.kafka.common.TopicPartition;
 
 /**
@@ -36,5 +38,5 @@ public interface TransactionCoordinator {
   TopicPartition getPartition();
 
   /* Called when a control event is received from the Kafka control topic */
-  void processControlEvent(ControlEvent message);
+  void processControlEvent(ControlMessage message);
 }

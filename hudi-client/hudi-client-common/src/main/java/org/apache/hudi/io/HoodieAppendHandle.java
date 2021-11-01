@@ -196,7 +196,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
-      // Whether it is a update or insert record.
+      // Whether it is an update or insert record.
       boolean isUpdateRecord = isUpdateRecord(hoodieRecord);
       // If the format can not record the operation field, nullify the DELETE payload manually.
       boolean nullifyPayload = HoodieOperation.isDelete(hoodieRecord.getOperation()) && !config.allowOperationMetadataField();
@@ -219,7 +219,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         if (config.allowOperationMetadataField()) {
           HoodieAvroUtils.addOperationToRecord(rewriteRecord, hoodieRecord.getOperation());
         }
-        if (isUpdateRecord(hoodieRecord)) {
+        if (isUpdateRecord) {
           updatedRecordsWritten++;
         } else {
           insertRecordsWritten++;

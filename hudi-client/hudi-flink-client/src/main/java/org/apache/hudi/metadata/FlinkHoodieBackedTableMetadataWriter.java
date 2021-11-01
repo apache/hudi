@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -45,12 +46,23 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   private static final Logger LOG = LogManager.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
 
-  public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig, HoodieEngineContext context) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context);
+  public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
+                                                 HoodieEngineContext context) {
+    return create(conf, writeConfig, context, Option.empty());
   }
 
-  FlinkHoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig, HoodieEngineContext engineContext) {
-    super(hadoopConf, writeConfig, engineContext);
+  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
+                                                                                HoodieWriteConfig writeConfig,
+                                                                                HoodieEngineContext context,
+                                                                                Option<T> actionMetadata) {
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata);
+  }
+
+  <T extends SpecificRecordBase> FlinkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+                                                                      HoodieWriteConfig writeConfig,
+                                                                      HoodieEngineContext engineContext,
+                                                                      Option<T> actionMetadata) {
+    super(hadoopConf, writeConfig, engineContext, actionMetadata);
   }
 
   @Override
@@ -65,10 +77,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void initialize(HoodieEngineContext engineContext) {
+  protected <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
+                                                           Option<T> actionMetadata) {
     try {
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient);
+        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
@@ -85,7 +98,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
         // if this is a new commit being applied to metadata for the first time
         writeClient.startCommitWithTime(instantTime);
-        writeClient.transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
+        metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
       } else {
         // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
         // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.

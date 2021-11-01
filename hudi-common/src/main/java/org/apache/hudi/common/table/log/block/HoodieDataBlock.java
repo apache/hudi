@@ -111,6 +111,17 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return records;
   }
 
+  /**
+   * Batch get of keys of interest. Implementation can choose to either do full scan and return matched entries or
+   * do a seek based parsing and return matched entries.
+   * @param keys keys of interest.
+   * @return List of IndexedRecords for the keys of interest.
+   * @throws IOException
+   */
+  public List<IndexedRecord> getRecords(List<String> keys) throws IOException {
+    throw new UnsupportedOperationException("On demand batch get based on interested keys not supported");
+  }
+
   public Schema getSchema() {
     // if getSchema was invoked before converting byte [] to records
     if (records == null) {
@@ -119,7 +130,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return schema;
   }
 
-  private void createRecordsFromContentBytes() throws IOException {
+  protected void createRecordsFromContentBytes() throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();

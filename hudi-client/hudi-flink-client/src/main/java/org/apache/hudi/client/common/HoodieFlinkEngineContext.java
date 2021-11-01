@@ -20,6 +20,10 @@ package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.data.HoodieAccumulator;
+import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -32,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +75,21 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   public HoodieFlinkEngineContext(SerializableConfiguration hadoopConf, TaskContextSupplier taskContextSupplier) {
     super(hadoopConf, taskContextSupplier);
     this.runtimeContext = ((FlinkTaskContextSupplier) taskContextSupplier).getFlinkRuntimeContext();
+  }
+
+  @Override
+  public HoodieAccumulator newAccumulator() {
+    return HoodieAtomicLongAccumulator.create();
+  }
+
+  @Override
+  public <T> HoodieData<T> emptyHoodieData() {
+    return HoodieList.of(Collections.emptyList());
+  }
+
+  @Override
+  public <T> HoodieData<T> parallelize(List<T> data, int parallelism) {
+    return HoodieList.of(data);
   }
 
   public RuntimeContext getRuntimeContext() {

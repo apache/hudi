@@ -19,6 +19,8 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.data.HoodieAccumulator;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
@@ -58,6 +60,16 @@ public abstract class HoodieEngineContext {
   public TaskContextSupplier getTaskContextSupplier() {
     return taskContextSupplier;
   }
+
+  public abstract HoodieAccumulator newAccumulator();
+
+  public abstract <T> HoodieData<T> emptyHoodieData();
+
+  public <T> HoodieData<T> parallelize(List<T> data) {
+    return parallelize(data, data.size());
+  }
+
+  public abstract <T> HoodieData<T> parallelize(List<T> data, int parallelism);
 
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
 

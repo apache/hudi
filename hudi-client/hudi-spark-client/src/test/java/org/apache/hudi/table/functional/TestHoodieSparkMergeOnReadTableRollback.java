@@ -279,8 +279,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getTimestamp();
         assertTrue(Arrays.stream(listAllBaseFilesInPath(hoodieTable))
             .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file).getCommitTime())));
-        thirdClient.rollbackInflightCompaction(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime),
-            hoodieTable);
+        hoodieTable.rollbackInflightCompaction(new HoodieInstant(
+            HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime));
         allFiles = listAllBaseFilesInPath(hoodieTable);
         metaClient = HoodieTableMetaClient.reload(metaClient);
         tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
@@ -611,7 +611,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
       table.getActiveTimeline().reload();
-      writeClient.rollbackInflightCompaction(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime), table);
+      table.rollbackInflightCompaction(new HoodieInstant(
+          HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime));
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(config, context(), metaClient);
@@ -619,7 +620,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       ((SyncableFileSystemView) tableRTFileSystemView).reset();
 
       for (String partitionPath : dataGen.getPartitionPaths()) {
-        List<FileSlice> fileSlices =  getFileSystemViewWithUnCommittedSlices(metaClient)
+        List<FileSlice> fileSlices = getFileSystemViewWithUnCommittedSlices(metaClient)
             .getAllFileSlices(partitionPath).filter(fs -> fs.getBaseInstantTime().equals("100")).collect(Collectors.toList());
         assertTrue(fileSlices.stream().noneMatch(fileSlice -> fileSlice.getBaseFile().isPresent()));
         assertTrue(fileSlices.stream().anyMatch(fileSlice -> fileSlice.getLogFiles().count() > 0));

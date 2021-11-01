@@ -100,7 +100,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
       .intType()
-      .defaultValue(24)
+      .defaultValue(10)
       .withDescription("Max delta commits for metadata table to trigger compaction, default 24");
 
   // ------------------------------------------------------------------------
@@ -115,15 +115,15 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Double> INDEX_STATE_TTL = ConfigOptions
       .key("index.state.ttl")
       .doubleType()
-      .defaultValue(1.5D)
-      .withDescription("Index state ttl in days, default 1.5 day");
+      .defaultValue(0D)
+      .withDescription("Index state ttl in days, default stores the index permanently");
 
   public static final ConfigOption<Boolean> INDEX_GLOBAL_ENABLED = ConfigOptions
       .key("index.global.enabled")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("Whether to update index for the old partition path\n"
-          + "if same key record with different partition path came in, default false");
+          + "if same key record with different partition path came in, default true");
 
   public static final ConfigOption<String> INDEX_PARTITION_REGEX = ConfigOptions
       .key("index.partition.regex")
@@ -227,11 +227,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
-  public static final ConfigOption<Boolean> INSERT_DEDUP = ConfigOptions
-      .key("write.insert.deduplicate")
+  public static final ConfigOption<Boolean> INSERT_CLUSTER = ConfigOptions
+      .key("write.insert.cluster")
       .booleanType()
-      .defaultValue(true)
-      .withDescription("Whether to deduplicate for INSERT operation, if disabled, writes the base files directly, default true");
+      .defaultValue(false)
+      .withDescription("Whether to merge small files for insert mode, "
+          + "if true, the write throughput will decrease because the read/write of existing small file, "
+          + "only valid for COW table, default false");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
@@ -239,6 +241,7 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("upsert")
       .withDescription("The write operation, that this write should do");
 
+  public static final String NO_PRE_COMBINE = "no_precombine";
   public static final ConfigOption<String> PRECOMBINE_FIELD = ConfigOptions
       .key("write.precombine.field")
       .stringType()
@@ -255,15 +258,17 @@ public class FlinkOptions extends HoodieConfig {
           + "This will render any value set for the option in-effective");
 
   /**
-   * Flag to indicate whether to drop duplicates upon insert.
-   * By default insert will accept duplicates, to gain extra performance.
+   * Flag to indicate whether to drop duplicates before insert/upsert.
+   * By default false to gain extra performance.
    */
-  public static final ConfigOption<Boolean> INSERT_DROP_DUPS = ConfigOptions
-      .key("write.insert.drop.duplicates")
+  public static final ConfigOption<Boolean> PRE_COMBINE = ConfigOptions
+      .key("write.precombine")
       .booleanType()
       .defaultValue(false)
-      .withDescription("Flag to indicate whether to drop duplicates upon insert.\n"
-          + "By default insert will accept duplicates, to gain extra performance");
+      .withDescription("Flag to indicate whether to drop duplicates before insert/upsert.\n"
+          + "By default these cases will accept duplicates, to gain extra performance:\n"
+          + "1) insert operation;\n"
+          + "2) upsert for MOR table, the MOR table deduplicate on reading");
 
   public static final ConfigOption<Integer> RETRY_TIMES = ConfigOptions
       .key("write.retry.times")
@@ -371,8 +376,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size")
       .doubleType()
-      .defaultValue(64D) // 64MB
-      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem, default 64MB");
+      .defaultValue(256D) // 256MB
+      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem, default 256MB");
 
   public static final ConfigOption<Integer> WRITE_LOG_BLOCK_SIZE = ConfigOptions
       .key("write.log_block.size")
@@ -487,6 +492,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(3600) // default 1 hour
       .withDescription("Max delta seconds time needed to trigger compaction, default 1 hour");
 
+  public static final ConfigOption<Integer> COMPACTION_TIMEOUT_SECONDS = ConfigOptions
+      .key("compaction.timeout.seconds")
+      .intType()
+      .defaultValue(1200) // default 20 minutes
+      .withDescription("Max timeout time in seconds for online compaction to rollback, default 20 minutes");
+
   public static final ConfigOption<Integer> COMPACTION_MAX_MEMORY = ConfigOptions
       .key("compaction.max_memory")
       .intType()
@@ -496,8 +507,8 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Long> COMPACTION_TARGET_IO = ConfigOptions
       .key("compaction.target_io")
       .longType()
-      .defaultValue(5120L) // default 5 GB
-      .withDescription("Target IO per compaction (both read and write), default 5 GB");
+      .defaultValue(500 * 1024L) // default 500 GB
+      .withDescription("Target IO per compaction (both read and write), default 500 GB");
 
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")

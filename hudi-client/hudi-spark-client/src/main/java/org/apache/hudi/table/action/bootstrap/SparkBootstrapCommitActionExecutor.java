@@ -55,6 +55,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -182,8 +183,8 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     writeStatusRDD = writeStatusRDD.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
     Instant indexStartTime = Instant.now();
     // Update the index back
-    JavaRDD<WriteStatus> statuses = table.getIndex().updateLocation(writeStatusRDD, context,
-        table);
+    JavaRDD<WriteStatus> statuses = HoodieJavaRDD.getJavaRDD(
+        table.getIndex().updateLocation(HoodieJavaRDD.of(writeStatusRDD), context, table));
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     commitOnAutoCommit(result);

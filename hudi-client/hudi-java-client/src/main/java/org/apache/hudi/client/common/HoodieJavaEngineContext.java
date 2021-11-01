@@ -21,6 +21,10 @@ package org.apache.hudi.client.common;
 import org.apache.hadoop.conf.Configuration;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.data.HoodieAccumulator;
+import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -34,6 +38,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +65,21 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
 
   public HoodieJavaEngineContext(Configuration conf, TaskContextSupplier taskContextSupplier) {
     super(new SerializableConfiguration(conf), taskContextSupplier);
+  }
+
+  @Override
+  public HoodieAccumulator newAccumulator() {
+    return HoodieAtomicLongAccumulator.create();
+  }
+
+  @Override
+  public <T> HoodieData<T> emptyHoodieData() {
+    return HoodieList.of(Collections.emptyList());
+  }
+
+  @Override
+  public <T> HoodieData<T> parallelize(List<T> data, int parallelism) {
+    return HoodieList.of(data);
   }
 
   @Override

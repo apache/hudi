@@ -18,7 +18,9 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -67,6 +69,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -98,8 +101,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
 
-  protected HoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig,
-      HoodieEngineContext engineContext) {
+  /**
+   * Hudi backed table metadata writer.
+   *
+   * @param hadoopConf     - Hadoop configuration to use for the metadata writer
+   * @param writeConfig    - Writer config
+   * @param engineContext  - Engine context
+   * @param actionMetadata - Optional action metadata to help decide bootstrap operations
+   * @param <T>            - Action metadata types extending Avro generated SpecificRecordBase
+   */
+  protected <T extends SpecificRecordBase> HoodieBackedTableMetadataWriter(Configuration hadoopConf,
+                                                                           HoodieWriteConfig writeConfig,
+                                                                           HoodieEngineContext engineContext,
+                                                                           Option<T> actionMetadata) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
@@ -110,15 +124,20 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       enabled = true;
 
       // Inline compaction and auto clean is required as we dont expose this table outside
-      ValidationUtils.checkArgument(!this.metadataWriteConfig.isAutoClean(), "Cleaning is controlled internally for Metadata table.");
-      ValidationUtils.checkArgument(!this.metadataWriteConfig.inlineCompactionEnabled(), "Compaction is controlled internally for metadata table.");
+      ValidationUtils.checkArgument(!this.metadataWriteConfig.isAutoClean(),
+          "Cleaning is controlled internally for Metadata table.");
+      ValidationUtils.checkArgument(!this.metadataWriteConfig.inlineCompactionEnabled(),
+          "Compaction is controlled internally for metadata table.");
       // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)
-      ValidationUtils.checkArgument(this.metadataWriteConfig.shouldAutoCommit(), "Auto commit is required for Metadata Table");
-      ValidationUtils.checkArgument(!this.metadataWriteConfig.isMetadataTableEnabled(), "File listing cannot be used for Metadata Table");
+      ValidationUtils.checkArgument(this.metadataWriteConfig.shouldAutoCommit(),
+          "Auto commit is required for Metadata Table");
+      ValidationUtils.checkArgument(!this.metadataWriteConfig.isMetadataTableEnabled(),
+          "File listing cannot be used for Metadata Table");
 
       initRegistry();
-      this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
-      initialize(engineContext);
+      this.dataMetaClient =
+          HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
+      initialize(engineContext, actionMetadata);
       initTableMetadata();
     } else {
       enabled = false;
@@ -215,10 +234,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   /**
    * Initialize the metadata table if it does not exist.
-   *
-   * If the metadata table did not exist, then file and partition listing is used to bootstrap the table.
+   * <p>
+   * If the metadata table does not exist, then file and partition listing is used to bootstrap the table.
    */
-  protected abstract void initialize(HoodieEngineContext engineContext);
+  protected abstract <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
+                                                                    Option<T> actionMetadata);
 
   public void initTableMetadata() {
     try {
@@ -233,26 +253,33 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
-  protected void bootstrapIfNeeded(HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient) throws IOException {
+  /**
+   * Bootstrap the metadata table if needed.
+   *
+   * @param engineContext  - Engine context
+   * @param dataMetaClient - Meta client for the data table
+   * @param actionMetadata - Optional action metadata
+   * @param <T>            - Action metadata types extending Avro generated SpecificRecordBase
+   * @throws IOException
+   */
+  protected <T extends SpecificRecordBase> void bootstrapIfNeeded(HoodieEngineContext engineContext,
+                                                                  HoodieTableMetaClient dataMetaClient,
+                                                                  Option<T> actionMetadata) throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    boolean exists = dataMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
+
+    boolean exists = dataMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(),
+        HoodieTableMetaClient.METAFOLDER_NAME));
     boolean rebootstrap = false;
+
+    // If the un-synced instants have been archived, then
+    // the metadata table will need to be bootstrapped again.
     if (exists) {
-      // If the un-synched instants have been archived then the metadata table will need to be bootstrapped again
-      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
+      final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
           .setBasePath(metadataWriteConfig.getBasePath()).build();
-      Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-      if (!latestMetadataInstant.isPresent()) {
-        LOG.warn("Metadata Table will need to be re-bootstrapped as no instants were found");
-        rebootstrap = true;
-      } else if (!latestMetadataInstant.get().getTimestamp().equals(SOLO_COMMIT_TIMESTAMP)
-          && dataMetaClient.getActiveTimeline().getAllCommitsTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
-        // TODO: Revisit this logic and validate that filtering for all commits timeline is the right thing to do
-        LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
-            + " latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
-            + ", latestDataInstant=" + dataMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
-        rebootstrap = true;
-      }
+      final Option<HoodieInstant> latestMetadataInstant =
+          metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+
+      rebootstrap = isBootstrapNeeded(latestMetadataInstant, actionMetadata);
     }
 
     if (rebootstrap) {
@@ -268,6 +295,52 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       }
     }
+  }
+
+  /**
+   * Whether bootstrap operation needed for this metadata table.
+   * <p>
+   * Rollback of the first commit would look like un-synced instants in the metadata table.
+   * Action metadata is needed to verify the instant time and avoid erroneous bootstrapping.
+   * <p>
+   * TODO: Revisit this logic and validate that filtering for all
+   *       commits timeline is the right thing to do
+   *
+   * @return True if the bootstrap is not needed, False otherwise
+   */
+  private <T extends SpecificRecordBase> boolean isBootstrapNeeded(Option<HoodieInstant> latestMetadataInstant,
+                                                                   Option<T> actionMetadata) {
+    if (!latestMetadataInstant.isPresent()) {
+      LOG.warn("Metadata Table will need to be re-bootstrapped as no instants were found");
+      return true;
+    }
+
+    final String latestMetadataInstantTimestamp = latestMetadataInstant.get().getTimestamp();
+    if (latestMetadataInstantTimestamp.equals(SOLO_COMMIT_TIMESTAMP)) {
+      return false;
+    }
+
+    boolean isRollbackAction = false;
+    List<String> rollbackedTimestamps = Collections.emptyList();
+    if (actionMetadata.isPresent() && actionMetadata.get() instanceof HoodieRollbackMetadata) {
+      isRollbackAction = true;
+      List<HoodieInstantInfo> rollbackedInstants =
+          ((HoodieRollbackMetadata) actionMetadata.get()).getInstantsRollback();
+      rollbackedTimestamps = rollbackedInstants.stream().map(instant -> {
+        return instant.getCommitTime().toString();
+      }).collect(Collectors.toList());
+    }
+
+    if (dataMetaClient.getActiveTimeline().getAllCommitsTimeline().isBeforeTimelineStarts(
+        latestMetadataInstant.get().getTimestamp())
+        && (!isRollbackAction || !rollbackedTimestamps.contains(latestMetadataInstantTimestamp))) {
+      LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
+          + " latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
+          + ", latestDataInstant=" + dataMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
+      return true;
+    }
+
+    return false;
   }
 
   /**

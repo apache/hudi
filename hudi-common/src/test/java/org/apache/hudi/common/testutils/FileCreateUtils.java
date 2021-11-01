@@ -144,8 +144,13 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
-  public static void createCommit(String basePath, String instantTime, HoodieCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+  public static void createCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> metadata) throws IOException {
+    if (metadata.isPresent()) {
+      createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION,
+          metadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+    } else {
+      createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
+    }
   }
 
   public static void createCommit(String basePath, String instantTime, FileSystem fs) throws IOException {

@@ -153,6 +153,10 @@
               </artifactSet>
               <relocations>
                 <relocation>
+                  <pattern>javax.servlet.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}javax.servlet.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>org.apache.avro.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.avro.</shadedPattern>
                 </relocation>
@@ -195,6 +199,10 @@
                 <relocation>
                   <pattern>org.apache.hadoop.hive.service.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.ql.metadata.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.ql.metadata.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.codahale.metrics.</pattern>
@@ -675,16 +683,6 @@
           <artifactId>hive-service-rpc</artifactId>
           <version>${hive.version}</version>
           <scope>${flink.bundle.hive.scope}</scope>
-        </dependency>
-      </dependencies>
-    </profile>
-    <profile>
-      <id>include-flink-sql-connector-hive</id>
-      <dependencies>
-        <dependency>
-          <groupId>org.apache.flink</groupId>
-          <artifactId>flink-sql-connector-hive-2.3.6_${scala.binary.version}</artifactId>
-          <version>${flink.version}</version>
         </dependency>
       </dependencies>
     </profile>

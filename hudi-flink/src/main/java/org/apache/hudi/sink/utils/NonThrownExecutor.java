@@ -18,16 +18,23 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.function.ThrowingRunnable;
 import org.slf4j.Logger;
 
+import javax.annotation.Nullable;
+
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
  * An executor service that catches all the throwable with logging.
+ *
+ * <p>A post-exception hook {@link ExceptionHook} can be defined on construction
+ * or on each execution.
  */
 public class NonThrownExecutor implements AutoCloseable {
   private final Logger logger;
@@ -38,18 +45,26 @@ public class NonThrownExecutor implements AutoCloseable {
   private final ExecutorService executor;
 
   /**
+   * Exception hook for post-exception handling.
+   */
+  @VisibleForTesting
+  protected final ExceptionHook exceptionHook;
+
+  /**
    * Flag saying whether to wait for the tasks finish on #close.
    */
-  private final boolean waitForTaskFinishOnClose;
+  private final boolean waitForTasksFinish;
 
-  public NonThrownExecutor(Logger logger, boolean waitForTaskFinishOnClose) {
+  @VisibleForTesting
+  protected NonThrownExecutor(Logger logger, @Nullable ExceptionHook exceptionHook, boolean waitForTasksFinish) {
     this.executor = Executors.newSingleThreadExecutor();
     this.logger = logger;
-    this.waitForTaskFinishOnClose = waitForTaskFinishOnClose;
+    this.exceptionHook = exceptionHook;
+    this.waitForTasksFinish = waitForTasksFinish;
   }
 
-  public NonThrownExecutor(Logger logger) {
-    this(logger, false);
+  public static Builder builder(Logger logger) {
+    return new Builder(logger);
   }
 
   /**
@@ -57,6 +72,17 @@ public class NonThrownExecutor implements AutoCloseable {
    */
   public void execute(
       final ThrowingRunnable<Throwable> action,
+      final String actionName,
+      final Object... actionParams) {
+    execute(action, this.exceptionHook, actionName, actionParams);
+  }
+
+  /**
+   * Run the action in a loop.
+   */
+  public void execute(
+      final ThrowingRunnable<Throwable> action,
+      final ExceptionHook hook,
       final String actionName,
       final Object... actionParams) {
 
@@ -73,19 +99,17 @@ public class NonThrownExecutor implements AutoCloseable {
             ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
             final String errMsg = String.format("Executor executes action [%s] error", actionString);
             logger.error(errMsg, t);
-            exceptionHook(errMsg, t);
+            if (hook != null) {
+              hook.apply(errMsg, t);
+            }
           }
         });
-  }
-
-  protected void exceptionHook(String errMsg, Throwable t) {
-    // for sub-class to override.
   }
 
   @Override
   public void close() throws Exception {
     if (executor != null) {
-      if (waitForTaskFinishOnClose) {
+      if (waitForTasksFinish) {
         executor.shutdown();
       } else {
         executor.shutdownNow();
@@ -93,6 +117,40 @@ public class NonThrownExecutor implements AutoCloseable {
       // We do not expect this to actually block for long. At this point, there should
       // be very few task running in the executor, if any.
       executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
+  public interface ExceptionHook {
+    void apply(String errMsg, Throwable t);
+  }
+
+  /**
+   * Builder for {@link NonThrownExecutor}.
+   */
+  public static class Builder {
+    private final Logger logger;
+    private ExceptionHook exceptionHook;
+    private boolean waitForTasksFinish = false;
+
+    private Builder(Logger logger) {
+      this.logger = Objects.requireNonNull(logger);
+    }
+
+    public NonThrownExecutor build() {
+      return new NonThrownExecutor(logger, exceptionHook, waitForTasksFinish);
+    }
+
+    public Builder exceptionHook(ExceptionHook exceptionHook) {
+      this.exceptionHook = exceptionHook;
+      return this;
+    }
+
+    public Builder waitForTasksFinish(boolean waitForTasksFinish) {
+      this.waitForTasksFinish = waitForTasksFinish;
+      return this;
     }
   }
 }

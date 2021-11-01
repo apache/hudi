@@ -18,7 +18,9 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -26,7 +28,6 @@ import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -117,20 +118,36 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // validate record key in pk absence.
     if (!schema.getPrimaryKey().isPresent()) {
-      Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
+      String[] recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      if (recordKeys.length == 1
+          && FlinkOptions.RECORD_KEY_FIELD.defaultValue().equals(recordKeys[0])
+          && !fields.contains(recordKeys[0])) {
+        throw new HoodieValidationException("Primary key definition is required, use either PRIMARY KEY syntax "
+            + "or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+      }
+
+      Arrays.stream(recordKeys)
           .filter(field -> !fields.contains(field))
           .findAny()
           .ifPresent(f -> {
-            throw new ValidationException("Field '" + f + "' does not exist in the table schema."
-                + "Please define primary key or modify 'hoodie.datasource.write.recordkey.field' option.");
+            throw new HoodieValidationException("Field '" + f + "' specified in option "
+                + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
     }
 
     // validate pre_combine key
     String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
     if (!fields.contains(preCombineField)) {
-      throw new ValidationException("Field " + preCombineField + " does not exist in the table schema."
-          + "Please check 'write.precombine.field' option.");
+      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
+        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
+            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
+      }
+      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
+        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+      } else {
+        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
+            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
+      }
     }
   }
 
@@ -157,6 +174,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupHiveOptions(conf);
     // read options
     setupReadOptions(conf);
+    // write options
+    setupWriteOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toPhysicalRowDataType().notNull().getLogicalType());
   }
@@ -249,17 +268,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
       conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
     }
-    if (conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED)
-        && !conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)
-        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
-      // if compaction schedule is on, tweak the target io to 500GB
-      conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
-    }
-    if (StreamerUtil.allowDuplicateInserts(conf)) {
-      // no need for compaction if insert duplicates is allowed
-      conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-      conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
-    }
   }
 
   /**
@@ -279,6 +287,16 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
         && (conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent())) {
       conf.setString(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    }
+  }
+
+  /**
+   * Sets up the write options from the table definition.
+   */
+  private static void setupWriteOptions(Configuration conf) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)
+        && OptionsResolver.isCowTable(conf)) {
+      conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
     }
   }
 
