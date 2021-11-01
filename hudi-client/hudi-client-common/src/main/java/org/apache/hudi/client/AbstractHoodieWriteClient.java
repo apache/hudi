@@ -251,7 +251,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     // Create a Hoodie table after starting the transaction which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
-    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime));
+    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime, false));
   }
 
   /**

@@ -409,7 +409,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     });
 
     LOG.info("Committing " + partitionToFileStatus.size() + " partitions and " + stats[0] + " files to metadata");
-    update(commitMetadata, createInstantTime);
+    update(commitMetadata, createInstantTime, false);
     return true;
   }
 
@@ -523,23 +523,24 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param instantTime instant time of interest.
    * @param convertMetadataFunction converter function to convert the respective metadata to List of HoodieRecords to be written to metadata table.
    * @param <T> type of commit metadata.
+   * @param canTriggerTableService true if table services can be triggered. false otherwise.
    */
-  private <T> void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction) {
+  private <T> void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction, boolean canTriggerTableService) {
     if (enabled && metadata != null) {
       List<HoodieRecord> records = convertMetadataFunction.convertMetadata();
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
+      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime, canTriggerTableService);
     }
   }
 
   /**
    * Update from {@code HoodieCommitMetadata}.
-   *
    * @param commitMetadata {@code HoodieCommitMetadata}
    * @param instantTime Timestamp at which the commit was performed
+   * @param isTableService
    */
   @Override
-  public void update(HoodieCommitMetadata commitMetadata, String instantTime) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata, instantTime));
+  public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableService) {
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata, instantTime), !isTableService);
   }
 
   /**
@@ -550,7 +551,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(cleanMetadata, instantTime));
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(cleanMetadata, instantTime),
+        false);
   }
 
   /**
@@ -562,7 +564,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(),
-        restoreMetadata, instantTime, metadata.getSyncedInstantTime()));
+        restoreMetadata, instantTime, metadata.getSyncedInstantTime()), false);
   }
 
   /**
@@ -588,7 +590,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(), rollbackMetadata, instantTime,
           metadata.getSyncedInstantTime(), wasSynced);
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
+      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime, false);
     }
   }
 
@@ -601,12 +603,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
-   *
-   * @param records The list of records to be written.
+   *  @param records The list of records to be written.
    * @param partitionName The partition to which the records are to be written.
    * @param instantTime The timestamp to use for the deltacommit.
+   * @param canTriggerTableService true if table services can be scheduled and executed. false otherwise.
    */
-  protected abstract void commit(List<HoodieRecord> records, String partitionName, String instantTime);
+  protected abstract void commit(List<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService);
 
   /**
    *  Perform a compaction on the Metadata Table.
