@@ -834,6 +834,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 4)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.NEVER)
             .retainCommits(1).retainFileVersions(1).withAutoClean(true).withAsyncClean(false).build())
+        .withEmbeddedTimelineServerEnabled(false)
         .build();
 
     List<HoodieRecord> records;
