@@ -58,6 +58,8 @@ import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -77,6 +79,7 @@ import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
@@ -117,17 +120,25 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata, int minArchivalCommits, int maxArchivalCommits, int maxDeltaCommitsMetadataTable) throws Exception {
-    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE);
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, true, 1);
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata, int minArchivalCommits, int maxArchivalCommits, int maxDeltaCommitsMetadataTable,
-                                                           HoodieTableType tableType) throws Exception {
+                                                           HoodieTableType tableType, boolean autoClean, int retainCommits) throws Exception {
     init(tableType);
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minArchivalCommits, maxArchivalCommits).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata)
-            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable).build())
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withAutoClean(autoClean)
+            .retainCommits(retainCommits)
+            .archiveCommitsWith(minArchivalCommits, maxArchivalCommits)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(enableMetadata)
+            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable)
+            .build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, enableMetadata);
     return writeConfig;
@@ -147,10 +158,15 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testArchiveTableWithArchival(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2);
-
+  @MethodSource("testArchiveTableWithArchival")
+  public void testArchiveTableWithArchival(boolean enableMetadata, boolean autoCleanEnable, int retainCommits) throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata,
+        2,
+        4,
+        2,
+        HoodieTableType.COPY_ON_WRITE,
+        autoCleanEnable,
+        retainCommits);
     // min archival commits is 2 and max archival commits is 4. and so, after 5th commit, 3 commits will be archived.
     // 1,2,3,4,5 : after archival -> 4,5
     // after 3 more commits, earliest 3 will be archived
@@ -269,8 +285,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testNoArchivalWithInflightCompactionInMiddle(boolean enableMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2,
-        HoodieTableType.MERGE_ON_READ);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2, HoodieTableType.MERGE_ON_READ, true, 1);
 
     // when max archival commits is set to 4, even after 7 commits, if there is an inflight compaction in the middle, archival should not kick in.
     HoodieCommitMetadata inflightCompactionMetadata = null;
@@ -685,5 +700,14 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       HoodieTestTable.of(metaClient).addRollback(rollbackTime, hoodieRollbackMetadata);
     }
     return new HoodieInstant(inflight, "rollback", rollbackTime);
+  }
+
+  private static Stream<Arguments> testArchiveTableWithArchival() {
+    return Stream.of(
+        arguments(false, false, 0), // Disable autoCleanEnable so that we don't need to take care about the size relationship between MIN_COMMITS_TO_KEEP and CLEANER_COMMITS_RETAINED anymore.
+        arguments(true, false, 0), // Same as args 1.
+        arguments(false, true, 1), // Enable auto clean, we need to keep MIN_COMMITS_TO_KEEP larger than CLEANER_COMMITS_RETAINED.
+        arguments(false, true, 1) // same as args 3.
+    );
   }
 }
