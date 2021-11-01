@@ -207,7 +207,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   }
 
   /**
-   * Performs a hudi datasource write with deltastreamer state merge enabled
+   * Performs a hudi datasource write with deltastreamer state merge enabled.
    */
   private void performWriteWithDeltastreamerStateMerge() {
     spark().read()
