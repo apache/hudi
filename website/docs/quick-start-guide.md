@@ -333,7 +333,7 @@ spark.read.
 
 spark.read.
   format("hudi").
-  option("as.of.instant", "2021-07-28 14: 11: 08").
+  option("as.of.instant", "2021-07-28 14:11:08").
   load(basePath)
 
 // It is equal to "as.of.instant = 2021-07-28 00:00:00"
