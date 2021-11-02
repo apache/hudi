@@ -21,12 +21,18 @@ package org.apache.hudi.data;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.storage.StorageLevel;
 
 import java.util.Iterator;
 import java.util.List;
+
+import scala.Tuple2;
 
 /**
  * Holds a {@link JavaRDD} of objects.
@@ -77,8 +83,23 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
+  public void persist(String storageLevel) {
+    rddData.persist(StorageLevel.fromString(storageLevel));
+  }
+
+  @Override
+  public void unpersist() {
+    rddData.unpersist();
+  }
+
+  @Override
   public boolean isEmpty() {
     return rddData.isEmpty();
+  }
+
+  @Override
+  public long count() {
+    return rddData.count();
   }
 
   @Override
@@ -87,8 +108,26 @@ public class HoodieJavaRDD<T> extends HoodieData<T> {
   }
 
   @Override
+  public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning) {
+    return HoodieJavaRDD.of(rddData.mapPartitions(func::apply, preservesPartitioning));
+  }
+
+  @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
-    return HoodieJavaRDD.of(rddData.flatMap(func::apply));
+    return HoodieJavaRDD.of(rddData.flatMap(e -> func.apply(e)));
+  }
+
+  @Override
+  public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> mapToPairFunc) {
+    return HoodieJavaPairRDD.of(rddData.mapToPair(input -> {
+      Pair<K, V> pair = mapToPairFunc.call(input);
+      return new Tuple2<>(pair.getLeft(), pair.getRight());
+    }));
+  }
+
+  @Override
+  public HoodieData<T> distinct() {
+    return HoodieJavaRDD.of(rddData.distinct());
   }
 
   @Override

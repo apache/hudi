@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
+import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -65,6 +67,11 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    */
   private transient Map<String, Map<String, CompactionCommitEvent>> commitBuffer;
 
+  /**
+   * The hoodie table.
+   */
+  private transient HoodieFlinkTable<?> table;
+
   public CompactionCommitSink(Configuration conf) {
     super(conf);
     this.conf = conf;
@@ -77,11 +84,17 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
     }
     this.commitBuffer = new HashMap<>();
+    this.table = this.writeClient.getHoodieTable();
   }
 
   @Override
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
     final String instant = event.getInstant();
+    if (event.isFailed()) {
+      // handle failure case
+      CompactionUtil.rollbackCompaction(table, event.getInstant());
+      return;
+    }
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileId(), event);
     commitIfNecessary(instant, commitBuffer.get(instant).values());

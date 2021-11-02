@@ -323,9 +323,7 @@ public class DeltaSync implements Serializable {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
-      // TODO: now not support replace action HUDI-1500
-      Option<HoodieInstant> lastCommit = commitTimelineOpt.get()
-          .filter(instant -> !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
+      Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
       if (lastCommit.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);

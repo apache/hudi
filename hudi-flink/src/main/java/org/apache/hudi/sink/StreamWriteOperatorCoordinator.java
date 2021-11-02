@@ -32,7 +32,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.utils.CoordinatorExecutor;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
@@ -120,7 +119,7 @@ public class StreamWriteOperatorCoordinator
   /**
    * A single-thread executor to handle all the asynchronous jobs of the coordinator.
    */
-  private CoordinatorExecutor executor;
+  private NonThrownExecutor executor;
 
   /**
    * A single-thread executor to handle asynchronous hive sync.
@@ -165,7 +164,9 @@ public class StreamWriteOperatorCoordinator
     this.writeClient = StreamerUtil.createWriteClient(conf);
     this.tableState = TableState.create(conf);
     // start the executor
-    this.executor = new CoordinatorExecutor(this.context, LOG);
+    this.executor = NonThrownExecutor.builder(LOG)
+        .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+        .waitForTasksFinish(true).build();
     // start the executor if required
     if (tableState.syncHive) {
       initHiveSync();
@@ -238,8 +239,10 @@ public class StreamWriteOperatorCoordinator
   public void notifyCheckpointAborted(long checkpointId) {
     // once the checkpoint was aborted, unblock the writer tasks to
     // reuse the last instant.
-    executor.execute(() -> sendCommitAckEvents(checkpointId),
-        "unblock data write with aborted checkpoint %s", checkpointId);
+    if (!WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
+      executor.execute(() -> sendCommitAckEvents(checkpointId),
+          "unblock data write with aborted checkpoint %s", checkpointId);
+    }
   }
 
   @Override
@@ -288,7 +291,7 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
 
   private void initHiveSync() {
-    this.hiveSyncExecutor = new NonThrownExecutor(LOG, true);
+    this.hiveSyncExecutor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf);
   }
 
@@ -516,7 +519,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   @VisibleForTesting
-  public void setExecutor(CoordinatorExecutor executor) throws Exception {
+  public void setExecutor(NonThrownExecutor executor) throws Exception {
     if (this.executor != null) {
       this.executor.close();
     }

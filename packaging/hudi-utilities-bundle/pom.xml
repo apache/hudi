@@ -325,6 +325,10 @@
       <scope>compile</scope>
       <exclusions>
         <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-common</artifactId>
+        </exclusion>
+        <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>

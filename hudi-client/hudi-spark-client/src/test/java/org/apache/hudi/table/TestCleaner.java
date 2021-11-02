@@ -76,7 +76,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.SparkHoodieIndex;
+import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.action.clean.CleanPlanner;
@@ -169,8 +169,8 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(table.getCompletedCleanTimeline().empty());
 
     if (client.getConfig().shouldAutoCommit()) {
-      HoodieIndex index = SparkHoodieIndex.createIndex(cfg);
-      List<HoodieRecord> taggedRecords = ((JavaRDD<HoodieRecord>) index.tagLocation(jsc.parallelize(records, 1), context, table)).collect();
+      HoodieIndex index = SparkHoodieIndexFactory.createIndex(cfg);
+      List<HoodieRecord> taggedRecords = tagLocation(index, jsc.parallelize(records, 1), table).collect();
       checkTaggedRecords(taggedRecords, newCommitTime);
     }
     return Pair.of(newCommitTime, statuses);
@@ -1308,7 +1308,7 @@ public class TestCleaner extends HoodieClientTestBase {
     metaClient.reloadActiveTimeline();
     HoodieInstant rollbackInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000");
     table.scheduleRollback(context, "001", rollbackInstant, false);
-    table.rollback(context, "001", rollbackInstant, true);
+    table.rollback(context, "001", rollbackInstant, true, false);
     final int numTempFilesAfter = testTable.listAllFilesInTempFolder().length;
     assertEquals(0, numTempFilesAfter, "All temp files are deleted.");
   }

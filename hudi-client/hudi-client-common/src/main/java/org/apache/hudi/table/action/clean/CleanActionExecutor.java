@@ -60,10 +60,16 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(CleanActionExecutor.class);
   private final TransactionManager txnManager;
+  private final boolean skipLocking;
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
+    this(context, config, table, instantTime, false);
+  }
+
+  public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime, boolean skipLocking) {
     super(context, config, table, instantTime);
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.skipLocking = skipLocking;
   }
 
   static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
@@ -214,11 +220,17 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
    * @param cleanMetadata instance of {@link HoodieCleanMetadata} to be applied to metadata.
    */
   private void writeMetadata(HoodieCleanMetadata cleanMetadata) {
-    try {
-      this.txnManager.beginTransaction(Option.empty(), Option.empty());
-      writeTableMetadata(cleanMetadata);
-    } finally {
-      this.txnManager.endTransaction();
+    if (config.isMetadataTableEnabled()) {
+      try {
+        if (!skipLocking) {
+          this.txnManager.beginTransaction(Option.empty(), Option.empty());
+        }
+        writeTableMetadata(cleanMetadata);
+      } finally {
+        if (!skipLocking) {
+          this.txnManager.endTransaction();
+        }
+      }
     }
   }
 

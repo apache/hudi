@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.index.FlinkHoodieIndex;
+import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -98,8 +98,8 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return FlinkHoodieIndex.createIndex((HoodieFlinkEngineContext) context, config);
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
   }
 
   /**

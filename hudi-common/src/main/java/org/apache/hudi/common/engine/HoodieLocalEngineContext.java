@@ -75,7 +75,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <T> HoodieData<T> parallelize(List<T> data) {
+  public <T> HoodieData<T> parallelize(List<T> data, int parallelism) {
     return HoodieList.of(data);
   }
 
