@@ -19,15 +19,15 @@
 package org.apache.hudi.exception;
 
 /**
- * Exception for in compatible schema.
+ * Exception for incompatible schema.
  */
-public class HoodieInCompatibleSchemaException extends Exception {
+public class HoodieIncompatibleSchemaException extends Exception {
 
-  public HoodieInCompatibleSchemaException(String msg, Throwable e) {
+  public HoodieIncompatibleSchemaException(String msg, Throwable e) {
     super(msg, e);
   }
 
-  public HoodieInCompatibleSchemaException(String msg) {
+  public HoodieIncompatibleSchemaException(String msg) {
     super(msg);
   }
 }
