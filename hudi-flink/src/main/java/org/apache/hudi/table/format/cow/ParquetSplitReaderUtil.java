@@ -108,9 +108,7 @@ public class ParquetSplitReaderUtil {
       for (int i = 0; i < vectors.length; i++) {
         String name = fullFieldNames[selectedFields[i]];
         LogicalType type = fullFieldTypes[selectedFields[i]].getLogicalType();
-        vectors[i] = partitionSpec.containsKey(name)
-            ? createVectorFromConstant(type, partitionSpec.get(name), batchSize)
-            : readVectors[selNonPartNames.indexOf(name)];
+        vectors[i] = createVector(readVectors, selNonPartNames, name, type, partitionSpec, batchSize);
       }
       return new VectorizedColumnBatch(vectors);
     };
@@ -128,6 +126,24 @@ public class ParquetSplitReaderUtil {
         new org.apache.hadoop.fs.Path(path.toUri()),
         splitStart,
         splitLength);
+  }
+
+  private static ColumnVector createVector(
+      ColumnVector[] readVectors,
+      List<String> selNonPartNames,
+      String name,
+      LogicalType type,
+      Map<String, Object> partitionSpec,
+      int batchSize) {
+    if (partitionSpec.containsKey(name)) {
+      return createVectorFromConstant(type, partitionSpec.get(name), batchSize);
+    }
+    ColumnVector readVector = readVectors[selNonPartNames.indexOf(name)];
+    if (readVector == null) {
+      // when the read vector is null, use a constant null vector instead
+      readVector = createVectorFromConstant(type, null, batchSize);
+    }
+    return readVector;
   }
 
   private static ColumnVector createVectorFromConstant(

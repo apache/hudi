@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -117,20 +118,36 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // validate record key in pk absence.
     if (!schema.getPrimaryKey().isPresent()) {
-      Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
+      String[] recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      if (recordKeys.length == 1
+          && FlinkOptions.RECORD_KEY_FIELD.defaultValue().equals(recordKeys[0])
+          && !fields.contains(recordKeys[0])) {
+        throw new HoodieValidationException("Primary key definition is required, use either PRIMARY KEY syntax "
+            + "or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+      }
+
+      Arrays.stream(recordKeys)
           .filter(field -> !fields.contains(field))
           .findAny()
           .ifPresent(f -> {
-            throw new ValidationException("Field '" + f + "' does not exist in the table schema."
-                + "Please define primary key or modify 'hoodie.datasource.write.recordkey.field' option.");
+            throw new HoodieValidationException("Field '" + f + "' specified in option "
+                + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
     }
 
     // validate pre_combine key
     String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
     if (!fields.contains(preCombineField)) {
-      throw new ValidationException("Field " + preCombineField + " does not exist in the table schema."
-          + "Please check 'write.precombine.field' option.");
+      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
+        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
+            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
+      }
+      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
+        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+      } else {
+        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
+            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
+      }
     }
   }
 

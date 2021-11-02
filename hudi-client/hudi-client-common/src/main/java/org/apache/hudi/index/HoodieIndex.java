@@ -21,12 +21,16 @@ package org.apache.hudi.index;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
@@ -35,9 +39,9 @@ import java.io.Serializable;
  * Base class for different types of indexes to determine the mapping from uuid.
  *
  * @param <T> Sub type of HoodieRecordPayload
- * @param <I> Type of inputs
- * @param <K> Type of keys
- * @param <O> Type of outputs
+ * @param <I> Type of inputs for deprecated APIs
+ * @param <K> Type of keys for deprecated APIs
+ * @param <O> Type of outputs for deprecated APIs
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implements Serializable {
@@ -52,18 +56,39 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
    * Looks up the index and tags each incoming record with a location of a file that contains the row (if it is actually
    * present).
    */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public abstract I tagLocation(I records, HoodieEngineContext context,
-                                HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
+  @Deprecated
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
+  public I tagLocation(I records, HoodieEngineContext context,
+                       HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException {
+    throw new HoodieNotSupportedException("Deprecated API should not be called");
+  }
 
   /**
    * Extracts the location of written records, and updates the index.
-   * <p>
-   * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public abstract O updateLocation(O writeStatuses, HoodieEngineContext context,
-                                   HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
+  @Deprecated
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
+  public O updateLocation(O writeStatuses, HoodieEngineContext context,
+                          HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException {
+    throw new HoodieNotSupportedException("Deprecated API should not be called");
+  }
+
+  /**
+   * Looks up the index and tags each incoming record with a location of a file that contains
+   * the row (if it is actually present).
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieData<HoodieRecord<T>> tagLocation(
+      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+      HoodieTable hoodieTable) throws HoodieIndexException;
+
+  /**
+   * Extracts the location of written records, and updates the index.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieData<WriteStatus> updateLocation(
+      HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context,
+      HoodieTable hoodieTable) throws HoodieIndexException;
 
   /**
    * Rollback the effects of the commit made at instantTime.

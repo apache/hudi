@@ -156,7 +156,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
       // Test tagLocation without any entries in index
-      JavaRDD<HoodieRecord> records1 = index.tagLocation(writeRecords, context(), hoodieTable);
+      JavaRDD<HoodieRecord> records1 = tagLocation(index, writeRecords, hoodieTable);
       assertEquals(0, records1.filter(record -> record.isCurrentLocationKnown()).count());
 
       // Insert 200 records
@@ -165,7 +165,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       assertNoWriteErrors(writeStatues.collect());
 
       // Now tagLocation for these records, hbaseIndex should not tag them since commit never occurred
-      JavaRDD<HoodieRecord> records2 = index.tagLocation(writeRecords, context(), hoodieTable);
+      JavaRDD<HoodieRecord> records2 = tagLocation(index, writeRecords, hoodieTable);
       assertEquals(0, records2.filter(record -> record.isCurrentLocationKnown()).count());
 
       // Now commit this & update location of records inserted and validate no errors
@@ -173,7 +173,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       // Now tagLocation for these records, hbaseIndex should tag them correctly
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-      List<HoodieRecord> records3 = index.tagLocation(writeRecords, context(), hoodieTable).collect();
+      List<HoodieRecord> records3 = tagLocation(index, writeRecords, hoodieTable).collect();
       assertEquals(numRecords, records3.stream().filter(record -> record.isCurrentLocationKnown()).count());
       assertEquals(numRecords, records3.stream().map(record -> record.getKey().getRecordKey()).distinct().count());
       assertEquals(numRecords, records3.stream().filter(record -> (record.getCurrentLocation() != null
@@ -207,17 +207,17 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
-      JavaRDD<HoodieRecord> oldHoodieRecord = index.tagLocation(oldWriteRecords, context, hoodieTable);
+      JavaRDD<HoodieRecord> oldHoodieRecord = tagLocation(index, oldWriteRecords, hoodieTable);
       assertEquals(0, oldHoodieRecord.filter(record -> record.isCurrentLocationKnown()).count());
       writeClient.startCommitWithTime(newCommitTime);
       JavaRDD<WriteStatus> writeStatues = writeClient.upsert(oldWriteRecords, newCommitTime);
       writeClient.commit(newCommitTime, writeStatues);
       assertNoWriteErrors(writeStatues.collect());
-      index.updateLocation(writeStatues, context, hoodieTable);
+      updateLocation(index, writeStatues, hoodieTable);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-      List<HoodieRecord> taggedRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      List<HoodieRecord> taggedRecords = tagLocation(index, newWriteRecords, hoodieTable).collect();
       assertEquals(numRecords * 2L, taggedRecords.stream().count());
       // Verify the number of deleted records
       assertEquals(numRecords, taggedRecords.stream().filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
@@ -227,7 +227,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
 
       // not allowed path change test
       index = new SparkHoodieHBaseIndex<>(getConfig(false, false));
-      List<HoodieRecord> notAllowPathChangeRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      List<HoodieRecord> notAllowPathChangeRecords = tagLocation(index, newWriteRecords, hoodieTable).collect();
       assertEquals(numRecords, notAllowPathChangeRecords.stream().count());
       assertEquals(numRecords, taggedRecords.stream().filter(hoodieRecord -> hoodieRecord.isCurrentLocationKnown()
           && hoodieRecord.getKey().getPartitionPath().equals(oldPartitionPath)).count());
@@ -250,7 +250,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
-    index.tagLocation(writeRecords, context(), hoodieTable);
+    tagLocation(index, writeRecords, hoodieTable);
 
     // Duplicate upsert and ensure correctness is maintained
     // We are trying to approximately imitate the case when the RDD is recomputed. For RDD creating, driver code is not
@@ -266,7 +266,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     // Now tagLocation for these records, hbaseIndex should tag them correctly
     metaClient = HoodieTableMetaClient.reload(metaClient);
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    List<HoodieRecord> taggedRecords = index.tagLocation(writeRecords, context(), hoodieTable).collect();
+    List<HoodieRecord> taggedRecords = tagLocation(index, writeRecords, hoodieTable).collect();
     assertEquals(numRecords, taggedRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
     assertEquals(numRecords, taggedRecords.stream().map(record -> record.getKey().getRecordKey()).distinct().count());
     assertEquals(numRecords, taggedRecords.stream().filter(record -> (record.getCurrentLocation() != null
@@ -295,22 +295,22 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       // first commit old record
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-      List<HoodieRecord> beforeFirstTaggedRecords = index.tagLocation(oldWriteRecords, context, hoodieTable).collect();
+      List<HoodieRecord> beforeFirstTaggedRecords = tagLocation(index, oldWriteRecords, hoodieTable).collect();
       JavaRDD<WriteStatus> oldWriteStatues = writeClient.upsert(oldWriteRecords, firstCommitTime);
-      index.updateLocation(oldWriteStatues, context, hoodieTable);
+      updateLocation(index, oldWriteStatues, hoodieTable);
       writeClient.commit(firstCommitTime, oldWriteStatues);
-      List<HoodieRecord> afterFirstTaggedRecords = index.tagLocation(oldWriteRecords, context, hoodieTable).collect();
+      List<HoodieRecord> afterFirstTaggedRecords = tagLocation(index, oldWriteRecords, hoodieTable).collect();
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(config, context, metaClient);
       final String secondCommitTime = writeClient.startCommit();
-      List<HoodieRecord> beforeSecondTaggedRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      List<HoodieRecord> beforeSecondTaggedRecords = tagLocation(index, newWriteRecords, hoodieTable).collect();
       JavaRDD<WriteStatus> newWriteStatues = writeClient.upsert(newWriteRecords, secondCommitTime);
-      index.updateLocation(newWriteStatues, context, hoodieTable);
+      updateLocation(index, newWriteStatues, hoodieTable);
       writeClient.commit(secondCommitTime, newWriteStatues);
-      List<HoodieRecord> afterSecondTaggedRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      List<HoodieRecord> afterSecondTaggedRecords = tagLocation(index, newWriteRecords, hoodieTable).collect();
       writeClient.rollback(secondCommitTime);
-      List<HoodieRecord> afterRollback = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      List<HoodieRecord> afterRollback = tagLocation(index, newWriteRecords, hoodieTable).collect();
 
       // Verify the first commit
       assertEquals(numRecords, beforeFirstTaggedRecords.stream().filter(record -> record.getCurrentLocation() == null).count());
@@ -355,7 +355,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     writeClient.commit(newCommitTime, writeStatues);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     // Now tagLocation for these records, hbaseIndex should tag them
-    List<HoodieRecord> records2 = index.tagLocation(writeRecords, context(), hoodieTable).collect();
+    List<HoodieRecord> records2 = tagLocation(index, writeRecords, hoodieTable).collect();
     assertEquals(numRecords, records2.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
 
     // check tagged records are tagged with correct fileIds
@@ -371,7 +371,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled
     // back commit
-    List<HoodieRecord> records3 = index.tagLocation(writeRecords, context(), hoodieTable).collect();
+    List<HoodieRecord> records3 = tagLocation(index, writeRecords, hoodieTable).collect();
     assertEquals(0, records3.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
     assertEquals(0, records3.stream().filter(record -> record.getCurrentLocation() != null).count());
   }
@@ -397,7 +397,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
 
     // verify location is tagged.
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    JavaRDD<HoodieRecord> javaRDD0 = index.tagLocation(invalidWriteRecords, context(), hoodieTable);
+    JavaRDD<HoodieRecord> javaRDD0 = tagLocation(index, invalidWriteRecords, hoodieTable);
     assert (javaRDD0.collect().size() == 1);   // one record present
     assert (javaRDD0.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 1); // it is tagged
     assert (javaRDD0.collect().get(0).getCurrentLocation().getInstantTime().equals(invalidCommit));
@@ -408,11 +408,11 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     // Now tagLocation for the valid records, hbaseIndex should tag them
     metaClient = HoodieTableMetaClient.reload(metaClient);
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords, context(), hoodieTable);
+    JavaRDD<HoodieRecord> javaRDD1 = tagLocation(index, writeRecords, hoodieTable);
     assert (javaRDD1.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 199);
 
     // tagLocation for the invalid record - commit is not present in timeline due to rollback.
-    JavaRDD<HoodieRecord> javaRDD2 = index.tagLocation(invalidWriteRecords, context(), hoodieTable);
+    JavaRDD<HoodieRecord> javaRDD2 = tagLocation(index, invalidWriteRecords, hoodieTable);
     assert (javaRDD2.collect().size() == 1);   // one record present
     assert (javaRDD2.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 0); // it is not tagged
   }
@@ -442,7 +442,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     // Now tagLocation for the first set of rolledback records, hbaseIndex should tag them
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords1, context(), hoodieTable);
+    JavaRDD<HoodieRecord> javaRDD1 = tagLocation(index, writeRecords1, hoodieTable);
     assert (javaRDD1.filter(HoodieRecord::isCurrentLocationKnown).collect().size() == 20);
   }
 
@@ -492,7 +492,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     // tagLocation for the first set of records (for the archived commit), hbaseIndex should tag them as valid
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords1, context(), hoodieTable);
+    JavaRDD<HoodieRecord> javaRDD1 = tagLocation(index, writeRecords1, hoodieTable);
     assertEquals(20, javaRDD1.filter(HoodieRecord::isCurrentLocationKnown).collect().size());
   }
 
@@ -524,7 +524,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     assertNoWriteErrors(writeStatues.collect());
 
     // Now tagLocation for these records, hbaseIndex should tag them
-    index.tagLocation(writeRecords, context(), hoodieTable);
+    tagLocation(index, writeRecords, hoodieTable);
 
     // 3 batches should be executed given batchSize = 100 and parallelism = 1
     verify(table, times(3)).get((List<Get>) any());
@@ -562,7 +562,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     // Get all the files generated
     int numberOfDataFileIds = (int) writeStatues.map(status -> status.getFileId()).distinct().count();
 
-    index.updateLocation(writeStatues, context(), hoodieTable);
+    updateLocation(index, writeStatues, hoodieTable);
     // 3 batches should be executed given batchSize = 100 and <=numberOfDataFileIds getting updated,
     // so each fileId ideally gets updates
     verify(table, atMost(numberOfDataFileIds)).put((List<Put>) any());
@@ -696,7 +696,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
       // Test tagLocation without any entries in index
-      JavaRDD<HoodieRecord> records1 = index.tagLocation(writeRecords, context(), hoodieTable);
+      JavaRDD<HoodieRecord> records1 = tagLocation(index, writeRecords, hoodieTable);
       assertEquals(0, records1.filter(record -> record.isCurrentLocationKnown()).count());
       // Insert 200 records
       writeClient.startCommitWithTime(newCommitTime);
@@ -705,7 +705,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
 
       // Now tagLocation for these records, hbaseIndex should not tag them since it was a failed
       // commit
-      JavaRDD<HoodieRecord> records2 = index.tagLocation(writeRecords, context(), hoodieTable);
+      JavaRDD<HoodieRecord> records2 = tagLocation(index, writeRecords, hoodieTable);
       assertEquals(0, records2.filter(record -> record.isCurrentLocationKnown()).count());
 
       // Now commit this & update location of records inserted and validate no errors
@@ -713,7 +713,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       // Now tagLocation for these records, hbaseIndex should tag them correctly
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-      List<HoodieRecord> records3 = index.tagLocation(writeRecords, context(), hoodieTable).collect();
+      List<HoodieRecord> records3 = tagLocation(index, writeRecords, hoodieTable).collect();
       assertEquals(numRecords, records3.stream().filter(record -> record.isCurrentLocationKnown()).count());
       assertEquals(numRecords, records3.stream().map(record -> record.getKey().getRecordKey()).distinct().count());
       assertEquals(numRecords, records3.stream().filter(record -> (record.getCurrentLocation() != null
@@ -736,7 +736,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
       // Test tagLocation without any entries in index
-      JavaRDD<HoodieRecord> records1 = index.tagLocation(writeRecords, context(), hoodieTable);
+      JavaRDD<HoodieRecord> records1 = tagLocation(index, writeRecords, hoodieTable);
       assertEquals(0, records1.filter(record -> record.isCurrentLocationKnown()).count());
 
       // Insert records
@@ -748,7 +748,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       // Now tagLocation for these records, hbaseIndex should tag them correctly
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-      List<HoodieRecord> records2 = index.tagLocation(writeRecords, context(), hoodieTable).collect();
+      List<HoodieRecord> records2 = tagLocation(index, writeRecords, hoodieTable).collect();
       assertEquals(numRecords, records2.stream().filter(record -> record.isCurrentLocationKnown()).count());
       assertEquals(numRecords, records2.stream().map(record -> record.getKey().getRecordKey()).distinct().count());
       assertEquals(numRecords, records2.stream().filter(record -> (record.getCurrentLocation() != null
@@ -766,12 +766,12 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
       // if not for this caching, due to RDD chaining/lineage, first time update is called again when subsequent update is called.
       // So caching here to break the chain and so future update does not re-trigger update of older Rdd.
       deleteWriteStatues.cache();
-      JavaRDD<WriteStatus> deleteStatus = index.updateLocation(deleteWriteStatues, context(), hoodieTable);
+      JavaRDD<WriteStatus> deleteStatus = updateLocation(index, deleteWriteStatues, hoodieTable);
       assertEquals(deleteStatus.count(), deleteWriteStatues.count());
       assertNoWriteErrors(deleteStatus.collect());
 
       // Ensure no records can be tagged
-      List<HoodieRecord> records3 = index.tagLocation(writeRecords, context(), hoodieTable).collect();
+      List<HoodieRecord> records3 = tagLocation(index, writeRecords, hoodieTable).collect();
       assertEquals(0, records3.stream().filter(record -> record.isCurrentLocationKnown()).count());
       assertEquals(numRecords, records3.stream().map(record -> record.getKey().getRecordKey()).distinct().count());
       assertEquals(0, records3.stream().filter(record -> (record.getCurrentLocation() != null

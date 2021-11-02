@@ -783,6 +783,7 @@
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-hdfs</artifactId>
         <classifier>tests</classifier>
+        <scope>test</scope>
         <version>${hadoop.version}</version>
       </dependency>
       <dependency>
@@ -1063,10 +1064,10 @@
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
     </repository>
-    <repository>
+    <!--<repository>
       <id>pentaho.org</id>
       <url>https://public.nexus.pentaho.org/repository/proxy-public-3rd-party-release/</url>
-    </repository>
+    </repository>-->
   </repositories>
 
   <profiles>

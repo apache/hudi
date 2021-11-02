@@ -94,7 +94,7 @@ cd $KAFKA_HOME
 Open a terminal to execute the following command:
 
 ```bash
-cd $HUDI_DIR/demo/
+cd $HUDI_DIR/hudi-kafka-connect/demo/
 bash setupKafka.sh -n <total_kafka_messages>
 ```
 
@@ -120,7 +120,7 @@ that can be changed based on the desired properties.
 
 ```bash
 curl -X DELETE http://localhost:8083/connectors/hudi-sink
-curl -X POST -H "Content-Type:application/json" -d @${HUDI_DIR}/hudi-kafka-connect/demo/config-sink.json http://localhost:8083/connectors
+curl -X POST -H "Content-Type:application/json" -d @$HUDI_DIR/hudi-kafka-connect/demo/config-sink.json http://localhost:8083/connectors
 ```
 
 Now, you should see that the connector is created and tasks are running.

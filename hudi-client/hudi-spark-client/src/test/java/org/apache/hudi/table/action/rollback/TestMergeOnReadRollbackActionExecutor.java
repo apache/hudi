@@ -99,7 +99,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         table,
         "003",
         rollBackInstant,
-        true);
+        true,
+        false);
     //3. assert the rollback stat
     Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = mergeOnReadRollbackActionExecutor.execute().getPartitionMetadata();
     assertEquals(2, rollbackMetadata.size());
@@ -148,7 +149,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
           rollBackInstant,
           true,
           true,
-          true).execute();
+          true,
+          false).execute();
     });
   }
 
