@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.aws;
+package org.apache.hudi.aws.credentials;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
@@ -29,6 +29,9 @@ import org.apache.log4j.Logger;
 
 import java.util.Properties;
 
+/**
+ * Credentials provider which fetches AWS access key from Hoodie config.
+ */
 public class HoodieConfigAWSCredentialsProvider implements AWSCredentialsProvider {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConfigAWSCredentialsProvider.class);
@@ -36,9 +39,9 @@ public class HoodieConfigAWSCredentialsProvider implements AWSCredentialsProvide
   private AWSCredentials awsCredentials;
 
   public HoodieConfigAWSCredentialsProvider(Properties props) {
-    String accessKey = props.getProperty(HoodieAWSConfig.AWS_ACCESS_KEY.key(), null);
-    String secretKey = props.getProperty(HoodieAWSConfig.AWS_SECRET_KEY.key(), null);
-    String sessionToken = props.getProperty(HoodieAWSConfig.AWS_SESSION_TOKEN.key(), null);
+    String accessKey = props.getProperty(HoodieAWSConfig.AWS_ACCESS_KEY.key());
+    String secretKey = props.getProperty(HoodieAWSConfig.AWS_SECRET_KEY.key());
+    String sessionToken = props.getProperty(HoodieAWSConfig.AWS_SESSION_TOKEN.key());
 
     if (StringUtils.isNullOrEmpty(accessKey) || StringUtils.isNullOrEmpty(secretKey)) {
       LOG.debug("AWS access key or secret key not found in the Hudi configuration. "

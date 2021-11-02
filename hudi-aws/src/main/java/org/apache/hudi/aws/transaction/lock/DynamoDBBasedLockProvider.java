@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.lock;
+package org.apache.hudi.aws.transaction.lock;
 
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.RegionUtils;
@@ -27,6 +27,7 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
 import com.amazonaws.services.dynamodbv2.LockItem;
 import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
+import com.amazonaws.services.dynamodbv2.model.BillingMode;
 import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
 import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
 import com.amazonaws.services.dynamodbv2.model.KeyType;
@@ -35,7 +36,7 @@ import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
 import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
 import com.amazonaws.services.dynamodbv2.util.TableUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.aws.HoodieAWSCredentialsProviderFactory;
+import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
@@ -52,12 +53,13 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.NotThreadSafe;
 
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_BILLING_MODE_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_PARTITION_KEY_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_READ_CAPACITY_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_REGION_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_TABLE_NAME_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_WRITE_CAPACITY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_BILLING_MODE_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_REGION_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_TABLE_NAME_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
 
 /**
@@ -69,43 +71,43 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
 
   private static final Logger LOG = LogManager.getLogger(DynamoDBBasedLockProvider.class);
 
+  private static final String DYNAMODB_ATTRIBUTE_NAME = "key";
+
   private final AmazonDynamoDBLockClient client;
   private final long leaseDuration;
   private final String tableName;
+  private final String dynamoDBPartitionKey;
   protected LockConfiguration lockConfiguration;
   private volatile LockItem lock;
 
   public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+    this(lockConfiguration, conf, null);
+  }
+
+  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, final AmazonDynamoDBLockClient client) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
-    this.tableName = lockConfiguration.getConfig().getString(DYNAMODB_TABLE_NAME_PROP_KEY);
+    this.tableName = lockConfiguration.getConfig().getString(DYNAMODB_LOCK_TABLE_NAME_PROP_KEY);
+    this.dynamoDBPartitionKey = lockConfiguration.getConfig().getString(DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY);
     this.leaseDuration = Long.parseLong(lockConfiguration.getConfig().getString(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY));
-    AmazonDynamoDB dynamoDB = getDynamoClient();
+    AmazonDynamoDB dynamoDB = getDynamoDBClient();
     // build the dynamoDb lock client
-    this.client = new AmazonDynamoDBLockClient(
+    this.client = client != null ? client : new AmazonDynamoDBLockClient(
         AmazonDynamoDBLockClientOptions.builder(dynamoDB, tableName)
                 .withTimeUnit(TimeUnit.MILLISECONDS)
                 .withLeaseDuration(leaseDuration)
                 .withHeartbeatPeriod(leaseDuration / 3)
                 .withCreateHeartbeatBackgroundThread(true)
                 .build());
-    if (!client.lockTableExists()) {
+    if (client != null && !client.lockTableExists()) {
       createLockTableInDynamoDB(
               dynamoDB,
               tableName,
-              lockConfiguration.getConfig().getString(DYNAMODB_BILLING_MODE_PROP_KEY),
-              Long.parseLong(lockConfiguration.getConfig().getString(DYNAMODB_READ_CAPACITY_PROP_KEY)),
-              Long.parseLong(lockConfiguration.getConfig().getString(DYNAMODB_WRITE_CAPACITY_PROP_KEY)));
+              lockConfiguration.getConfig().getString(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY),
+              Long.parseLong(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY)),
+              Long.parseLong(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY)),
+              Integer.parseInt(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY)));
     }
-  }
-
-  // Only used for testing
-  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final AmazonDynamoDBLockClient client) {
-    checkRequiredProps(lockConfiguration);
-    this.lockConfiguration = lockConfiguration;
-    this.tableName = lockConfiguration.getConfig().getString(DYNAMODB_TABLE_NAME_PROP_KEY);
-    this.leaseDuration = Long.parseLong(lockConfiguration.getConfig().getString(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY));
-    this.client = client;
   }
 
   @Override
@@ -113,13 +115,15 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     LOG.info(generateLogStatement(LockState.ACQUIRING, generateLogSuffixString()));
     long millisTime = unit.toMillis(time);
     try {
-      lock = client.acquireLock(AcquireLockOptions.builder(lockConfiguration.getConfig().getString(DYNAMODB_PARTITION_KEY_PROP_KEY))
+      lock = client.acquireLock(AcquireLockOptions.builder(dynamoDBPartitionKey)
               .withAdditionalTimeToWaitForLock(millisTime - leaseDuration > 0 ? millisTime - leaseDuration : 0)
               .withTimeUnit(TimeUnit.MILLISECONDS)
               .build());
       LOG.info(generateLogStatement(LockState.ACQUIRED, generateLogSuffixString()));
-    } catch (InterruptedException | LockNotGrantedException e) {
+    } catch (InterruptedException e) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()), e);
+    } catch (LockNotGrantedException e) {
+      return false;
     }
     return lock != null && !lock.isExpired();
   }
@@ -161,8 +165,8 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     return lock;
   }
 
-  private AmazonDynamoDB getDynamoClient() {
-    String region = this.lockConfiguration.getConfig().getString(DYNAMODB_REGION_PROP_KEY);
+  private AmazonDynamoDB getDynamoDBClient() {
+    String region = this.lockConfiguration.getConfig().getString(DYNAMODB_LOCK_REGION_PROP_KEY);
     String endpointURL = RegionUtils.getRegion(region).getServiceEndpoint(AmazonDynamoDB.ENDPOINT_PREFIX);
     AwsClientBuilder.EndpointConfiguration dynamodbEndpoint =
             new AwsClientBuilder.EndpointConfiguration(endpointURL, region);
@@ -172,26 +176,22 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
             .build();
   }
 
-  public static void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName) {
-    createLockTableInDynamoDB(dynamoDB, tableName, "PAY_PER_REQUEST", 0L, 0L);
-  }
-
-  private static void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName, String billingMode,
-                                               Long readCapacityUnits, Long writeCapacityUnits) {
+  public static void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName, String billingMode,
+                                               Long readCapacityUnits, Long writeCapacityUnits, int tableCreationTimeout) {
     KeySchemaElement partitionKeyElement = new KeySchemaElement();
-    partitionKeyElement.setAttributeName("key");
+    partitionKeyElement.setAttributeName(DYNAMODB_ATTRIBUTE_NAME);
     partitionKeyElement.setKeyType(KeyType.HASH);
 
     List<KeySchemaElement> keySchema = new ArrayList<>();
     keySchema.add(partitionKeyElement);
 
     Collection<AttributeDefinition> attributeDefinitions = new ArrayList<>();
-    attributeDefinitions.add(new AttributeDefinition().withAttributeName("key").withAttributeType(ScalarAttributeType.S));
+    attributeDefinitions.add(new AttributeDefinition().withAttributeName(DYNAMODB_ATTRIBUTE_NAME).withAttributeType(ScalarAttributeType.S));
 
     CreateTableRequest createTableRequest = new CreateTableRequest(tableName, keySchema);
     createTableRequest.setAttributeDefinitions(attributeDefinitions);
     createTableRequest.setBillingMode(billingMode);
-    if (billingMode.equals("PROVISIONED")) {
+    if (billingMode.equals(BillingMode.PROVISIONED.name())) {
       createTableRequest.setProvisionedThroughput(
               new ProvisionedThroughput().withReadCapacityUnits(readCapacityUnits).withWriteCapacityUnits(writeCapacityUnits));
     }
@@ -199,7 +199,7 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
 
     LOG.info("Creating dynamoDB table " + tableName + ", waiting for table to be active");
     try {
-      TableUtils.waitUntilActive(dynamoDB, tableName);
+      TableUtils.waitUntilActive(dynamoDB, tableName, tableCreationTimeout, 20 * 1000);
     } catch (TableUtils.TableNeverTransitionedToStateException e) {
       throw new HoodieLockException("Created dynamoDB table never transits to active", e);
     } catch (InterruptedException e) {
@@ -209,15 +209,18 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   }
 
   private void checkRequiredProps(final LockConfiguration config) {
-    ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_BILLING_MODE_PROP_KEY) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_TABLE_NAME_PROP_KEY) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_PARTITION_KEY_PROP_KEY) != null);
-    ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_REGION_PROP_KEY) != null);
+    ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY) != null);
+    ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_LOCK_TABLE_NAME_PROP_KEY) != null);
+    ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_LOCK_REGION_PROP_KEY) != null);
+    ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY) != null);
+    config.getConfig().putIfAbsent(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY, BillingMode.PAY_PER_REQUEST.name());
+    config.getConfig().putIfAbsent(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY, 20);
+    config.getConfig().putIfAbsent(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY, 10);
+    config.getConfig().putIfAbsent(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY, 600000);
   }
 
   private String generateLogSuffixString() {
-    String dynamoDbPartitionKey = this.lockConfiguration.getConfig().getString(DYNAMODB_PARTITION_KEY_PROP_KEY);
-    return StringUtils.join("DynamoDb table = ", tableName, ", partition key = ", dynamoDbPartitionKey);
+    return StringUtils.join("DynamoDb table = ", tableName, ", partition key = ", dynamoDBPartitionKey);
   }
 
   protected String generateLogStatement(LockState state, String suffix) {

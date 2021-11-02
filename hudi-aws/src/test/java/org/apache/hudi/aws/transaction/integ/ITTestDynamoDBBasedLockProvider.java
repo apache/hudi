@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction.integ;
+package org.apache.hudi.aws.transaction.integ;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -26,7 +26,8 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClientOptions;
-import org.apache.hudi.client.transaction.lock.DynamoDBBasedLockProvider;
+import com.amazonaws.services.dynamodbv2.model.BillingMode;
+import org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.exception.HoodieLockException;
 
@@ -37,10 +38,12 @@ import org.junit.jupiter.api.Test;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_BILLING_MODE_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_PARTITION_KEY_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_REGION_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_TABLE_NAME_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_BILLING_MODE_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_REGION_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_TABLE_NAME_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
 
 /**
@@ -58,15 +61,17 @@ public class ITTestDynamoDBBasedLockProvider {
   @BeforeAll
   public static void setup() throws InterruptedException {
     Properties properties = new Properties();
-    properties.setProperty(DYNAMODB_BILLING_MODE_PROP_KEY, "PAY_PER_REQUEST");
-    properties.setProperty(DYNAMODB_TABLE_NAME_PROP_KEY, TABLE_NAME);
-    properties.setProperty(DYNAMODB_PARTITION_KEY_PROP_KEY, "testKey");
-    properties.setProperty(DYNAMODB_REGION_PROP_KEY, REGION);
+    properties.setProperty(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY, BillingMode.PAY_PER_REQUEST.name());
+    properties.setProperty(DYNAMODB_LOCK_TABLE_NAME_PROP_KEY, TABLE_NAME);
+    properties.setProperty(DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY, "testKey");
+    properties.setProperty(DYNAMODB_LOCK_REGION_PROP_KEY, REGION);
     properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
+    properties.setProperty(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY, "0");
+    properties.setProperty(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY, "0");
     lockConfiguration = new LockConfiguration(properties);
 
     AmazonDynamoDB dynamoDb = getDynamoClientWithLocalEndpoint();
-    DynamoDBBasedLockProvider.createLockTableInDynamoDB(dynamoDb, TABLE_NAME);
+    DynamoDBBasedLockProvider.createLockTableInDynamoDB(dynamoDb, TABLE_NAME, BillingMode.PAY_PER_REQUEST.name(), 0L, 0L, 100000);
 
     lockClient = new AmazonDynamoDBLockClient(
             AmazonDynamoDBLockClientOptions.builder(dynamoDb, TABLE_NAME)
@@ -79,7 +84,7 @@ public class ITTestDynamoDBBasedLockProvider {
 
   @Test
   public void testAcquireLock() {
-    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, lockClient);
+    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, null, lockClient);
     Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfiguration.getConfig()
             .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     dynamoDbBasedLockProvider.unlock();
@@ -87,7 +92,7 @@ public class ITTestDynamoDBBasedLockProvider {
 
   @Test
   public void testUnlock() {
-    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, lockClient);
+    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, null, lockClient);
     Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfiguration.getConfig()
             .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     dynamoDbBasedLockProvider.unlock();
@@ -97,7 +102,7 @@ public class ITTestDynamoDBBasedLockProvider {
 
   @Test
   public void testReentrantLock() {
-    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, lockClient);
+    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, null, lockClient);
     Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfiguration.getConfig()
             .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     try {
@@ -112,7 +117,7 @@ public class ITTestDynamoDBBasedLockProvider {
 
   @Test
   public void testUnlockWithoutLock() {
-    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, lockClient);
+    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, null, lockClient);
     dynamoDbBasedLockProvider.unlock();
   }
 

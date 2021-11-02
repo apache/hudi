@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.aws;
+package org.apache.hudi.aws.credentials;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProviderChain;
@@ -26,6 +26,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+/**
+ * Factory class for Hoodie AWSCredentialsProvider.
+ */
 public class HoodieAWSCredentialsProviderFactory {
   public static AWSCredentialsProvider getAwsCredentialsProvider(Properties props) {
     return getAwsCredentialsProviderChain(props);

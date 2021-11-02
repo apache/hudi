@@ -38,6 +38,7 @@
     <module>hudi-common</module>
     <module>hudi-cli</module>
     <module>hudi-client</module>
+    <module>hudi-aws</module>
     <module>hudi-hadoop-mr</module>
     <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>

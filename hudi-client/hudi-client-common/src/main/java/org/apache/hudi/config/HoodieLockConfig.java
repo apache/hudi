@@ -18,6 +18,7 @@
 package org.apache.hudi.config;
 
 import com.amazonaws.regions.RegionUtils;
+import com.amazonaws.services.dynamodbv2.model.BillingMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
@@ -37,12 +38,13 @@ import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUI
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_BILLING_MODE_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_PARTITION_KEY_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_READ_CAPACITY_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_REGION_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_TABLE_NAME_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_WRITE_CAPACITY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_BILLING_MODE_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_REGION_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_TABLE_NAME_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_METASTORE_URI_PROP_KEY;
@@ -171,13 +173,13 @@ public class HoodieLockConfig extends HoodieConfig {
       .withDocumentation("Key name under base_path at which to create a ZNode and acquire lock. "
           + "Final path on zk will look like base_path/lock_key. We recommend setting this to the table name");
 
-  public static final ConfigProperty<String> DYNAMODB_TABLE_NAME = ConfigProperty
-      .key(DYNAMODB_TABLE_NAME_PROP_KEY)
+  public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_NAME = ConfigProperty
+      .key(DYNAMODB_LOCK_TABLE_NAME_PROP_KEY)
       .noDefaultValue()
       .withDocumentation("For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table");
 
-  public static final ConfigProperty<String> DYNAMODB_PARTITION_KEY = ConfigProperty
-      .key(DYNAMODB_PARTITION_KEY_PROP_KEY)
+  public static final ConfigProperty<String> DYNAMODB_LOCK_PARTITION_KEY = ConfigProperty
+      .key(DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY)
       .noDefaultValue()
       .withInferFunction(cfg -> {
         if (cfg.contains(HoodieWriteConfig.TBL_NAME)) {
@@ -189,8 +191,8 @@ public class HoodieLockConfig extends HoodieConfig {
           + "Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key."
           + " By default we use the Hudi table name specified to be the partition key");
 
-  public static final ConfigProperty<String> DYNAMODB_REGION = ConfigProperty
-      .key(DYNAMODB_REGION_PROP_KEY)
+  public static final ConfigProperty<String> DYNAMODB_LOCK_REGION = ConfigProperty
+      .key(DYNAMODB_LOCK_REGION_PROP_KEY)
       .defaultValue("us-east-1")
       .withInferFunction(cfg -> {
         String regionFromEnv = System.getenv("AWS_REGION");
@@ -202,20 +204,25 @@ public class HoodieLockConfig extends HoodieConfig {
       .withDocumentation("For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service."
               + " Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1");
 
-  public static final ConfigProperty<String> DYNAMODB_BILLING_MODE = ConfigProperty
-      .key(DYNAMODB_BILLING_MODE_PROP_KEY)
-      .defaultValue("PAY_PER_REQUEST")
+  public static final ConfigProperty<String> DYNAMODB_LOCK_BILLING_MODE = ConfigProperty
+      .key(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY)
+      .defaultValue(BillingMode.PAY_PER_REQUEST.name())
       .withDocumentation("For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode");
 
-  public static final ConfigProperty<String> DYNAMODB_READ_CAPACITY = ConfigProperty
-          .key(DYNAMODB_READ_CAPACITY_PROP_KEY)
+  public static final ConfigProperty<String> DYNAMODB_LOCK_READ_CAPACITY = ConfigProperty
+          .key(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY)
           .defaultValue("20")
           .withDocumentation("For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode");
 
-  public static final ConfigProperty<String> DYNAMODB_WRITE_CAPACITY = ConfigProperty
-          .key(DYNAMODB_WRITE_CAPACITY_PROP_KEY)
+  public static final ConfigProperty<String> DYNAMODB_LOCK_WRITE_CAPACITY = ConfigProperty
+          .key(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY)
           .defaultValue("10")
           .withDocumentation("For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode");
+
+  public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT = ConfigProperty
+          .key(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY)
+          .defaultValue(String.valueOf(10 * 60 * 1000))
+          .withDocumentation("For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table");
 
   // Pluggable type of lock provider
   public static final ConfigProperty<String> LOCK_PROVIDER_CLASS_NAME = ConfigProperty
@@ -321,32 +328,32 @@ public class HoodieLockConfig extends HoodieConfig {
     }
 
     public HoodieLockConfig.Builder withDynamoDBTable(String dynamoDbTableName) {
-      lockConfig.setValue(DYNAMODB_TABLE_NAME, dynamoDbTableName);
+      lockConfig.setValue(DYNAMODB_LOCK_TABLE_NAME, dynamoDbTableName);
       return this;
     }
 
     public HoodieLockConfig.Builder withDynamoDBPartitionKey(String partitionKey) {
-      lockConfig.setValue(DYNAMODB_PARTITION_KEY, partitionKey);
+      lockConfig.setValue(DYNAMODB_LOCK_PARTITION_KEY, partitionKey);
       return this;
     }
 
     public HoodieLockConfig.Builder withDynamoDBRegion(String region) {
-      lockConfig.setValue(DYNAMODB_REGION, region);
+      lockConfig.setValue(DYNAMODB_LOCK_REGION, region);
       return this;
     }
 
     public HoodieLockConfig.Builder withDynamoDBBillingMode(String mode) {
-      lockConfig.setValue(DYNAMODB_BILLING_MODE, mode);
+      lockConfig.setValue(DYNAMODB_LOCK_BILLING_MODE, mode);
       return this;
     }
 
     public HoodieLockConfig.Builder withDynamoDBReadCapacity(String capacity) {
-      lockConfig.setValue(DYNAMODB_READ_CAPACITY, capacity);
+      lockConfig.setValue(DYNAMODB_LOCK_READ_CAPACITY, capacity);
       return this;
     }
 
     public HoodieLockConfig.Builder withDynamoDBWriteCapacity(String capacity) {
-      lockConfig.setValue(DYNAMODB_WRITE_CAPACITY, capacity);
+      lockConfig.setValue(DYNAMODB_LOCK_WRITE_CAPACITY, capacity);
       return this;
     }
 

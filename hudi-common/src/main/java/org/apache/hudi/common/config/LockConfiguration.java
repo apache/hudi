@@ -77,17 +77,19 @@ public class LockConfiguration implements Serializable {
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LOCK_PREFIX + "dynamodb.";
 
-  public static final String DYNAMODB_TABLE_NAME_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table";
+  public static final String DYNAMODB_LOCK_TABLE_NAME_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table";
 
-  public static final String DYNAMODB_PARTITION_KEY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "partition_key";
+  public static final String DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "partition_key";
 
-  public static final String DYNAMODB_REGION_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region";
+  public static final String DYNAMODB_LOCK_REGION_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region";
 
-  public static final String DYNAMODB_BILLING_MODE_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode";
+  public static final String DYNAMODB_LOCK_BILLING_MODE_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode";
 
-  public static final String DYNAMODB_READ_CAPACITY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "read_capacity";
+  public static final String DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "read_capacity";
 
-  public static final String DYNAMODB_WRITE_CAPACITY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "write_capacity";
+  public static final String DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "write_capacity";
+
+  public static final String DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table_creation_timeout";
 
   /** @deprecated Use {@link #LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY} */
   @Deprecated
