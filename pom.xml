@@ -531,12 +531,14 @@
         <groupId>org.apache.parquet</groupId>
         <artifactId>parquet-avro</artifactId>
         <version>${parquet.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <dependency>
         <groupId>org.apache.parquet</groupId>
         <artifactId>parquet-column</artifactId>
         <version>${parquet.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <!-- Spark -->

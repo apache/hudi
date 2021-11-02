@@ -59,6 +59,11 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-column</artifactId>
+    </dependency>
+
     <!-- Dropwizard Metrics -->
     <dependency>
       <groupId>io.dropwizard.metrics</groupId>

@@ -216,6 +216,11 @@
       </exclusions>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-column</artifactId>
+    </dependency>
+
     <!-- Spark -->
     <dependency>
       <groupId>org.apache.spark</groupId>

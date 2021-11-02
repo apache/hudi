@@ -200,6 +200,12 @@
       <version>${parquet.version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-column</artifactId>
+      <version>${parquet.version}</version>
+    </dependency>
+
     <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>

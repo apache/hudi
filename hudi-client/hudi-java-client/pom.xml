@@ -43,6 +43,11 @@
             <artifactId>parquet-avro</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-column</artifactId>
+        </dependency>
+
         <!-- Hoodie - Test -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
