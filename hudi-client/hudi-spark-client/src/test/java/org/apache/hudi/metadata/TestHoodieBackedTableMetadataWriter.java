@@ -80,7 +80,7 @@ public class TestHoodieBackedTableMetadataWriter extends TestHoodieMetadataBase 
     }
 
     @Override
-    protected void commit(String instantTime, Map<String, List<HoodieRecord>> partitionRecordsMap) {
+    protected void commit(String instantTime, Map<MetadataPartitionType, List<HoodieRecord>> partitionRecordsMap) {
       //
     }
 

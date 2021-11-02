@@ -22,29 +22,44 @@ import java.util.Arrays;
 import java.util.List;
 
 public enum MetadataPartitionType {
-  FILES("files", "files-"),
-  COLUMN_STATS("column_stats", "col-stats-"),
-  BLOOM_FILTERS("bloom_filters", "bloom-filters-");
+  FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 1),
+  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 10),
+  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 100);
 
-  // refers to partition path in metadata table.
+  // Partition path in metadata table.
   private final String partitionPath;
-  // refers to fileId prefix used for all file groups in this partition.
+  // FileId prefix used for all file groups in this partition.
   private final String fileIdPrefix;
+  // Total file groups
+  private final int fileGroupCount;
 
-  MetadataPartitionType(String partitionPath, String fileIdPrefix) {
+  MetadataPartitionType(final String partitionPath, final String fileIdPrefix, final int fileGroupCount) {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
+    this.fileGroupCount = getFileGroupCount();
   }
 
   public String partitionPath() {
     return partitionPath;
   }
 
+  public String getPartitionPath() {
+    return partitionPath();
+  }
+
   public String getFileIdPrefix() {
     return fileIdPrefix;
   }
 
+  public int getFileGroupCount() {
+    return this.fileGroupCount;
+  }
+
   public static List<String> all() {
-    return Arrays.asList(MetadataPartitionType.FILES.partitionPath());
+    return Arrays.asList(
+        FILES.partitionPath(),
+        COLUMN_STATS.partitionPath(),
+        BLOOM_FILTERS.partitionPath
+    );
   }
 }

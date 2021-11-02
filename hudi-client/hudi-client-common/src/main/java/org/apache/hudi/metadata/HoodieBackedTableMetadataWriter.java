@@ -520,7 +520,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Updates of different commit metadata uses the same method to convert to HoodieRecords and hence.
    */
   private interface ConvertMetadataFunction {
-    List<HoodieRecord> convertMetadata();
+    Map<MetadataPartitionType, List<HoodieRecord>> convertMetadata();
   }
 
   /**
@@ -531,8 +531,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private <T> void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction) {
     if (enabled && metadata != null) {
-      List<HoodieRecord> records = convertMetadataFunction.convertMetadata();
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
+      Map<MetadataPartitionType, List<HoodieRecord>> partitionRecordsMap = convertMetadataFunction.convertMetadata();
+      commit(instantTime, partitionRecordsMap);
     }
   }
 
@@ -581,19 +581,23 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (enabled && metadata != null) {
       // Is this rollback of an instant that has been synced to the metadata table?
       String rollbackInstant = rollbackMetadata.getCommitsRollback().get(0);
-      boolean wasSynced = metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, rollbackInstant));
+      boolean wasSynced = metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false,
+          HoodieTimeline.DELTA_COMMIT_ACTION, rollbackInstant));
       if (!wasSynced) {
         // A compaction may have taken place on metadata table which would have included this instant being rolled back.
         // Revisit this logic to relax the compaction fencing : https://issues.apache.org/jira/browse/HUDI-2458
         Option<String> latestCompaction = metadata.getLatestCompactionTime();
         if (latestCompaction.isPresent()) {
-          wasSynced = HoodieTimeline.compareTimestamps(rollbackInstant, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCompaction.get());
+          wasSynced = HoodieTimeline.compareTimestamps(rollbackInstant, HoodieTimeline.LESSER_THAN_OR_EQUALS,
+              latestCompaction.get());
         }
       }
 
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(), rollbackMetadata, instantTime,
-          metadata.getSyncedInstantTime(), wasSynced);
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
+      Map<MetadataPartitionType, List<HoodieRecord>> records =
+          HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(), rollbackMetadata,
+              instantTime,
+              metadata.getSyncedInstantTime(), wasSynced);
+      commit(instantTime, records);
     }
   }
 
@@ -606,6 +610,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
+   * <p>
+   * TODO: This method need to be removed
    *
    * @param records       The list of records to be written.
    * @param partitionName The partition to which the records are to be written.
@@ -619,7 +625,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param instantTime         - Action instant time for this commit
    * @param partitionRecordsMap - Map of parition name to its records to commit
    */
-  protected abstract void commit(String instantTime, Map<String, List<HoodieRecord>> partitionRecordsMap);
+  protected abstract void commit(String instantTime,
+                                 Map<MetadataPartitionType, List<HoodieRecord>> partitionRecordsMap);
 
   /**
    *  Perform a compaction on the Metadata Table.

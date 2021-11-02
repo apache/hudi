@@ -135,21 +135,24 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(String instantTime, Map<String, List<HoodieRecord>> partitionRecordsMap) {
+  protected void commit(String instantTime, Map<MetadataPartitionType, List<HoodieRecord>> partitionRecordsMap) {
     throw new HoodieMetadataException("Unsupported operation!");
   }
 
   /**
    * Tag each record with the location in the given partition.
-   *
+   * <p>
    * The record is tagged with respective file slice's location based on its record key.
    */
   private List<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int numFileGroups) {
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
-    ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
+    List<FileSlice> fileSlices =
+        HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
+    ValidationUtils.checkArgument(fileSlices.size() == numFileGroups,
+        String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
 
     return records.stream().map(r -> {
-      FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups));
+      FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
+          numFileGroups));
       final String instantTime = slice.isEmpty() ? "I" : "U";
       r.setCurrentLocation(new HoodieRecordLocation(instantTime, slice.getFileId()));
       return r;

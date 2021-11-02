@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.hash.FileID;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -60,12 +61,36 @@ public class HoodieTableMetadataUtil {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetadataUtil.class);
 
+  protected static final String PARTITION_NAME_FILES = "files";
+  protected static final String PARTITION_NAME_COLUMN_STATS = "column_stats";
+  protected static final String PARTITION_NAME_BLOOM_FILTERS = "bloom_filters";
+
   /**
-   * Delete the metadata table for the dataset. This will be invoked during upgrade/downgrade operation during which no other
+   * TODO: Comment.
+   *
+   * @param partitionPath
+   * @return
+   */
+  public static Option<MetadataPartitionType> fromPartitionPath(final String partitionPath) {
+    switch (partitionPath) {
+      case PARTITION_NAME_FILES:
+        return Option.of(MetadataPartitionType.FILES);
+      case PARTITION_NAME_COLUMN_STATS:
+        return Option.of(MetadataPartitionType.COLUMN_STATS);
+      case PARTITION_NAME_BLOOM_FILTERS:
+        return Option.of(MetadataPartitionType.BLOOM_FILTERS);
+      default:
+        return Option.empty();
+    }
+  }
+
+  /**
+   * Delete the metadata table for the dataset. This will be invoked during upgrade/downgrade operation during which
+   * no other
    * process should be running.
    *
    * @param basePath base path of the dataset
-   * @param context instance of {@link HoodieEngineContext}.
+   * @param context  instance of {@link HoodieEngineContext}.
    */
   public static void deleteMetadataTable(String basePath, HoodieEngineContext context) {
     final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
@@ -78,15 +103,37 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * TODO: Comment.
+   *
+   * @param commitMetadata
+   * @param instantTime
+   * @return
+   */
+  public static Map<MetadataPartitionType, List<HoodieRecord>> convertMetadataToRecords(
+      HoodieCommitMetadata commitMetadata, String instantTime) {
+    Map<MetadataPartitionType, List<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
+    partitionToRecordsMap.put(MetadataPartitionType.FILES, convertMetadataToFilesPartitionRecords(commitMetadata,
+        instantTime));
+    final List<HoodieRecord> metadataBloomFilterRecords = convertMetadataToBloomFilterRecords(commitMetadata,
+        instantTime);
+    if (!metadataBloomFilterRecords.isEmpty()) {
+      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, metadataBloomFilterRecords);
+    }
+    return partitionToRecordsMap;
+  }
+
+  /**
    * Finds all new files/partitions created as part of commit and creates metadata table records for them.
    *
    * @param commitMetadata
    * @param instantTime
    * @return a list of metadata table records
    */
-  public static List<HoodieRecord> convertMetadataToRecords(HoodieCommitMetadata commitMetadata, String instantTime) {
+  public static List<HoodieRecord> convertMetadataToFilesPartitionRecords(HoodieCommitMetadata commitMetadata,
+                                                                          String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     List<String> allPartitions = new LinkedList<>();
+
     commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
       final String partition = partitionStatName.equals("") ? NON_PARTITIONED_NAME : partitionStatName;
       allPartitions.add(partition);
@@ -121,13 +168,65 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * TODO: Comment.
+   *
+   * @param commitMetadata
+   * @param instantTime
+   * @return
+   */
+  public static List<HoodieRecord> convertMetadataToBloomFilterRecords(HoodieCommitMetadata commitMetadata,
+                                                                       String instantTime) {
+    List<HoodieRecord> records = new LinkedList<>();
+    commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
+      final String partition = partitionStatName.equals("") ? NON_PARTITIONED_NAME : partitionStatName;
+      Map<String, Long> newFiles = new HashMap<>(writeStats.size());
+      writeStats.forEach(hoodieWriteStat -> {
+        String pathWithPartition = hoodieWriteStat.getPath();
+        if (pathWithPartition == null) {
+          // Empty partition
+          LOG.warn("Unable to find path in write stat to update metadata table " + hoodieWriteStat);
+          return;
+        }
+
+        int offset = partition.equals(NON_PARTITIONED_NAME) ? (pathWithPartition.startsWith("/") ? 1 : 0) :
+            partition.length() + 1;
+
+        String filename = pathWithPartition.substring(offset);
+        ValidationUtils.checkState(!newFiles.containsKey(filename), "Duplicate files in HoodieCommitMetadata");
+        // TODO: read the bloom from base file
+        HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
+            new FileID(filename), instantTime, null, true);
+        records.add(record);
+      });
+    });
+
+    return records;
+  }
+
+  /**
+   * TODO: Comment.
+   *
+   * @param commitMetadata
+   * @param instantTime
+   * @return
+   */
+  public static Map<MetadataPartitionType, List<HoodieRecord>> convertMetadataToRecords(
+      HoodieCleanMetadata cleanMetadata, String instantTime) {
+    Map<MetadataPartitionType, List<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
+    partitionToRecordsMap.put(MetadataPartitionType.FILES, convertMetadataToFilesPartitionRecords(cleanMetadata,
+        instantTime));
+    return partitionToRecordsMap;
+  }
+
+  /**
    * Finds all files that were deleted as part of a clean and creates metadata table records for them.
    *
    * @param cleanMetadata
    * @param instantTime
    * @return a list of metadata table records
    */
-  public static List<HoodieRecord> convertMetadataToRecords(HoodieCleanMetadata cleanMetadata, String instantTime) {
+  public static List<HoodieRecord> convertMetadataToFilesPartitionRecords(HoodieCleanMetadata cleanMetadata,
+                                                                          String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
     cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
@@ -146,6 +245,23 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * TODO: Comment.
+   *
+   * @param commitMetadata
+   * @param instantTime
+   * @return
+   */
+  public static Map<MetadataPartitionType, List<HoodieRecord>> convertMetadataToRecords(
+      HoodieActiveTimeline metadataTableTimeline,
+      HoodieRestoreMetadata restoreMetadata, String instantTime, Option<String> lastSyncTs) {
+    Map<MetadataPartitionType, List<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
+    partitionToRecordsMap.put(MetadataPartitionType.FILES, convertMetadataToRestoreRecords(
+        metadataTableTimeline, restoreMetadata, instantTime, lastSyncTs));
+    return partitionToRecordsMap;
+  }
+
+
+  /**
    * Aggregates all files deleted and appended to from all rollbacks associated with a restore operation then
    * creates metadata table records for them.
    *
@@ -153,24 +269,44 @@ public class HoodieTableMetadataUtil {
    * @param instantTime
    * @return a list of metadata table records
    */
-  public static List<HoodieRecord> convertMetadataToRecords(HoodieActiveTimeline metadataTableTimeline,
-      HoodieRestoreMetadata restoreMetadata, String instantTime, Option<String> lastSyncTs) {
+  public static List<HoodieRecord> convertMetadataToRestoreRecords(HoodieActiveTimeline metadataTableTimeline,
+                                                                   HoodieRestoreMetadata restoreMetadata,
+                                                                   String instantTime, Option<String> lastSyncTs) {
     Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
     restoreMetadata.getHoodieRestoreMetadata().values().forEach(rms -> {
-      rms.forEach(rm -> processRollbackMetadata(metadataTableTimeline, rm, partitionToDeletedFiles, partitionToAppendedFiles, lastSyncTs));
+      rms.forEach(rm -> processRollbackMetadata(metadataTableTimeline, rm, partitionToDeletedFiles,
+          partitionToAppendedFiles, lastSyncTs));
     });
 
     return convertFilesToRecords(partitionToDeletedFiles, partitionToAppendedFiles, instantTime, "Restore");
   }
 
-  public static List<HoodieRecord> convertMetadataToRecords(HoodieActiveTimeline metadataTableTimeline,
-                                                            HoodieRollbackMetadata rollbackMetadata, String instantTime,
-                                                            Option<String> lastSyncTs, boolean wasSynced) {
+  /**
+   * TODO: Comment.
+   *
+   * @param commitMetadata
+   * @param instantTime
+   * @return
+   */
+  public static Map<MetadataPartitionType, List<HoodieRecord>> convertMetadataToRecords(
+      HoodieActiveTimeline metadataTableTimeline,
+      HoodieRollbackMetadata rollbackMetadata, String instantTime, Option<String> lastSyncTs, boolean wasSynced) {
+    Map<MetadataPartitionType, List<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
+    partitionToRecordsMap.put(MetadataPartitionType.FILES, convertMetadataToRollbackRecords(
+        metadataTableTimeline, rollbackMetadata, instantTime, lastSyncTs, wasSynced));
+    return partitionToRecordsMap;
+  }
+
+  public static List<HoodieRecord> convertMetadataToRollbackRecords(HoodieActiveTimeline metadataTableTimeline,
+                                                                    HoodieRollbackMetadata rollbackMetadata,
+                                                                    String instantTime,
+                                                                    Option<String> lastSyncTs, boolean wasSynced) {
 
     Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
     Map<String, List<String>> partitionToDeletedFiles = new HashMap<>();
-    processRollbackMetadata(metadataTableTimeline, rollbackMetadata, partitionToDeletedFiles, partitionToAppendedFiles, lastSyncTs);
+    processRollbackMetadata(metadataTableTimeline, rollbackMetadata, partitionToDeletedFiles,
+        partitionToAppendedFiles, lastSyncTs);
     if (!wasSynced) {
       // Since the instant-being-rolled-back was never committed to the metadata table, the files added there
       // need not be deleted. For MOR Table, the rollback appends logBlocks so we need to keep the appended files.

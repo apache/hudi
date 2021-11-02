@@ -75,10 +75,10 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_L
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
   // Type of the record. This can be an enum in the schema but Avro1.8
   // has a bug - https://issues.apache.org/jira/browse/AVRO-1810
-  private static final int METADATA_TYPE_PARTITION_LIST = 1;
-  private static final int METADATA_TYPE_FILE_LIST = 2;
-  //private static final int METADATA_TYPE_COLUMN_STATS = 3;
-  private static final int METADATA_TYPE_BLOOM_FILTER = 4;
+  protected static final int METADATA_TYPE_PARTITION_LIST = 1;
+  protected static final int METADATA_TYPE_FILE_LIST = 2;
+  //protected static final int METADATA_TYPE_COLUMN_STATS = 3;
+  protected static final int METADATA_TYPE_BLOOM_FILTER = 4;
 
   // Various metadata type record names in the payload
   private static final String METADATA_RECORD_FILESYSTEM = "filesystemMetadata";
@@ -138,9 +138,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(key, type, null, metadataBloomFilter);
   }
 
-  private HoodieMetadataPayload(String key, int type,
-                                Map<String, HoodieMetadataFileInfo> filesystemMetadata,
-                                HoodieMetadataBloomFilter metadataBloomFilter) {
+  protected HoodieMetadataPayload(String key, int type,
+                                  Map<String, HoodieMetadataFileInfo> filesystemMetadata,
+                                  HoodieMetadataBloomFilter metadataBloomFilter) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
