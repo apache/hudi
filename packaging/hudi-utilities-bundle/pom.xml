@@ -265,7 +265,7 @@
 
     <dependency>
       <groupId>org.apache.parquet</groupId>
-      <artifactId>parquetcolumn</artifactId>
+      <artifactId>parquet-column</artifactId>
       <scope>compile</scope>
     </dependency>
 
