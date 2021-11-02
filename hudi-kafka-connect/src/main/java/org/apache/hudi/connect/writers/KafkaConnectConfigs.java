@@ -66,6 +66,16 @@ public class KafkaConnectConfigs extends HoodieConfig {
       .withDocumentation("The interval at which Hudi will commit the records written "
           + "to the files, making them consumable on the read-side.");
 
+  public static final ConfigProperty<String> ENABLE_COMPACTION = ConfigProperty
+      .key("hoodie.kafka.compaction.enable")
+      .defaultValue("false")
+      .withDocumentation("Enable compaction");
+
+  public static final ConfigProperty<String> ENABLE_CLUSTERING = ConfigProperty
+      .key("hoodie.kafka.clustering.enable")
+      .defaultValue("false")
+      .withDocumentation("Enable clustering");
+
   public static final ConfigProperty<String> COORDINATOR_WRITE_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.kafka.coordinator.write.timeout.secs")
       .defaultValue("300")
@@ -119,6 +129,14 @@ public class KafkaConnectConfigs extends HoodieConfig {
 
   public String getKafkaValueConverter() {
     return getString(KAFKA_VALUE_CONVERTER);
+  }
+
+  public Boolean isCompactionEnabled() {
+    return getBoolean(ENABLE_COMPACTION);
+  }
+
+  public Boolean isClusteringEnabled() {
+    return getBoolean(ENABLE_CLUSTERING);
   }
 
   public Boolean isMetaSyncEnabled() {

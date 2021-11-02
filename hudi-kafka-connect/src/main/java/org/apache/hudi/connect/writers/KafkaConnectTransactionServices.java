@@ -55,6 +55,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
   private final Option<HoodieTableMetaClient> tableMetaClient;
   private final Configuration hadoopConf;
+  private final KafkaConnectConfigs connectConfigs;
   private final String tableBasePath;
   private final String tableName;
   private final HoodieEngineContext context;
@@ -62,6 +63,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
   private final HoodieJavaWriteClient<HoodieAvroPayload> javaClient;
 
   public KafkaConnectTransactionServices(KafkaConnectConfigs connectConfigs) throws HoodieException {
+    this.connectConfigs = connectConfigs;
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withProperties(connectConfigs.getProps())
@@ -110,10 +112,14 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     LOG.info("Ending Hudi commit " + commitTime);
 
     // Schedule clustering and compaction as needed.
-    javaClient.scheduleClustering(Option.empty()).ifPresent(
-        instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
-    javaClient.scheduleCompaction(Option.empty()).ifPresent(
-        instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
+    if (connectConfigs.isClusteringEnabled()) {
+      javaClient.scheduleClustering(Option.empty()).ifPresent(
+          instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
+    }
+    if (connectConfigs.isCompactionEnabled()) {
+      javaClient.scheduleCompaction(Option.empty()).ifPresent(
+          instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
+    }
   }
 
   public Map<String, String> fetchLatestExtraCommitMetadata() {
