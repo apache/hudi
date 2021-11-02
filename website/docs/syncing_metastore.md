@@ -5,7 +5,7 @@ keywords: [hudi, hive, sync]
 
 ## Syncing to Hive
 
-Writing data with [DataSource](https://hudi.apache.org/docs/writing_data) writer or [HoodieDeltaStreamer](https://hudi.apache.org/docs/hoodie_deltastreamer) supports syncing of the table's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
+Writing data with [DataSource](/docs/writing_data) writer or [HoodieDeltaStreamer](/docs/hoodie_deltastreamer) supports syncing of the table's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
 In case, it's preferable to run this from commandline or in an independent jvm, Hudi provides a `HiveSyncTool`, which can be invoked as below,
 once you have built the hudi-hive module. Following is how we sync the above Datasource Writer written table to Hive metastore.
 

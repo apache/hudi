@@ -83,7 +83,7 @@ hudi:trips->compaction run --tableName <table_name> --parallelism <parallelism> 
 ```
 
 ### Hudi Compactor Script
-Hudi provides a standalone tool to also execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](https://hudi.apache.org/docs/next/deployment#compactions)
+Hudi provides a standalone tool to also execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/next/deployment#compactions)
 
 ```properties
 spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \

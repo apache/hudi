@@ -11,7 +11,7 @@ The following are SparkSQL table management actions available:
 
 ## Spark Create Table
 :::note
-Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or Python. The first batch of a [Write](https://hudi.apache.org/docs/writing_data) to a table will create the table if it does not exist.
+Only SparkSQL needs an explicit Create Table command. No Create Table command is required in Spark when using Scala or Python. The first batch of a [Write](/docs/writing_data) to a table will create the table if it does not exist.
 :::
 
 ### Options
@@ -21,7 +21,7 @@ Users can set table options while creating a hudi table.
 | Parameter Name | Description | (Optional/Required) : Default Value |
 |------------|--------|--------|
 | primaryKey | The primary key names of the table, multiple fields separated by commas. | (Optional) : `id`|
-| type       | The type of table to create ([read more](https://hudi.apache.org/docs/table_types)). <br></br> `cow` = COPY-ON-WRITE, `mor` = MERGE-ON-READ.| (Optional) : `cow` |
+| type       | The type of table to create ([read more](/docs/table_types)). <br></br> `cow` = COPY-ON-WRITE, `mor` = MERGE-ON-READ.| (Optional) : `cow` |
 | preCombineField | The Pre-Combine field of the table. | (Optional) : `ts`|
 
 To set any custom hudi config(like index type, max parquet size, etc), see the  "Set hudi config section" .
@@ -216,7 +216,7 @@ set hoodie.delete.shuffle.parallelism = 100;
 ## Flink 
 ### Create Table
 
-The following is a Flink example to create a table. [Read the Flink Quick Start](https://hudi.apache.org/docs/flink-quick-start-guide) guide for more examples.
+The following is a Flink example to create a table. [Read the Flink Quick Start](/docs/flink-quick-start-guide) guide for more examples.
 
 ```sql 
 CREATE TABLE hudi_table2(

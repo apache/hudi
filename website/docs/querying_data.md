@@ -15,9 +15,9 @@ In sections, below we will discuss specific setup to access different query type
 ## Spark Datasource
 
 The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple `spark.read.parquet`.
-See the [Spark Quick Start](https://hudi.apache.org/docs/quick-start-guide) for more examples of Spark datasource reading queries. 
+See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark datasource reading queries. 
 
-To setup Spark for querying Hudi, see the [Query Engine Setup](https://hudi.apache.org/docs/query_engine_setup#Spark-DataSource) page.
+To setup Spark for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#Spark-DataSource) page.
 
 ### Snapshot query {#spark-snap-query}
 Retrieve the data table at the present point in time.
@@ -89,7 +89,7 @@ Note: COPY_ON_WRITE tables can also still be read if you turn off the default pa
 
 ## Flink SQL
 Once the flink Hudi tables have been registered to the Flink catalog, it can be queried using the Flink SQL. It supports all query types across both Hudi table types,
-relying on the custom Hudi input formats again like Hive. Typically notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](https://hudi.apache.org/docs/flink-quick-start-guide).
+relying on the custom Hudi input formats again like Hive. Typically notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described in the [Flink Quickstart](/docs/flink-quick-start-guide).
 
 By default, Flink SQL will try to use its own parquet reader instead of Hive SerDe when reading from Hive metastore parquet tables.
 
@@ -129,7 +129,7 @@ You can specify the start commit with option `read.streaming.start-commit` and s
 `read.streaming.check-interval`.
 
 ## Hive
-To setup Hive for querying Hudi, see the [Query Engine Setup](https://hudi.apache.org/docs/query_engine_setup#hive) page.
+To setup Hive for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#hive) page.
 
 ### Incremental query
 `HiveIncrementalPuller` allows incrementally extracting changes from large fact/dimension tables via HiveQL, combining the benefits of Hive (reliably process complex SQL queries) and
@@ -170,10 +170,10 @@ would ensure Map Reduce execution is chosen for a Hive query, which combines par
 separated) and calls InputFormat.listStatus() only once with all those partitions.
 
 ## PrestoDB
-To setup PrestoDB for querying Hudi, see the [Query Engine Setup](https://hudi.apache.org/docs/query_engine_setup#PrestoDB) page.
+To setup PrestoDB for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#PrestoDB) page.
 
 ## Trino
-To setup Trino for querying Hudi, see the [Query Engine Setup](https://hudi.apache.org/docs/query_engine_setup#Trino) page.
+To setup Trino for querying Hudi, see the [Query Engine Setup](/docs/query_engine_setup#Trino) page.
 
 ## Impala (3.4 or later)
 

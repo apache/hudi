@@ -208,4 +208,4 @@ A deltastreamer job can then be triggered as follows:
   --op BULK_INSERT
 ```
 
-Read more in depth about concurrency control in the [concurrency control concepts](https://hudi.apache.org/docs/concurrency_control) section
+Read more in depth about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section

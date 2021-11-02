@@ -5,9 +5,9 @@ toc: true
 last_modified_at:
 ---
 
-## Spark Datasource
+## Spark
 The Spark Datasource API is a popular way of authoring Spark ETL pipelines. Hudi tables can be queried via the Spark datasource with a simple `spark.read.parquet`.
-See the [Spark Quick Start](https://hudi.apache.org/docs/quick-start-guide) for more examples of Spark datasource reading queries.
+See the [Spark Quick Start](/docs/quick-start-guide) for more examples of Spark datasource reading queries.
 
 If your Spark environment does not have the Hudi jars installed, add `--jars <path to jar>/hudi-spark-bundle_2.11-<hudi version>.jar` to the classpath of drivers
 and executors. Alternatively, hudi-spark-bundle can also fetched via the `--packages` options (e.g: `--packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3`).
