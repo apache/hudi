@@ -32,6 +32,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Clustering Strategy that only looks at latest 'daybased.lookback.partitions' partitions
+ * for Java engine.
+ */
 public class JavaRecentDaysClusteringPlanStrategy<T extends HoodieRecordPayload<T>>
     extends JavaSizeBasedClusteringPlanStrategy<T> {
   private static final Logger LOG = LogManager.getLogger(JavaRecentDaysClusteringPlanStrategy.class);

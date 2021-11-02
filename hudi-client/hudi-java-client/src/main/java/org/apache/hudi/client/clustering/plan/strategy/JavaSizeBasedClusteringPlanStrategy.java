@@ -46,7 +46,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
 /**
- * Clustering Strategy based on following.
+ * Clustering Strategy for Java engine based on following.
  * 1) Creates clustering groups based on max size allowed per group.
  * 2) Excludes files that are greater than 'small.file.limit' from clustering plan.
  */

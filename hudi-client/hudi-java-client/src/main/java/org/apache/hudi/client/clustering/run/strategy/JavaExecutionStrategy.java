@@ -61,6 +61,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Clustering strategy for Java engine.
+ */
 public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
     extends ClusteringExecutionStrategy<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
 

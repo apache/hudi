@@ -39,6 +39,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+/**
+ * Clustering Strategy based on following.
+ * 1) Java execution engine.
+ * 2) Uses bulk_insert to write data into new files.
+ */
 public class JavaSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
     extends JavaExecutionStrategy<T> {
   private static final Logger LOG = LogManager.getLogger(JavaSortAndSizeExecutionStrategy.class);
