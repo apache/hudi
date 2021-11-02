@@ -25,9 +25,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
@@ -102,6 +105,24 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Fetch all files for given partition paths.
    */
   Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
+
+  /**
+   * Get the bloom filter for the FileID from the metadata table.
+   *
+   * @param fileID - FileID for which bloom filter needs to be retrieved
+   * @return BloomFilter byte buffer if available, otherwise empty
+   * @throws HoodieMetadataException
+   */
+  Option<ByteBuffer> getBloomFilter(final FileID fileID) throws HoodieMetadataException;
+
+  /**
+   * Get bloom filters for the list of FileIDs from the metadata table.
+   *
+   * @param fileIDList - List of FileIDs for which bloom filters need to be retrieved
+   * @return Map of FileID to its bloom filter byte buffer
+   * @throws HoodieMetadataException
+   */
+  Map<String, ByteBuffer> getBloomFilters(final List<FileID> fileIDList) throws HoodieMetadataException;
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

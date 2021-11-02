@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -95,11 +97,17 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
   protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {
     this.writeConfig = writeConfig;
     if (enableMetadataTable) {
-      metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
+      metadataWriter = getMetadataWriter(hadoopConf, writeConfig, context);
       testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
     } else {
       testTable = HoodieTestTable.of(metaClient);
     }
+  }
+
+  protected HoodieTableMetadataWriter getMetadataWriter(final Configuration hadoopConf,
+                                                        HoodieWriteConfig writeConfig,
+                                                        HoodieSparkEngineContext context) {
+    return SparkHoodieBackedTableMetadataWriter.create(hadoopConf, writeConfig, context);
   }
 
   @AfterEach

@@ -42,7 +42,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
@@ -104,8 +106,17 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
+    commit(instantTime, new HashMap<String, List<HoodieRecord>>() {
+      {
+        put(partitionName, records);
+      }
+    });
+  }
+
+  @Override
+  protected void commit(String instantTime, Map<String, List<HoodieRecord>> partitionRecordsMap) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
+    JavaRDD<HoodieRecord> recordRDD = prepRecords(partitionRecordsMap);
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
       if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
@@ -113,14 +124,19 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         writeClient.startCommitWithTime(instantTime);
       } else {
         // this code path refers to a re-attempted commit that got committed to metadata table, but failed in datatable.
-        // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to datatable.
-        // when retried again, data table will first rollback pending compaction. these will be applied to metadata table, but all changes
+        // for eg, lets say compaction c1 on 1st attempt succeeded in metadata table and failed before committing to
+        // datatable.
+        // when retried again, data table will first rollback pending compaction. these will be applied to metadata
+        // table, but all changes
         // are upserts to metadata table and so only a new delta commit will be created.
-        // once rollback is complete, compaction will be retried again, which will eventually hit this code block where the respective commit is
+        // once rollback is complete, compaction will be retried again, which will eventually hit this code block
+        // where the respective commit is
         // already part of completed commit. So, we have to manually remove the completed instant and proceed.
         // and it is for the same reason we enabled withAllowMultiWriteOnSameInstant for metadata table.
-        HoodieInstant alreadyCompletedInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
-        HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(), alreadyCompletedInstant);
+        HoodieInstant alreadyCompletedInstant =
+            metadataMetaClient.getActiveTimeline().filterCompletedInstants().filter(entry -> entry.getTimestamp().equals(instantTime)).lastInstant().get();
+        HoodieActiveTimeline.deleteInstantFile(metadataMetaClient.getFs(), metadataMetaClient.getMetaPath(),
+            alreadyCompletedInstant);
         metadataMetaClient.reloadActiveTimeline();
       }
       List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
@@ -142,18 +158,39 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   /**
    * Tag each record with the location in the given partition.
-   *
+   * <p>
    * The record is tagged with respective file slice's location based on its record key.
    */
-  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int numFileGroups) {
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
-    ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
+  private JavaRDD<HoodieRecord> prepRecords(Map<String, List<HoodieRecord>> partitionRecordsMap) {
 
-    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
-    return jsc.parallelize(records, 1).map(r -> {
-      FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups));
-      r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-      return r;
-    });
+    // TODO: generalize this
+    final int numFileGroups = 1;
+    JavaRDD<HoodieRecord> rddAllPartitionRecords = null;
+
+    for (Map.Entry<String, List<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
+      final String partitionName = entry.getKey();
+      final List<HoodieRecord> records = entry.getValue();
+
+      List<FileSlice> fileSlices =
+          HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
+      ValidationUtils.checkArgument(fileSlices.size() == numFileGroups,
+          String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
+
+      JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
+      JavaRDD<HoodieRecord> rddSinglePartitionRecords = jsc.parallelize(records, 1).map(r -> {
+        FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
+            numFileGroups));
+        r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
+        return r;
+      });
+
+      if (rddAllPartitionRecords == null) {
+        rddAllPartitionRecords = rddSinglePartitionRecords;
+      } else {
+        rddAllPartitionRecords.union(rddSinglePartitionRecords);
+      }
+    }
+
+    return rddAllPartitionRecords;
   }
 }

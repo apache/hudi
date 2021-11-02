@@ -29,8 +29,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -138,5 +141,15 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   @Override
   public void close() throws Exception {
     // no-op
+  }
+
+  @Override
+  public Option<ByteBuffer> getBloomFilter(FileID fileID) throws HoodieMetadataException {
+    return Option.empty();
+  }
+
+  @Override
+  public Map<String, ByteBuffer> getBloomFilters(List<FileID> fileIDList) throws HoodieMetadataException {
+    return Collections.emptyMap();
   }
 }

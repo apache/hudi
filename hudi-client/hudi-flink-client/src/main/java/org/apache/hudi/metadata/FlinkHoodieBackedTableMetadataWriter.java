@@ -40,6 +40,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
@@ -131,6 +132,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> m.updateSizeMetrics(metadataMetaClient, metadata));
+  }
+
+  @Override
+  protected void commit(String instantTime, Map<String, List<HoodieRecord>> partitionRecordsMap) {
+    throw new HoodieMetadataException("Unsupported operation!");
   }
 
   /**

@@ -100,6 +100,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected boolean enabled;
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
+  protected boolean isBloomFilterEnabled;
 
   /**
    * Hudi backed table metadata writer.
@@ -117,8 +118,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
+    this.metrics = Option.empty();
 
     if (writeConfig.isMetadataTableEnabled()) {
+      this.isBloomFilterEnabled = writeConfig.getMetadataConfig().isBloomFiltersEnabled();
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig);
       enabled = true;
@@ -141,7 +144,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       initTableMetadata();
     } else {
       enabled = false;
-      this.metrics = Option.empty();
     }
   }
 
@@ -228,7 +230,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     return metadataWriteConfig;
   }
 
-  public HoodieBackedTableMetadata metadata() {
+  public HoodieBackedTableMetadata getTableMetadata() {
     return metadata;
   }
 
@@ -370,12 +372,15 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(tableName)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-      .setPayloadClassName(HoodieMetadataPayload.class.getName())
-      .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
-      .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
+        .setPayloadClassName(HoodieMetadataPayload.class.getName())
+        .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
+        .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
 
     initTableMetadata();
     initializeFileGroups(dataMetaClient, MetadataPartitionType.FILES, createInstantTime, 1);
+    if (isBloomFilterEnabled) {
+      initializeFileGroups(dataMetaClient, MetadataPartitionType.BLOOM_FILTERS, createInstantTime, 1);
+    }
 
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
@@ -602,11 +607,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
    *
-   * @param records The list of records to be written.
+   * @param records       The list of records to be written.
    * @param partitionName The partition to which the records are to be written.
-   * @param instantTime The timestamp to use for the deltacommit.
+   * @param instantTime   The timestamp to use for the deltacommit.
    */
   protected abstract void commit(List<HoodieRecord> records, String partitionName, String instantTime);
+
+  /**
+   * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
+   *
+   * @param instantTime         - Action instant time for this commit
+   * @param partitionRecordsMap - Map of parition name to its records to commit
+   */
+  protected abstract void commit(String instantTime, Map<String, List<HoodieRecord>> partitionRecordsMap);
 
   /**
    *  Perform a compaction on the Metadata Table.

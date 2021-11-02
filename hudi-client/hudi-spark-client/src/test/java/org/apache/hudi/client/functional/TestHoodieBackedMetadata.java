@@ -194,7 +194,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     testTable.doWriteOperation("0000003", UPSERT, emptyList(), asList("p1", "p2"), 1, true);
     syncTableMetadata(writeConfig);
 
-    List<String> partitions = metadataWriter(writeConfig).metadata().getAllPartitionPaths();
+    List<String> partitions = metadataWriter(writeConfig).getTableMetadata().getAllPartitionPaths();
     assertFalse(partitions.contains(nonPartitionDirectory),
         "Must not contain the non-partition " + nonPartitionDirectory);
     assertTrue(partitions.contains("p1"), "Must contain partition p1");

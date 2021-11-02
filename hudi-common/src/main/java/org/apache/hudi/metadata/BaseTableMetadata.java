@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.hash.FileID;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -39,6 +41,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,6 +67,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final String spillableMapDirectory;
 
   protected boolean enabled;
+  protected boolean isBloomFilterMetadataEnabled;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                               String dataBasePath, String spillableMapDirectory) {
@@ -75,6 +79,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     this.metadataConfig = metadataConfig;
 
     this.enabled = metadataConfig.enabled();
+    this.isBloomFilterMetadataEnabled = (this.enabled && metadataConfig.isBloomFiltersEnabled());
     if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {
@@ -146,12 +151,65 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         .getAllFilesInPartitions(partitions);
   }
 
+  @Override
+  public Option<ByteBuffer> getBloomFilter(FileID fileID) throws HoodieMetadataException {
+    if (!isBloomFilterMetadataEnabled) {
+      throw new HoodieMetadataException("Metadata table or the bloom filter indexing is disabled! Cannot get bloom "
+          + "filter for " + fileID);
+    }
+
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(fileID.asBase64EncodedString(),
+        MetadataPartitionType.BLOOM_FILTERS.partitionPath());
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
+
+    if (!hoodieRecord.isPresent()) {
+      return Option.empty();
+    }
+
+    final Option<HoodieMetadataBloomFilter> optionalBloomFilterMetadata =
+        hoodieRecord.get().getData().getBloomFilterMetadata();
+    if (optionalBloomFilterMetadata.isPresent()) {
+      LOG.error("Bloom filter metadata for " + fileID + " is not available!");
+      return Option.empty();
+    }
+
+    return Option.of(optionalBloomFilterMetadata.get().getBloomfilter());
+  }
+
+  @Override
+  public Map<String, ByteBuffer> getBloomFilters(List<FileID> fileIDList) throws HoodieMetadataException {
+    if (!isBloomFilterMetadataEnabled) {
+      throw new HoodieMetadataException("Metadata table or the bloom filter indexing is disabled!");
+    }
+
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    List<String> fileIDStrings = new ArrayList<>();
+    fileIDList.forEach(fileID -> fileIDStrings.add(fileID.asBase64EncodedString()));
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
+        getRecordsByKeys(fileIDStrings, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
+
+    Map<String, ByteBuffer> fileIDBloomFilterMap = new HashMap<>();
+    for (final Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry : hoodieRecordList) {
+      if (entry.getRight().isPresent()) {
+        final Option<HoodieMetadataBloomFilter> optionalBloomFilterMetadata =
+            entry.getRight().get().getData().getBloomFilterMetadata();
+        if (optionalBloomFilterMetadata.isPresent()) {
+          fileIDBloomFilterMap.put(entry.getLeft(), optionalBloomFilterMetadata.get().getBloomfilter());
+        }
+      }
+    }
+    return fileIDBloomFilterMap;
+  }
+
   /**
    * Returns a list of all partitions.
    */
   protected List<String> fetchAllPartitionPaths() throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.partitionPath());
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST,
+        MetadataPartitionType.FILES.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
 
     List<String> partitions = Collections.emptyList();

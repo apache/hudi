@@ -30,27 +30,65 @@
             "doc": "Type of the metadata record",
             "type": "int"
         },
-        {   "name": "filesystemMetadata",
+        {
+            "name": "filesystemMetadata",
             "doc": "Contains information about partitions and files within the dataset",
-            "type": ["null", {
-               "type": "map",
-               "values": {
+            "type": [
+                "null",
+                {
+                    "type": "map",
+                    "values": {
+                        "type": "record",
+                        "name": "HoodieMetadataFileInfo",
+                        "fields": [
+                            {
+                                "name": "size",
+                                "type": "long",
+                                "doc": "Size of the file"
+                            },
+                            {
+                                "name": "isDeleted",
+                                "type": "boolean",
+                                "doc": "True if this file has been deleted"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "doc": "Metadata about base file bloom filters",
+            "name": "BloomFilterMetadata",
+            "type": [
+                "null",
+                {
+                    "doc": "Base FileID and its BloomFilter details",
+                    "name": "HoodieMetadataBloomFilter",
                     "type": "record",
-                    "name": "HoodieMetadataFileInfo",
                     "fields": [
                         {
-                            "name": "size",
-                            "type": "long",
-                            "doc": "Size of the file"
+                            "doc": "Version of the bloom filter metadata",
+                            "name": "version",
+                            "type": "int"
                         },
                         {
-                            "name": "isDeleted",
-                            "type": "boolean",
-                            "doc": "True if this file has been deleted"
+                            "doc": "Instant timestamp when this metadata was created/updated",
+                            "name": "timestamp",
+                            "type": "string"
+                        },
+                        {
+                            "doc": "Bloom filter binary byte array",
+                            "name": "bloomfilter",
+                            "type": "bytes"
+                        },
+                        {
+                            "doc": "True if this entry is valid",
+                            "name": "valid",
+                            "type": "boolean"
                         }
                     ]
                 }
-            }]
+            ]
         }
     ]
 }
