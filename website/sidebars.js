@@ -15,40 +15,70 @@ module.exports = {
             items: [
                 'quick-start-guide',
                 'flink-quick-start-guide',
+                'docker_demo'
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Concepts',
+            items: [
+                'write_operations',
+                'schema_evolution',
+                'key_generation',
+                'concurrency_control',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'How To',
+            items: [
+                'table_management',
+                'writing_data',
+                'hoodie_deltastreamer',
+                'querying_data',
+                'syncing_metastore',
+            ],
+        },
+        {
+            type: 'category',
+            label: 'Services',
+            items: [
+                'migration_guide',
+                'compaction',
+                'clustering'
+            ],
+        },
+        'configurations',
+        {
+            type: 'category',
+            label: 'Guides',
+            items: [
+                'query_engine_setup',
+                'performance',
+                'deployment',
+                'cli',
+                'metrics',
+                'troubleshooting',
+                {
+                    type: 'category',
+                    label: 'Storage Configurations',
+                    items: [
+                        'cloud',
+                        's3_hoodie',
+                        'gcs_hoodie',
+                        'oss_hoodie',
+                        'azure_hoodie',
+                        'cos_hoodie',
+                        'ibm_cos_hoodie',
+                        'bos_hoodie',
+                        'jfs_hoodie'
+                    ],
+                },
             ],
         },
         'use_cases',
-        'writing_data',
-        'schema_evolution',
-        'concurrency_control',
-        'querying_data',
-        'configurations',
-        'performance',
-        'deployment',
-        {
-            type: 'category',
-            label: 'Storage Configurations',
-            items: [
-                'cloud',
-                's3_hoodie',
-                'gcs_hoodie',
-                'oss_hoodie',
-                'azure_hoodie',
-                'cos_hoodie',
-                'ibm_cos_hoodie',
-                'bos_hoodie',
-                'jfs_hoodie'
-            ],
-        },
-        {
-            type: 'category',
-            label: 'Resources',
-            items: [
-                'docker_demo',
-                'metrics',
-                'privacy'
-            ],
-        },
+        'faq',
+        'privacy',
     ],
     quick_links: [
         {

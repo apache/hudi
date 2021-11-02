@@ -1,5 +1,5 @@
 ---
-title: Migration
+title: Bootstrap Existing Tables
 keywords: [ hudi, migration, use case]
 summary: In this page, we will discuss some available tools for migrating your existing table into a Hudi table
 last_modified_at: 2019-12-30T15:59:57-04:00
