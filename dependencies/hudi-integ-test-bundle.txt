@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 
-../va.JavaVirtualMachines.jdk1.8.0_211.jdk.Contents.Home.jre/lib//tools.jar
 HikariCP/com.zaxxer/2.5.1//HikariCP-2.5.1.jar
 RoaringBitmap/org.roaringbitmap/0.7.45//RoaringBitmap-0.7.45.jar
 ST4/org.antlr/4.0.4//ST4-4.0.4.jar

@@ -19,12 +19,16 @@
 package org.apache.hudi.metadata;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -32,26 +36,30 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * A {@code HoodieMergedLogRecordScanner} implementation which only merged records matching providing keys. This is
  * useful in limiting memory usage when only a small subset of updates records are to be read.
  */
-public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordScanner {
+public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordScanner {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieMetadataMergedLogRecordReader.class);
 
   // Set of all record keys that are to be read in memory
   private Set<String> mergeKeyFilter;
 
-  private HoodieMetadataMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
+  private HoodieMetadataMergedLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                               Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes, int bufferSize,
                                               String spillableMapBasePath, Set<String> mergeKeyFilter,
                                               ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
-                                              Option<InstantRange> instantRange) {
+                                              Option<InstantRange> instantRange, boolean enableFullScan) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
-        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false);
+        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false, enableFullScan);
     this.mergeKeyFilter = mergeKeyFilter;
-
-    performScan();
+    if (enableFullScan) {
+      performScan();
+    }
   }
 
   @Override
@@ -71,8 +79,8 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
   /**
    * Returns the builder for {@code HoodieMetadataMergedLogRecordScanner}.
    */
-  public static HoodieMetadataMergedLogRecordScanner.Builder newBuilder() {
-    return new HoodieMetadataMergedLogRecordScanner.Builder();
+  public static HoodieMetadataMergedLogRecordReader.Builder newBuilder() {
+    return new HoodieMetadataMergedLogRecordReader.Builder();
   }
 
   /**
@@ -81,8 +89,22 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
    * @param key Key of the record to retrieve
    * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
    */
-  public Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key) {
-    return Option.ofNullable((HoodieRecord) records.get(key));
+  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordByKey(String key) {
+    return Collections.singletonList(Pair.of(key, Option.ofNullable((HoodieRecord) records.get(key))));
+  }
+
+  public List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys) {
+    records.clear();
+    scan(Option.of(keys));
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> metadataRecords = new ArrayList<>();
+    keys.forEach(entry -> {
+      if (records.containsKey(entry)) {
+        metadataRecords.add(Pair.of(entry, Option.ofNullable((HoodieRecord) records.get(entry))));
+      } else {
+        metadataRecords.add(Pair.of(entry, Option.empty()));
+      }
+    });
+    return metadataRecords;
   }
 
   /**
@@ -90,6 +112,8 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
    */
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
     private Set<String> mergeKeyFilter = Collections.emptySet();
+    private boolean enableFullScan;
+    private boolean enableInlineReading;
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -171,11 +195,16 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
       return this;
     }
 
+    public Builder enableFullScan(boolean enableFullScan) {
+      this.enableFullScan = enableFullScan;
+      return this;
+    }
+
     @Override
-    public HoodieMetadataMergedLogRecordScanner build() {
-      return new HoodieMetadataMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
+    public HoodieMetadataMergedLogRecordReader build() {
+      return new HoodieMetadataMergedLogRecordReader(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, enableFullScan);
     }
   }
 

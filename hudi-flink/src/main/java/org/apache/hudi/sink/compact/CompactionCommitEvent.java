@@ -51,12 +51,27 @@ public class CompactionCommitEvent implements Serializable {
   public CompactionCommitEvent() {
   }
 
+  /**
+   * An event with NULL write statuses that represents a failed compaction.
+   */
+  public CompactionCommitEvent(String instant, String fileId, int taskID) {
+    this(instant, fileId, null, taskID);
+  }
+
   public CompactionCommitEvent(String instant, String fileId, List<WriteStatus> writeStatuses, int taskID) {
     this.instant = instant;
     this.fileId = fileId;
     this.writeStatuses = writeStatuses;
     this.taskID = taskID;
   }
+
+  public boolean isFailed() {
+    return this.writeStatuses == null;
+  }
+
+  // -------------------------------------------------------------------------
+  //  Getter/Setter
+  // -------------------------------------------------------------------------
 
   public void setInstant(String instant) {
     this.instant = instant;

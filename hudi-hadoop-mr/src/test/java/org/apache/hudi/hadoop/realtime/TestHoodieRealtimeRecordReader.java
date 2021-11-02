@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -137,6 +138,24 @@ public class TestHoodieRealtimeRecordReader {
   public void testReader(ExternalSpillableMap.DiskMapType diskMapType,
                          boolean isCompressionEnabled,
                          boolean partitioned) throws Exception {
+    testReaderInternal(diskMapType, isCompressionEnabled, partitioned);
+  }
+
+  @Test
+  public void testHFileInlineReader() throws Exception {
+    testReaderInternal(ExternalSpillableMap.DiskMapType.BITCASK, false, false,
+        HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK);
+  }
+
+  private void testReaderInternal(ExternalSpillableMap.DiskMapType diskMapType,
+                                  boolean isCompressionEnabled,
+                                  boolean partitioned) throws Exception {
+    testReaderInternal(diskMapType, isCompressionEnabled, partitioned, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK);
+  }
+
+  private void testReaderInternal(ExternalSpillableMap.DiskMapType diskMapType,
+                         boolean isCompressionEnabled,
+                         boolean partitioned, HoodieLogBlock.HoodieLogBlockType logBlockType) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
@@ -175,7 +194,7 @@ public class TestHoodieRealtimeRecordReader {
         } else {
           writer =
               InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", baseInstant,
-                  instantTime, 120, 0, logVersion);
+                  instantTime, 120, 0, logVersion, logBlockType);
         }
         long size = writer.getCurrentSize();
         writer.close();

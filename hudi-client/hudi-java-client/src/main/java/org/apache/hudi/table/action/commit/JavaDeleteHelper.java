@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -97,8 +98,8 @@ public class JavaDeleteHelper<R> extends
           dedupedKeys.stream().map(key -> new HoodieRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
       Instant beginTag = Instant.now();
       // perform index look up to get existing location of records
-      List<HoodieRecord<EmptyHoodieRecordPayload>> taggedRecords =
-          table.getIndex().tagLocation(dedupedRecords, context, table);
+      List<HoodieRecord<EmptyHoodieRecordPayload>> taggedRecords = HoodieList.getList(
+          table.getIndex().tagLocation(HoodieList.of(dedupedRecords), context, table));
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
 
       // filter out non existent keys/records
