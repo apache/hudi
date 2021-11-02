@@ -1047,8 +1047,6 @@ public class TestHiveSyncTool {
     // Create a database in Hive. If the database is created successfully
     // the client synchronizes the Kerberos metadata for managing Hive
     hoodieHiveClient.createDatabase(hiveSyncConfig.databaseName);
-
-    assert !hoodieHiveClient.doesDataBaseExist(hiveSyncConfig.databaseName) : "Database creation failed!";
-    System.out.println("Database created successfully: " + hiveSyncConfig.databaseName);
+    assertTrue(hoodieHiveClient.doesDataBaseExist(hiveSyncConfig.databaseName));
   }
 }
