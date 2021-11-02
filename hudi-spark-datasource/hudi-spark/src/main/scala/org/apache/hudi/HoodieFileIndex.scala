@@ -159,7 +159,7 @@ case class HoodieFileIndex(
       spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
   }
 
-  private def createFilterFiles(dataFilters: Seq[Expression]): Set[String] = {
+  private def filterFilesByDataSkippingIndex(dataFilters: Seq[Expression]): Set[String] = {
     var allFiles: Set[String] = Set.empty
     var candidateFiles: Set[String] = Set.empty
     val indexPath = metaClient.getZindexPath
@@ -181,7 +181,7 @@ case class HoodieFileIndex(
           val indexSchema = dataFrameOpt.get.schema
           val indexFiles = DataSkippingUtils.getIndexFiles(spark.sparkContext.hadoopConfiguration, new Path(indexPath, candidateIndexTables.last).toString)
           val indexFilter = dataFilters.map(DataSkippingUtils.createZindexFilter(_, indexSchema)).reduce(And)
-          logInfo(s"index filter condition: ${indexFilter}")
+          logInfo(s"index filter condition: $indexFilter")
           dataFrameOpt.get.persist()
           if (indexFiles.size <= 4) {
             allFiles = DataSkippingUtils.readParquetFile(spark, indexFiles)
@@ -206,8 +206,8 @@ case class HoodieFileIndex(
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     // try to load filterFiles from index
-    val filterFiles: Set[String] = if (enableDataSkipping) {
-      createFilterFiles(dataFilters)
+    val filterFiles: Set[String] = if (enableDataSkipping()) {
+      filterFilesByDataSkippingIndex(dataFilters)
     } else {
       Set.empty
     }
@@ -217,9 +217,9 @@ case class HoodieFileIndex(
       } else {
         allFiles
       }
-      logInfo(s"Total file size is: ${allFiles.size}," +
-        s" after file skip size is: ${candidateFiles.size} " +
-        s"skipping percent ${if (allFiles.length != 0) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+      logInfo(s"Total files : ${allFiles.size}," +
+        s" candidate files after data skipping: ${candidateFiles.size} " +
+        s" skipping percent ${if (allFiles.length != 0) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
       Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
@@ -236,7 +236,7 @@ case class HoodieFileIndex(
           }
         }).filterNot(_ == null)
         val candidateFiles = if (!filterFiles.isEmpty) {
-          baseFileStatuses.filterNot(fileStatu => filterFiles.contains(fileStatu.getPath.getName))
+          baseFileStatuses.filterNot(fileStatus => filterFiles.contains(fileStatus.getPath.getName))
         } else {
           baseFileStatuses
         }
@@ -244,8 +244,8 @@ case class HoodieFileIndex(
         candidateFileSize += candidateFiles.size
         PartitionDirectory(partition.values, candidateFiles)
       }
-      logInfo(s"Total file size is: ${totalFileSize}," +
-        s" after file skip size is: ${candidateFileSize} " +
+      logInfo(s"Total files: ${totalFileSize}," +
+        s" Candidate files after data skipping : ${candidateFileSize} " +
         s"skipping percent ${if (allFiles.length != 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
       result
     }

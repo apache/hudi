@@ -113,6 +113,7 @@ object DataSourceReadOptions {
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.enable.data.skipping")
     .defaultValue(true)
+    .sinceVersion("0.10.0")
     .withDocumentation("enable data skipping to boost query after doing z-order optimize for current table")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
