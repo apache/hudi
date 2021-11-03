@@ -46,6 +46,7 @@ class TestTimeTravelQuery extends HoodieClientTestBase {
   )
 
   @BeforeEach override def setUp() {
+    setTableName("hoodie_test")
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession

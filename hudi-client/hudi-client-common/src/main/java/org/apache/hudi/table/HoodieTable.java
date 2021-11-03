@@ -244,6 +244,16 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
 
+  /**
+   * update statistics info for current table.
+   * to do adaptation, once RFC-27 is finished.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant time for the replace action
+   * @param isOptimizeOperation whether current operation is OPTIMIZE type
+   */
+  public abstract void updateStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime, Boolean isOptimizeOperation);
+
   public HoodieWriteConfig getConfig() {
     return config;
   }
@@ -424,7 +434,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    *
    * @return information on cleaned file slices
    */
-  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime);
+  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking);
 
   /**
    * Schedule rollback for the instant time.
@@ -452,7 +462,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieRollbackMetadata rollback(HoodieEngineContext context,
                                                   String rollbackInstantTime,
                                                   HoodieInstant commitInstant,
-                                                  boolean deleteInstants);
+                                                  boolean deleteInstants,
+                                                  boolean skipLocking);
 
   /**
    * Create a savepoint at the specified instant, so that the table can be restored
@@ -480,7 +491,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
     String commitTime = HoodieActiveTimeline.createNewInstantTime();
     scheduleRollback(context, commitTime, inflightInstant, false);
-    rollback(context, commitTime, inflightInstant, false);
+    rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }
 

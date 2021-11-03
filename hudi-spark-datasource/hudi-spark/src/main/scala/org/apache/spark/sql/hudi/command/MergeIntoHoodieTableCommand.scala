@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
@@ -34,7 +35,6 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, SerDeUtils}
 import org.apache.spark.sql.types.{BooleanType, StructType}
-
 import java.util.Base64
 
 /**
@@ -419,7 +419,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     val targetTableDb = targetTableIdentify.database.getOrElse("default")
     val targetTableName = targetTableIdentify.identifier
     val path = getTableLocation(targetTable, sparkSession)
-
+    val conf = sparkSession.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(path)
+      .setConf(conf)
+      .build()
+    val tableConfig = metaClient.getTableConfig
     val options = targetTable.storage.properties
     val definedPk = HoodieOptionConfig.getPrimaryColumns(options)
     // TODO Currently the mergeEqualConditionKeys must be the same the primary key.
@@ -429,31 +434,30 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     }
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isEnableHive(sparkSession)
-    HoodieWriterUtils.parametersWithWriteDefaults(
-      withSparkConf(sparkSession, options) {
-        Map(
-          "path" -> path,
-          RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
-          KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
-          PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
-          TBL_NAME.key -> targetTableName,
-          PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
-          PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
-          META_SYNC_ENABLED.key -> enableHive.toString,
-          HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
-          HIVE_USE_JDBC.key -> "false",
-          HIVE_DATABASE.key -> targetTableDb,
-          HIVE_TABLE.key -> targetTableName,
-          HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
-          HIVE_STYLE_PARTITIONING.key -> "true",
-          HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
-          HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-          URL_ENCODE_PARTITIONING.key -> "true", // enable the url decode for sql.
-          HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200", // set the default parallelism to 200 for sql
-          HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
-          HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
-          SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
-        )
-      })
+    withSparkConf(sparkSession, options) {
+      Map(
+        "path" -> path,
+        RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
+        PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
+        TBL_NAME.key -> targetTableName,
+        PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
+        PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
+        HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
+        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitoning,
+        KEYGENERATOR_CLASS_NAME.key -> tableConfig.getKeyGeneratorClassName,
+        META_SYNC_ENABLED.key -> enableHive.toString,
+        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
+        HIVE_USE_JDBC.key -> "false",
+        HIVE_DATABASE.key -> targetTableDb,
+        HIVE_TABLE.key -> targetTableName,
+        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
+        HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
+        HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+        HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200", // set the default parallelism to 200 for sql
+        HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
+        HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
+        SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
+      )
+    }
   }
 }

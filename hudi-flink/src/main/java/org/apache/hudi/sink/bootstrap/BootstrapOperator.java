@@ -18,9 +18,6 @@
 
 package org.apache.hudi.sink.bootstrap;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
@@ -37,9 +34,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
+import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
@@ -119,7 +116,7 @@ public class BootstrapOperator<I, O extends HoodieRecord>
 
     this.hadoopConf = StreamerUtil.getHadoopConf();
     this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
-    this.hoodieTable = getTable();
+    this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
 
     preLoadIndexRecords();
   }
@@ -144,13 +141,6 @@ public class BootstrapOperator<I, O extends HoodieRecord>
   @SuppressWarnings("unchecked")
   public void processElement(StreamRecord<I> element) throws Exception {
     output.collect((StreamRecord<O>) element);
-  }
-
-  private HoodieFlinkTable getTable() {
-    HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
-        new SerializableConfiguration(this.hadoopConf),
-        new FlinkTaskContextSupplier(getRuntimeContext()));
-    return HoodieFlinkTable.create(this.writeConfig, context);
   }
 
   /**
@@ -241,7 +231,7 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     return hoodieRecord;
   }
 
-  private static boolean shouldLoadFile(String fileId,
+  protected boolean shouldLoadFile(String fileId,
                                         int maxParallelism,
                                         int parallelism,
                                         int taskID) {
