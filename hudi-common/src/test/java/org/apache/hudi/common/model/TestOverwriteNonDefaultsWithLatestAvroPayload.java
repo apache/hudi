@@ -127,6 +127,7 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record2);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
   }
+  
   @Test
   public void testNullColumn() throws IOException {
     Schema avroSchema = Schema.createRecord(Arrays.asList(
