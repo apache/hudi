@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive.ddl;
 
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -101,6 +102,7 @@ public class HMSDDLExecutor implements DDLExecutor {
       Table newTb = new Table();
       newTb.setDbName(syncConfig.databaseName);
       newTb.setTableName(tableName);
+      newTb.setOwner(UserGroupInformation.getCurrentUser().getShortUserName());
       newTb.setCreateTime((int) System.currentTimeMillis());
       StorageDescriptor storageDescriptor = new StorageDescriptor();
       storageDescriptor.setCols(fieldSchema);
