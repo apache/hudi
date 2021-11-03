@@ -47,6 +47,17 @@ module.exports = {
     [
       '@docusaurus/plugin-content-docs',
       {
+        id: 'community',
+        path: 'community',
+        routeBasePath: 'community',
+        sidebarPath: require.resolve('./sidebarsCommunity.js'),
+        showLastUpdateAuthor: false,
+        showLastUpdateTime: false,
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
         id: 'releases',
         path: 'releases',
         routeBasePath: 'releases',
@@ -78,8 +89,12 @@ module.exports = {
         },
         redirects: [
           {
-            from: ['/docs/contribute', '/docs/next/contribute'],
-            to: '/contribute/get-involved',
+            from: ['/docs/contribute', '/docs/next/contribute', '/contribute/get-involved'],
+            to: '/community/get-involved',
+          },
+          {
+            from: ['/contribute/team'],
+            to: '/community/team',
           },
           {
             from: ['/docs/releases', '/docs/next/releases'],
@@ -140,14 +155,6 @@ module.exports = {
           position: 'left',
           items: [
             {
-              label: 'Get Involved',
-              to: '/contribute/get-involved',
-            },
-            {
-              label: 'Team',
-              to: '/contribute/team',
-            },
-            {
               label: 'How to Contribute',
               to: '/contribute/how-to-contribute',
             },
@@ -166,6 +173,24 @@ module.exports = {
             {
               label: 'Report Issues',
               href: 'https://issues.apache.org/jira/projects/HUDI/summary',
+            }
+          ],
+        },
+        {
+          label: 'Community',
+          position: 'left',
+          items: [
+            {
+              label: 'Get Involved',
+              to: '/community/get-involved',
+            },
+            {
+              label: 'Community Syncs',
+              to: '/community/syncs',
+            },
+            {
+              label: 'Team',
+              to: '/community/team',
             }
           ],
         },
@@ -225,7 +250,7 @@ module.exports = {
             },
             {
               label: 'Team',
-              to: '/contribute/team',
+              to: '/community/team',
             },
             {
               label: 'Releases',
