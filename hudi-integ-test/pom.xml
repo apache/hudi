@@ -375,6 +375,10 @@
           <groupId>org.eclipse.jetty</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+          <exclusion>
+              <artifactId>parquet-hadoop-bundle</artifactId>
+              <groupId>org.apache.parquet</groupId>
+          </exclusion>
       </exclusions>
       <scope>test</scope>
     </dependency>
