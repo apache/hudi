@@ -75,4 +75,10 @@ public class BatchBootstrapOperator<I, O extends HoodieRecord>
     // send the trigger record
     output.collect((StreamRecord<O>) element);
   }
+
+  @Override
+  protected boolean shouldLoadFile(String fileId, int maxParallelism, int parallelism, int taskID) {
+    // load all the file groups in the partition
+    return true;
+  }
 }
