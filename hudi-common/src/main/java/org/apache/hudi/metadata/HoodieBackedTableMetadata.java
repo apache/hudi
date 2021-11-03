@@ -165,6 +165,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           logRecords.put(entry.getKey(), entry.getValue());
         }
       }
+    } else {
+      for (String key : keys) {
+        logRecords.put(key, Option.empty());
+      }
     }
     timings.add(timer.endTimer());
     return logRecords;
@@ -199,12 +203,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           }
         } else {
           // only log record
-          if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {
-            HoodieRecordPayload mergedPayload = logRecords.get(key).get().getData().preCombine(hoodieRecord.getData());
-            result.add(Pair.of(key, Option.of(new HoodieRecord(hoodieRecord.getKey(), mergedPayload))));
-          } else { // not found in both base file and log files
-            result.add(Pair.of(key, Option.empty()));
-          }
+          result.add(Pair.of(key, logRecords.get(key)));
         }
       }
       timings.add(timer.endTimer());

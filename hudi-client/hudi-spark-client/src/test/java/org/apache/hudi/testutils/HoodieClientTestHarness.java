@@ -249,7 +249,15 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     initMetaClient(getTableType());
   }
 
+  protected void initMetaClient(Properties properties) throws IOException {
+    initMetaClient(getTableType(), properties);
+  }
+
   protected void initMetaClient(HoodieTableType tableType) throws IOException {
+    initMetaClient(tableType, new Properties());
+  }
+
+  protected void initMetaClient(HoodieTableType tableType, Properties properties) throws IOException {
     if (basePath == null) {
       throw new IllegalStateException("The base path has not been initialized.");
     }
@@ -258,7 +266,10 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
+    if (tableName != null && !tableName.isEmpty()) {
+      properties.put(HoodieTableConfig.NAME.key(), tableName);
+    }
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, properties);
   }
 
   protected Properties getPropertiesForKeyGen() {

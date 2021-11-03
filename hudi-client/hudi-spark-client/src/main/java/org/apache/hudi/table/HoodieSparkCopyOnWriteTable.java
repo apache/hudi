@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -71,13 +73,16 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.ZCurveOptimizeHelper;
 import org.apache.spark.api.java.JavaRDD;
+import scala.collection.JavaConversions;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
@@ -150,6 +155,32 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> insertOverwriteTable(HoodieEngineContext context, String instantTime, JavaRDD<HoodieRecord<T>> records) {
     return new SparkInsertOverwriteTableCommitActionExecutor(context, config, this, instantTime, records).execute();
+  }
+
+  @Override
+  public void updateStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime, Boolean isOptimizeOperation) {
+    // deal with z-order/hilbert statistic info
+    if (isOptimizeOperation) {
+      updateOptimizeOperationStatistics(context, stats, instantTime);
+    }
+  }
+
+  private void updateOptimizeOperationStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime) {
+    String cols = config.getClusteringSortColumns();
+    String basePath = metaClient.getBasePath();
+    String indexPath = metaClient.getZindexPath();
+    List<String> validateCommits = metaClient.getCommitsTimeline()
+        .filterCompletedInstants().getInstants().map(f -> f.getTimestamp()).collect(Collectors.toList());
+    List<String> touchFiles = stats.stream().map(s -> new Path(basePath, s.getPath()).toString()).collect(Collectors.toList());
+    if (touchFiles.isEmpty() || cols.isEmpty() || indexPath.isEmpty()) {
+      LOG.warn("save nothing to index table");
+      return;
+    }
+    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
+    ZCurveOptimizeHelper.saveStatisticsInfo(sparkEngineContext
+        .getSqlContext().sparkSession().read().load(JavaConversions.asScalaBuffer(touchFiles)),
+        cols, indexPath, instantTime, validateCommits);
+    LOG.info(String.format("save statistic info sucessfully at commitTime: %s", instantTime));
   }
 
   @Override

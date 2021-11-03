@@ -154,14 +154,12 @@ class DefaultSource extends RelationProvider
                               mode: SaveMode,
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
-    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
 
-    if (translatedOptions(OPERATION.key).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
+    if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
+      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, dfWithoutMetaCols)
     } else {
-      HoodieSparkSqlWriter.write(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.write(sqlContext, mode, optParams, dfWithoutMetaCols)
     }
     new HoodieEmptyRelation(sqlContext, dfWithoutMetaCols.schema)
   }
@@ -170,11 +168,9 @@ class DefaultSource extends RelationProvider
                           optParams: Map[String, String],
                           partitionColumns: Seq[String],
                           outputMode: OutputMode): Sink = {
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
-    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     new HoodieStreamingSink(
       sqlContext,
-      translatedOptions,
+      optParams,
       partitionColumns,
       outputMode)
   }
