@@ -658,15 +658,26 @@ public class FSUtils {
           .filter(subPathPredicate)
           .map(fileStatus -> fileStatus.getPath().toString())
           .collect(Collectors.toList());
-      if (subPaths.size() > 0) {
-        SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
-        int actualParallelism = Math.min(subPaths.size(), parallelism);
-        result = hoodieEngineContext.mapToPair(subPaths,
-            subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
-            actualParallelism);
-      }
+      result = parallelizeFilesProcess(hoodieEngineContext, fs, parallelism, pairFunction, subPaths);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+    return result;
+  }
+
+  public static <T> Map<String, T> parallelizeFilesProcess(
+      HoodieEngineContext hoodieEngineContext,
+      FileSystem fs,
+      int parallelism,
+      SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction,
+      List<String> subPaths) {
+    Map<String, T> result = new HashMap<>();
+    if (subPaths.size() > 0) {
+      SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
+      int actualParallelism = Math.min(subPaths.size(), parallelism);
+      result = hoodieEngineContext.mapToPair(subPaths,
+          subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
+          actualParallelism);
     }
     return result;
   }

@@ -193,6 +193,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("100")
       .withDocumentation("Parallelism for rollback of commits. Rollbacks perform delete of files or logging delete blocks to file groups on storage in parallel.");
 
+  public static final ConfigProperty<String> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
+      .key("hoodie.archive.delete.parallelism")
+      .defaultValue("100")
+      .withDocumentation("Parallelism for delete archived commits.");
+
   public static final ConfigProperty<String> WRITE_BUFFER_LIMIT_BYTES_VALUE = ConfigProperty
       .key("hoodie.write.buffer.limit.bytes")
       .defaultValue(String.valueOf(4 * 1024 * 1024))
@@ -931,6 +936,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getRollbackParallelism() {
     return getInt(ROLLBACK_PARALLELISM_VALUE);
+  }
+
+  public int getArchiveDeleteParallelism() {
+    return getInt(DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE);
   }
 
   public int getFileListingParallelism() {
@@ -1883,6 +1892,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withRollbackParallelism(int rollbackParallelism) {
       writeConfig.setValue(ROLLBACK_PARALLELISM_VALUE, String.valueOf(rollbackParallelism));
+      return this;
+    }
+
+    public Builder withArchiveDeleteParallelism(int archiveDeleteParallelism) {
+      writeConfig.setValue(DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE, String.valueOf(archiveDeleteParallelism));
       return this;
     }
 
