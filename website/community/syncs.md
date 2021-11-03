@@ -16,7 +16,7 @@ Every month on the Last Wed, 07:00 AM Pacific Time (US and Canada)([translate to
 
 **Typical agenda**
 
-*   \[15 mins\] Progress updates & Plans(PMC member)
+*   \[15 mins\] Progress updates & Plans (PMC member)
 *   \[30 mins\] User presentations, Upcoming feature show cases, Demos
 *   \[15 mins\] Open Floor, Q&A
 
