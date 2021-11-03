@@ -214,8 +214,17 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       while (!buffer.isEmpty()) {
         try {
           SinkRecord record = buffer.peek();
+          if (record != null) {
+            LOG.warn("writing record: offset " + record.kafkaOffset()
+                + " last written kafka offset " + ongoingTransactionInfo.getLastWrittenKafkaOffset());
+          }
           if (record != null
-              && record.kafkaOffset() >= ongoingTransactionInfo.getLastWrittenKafkaOffset()) {
+              && record.kafkaOffset() > ongoingTransactionInfo.getLastWrittenKafkaOffset()) {
+            LOG.warn("Offset partition based on record: " + record.kafkaOffset()
+                + " last written kafka offset " + ongoingTransactionInfo.getLastWrittenKafkaOffset());
+            context.offset(partition, ongoingTransactionInfo.getLastWrittenKafkaOffset());
+          } else if (record != null
+              && record.kafkaOffset() == ongoingTransactionInfo.getLastWrittenKafkaOffset()) {
             ongoingTransactionInfo.getWriter().writeRecord(record);
             ongoingTransactionInfo.setLastWrittenKafkaOffset(record.kafkaOffset() + 1);
           } else if (record != null && record.kafkaOffset() < committedKafkaOffset) {
