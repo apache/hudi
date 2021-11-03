@@ -73,8 +73,8 @@ public class HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier, boolean populateMetaFields, boolean enableBloomFilter) throws IOException {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
 
-    LOG.error("--" + SystemUtils.getClassLocation(AvroSchemaConverter.class));
-    LOG.error("--" + SystemUtils.getClassLocation(Types.class));
+    LOG.error("--123" + SystemUtils.getClassLocation(AvroSchemaConverter.class));
+    LOG.error("--123" + SystemUtils.getClassLocation(Types.class));
 
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter(hoodieTable.getHadoopConf()).convert(schema), schema, filter);
 
