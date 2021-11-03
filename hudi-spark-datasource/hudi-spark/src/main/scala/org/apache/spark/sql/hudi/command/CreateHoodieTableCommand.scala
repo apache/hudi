@@ -41,8 +41,12 @@ import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOL
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
-
 import java.util.{Locale, Properties}
+
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -90,35 +94,13 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
         .setBasePath(path)
         .setConf(conf)
         .build()
-     val tableSchema = getTableSqlSchema(metaClient)
+      val tableSchema = getTableSqlSchema(metaClient)
 
-     // Get options from the external table and append with the options in ddl.
-     val originTableConfig =  HoodieOptionConfig.mappingTableConfigToSqlOption(
-       metaClient.getTableConfig.getProps.asScala.toMap)
-
-     val allPartitionPaths = getAllPartitionPaths(sparkSession, table)
-     var upgrateConfig = Map.empty[String, String]
-     // If this is a non-hive-styled partition table, disable the hive style config.
-     // (By default this config is enable for spark sql)
-     upgrateConfig = if (!isHiveStyledPartitioning(allPartitionPaths, table)) {
-        upgrateConfig + (DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key -> "false")
-     } else {
-       upgrateConfig
-     }
-      upgrateConfig = if (!isUrlEncodeEnabled(allPartitionPaths, table)) {
-        upgrateConfig + (DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key -> "false")
-      } else {
-        upgrateConfig
-      }
-
-      // Use the origin keygen to generate record key to keep the rowkey consistent with the old table for spark sql.
-      // See SqlKeyGenerator#getRecordKey for detail.
-      upgrateConfig = if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
-        upgrateConfig + (SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
-      } else {
-        upgrateConfig
-      }
-      val options = originTableConfig ++ upgrateConfig ++ table.storage.properties
+      // Get options from the external table and append with the options in ddl.
+      val originTableConfig =  HoodieOptionConfig.mappingTableConfigToSqlOption(
+        metaClient.getTableConfig.getProps.asScala.toMap)
+      val extraConfig = extraTableConfig(sparkSession, isTableExists, originTableConfig)
+      val options = originTableConfig ++ table.storage.properties ++ extraConfig
 
       val userSpecifiedSchema = table.schema
       if (userSpecifiedSchema.isEmpty && tableSchema.isDefined) {
@@ -137,7 +119,8 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
           s". The associated location('$path') already exists.")
       }
       // Add the meta fields to the schema if this is a managed table or an empty external table.
-      (addMetaFields(table.schema), table.storage.properties)
+      val options = table.storage.properties ++ extraTableConfig(sparkSession, false)
+      (addMetaFields(table.schema), options)
     }
 
     val tableType = HoodieOptionConfig.getTableType(table.storage.properties)
@@ -314,6 +297,43 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
           s"'${HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_MOR}'")
     }
   }
+
+  def extraTableConfig(sparkSession: SparkSession, isTableExists: Boolean,
+      originTableConfig: Map[String, String] = Map.empty): Map[String, String] = {
+    val extraConfig = mutable.Map.empty[String, String]
+    if (isTableExists) {
+      val allPartitionPaths = getAllPartitionPaths(sparkSession, table)
+      if (originTableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)) {
+        extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) =
+          originTableConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
+      } else {
+        extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) =
+          String.valueOf(isHiveStyledPartitioning(allPartitionPaths, table))
+      }
+      if (originTableConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)) {
+        extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) =
+        originTableConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
+      } else {
+        extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) =
+          String.valueOf(isUrlEncodeEnabled(allPartitionPaths, table))
+      }
+    } else {
+      extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
+      extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue()
+    }
+
+    val primaryColumns = HoodieOptionConfig.getPrimaryColumns(originTableConfig ++ table.storage.properties)
+    if (primaryColumns.isEmpty) {
+      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = classOf[UuidKeyGenerator].getCanonicalName
+    } else if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
+      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
+        HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
+          originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    } else {
+      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = classOf[ComplexKeyGenerator].getCanonicalName
+    }
+    extraConfig.toMap
+  }
 }
 
 object CreateHoodieTableCommand extends Logging {
@@ -342,6 +362,9 @@ object CreateHoodieTableCommand extends Logging {
     checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PRECOMBINE_FIELD.key)
     checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PARTITION_FIELDS.key)
     checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.RECORDKEY_FIELDS.key)
+    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
+    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
+    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
     // Save all the table config to the hoodie.properties.
     val parameters = originTableConfig ++ tableOptions
     val properties = new Properties()
