@@ -248,7 +248,6 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   public void close() throws Exception {
     coordinator.close();
     ioManager.close();
-    writeFunction.close();
   }
 
   public StreamWriteOperatorCoordinator getCoordinator() {
