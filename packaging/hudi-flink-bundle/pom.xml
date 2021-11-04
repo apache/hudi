@@ -613,6 +613,10 @@
       <scope>compile</scope>
       <exclusions>
         <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+        <exclusion>
           <groupId>org.apache.hbase</groupId>
           <artifactId>hbase-common</artifactId>
         </exclusion>
