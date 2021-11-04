@@ -137,6 +137,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   @Override
   public void close() {
+    super.close();
     if (this.writeClient != null) {
       this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
@@ -401,11 +402,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     }
   }
 
-  private boolean hasData() {
-    return this.buckets.size() > 0
-        && this.buckets.values().stream().anyMatch(bucket -> bucket.records.size() > 0);
-  }
-
   @SuppressWarnings("unchecked, rawtypes")
   private boolean flushBucket(DataBucket bucket) {
     String instant = instantToWrite(true);
@@ -439,7 +435,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean endInput) {
-    this.currentInstant = instantToWrite(hasData());
+    this.currentInstant = instantToWrite(false);
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
       throw new HoodieException("No inflight instant when flushing data!");

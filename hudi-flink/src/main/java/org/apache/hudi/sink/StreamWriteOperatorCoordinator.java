@@ -30,8 +30,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.message.MessageBus;
+import org.apache.hudi.sink.message.MessageDriver;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
@@ -41,7 +42,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -137,6 +137,11 @@ public class StreamWriteOperatorCoordinator
   private transient TableState tableState;
 
   /**
+   * The message driver.
+   */
+  private MessageDriver messageDriver;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -174,6 +179,7 @@ public class StreamWriteOperatorCoordinator
     if (tableState.syncMetadata) {
       initMetadataSync();
     }
+    this.messageDriver = MessageBus.getDriver(this.metaClient.getFs(), metaClient.getBasePath());
   }
 
   @Override
@@ -191,6 +197,9 @@ public class StreamWriteOperatorCoordinator
       writeClient.close();
     }
     this.eventBuffer = null;
+    if (this.messageDriver != null) {
+      this.messageDriver.close();
+    }
   }
 
   @Override
@@ -227,7 +236,7 @@ public class StreamWriteOperatorCoordinator
               writeClient.scheduleCompaction(Option.empty());
             }
             // start new instant.
-            startInstant();
+            startInstant(checkpointId);
             // sync Hive if is enabled
             syncHiveIfEnabled();
           }
@@ -237,12 +246,7 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void notifyCheckpointAborted(long checkpointId) {
-    // once the checkpoint was aborted, unblock the writer tasks to
-    // reuse the last instant.
-    if (!WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
-      executor.execute(() -> sendCommitAckEvents(checkpointId),
-          "unblock data write with aborted checkpoint %s", checkpointId);
-    }
+    this.messageDriver.abortCkp(checkpointId);
   }
 
   @Override
@@ -333,12 +337,19 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void startInstant() {
+    // the flink checkpoint id starts from 1,
+    // see AbstractStreamWriteFunction#ackInstant
+    startInstant(MessageBus.INITIAL_CKP_ID);
+  }
+
+  private void startInstant(long checkpoint) {
     final String instant = HoodieActiveTimeline.createNewInstantTime();
     this.writeClient.startCommitWithTime(instant, tableState.commitAction);
+    this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, instant);
+    this.writeClient.upgradeDowngrade(instant);
+    this.messageDriver.commitCkp(checkpoint, this.instant, instant);
     this.instant = instant;
-    this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
-    this.writeClient.upgradeDowngrade(this.instant);
-    LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
+    LOG.info("Create instant [{}] for table [{}] with type [{}]", instant,
         this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
   }
 
@@ -398,33 +409,6 @@ public class StreamWriteOperatorCoordinator
   }
 
   /**
-   * The coordinator reuses the instant if there is no data for this round of checkpoint,
-   * sends the commit ack events to unblock the flushing.
-   */
-  private void sendCommitAckEvents(long checkpointId) {
-    CompletableFuture<?>[] futures = Arrays.stream(this.gateways).filter(Objects::nonNull)
-        .map(gw -> gw.sendEvent(CommitAckEvent.getInstance(checkpointId)))
-        .toArray(CompletableFuture<?>[]::new);
-    try {
-      CompletableFuture.allOf(futures).get();
-    } catch (Throwable throwable) {
-      if (!sendToFinishedTasks(throwable)) {
-        throw new HoodieException("Error while waiting for the commit ack events to finish sending", throwable);
-      }
-    }
-  }
-
-  /**
-   * Decides whether the given exception is caused by sending events to FINISHED tasks.
-   *
-   * <p>Ugly impl: the exception may change in the future.
-   */
-  private static boolean sendToFinishedTasks(Throwable throwable) {
-    return throwable.getCause() instanceof TaskNotRunningException
-        || throwable.getCause().getMessage().contains("running");
-  }
-
-  /**
    * Commits the instant.
    */
   private void commitInstant(String instant) {
@@ -451,8 +435,7 @@ public class StreamWriteOperatorCoordinator
     if (writeResults.size() == 0) {
       // No data has written, reset the buffer and returns early
       reset();
-      // Send commit ack event to the write function to unblock the flushing
-      sendCommitAckEvents(checkpointId);
+      messageDriver.commitCkp(checkpointId, this.instant, this.instant);
       return false;
     }
     doCommit(instant, writeResults);
