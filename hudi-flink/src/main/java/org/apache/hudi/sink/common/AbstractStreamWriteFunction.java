@@ -21,14 +21,11 @@ package org.apache.hudi.sink.common;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.message.MessageBus;
-import org.apache.hudi.sink.message.MessageClient;
 import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -42,14 +39,12 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.util.CollectionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Base infrastructures for streaming writer function.
@@ -125,11 +120,6 @@ public abstract class AbstractStreamWriteFunction<I>
   private long checkpointId = -1;
 
   /**
-   * The message client.
-   */
-  private MessageClient messageClient;
-
-  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
@@ -150,6 +140,7 @@ public abstract class AbstractStreamWriteFunction<I>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
+    this.currentInstant = lastPendingInstant();
     if (context.isRestored()) {
       restoreWriteMetadata();
     } else {
@@ -157,7 +148,6 @@ public abstract class AbstractStreamWriteFunction<I>
     }
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
-    this.messageClient = MessageBus.getClient(this.metaClient.getFs(), this.metaClient.getBasePath());
   }
 
   @Override
@@ -187,19 +177,14 @@ public abstract class AbstractStreamWriteFunction<I>
   // -------------------------------------------------------------------------
 
   private void restoreWriteMetadata() throws Exception {
-    List<WriteMetadataEvent> events = CollectionUtil.iterableToList(this.writeMetadataState.get());
+    String lastInflight = lastPendingInstant();
     boolean eventSent = false;
-    if (events.size() > 0) {
-      boolean committed = this.metaClient.getActiveTimeline()
-          .filterCompletedInstants()
-          .containsInstant(events.get(0).getInstantTime());
-      if (!committed) {
-        for (WriteMetadataEvent event : events) {
-          // The checkpoint succeed but the meta does not commit,
-          // re-commit the inflight instant
-          this.eventGateway.sendEventToCoordinator(event);
-          LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
-        }
+    for (WriteMetadataEvent event : this.writeMetadataState.get()) {
+      if (Objects.equals(lastInflight, event.getInstantTime())) {
+        // The checkpoint succeed but the meta does not commit,
+        // re-commit the inflight instant
+        this.eventGateway.sendEventToCoordinator(event);
+        LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
         eventSent = true;
       }
     }
@@ -237,65 +222,21 @@ public abstract class AbstractStreamWriteFunction<I>
     }
   }
 
-  @Override
-  public void close() {
-    if (this.messageClient != null) {
-      this.messageClient.close();
-    }
-  }
-
   /**
    * Returns the last pending instant time.
    */
-  private String lastPendingInstant() {
-    return StreamerUtil.getLastPendingInstant(metaClient);
-  }
-
-  /**
-   * Returns the previous committed checkpoint id.
-   *
-   * @param eagerFlush Whether the data flush happens before the checkpoint barrier arrives
-   */
-  private long prevCkp(boolean eagerFlush) {
-    // Use the last checkpoint id to request for the message,
-    // the time sequence of committed checkpoints and ongoing
-    // checkpoints are as following:
-
-    // 0 ------------ 1 ------------ 2 ------------ 3 ------------>   committed ckp id
-    // |             /              /              /              /
-    // |--- ckp-1 ----|--- ckp-2 ----|--- ckp-3 ----|--- ckp-4 ----|  ongoing ckp id
-
-    // Use 0 as the initial committed checkpoint id, the 0th checkpoint message records the writing instant for ckp-1;
-    // when ckp-1 success event is received, commits a checkpoint message with the writing instant for ckp-2;
-    // that means, the checkpoint message records the writing instant of next checkpoint.
-    return Math.max(0, eagerFlush ? this.checkpointId : this.checkpointId - 1);
-  }
-
-  /**
-   * Returns the next instant to write from the message bus.
-   *
-   * <p>It returns 3 kinds of value:
-   * i) normal instant time: the previous checkpoint succeed;
-   * ii) 'aborted' instant time: the previous checkpoint has been aborted;
-   * ii) null: the checkpoint is till ongoing without any notifications.
-   */
-  @Nullable
-  protected String ackInstant(long checkpointId) {
-    Option<MessageBus.CkpMessage> ckpMessageOption = this.messageClient.getCkpMessage(checkpointId);
-    return ckpMessageOption.map(message -> message.inflightInstant).orElse(null);
+  protected String lastPendingInstant() {
+    return StreamerUtil.getLastPendingInstant(this.metaClient);
   }
 
   /**
    * Prepares the instant time to write with for next checkpoint.
    *
-   * @param eagerFlush Whether the data flush happens before the checkpoint barrier arrives
-   *
+   * @param hasData Whether the task has buffering data
    * @return The instant time
    */
-  protected String instantToWrite(boolean eagerFlush) {
-    final long ckpId = prevCkp(eagerFlush);
-    String instant = ackInstant(ckpId);
-
+  protected String instantToWrite(boolean hasData) {
+    String instant = lastPendingInstant();
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
     TimeWait timeWait = TimeWait.builder()
@@ -306,23 +247,18 @@ public abstract class AbstractStreamWriteFunction<I>
       // wait condition:
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
-      if (instant == null) {
+      if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
         // sleep for a while
         boolean timeout = timeWait.waitFor();
-        if (timeout && MessageBus.notInitialCkp(ckpId)) {
+        if (timeout && instant != null) {
           // if the timeout threshold hits but the last instant still not commit,
           // and the task does not receive commit ask event(no data or aborted checkpoint),
           // assumes the checkpoint was canceled silently and unblock the data flushing
           confirming = false;
-          instant = lastPendingInstant();
         } else {
           // refresh the inflight instant
-          instant = ackInstant(ckpId);
+          instant = lastPendingInstant();
         }
-      } else if (MessageBus.canAbort(instant, ckpId)) {
-        // the checkpoint was canceled, reuse the last instant
-        confirming = false;
-        instant = lastPendingInstant();
       } else {
         // the pending instant changed, that means the last instant was committed
         // successfully.
