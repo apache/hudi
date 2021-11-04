@@ -285,7 +285,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         try {
           LOG.info("Building file system view for partition (" + partitionPathStr + ")");
 
+          // Create the path if it does not exist already
           Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
+          FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
           long beginLsTs = System.currentTimeMillis();
           FileStatus[] statuses = listPartition(partitionPath);
           long endLsTs = System.currentTimeMillis();
@@ -315,13 +317,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @throws IOException
    */
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    // Create the path if it does not exist already
-    if (!metaClient.getFs().exists(partitionPath)) {
-      metaClient.getFs().mkdirs(partitionPath);
-      return new FileStatus[0];
-    } else {
-      return metaClient.getFs().listStatus(partitionPath);
-    }
+    return metaClient.getFs().listStatus(partitionPath);
   }
 
   /**
