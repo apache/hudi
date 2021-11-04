@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -147,6 +148,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
             + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
       }
+    } else if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PAYLOAD_CLASS_NAME)) {
+      // if precombine field is specified but payload clazz is default,
+      // use DefaultHoodieRecordPayload to make sure the precombine field is always taken for
+      // comparing.
+      conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, EventTimeAvroPayload.class.getName());
     }
   }
 
