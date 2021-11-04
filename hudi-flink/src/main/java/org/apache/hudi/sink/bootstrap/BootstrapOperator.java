@@ -231,7 +231,7 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     return hoodieRecord;
   }
 
-  private static boolean shouldLoadFile(String fileId,
+  protected boolean shouldLoadFile(String fileId,
                                         int maxParallelism,
                                         int parallelism,
                                         int taskID) {

@@ -92,10 +92,9 @@ object HoodieWriterUtils {
    * @return
    */
   def getPartitionColumns(parameters: Map[String, String]): String = {
-    val props = new TypedProperties()
+    val props = new Properties()
     props.putAll(parameters.asJava)
-    val keyGen = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
-    HoodieSparkUtils.getPartitionColumns(keyGen, props)
+    HoodieSparkUtils.getPartitionColumns(props)
   }
 
   def convertMapToHoodieConfig(parameters: Map[String, String]): HoodieConfig = {

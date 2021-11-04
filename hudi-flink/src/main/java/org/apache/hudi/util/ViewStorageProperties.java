@@ -51,6 +51,7 @@ public class ViewStorageProperties {
       FileSystemViewStorageConfig config) throws IOException {
     Path propertyPath = getPropertiesFilePath(basePath);
     FileSystem fs = FSUtils.getFs(basePath, StreamerUtil.getHadoopConf());
+    fs.delete(propertyPath, false);
     try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
       config.getProps().store(outputStream,
           "Filesystem view storage properties saved on " + new Date(System.currentTimeMillis()));

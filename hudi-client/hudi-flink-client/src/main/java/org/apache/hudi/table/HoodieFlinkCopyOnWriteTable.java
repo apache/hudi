@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -230,6 +231,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
     throw new HoodieNotSupportedException("DeletePartitions is not supported yet");
+  }
+
+  @Override
+  public void updateStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime, Boolean isOptimizeOperation) {
+    throw new HoodieNotSupportedException("update statistics is not supported yet");
   }
 
   @Override
