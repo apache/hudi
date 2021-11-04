@@ -266,6 +266,8 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
         }
         committedKafkaOffset = coordinatorCommittedKafkaOffset;
       }
+    } else {
+      context.offset(partition, 0);
     }
   }
 }
