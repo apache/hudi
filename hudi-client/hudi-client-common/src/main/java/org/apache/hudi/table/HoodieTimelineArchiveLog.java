@@ -234,18 +234,22 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }).map(Path::toString).collect(Collectors.toList());
 
     context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants");
-    Map<String, Boolean> resultDeleteInstantFiles = FSUtils.parallelizeFilesProcess(context, metaClient.getFs(), config.getArchiveDeleteParallelism(), pairOfSubPathAndConf -> {
-      Path commitFile = new Path(pairOfSubPathAndConf.getKey());
-      try {
-        FileSystem fs = commitFile.getFileSystem(pairOfSubPathAndConf.getValue().get());
-        if (fs.exists(commitFile)) {
-          return fs.delete(commitFile, false);
-        }
-        return true;
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to delete archived instant " + commitFile, e);
-      }
-    }, instantFiles);
+    Map<String, Boolean> resultDeleteInstantFiles = FSUtils.parallelizeFilesProcess(context,
+        metaClient.getFs(),
+        config.getArchiveDeleteParallelism(),
+        pairOfSubPathAndConf -> {
+          Path commitFile = new Path(pairOfSubPathAndConf.getKey());
+          try {
+            FileSystem fs = commitFile.getFileSystem(pairOfSubPathAndConf.getValue().get());
+            if (fs.exists(commitFile)) {
+              return fs.delete(commitFile, false);
+            }
+            return true;
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to delete archived instant " + commitFile, e);
+          }
+        },
+        instantFiles);
 
     for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
       LOG.info("Archived and deleted instant file " + result.getKey() + " : " + result.getValue());
