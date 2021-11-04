@@ -23,6 +23,9 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.hudi.io.storage.SystemUtils;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -89,6 +92,8 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnSinglePartitionKeyMORTable() throws Exception {
+    LOG.error("--1234" + org.apache.hudi.io.storage.SystemUtils.getClassLocation(AvroSchemaConverter.class));
+    LOG.error("--1234" + SystemUtils.getClassLocation(Types.class));
     String hiveTableName = "docker_hoodie_single_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.SINGLE_KEY_PARTITIONED);
