@@ -23,8 +23,8 @@ import java.util.List;
 
 public enum MetadataPartitionType {
   FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 1),
-  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 10),
-  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 100);
+  // COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 1),
+  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 10);
 
   // Partition path in metadata table.
   private final String partitionPath;
@@ -36,7 +36,7 @@ public enum MetadataPartitionType {
   MetadataPartitionType(final String partitionPath, final String fileIdPrefix, final int fileGroupCount) {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
-    this.fileGroupCount = getFileGroupCount();
+    this.fileGroupCount = fileGroupCount;
   }
 
   public String partitionPath() {
@@ -58,7 +58,7 @@ public enum MetadataPartitionType {
   public static List<String> all() {
     return Arrays.asList(
         FILES.partitionPath(),
-        COLUMN_STATS.partitionPath(),
+        //COLUMN_STATS.partitionPath(),
         BLOOM_FILTERS.partitionPath
     );
   }

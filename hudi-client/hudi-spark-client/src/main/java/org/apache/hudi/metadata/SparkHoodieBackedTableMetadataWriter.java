@@ -162,8 +162,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * <p>
    * The record is tagged with respective file slice's location based on its record key.
    */
-  private JavaRDD<HoodieRecord> prepRecords(Map<MetadataPartitionType,
-      List<HoodieRecord>> partitionRecordsMap) {
+  private JavaRDD<HoodieRecord> prepRecords(Map<MetadataPartitionType, List<HoodieRecord>> partitionRecordsMap) {
 
     // The result set
     JavaRDD<HoodieRecord> rddAllPartitionRecords = null;
@@ -189,7 +188,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       if (rddAllPartitionRecords == null) {
         rddAllPartitionRecords = rddSinglePartitionRecords;
       } else {
-        rddAllPartitionRecords.union(rddSinglePartitionRecords);
+        rddAllPartitionRecords = rddAllPartitionRecords.union(rddSinglePartitionRecords);
       }
     }
 

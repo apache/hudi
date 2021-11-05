@@ -230,9 +230,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
         // Metadata is in sync till the latest completed instant on the dataset
         HoodieTimer timer = new HoodieTimer().startTimer();
-        List<FileSlice> latestFileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
-        ValidationUtils.checkArgument(latestFileSlices.size() == 1, String.format("Invalid number of file slices: found=%d, required=%d", latestFileSlices.size(), 1));
-        final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, latestFileSlices.size()));
+        List<FileSlice> latestFileSlices =
+            HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
+        Option<MetadataPartitionType> partitionType = HoodieTableMetadataUtil.fromPartitionPath(partitionName);
+        ValidationUtils.checkArgument(partitionType.isPresent());
+        ValidationUtils.checkArgument(latestFileSlices.size() == partitionType.get().getFileGroupCount(),
+            String.format("Invalid number of file slices: found=%d, required=%d", latestFileSlices.size(),
+                partitionType.get().getFileGroupCount()));
+        final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key,
+            latestFileSlices.size()));
 
         // Open base file reader
         Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);

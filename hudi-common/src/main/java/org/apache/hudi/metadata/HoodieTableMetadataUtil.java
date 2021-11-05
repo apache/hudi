@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -39,9 +41,13 @@ import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -75,11 +81,14 @@ public class HoodieTableMetadataUtil {
     switch (partitionPath) {
       case PARTITION_NAME_FILES:
         return Option.of(MetadataPartitionType.FILES);
+      /*
       case PARTITION_NAME_COLUMN_STATS:
         return Option.of(MetadataPartitionType.COLUMN_STATS);
+      */
       case PARTITION_NAME_BLOOM_FILTERS:
         return Option.of(MetadataPartitionType.BLOOM_FILTERS);
       default:
+        LOG.error("Unexpected Partition path " + partitionPath);
         return Option.empty();
     }
   }
@@ -106,16 +115,17 @@ public class HoodieTableMetadataUtil {
    * TODO: Comment.
    *
    * @param commitMetadata
+   * @param dataMetaClient
    * @param instantTime
    * @return
    */
   public static Map<MetadataPartitionType, List<HoodieRecord>> convertMetadataToRecords(
-      HoodieCommitMetadata commitMetadata, String instantTime) {
+      HoodieCommitMetadata commitMetadata, HoodieTableMetaClient dataMetaClient, String instantTime) {
     Map<MetadataPartitionType, List<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     partitionToRecordsMap.put(MetadataPartitionType.FILES, convertMetadataToFilesPartitionRecords(commitMetadata,
         instantTime));
     final List<HoodieRecord> metadataBloomFilterRecords = convertMetadataToBloomFilterRecords(commitMetadata,
-        instantTime);
+        dataMetaClient, instantTime);
     if (!metadataBloomFilterRecords.isEmpty()) {
       partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, metadataBloomFilterRecords);
     }
@@ -171,16 +181,24 @@ public class HoodieTableMetadataUtil {
    * TODO: Comment.
    *
    * @param commitMetadata
+   * @param dataMetaClient
    * @param instantTime
    * @return
    */
   public static List<HoodieRecord> convertMetadataToBloomFilterRecords(HoodieCommitMetadata commitMetadata,
+                                                                       HoodieTableMetaClient dataMetaClient,
                                                                        String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
       final String partition = partitionStatName.equals("") ? NON_PARTITIONED_NAME : partitionStatName;
       Map<String, Long> newFiles = new HashMap<>(writeStats.size());
       writeStats.forEach(hoodieWriteStat -> {
+
+        // No action for delta logs
+        if (hoodieWriteStat instanceof HoodieDeltaWriteStat) {
+          return;
+        }
+
         String pathWithPartition = hoodieWriteStat.getPath();
         if (pathWithPartition == null) {
           // Empty partition
@@ -193,10 +211,20 @@ public class HoodieTableMetadataUtil {
 
         String filename = pathWithPartition.substring(offset);
         ValidationUtils.checkState(!newFiles.containsKey(filename), "Duplicate files in HoodieCommitMetadata");
-        // TODO: read the bloom from base file
-        HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
-            new FileID(filename), instantTime, null, true);
-        records.add(record);
+
+        Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
+        // TODO: Remove the below debug print
+        // LOG.error("XXX Write stat: " + writeFilePath + ", filename: " + filename);
+        try {
+          HoodieFileReader<IndexedRecord> fileReader =
+              HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), writeFilePath);
+          ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileReader.readBloomFilter().serializeToString().getBytes());
+          HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
+              new FileID(filename), instantTime, bloomByteBuffer, true);
+          records.add(record);
+        } catch (IOException e) {
+          LOG.error("Failed to get bloom filter for file: " + writeFilePath + ", write stat: " + hoodieWriteStat);
+        }
       });
     });
 

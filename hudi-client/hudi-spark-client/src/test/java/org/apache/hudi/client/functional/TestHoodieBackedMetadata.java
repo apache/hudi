@@ -66,6 +66,7 @@ import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -490,6 +491,57 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  @Test
+  public void testTableOperationsForMetaIndex() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .bloomIndexPruneByRanges(false)
+            .bloomIndexTreebasedFilter(false)
+            .bloomIndexBucketizedChecking(false).build())
+        .build();
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      LOG.error("XXX 1 Bulk insert!");
+      // Write 1 (Bulk insert)
+      String newCommitTime = "0000001";
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      client.startCommitWithTime(newCommitTime);
+      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+
+      LOG.error("XXX 2 insert!");
+      // Write 2 (inserts)
+      newCommitTime = "0000002";
+      client.startCommitWithTime(newCommitTime);
+      validateMetadata(client);
+
+      records = dataGen.generateInserts(newCommitTime, 20);
+      writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+
+      LOG.error("XXX 3 update!");
+      // Write 3 (updates)
+      newCommitTime = "0000003";
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateUniqueUpdates(newCommitTime, 10);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+
+      LOG.error("XXX 4 update and insert!");
+      // Write 4 (updates and inserts)
+      newCommitTime = "0000004";
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateUpdates(newCommitTime, 10);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+    }
+  }
 
   /**
    * Test several table operations with restore. This test uses SparkRDDWriteClient.
@@ -610,7 +662,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       final int index = i;
       String newCommitTime = "000000" + (index + 1);
       Future future = executors.submit(() -> {
-        List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, dataGen.getPartitionPaths()[index]);
+        List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100,
+            dataGen.getPartitionPaths()[index]);
         SparkRDDWriteClient writeClient = writeClients[index];
         writeClient.startCommitWithTime(newCommitTime);
         List<WriteStatus> writeStatuses = writeClient.insert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -625,11 +678,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     // Ensure all commits were synced to the Metadata Table
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient metadataMetaClient =
+        HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
     assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 4);
-    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000001")));
-    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000002")));
-    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000003")));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false,
+        HoodieTimeline.DELTA_COMMIT_ACTION, "0000001")));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false,
+        HoodieTimeline.DELTA_COMMIT_ACTION, "0000002")));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false,
+        HoodieTimeline.DELTA_COMMIT_ACTION, "0000003")));
 
     // Compaction may occur if the commits completed in order
     assertTrue(metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().countInstants() <= 1);
@@ -673,7 +730,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     // Ensure all commits were synced to the Metadata Table
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient metadataMetaClient =
+        HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
     LOG.warn("total commits in metadata table " + metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
 
     // 6 commits and 2 cleaner commits.
@@ -685,9 +743,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Lets say clustering commit succeeded in metadata table, but failed before committing to datatable.
-   * Next time, when clustering kicks in, hudi will rollback pending clustering and re-attempt the clustering with same instant time.
+   * Next time, when clustering kicks in, hudi will rollback pending clustering and re-attempt the clustering with
+   * same instant time.
    * So, this test ensures the 2nd attempt succeeds with metadata enabled.
-   * This is applicable to any table service where instant time is fixed. So, how many ever times the operation fails, re attempt will
+   * This is applicable to any table service where instant time is fixed. So, how many ever times the operation
+   * fails, re attempt will
    * be made with same commit time.
    * Tests uses clustering to test out the scenario.
    */
@@ -720,7 +780,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringSortColumns("_row_key")
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
 
-    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+    HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM,
+        HoodieFailedWritesCleaningPolicy.EAGER)
         .withAutoCommit(false)
         .withClusteringConfig(clusteringConfig).build();
 
@@ -743,7 +804,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertNoWriteErrors(writeStatuses);
     validateMetadata(client);
 
-    // manually remove clustering completed instant from .hoodie folder and to mimic succeeded clustering in metadata table, but failed in data table.
+    // manually remove clustering completed instant from .hoodie folder and to mimic succeeded clustering in metadata
+    // table, but failed in data table.
     FileCreateUtils.deleteReplaceCommit(basePath, clusteringCommitTime);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> updatedClusterMetadata = newClient.cluster(clusteringCommitTime, true);
 
@@ -768,7 +830,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     List<HoodieRecord> records;
     List<WriteStatus> writeStatuses;
-    String[] commitTimestamps = {HoodieActiveTimeline.createNewInstantTime(), HoodieActiveTimeline.createNewInstantTime(),
+    String[] commitTimestamps = {HoodieActiveTimeline.createNewInstantTime(),
+        HoodieActiveTimeline.createNewInstantTime(),
         HoodieActiveTimeline.createNewInstantTime(), HoodieActiveTimeline.createNewInstantTime()};
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
@@ -780,7 +843,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
 
       // Ensure we can see files from each commit
-      Set<String> timelineTimestamps = getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
+      Set<String> timelineTimestamps =
+          getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
       assertEquals(timelineTimestamps.size(), commitTimestamps.length);
       for (int i = 0; i < commitTimestamps.length; ++i) {
         assertTrue(timelineTimestamps.contains(commitTimestamps[i]));
@@ -789,7 +853,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // mark each commit as incomplete and ensure files are not seen
       for (int i = 0; i < commitTimestamps.length; ++i) {
         FileCreateUtils.deleteCommit(basePath, commitTimestamps[i]);
-        timelineTimestamps = getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
+        timelineTimestamps =
+            getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
         assertEquals(timelineTimestamps.size(), commitTimestamps.length - 1);
         for (int j = 0; j < commitTimestamps.length; ++j) {
           assertTrue(j == i || timelineTimestamps.contains(commitTimestamps[j]));
@@ -800,7 +865,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Test multiple incomplete commits
       FileCreateUtils.deleteCommit(basePath, commitTimestamps[0]);
       FileCreateUtils.deleteCommit(basePath, commitTimestamps[2]);
-      timelineTimestamps = getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
+      timelineTimestamps =
+          getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
       assertEquals(timelineTimestamps.size(), commitTimestamps.length - 2);
       for (int j = 0; j < commitTimestamps.length; ++j) {
         assertTrue(j == 0 || j == 2 || timelineTimestamps.contains(commitTimestamps[j]));
@@ -810,7 +876,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       for (int i = 0; i < commitTimestamps.length; ++i) {
         FileCreateUtils.deleteCommit(basePath, commitTimestamps[i]);
       }
-      timelineTimestamps = getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
+      timelineTimestamps =
+          getAllFiles(metadata(client)).stream().map(p -> p.getName()).map(n -> FSUtils.getCommitTime(n)).collect(Collectors.toSet());
       assertEquals(timelineTimestamps.size(), 0);
     }
   }
@@ -849,14 +916,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       }
 
-      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
-      HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath()).build();
+      HoodieTableMetaClient metadataMetaClient =
+          HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+      HoodieTableMetaClient datasetMetaClient =
+          HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath()).build();
 
       // There should not be any compaction yet and we have not performed more than maxDeltaCommitsBeforeCompaction
       // deltacommits (1 will be due to bootstrap)
       HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 0);
-      assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), maxDeltaCommitsBeforeCompaction - 1);
+      assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(),
+          maxDeltaCommitsBeforeCompaction - 1);
       assertEquals(datasetMetaClient.getArchivedTimeline().reload().countInstants(), 0);
 
       // Next commit will initiate a compaction
@@ -866,7 +936,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 1);
-      assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), maxDeltaCommitsBeforeCompaction + 1);
+      assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(),
+          maxDeltaCommitsBeforeCompaction + 1);
       assertEquals(datasetMetaClient.getArchivedTimeline().reload().countInstants(), 0);
 
       // More than maxDeltaCommitsBeforeCompaction commits
@@ -888,7 +959,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 1);
       assertEquals(metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants(),
-          ((2 * maxDeltaCommitsBeforeCompaction) + (maxDeltaCommitsBeforeCompaction /* clean from dataset */) + 1)/* clean in metadata table */);
+          ((2 * maxDeltaCommitsBeforeCompaction) + (maxDeltaCommitsBeforeCompaction /* clean from dataset */) + 1)/*
+          clean in metadata table */);
 
       // Complete commit
       FileCreateUtils.createCommit(basePath, inflightCommitTime);
@@ -970,7 +1042,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   /**
-   * When table needs to be upgraded and when multi writer is enabled, hudi rollsback partial commits. Upgrade itself is happening
+   * When table needs to be upgraded and when multi writer is enabled, hudi rollsback partial commits. Upgrade
+   * itself is happening
    * within a lock and hence rollback should not lock again.
    *
    * @throws IOException
@@ -1104,7 +1177,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    HoodieTestDataGenerator nonPartitionedGenerator = new HoodieTestDataGenerator(new String[] {""});
+    HoodieTestDataGenerator nonPartitionedGenerator = new HoodieTestDataGenerator(new String[]{""});
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
@@ -1126,7 +1199,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfigBuilder(true, true, true).build())) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, true).build())) {
       // Write
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -1163,8 +1237,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteInsertAndUpsert(testTable, "0000001", "0000002");
   }
 
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts) {
-    HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize,
+                                                      boolean mergeAllowDuplicateInserts) {
+    HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, HoodieIndex.IndexType.BLOOM,
+        HoodieFailedWritesCleaningPolicy.EAGER);
     return builder
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder()
@@ -1233,7 +1309,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(config, engineContext);
     TableFileSystemView tableView = table.getHoodieView();
-    List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
+    List<String> fullPartitionPaths =
+        fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
     Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
     assertEquals(fsPartitions.size(), partitionToFilesMap.size());
 
@@ -1280,11 +1357,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));
         List<Long> fsBlockSizes = Arrays.stream(fsStatuses).map(FileStatus::getBlockSize).collect(Collectors.toList());
         Collections.sort(fsBlockSizes);
-        List<Long> metadataBlockSizes = Arrays.stream(metaStatuses).map(FileStatus::getBlockSize).collect(Collectors.toList());
+        List<Long> metadataBlockSizes =
+            Arrays.stream(metaStatuses).map(FileStatus::getBlockSize).collect(Collectors.toList());
         Collections.sort(metadataBlockSizes);
         assertEquals(fsBlockSizes, metadataBlockSizes);
 
-        assertEquals(fsFileNames.size(), metadataFilenames.size(), "Files within partition " + partition + " should match");
+        assertEquals(fsFileNames.size(), metadataFilenames.size(), "Files within partition " + partition
+            + " should " + "match");
         assertTrue(fsFileNames.equals(metadataFilenames), "Files within partition " + partition + " should match");
 
         // FileSystemView should expose the same data
@@ -1313,7 +1392,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
 
     // Metadata table should be in sync with the dataset
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient metadataMetaClient =
+        HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
 
     // Metadata table is MOR
     assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");
@@ -1325,20 +1405,27 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext,
+        HoodieTableMetadata.getMetadataTableBasePath(basePath),
         false, false);
     assertEquals(MetadataPartitionType.values().length, metadataTablePartitions.size());
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits
     int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient,
+        metadataMetaClient.getActiveTimeline());
     metadataTablePartitions.forEach(partition -> {
+      Option<MetadataPartitionType> partitionType = HoodieTableMetadataUtil.fromPartitionPath(partition);
+      assertTrue(partitionType.isPresent());
+      final int partitionFileGroupCount = partitionType.get().getFileGroupCount();
       List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
-      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count() <= 1, "Should have a single latest base file");
-      assertTrue(latestSlices.size() <= 1, "Should have a single latest file slice");
-      assertTrue(latestSlices.size() <= numFileVersions, "Should limit file slice to "
-          + numFileVersions + " but was " + latestSlices.size());
+      assertTrue(latestSlices.stream().map(FileSlice::getBaseFile).count() <= partitionFileGroupCount,
+          "Should have a single latest base file");
+      assertTrue(latestSlices.size() <= partitionFileGroupCount,
+          "Should have a single latest file slice");
+      assertTrue(latestSlices.size() <= (numFileVersions * partitionFileGroupCount),
+          "Should limit file slice to " + (numFileVersions * partitionFileGroupCount) + " but was " + latestSlices.size());
     });
 
     LOG.info("Validation time=" + timer.endTimer());
@@ -1368,7 +1455,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private HoodieTableMetadata metadata(SparkRDDWriteClient client) {
     HoodieWriteConfig clientConfig = client.getConfig();
-    return HoodieTableMetadata.create(client.getEngineContext(), clientConfig.getMetadataConfig(), clientConfig.getBasePath(),
+    return HoodieTableMetadata.create(client.getEngineContext(), clientConfig.getMetadataConfig(),
+        clientConfig.getBasePath(),
         clientConfig.getSpillableMapBasePath());
   }
 

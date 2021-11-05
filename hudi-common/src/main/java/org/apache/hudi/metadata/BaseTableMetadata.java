@@ -169,7 +169,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     final Option<HoodieMetadataBloomFilter> optionalBloomFilterMetadata =
         hoodieRecord.get().getData().getBloomFilterMetadata();
-    if (optionalBloomFilterMetadata.isPresent()) {
+    if (!optionalBloomFilterMetadata.isPresent()) {
       LOG.error("Bloom filter metadata for " + fileID + " is not available!");
       return Option.empty();
     }

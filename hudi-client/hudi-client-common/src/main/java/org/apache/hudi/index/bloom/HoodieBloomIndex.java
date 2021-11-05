@@ -126,6 +126,10 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     HoodieData<ImmutablePair<String, HoodieKey>> fileComparisonPairs =
         explodeRecordsWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairs);
 
+    //TODO: Remove the below debug print
+    // fileComparisonPairs.collectAsList().forEach(entry -> LOG.error("XXX LookupIndex 2:  FileComparisonPairs: " +
+    // entry.left + ", " + entry.right.getRecordKey() + ", " + entry.right.getPartitionPath()));
+
     return bloomIndexHelper.findMatchingFilesForRecordKeys(config, context, hoodieTable,
         partitionRecordKeyPairs, fileComparisonPairs, partitionToFileInfo, recordsPerPartition);
   }

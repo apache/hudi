@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.hash.FileID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -85,7 +86,25 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       fileComparisonsRDD = fileComparisonsRDD.mapToPair(t -> new Tuple2<>(Pair.of(t._1, t._2.getRecordKey()), t))
           .repartitionAndSortWithinPartitions(partitioner).map(Tuple2::_2);
     } else {
-      fileComparisonsRDD = fileComparisonsRDD.sortBy(Tuple2::_1, true, joinParallelism);
+      // fileId(uuid part of the file), HoodieKey => file_name, HoodieKey
+      fileComparisonsRDD = fileComparisonsRDD.map(entry -> new Tuple2<String, HoodieKey>(
+          hoodieTable.getBaseFileOnlyView().getLatestBaseFile(entry._2.getPartitionPath(), entry._1).get().getFileName(),
+          entry._2));
+
+      // <<fileName, hash>, key>
+      JavaRDD<Tuple2<Tuple2<String, String>, HoodieKey>> tempVar =
+          fileComparisonsRDD.map(
+              entry -> new Tuple2<Tuple2<String, String>, HoodieKey>(new Tuple2<>(entry._1,
+                  new FileID(entry._1).asBase64EncodedString()), entry._2)).sortBy(entry -> entry._1._2, true,
+              joinParallelism);
+
+      return HoodieJavaPairRDD.of(tempVar.mapPartitionsWithIndex(
+              new HoodieBloomMetaIndexCheckFunction(hoodieTable, config), true)
+          .flatMap(List::iterator).filter(lr -> lr.getMatchingRecordKeys().size() > 0)
+          .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
+              .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
+                  new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
+              .collect(Collectors.toList()).iterator()));
     }
 
     return HoodieJavaPairRDD.of(fileComparisonsRDD.mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true)

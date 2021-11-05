@@ -377,9 +377,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
 
     initTableMetadata();
-    initializeFileGroups(dataMetaClient, MetadataPartitionType.FILES, createInstantTime, 1);
+    initializeFileGroups(dataMetaClient, MetadataPartitionType.FILES, createInstantTime,
+        MetadataPartitionType.FILES.getFileGroupCount());
     if (isBloomFilterEnabled) {
-      initializeFileGroups(dataMetaClient, MetadataPartitionType.BLOOM_FILTERS, createInstantTime, 1);
+      initializeFileGroups(dataMetaClient, MetadataPartitionType.BLOOM_FILTERS, createInstantTime,
+          MetadataPartitionType.BLOOM_FILTERS.getFileGroupCount());
     }
 
     // List all partitions in the basePath of the containing dataset
@@ -544,7 +546,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata, instantTime));
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata,
+        dataMetaClient, instantTime));
   }
 
   /**
