@@ -84,13 +84,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Deprecated
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending) {
-    super(context, writeConfig);
+    this(context, writeConfig, Option.empty());
   }
 
   @Deprecated
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending,
                              Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, timelineService);
+    this(context, writeConfig, timelineService);
   }
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
