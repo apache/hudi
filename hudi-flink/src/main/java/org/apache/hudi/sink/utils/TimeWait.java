@@ -35,14 +35,13 @@ public class TimeWait {
   private final long timeout;    // timeout in SECONDS
   private final long interval;   // interval in MILLISECONDS
   private final String action;   // action to report error message
-  private final boolean throwsT; // whether to throw when timeout
+
   private long waitingTime = 0L;
 
-  private TimeWait(long timeout, long interval, String action, boolean throwsT) {
+  private TimeWait(long timeout, long interval, String action) {
     this.timeout = timeout;
     this.interval = interval;
     this.action = action;
-    this.throwsT = throwsT;
   }
 
   public static Builder builder() {
@@ -51,23 +50,14 @@ public class TimeWait {
 
   /**
    * Wait for an interval time.
-   *
-   * @return true if is timed out
    */
-  public boolean waitFor() {
+  public void waitFor() {
     try {
       if (waitingTime > timeout) {
-        final String msg = "Timeout(" + waitingTime + "ms) while waiting for " + action;
-        if (this.throwsT) {
-          throw new HoodieException(msg);
-        } else {
-          LOG.warn(msg);
-          return true;
-        }
+        throw new HoodieException("Timeout(" + waitingTime + "ms) while waiting for " + action);
       }
       TimeUnit.MILLISECONDS.sleep(interval);
       waitingTime += interval;
-      return false;
     } catch (InterruptedException e) {
       throw new HoodieException("Error while waiting for " + action, e);
     }
@@ -80,7 +70,6 @@ public class TimeWait {
     private long timeout = 5 * 60 * 1000L; // default 5 minutes
     private long interval = 1000;
     private String action;
-    private boolean throwsT = false;
 
     private Builder() {
     }
@@ -102,14 +91,9 @@ public class TimeWait {
       return this;
     }
 
-    public Builder throwsT(boolean throwsT) {
-      this.throwsT = throwsT;
-      return this;
-    }
-
     public TimeWait build() {
       Objects.requireNonNull(this.action);
-      return new TimeWait(this.timeout, this.interval, this.action, this.throwsT);
+      return new TimeWait(this.timeout, this.interval, this.action);
     }
   }
 }
