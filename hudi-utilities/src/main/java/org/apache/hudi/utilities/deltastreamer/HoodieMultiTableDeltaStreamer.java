@@ -46,10 +46,13 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Wrapper over HoodieDeltaStreamer.java class.
@@ -67,8 +70,8 @@ public class HoodieMultiTableDeltaStreamer {
 
   public HoodieMultiTableDeltaStreamer(Config config, JavaSparkContext jssc) throws IOException {
     this.tableExecutionContexts = new ArrayList<>();
-    this.successTables = new HashSet<>();
-    this.failedTables = new HashSet<>();
+    this.successTables = Collections.synchronizedSet(new HashSet<>());
+    this.failedTables = Collections.synchronizedSet(new HashSet<>());
     this.jssc = jssc;
     String commonPropsFile = config.propsFilePath;
     String configFolder = config.configFolder;
@@ -221,6 +224,8 @@ public class HoodieMultiTableDeltaStreamer {
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-delta-streamer", Constants.LOCAL_SPARK_MASTER);
     try {
       new HoodieMultiTableDeltaStreamer(config, jssc).sync();
+    } catch (InterruptedException ie) {
+      logger.warn("Incremental sync executor got interrupted exception!", ie);
     } finally {
       jssc.stop();
     }
@@ -378,16 +383,23 @@ public class HoodieMultiTableDeltaStreamer {
   /**
    * Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync.
    */
-  public void sync() {
-    for (TableExecutionContext context : tableExecutionContexts) {
-      try {
-        new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
-        successTables.add(Helpers.getTableWithDatabase(context));
-      } catch (Exception e) {
-        logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
-        failedTables.add(Helpers.getTableWithDatabase(context));
-      }
-    }
+  public void sync() throws InterruptedException {
+    ExecutorService executorService = Executors.newFixedThreadPool(tableExecutionContexts.size());
+    tableExecutionContexts.forEach(context -> {
+      executorService.execute(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
+            successTables.add(Helpers.getTableWithDatabase(context));
+          } catch (Exception e) {
+            logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);
+            failedTables.add(Helpers.getTableWithDatabase(context));
+          }
+        }
+      });
+    });
+    executorService.shutdown();
 
     logger.info("Ingestion was successful for topics: " + successTables);
     if (!failedTables.isEmpty()) {

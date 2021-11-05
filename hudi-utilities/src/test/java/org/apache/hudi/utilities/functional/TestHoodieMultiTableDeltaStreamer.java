@@ -128,7 +128,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
   }
 
   @Test //0 corresponds to fg
-  public void testMultiTableExecutionWithKafkaSource() throws IOException {
+  public void testMultiTableExecutionWithKafkaSource() throws Exception {
     //create topics for each table
     String topicName1 = "topic" + testNum++;
     String topicName2 = "topic" + testNum;
@@ -178,7 +178,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
   }
 
   @Test
-  public void testMultiTableExecutionWithParquetSource() throws IOException {
+  public void testMultiTableExecutionWithParquetSource() throws Exception {
     // ingest test data to 2 parquet source paths
     String parquetSourceRoot1 = dfsBasePath + "/parquetSrcPath1/";
     prepareParquetDFSFiles(10, parquetSourceRoot1);
@@ -218,7 +218,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
   }
 
   @Test
-  public void testTableLevelProperties() throws IOException {
+  public void testTableLevelProperties() throws Exception {
     HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), false, false);
     HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
     List<TableExecutionContext> tableExecutionContexts = streamer.getTableExecutionContexts();
@@ -264,7 +264,7 @@ public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBa
     }
   }
 
-  private void syncAndVerify(HoodieMultiTableDeltaStreamer streamer, String targetBasePath1, String targetBasePath2, long table1ExpectedRecords, long table2ExpectedRecords) {
+  private void syncAndVerify(HoodieMultiTableDeltaStreamer streamer, String targetBasePath1, String targetBasePath2, long table1ExpectedRecords, long table2ExpectedRecords) throws InterruptedException {
     streamer.sync();
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(table1ExpectedRecords, targetBasePath1 + "/*/*.parquet", sqlContext);
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(table2ExpectedRecords, targetBasePath2 + "/*/*.parquet", sqlContext);
