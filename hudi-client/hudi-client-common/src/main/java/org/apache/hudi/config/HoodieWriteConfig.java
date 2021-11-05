@@ -1129,6 +1129,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.INLINE_COMPACT_TIME_DELTA_SECONDS);
   }
 
+  public boolean isAsyncCompactionEnabled() {
+    return getBoolean(HoodieCompactionConfig.ASYNC_COMPACT_ENABLE);
+  }
+
   public CompactionStrategy getCompactionStrategy() {
     return ReflectionUtils.loadClass(getString(HoodieCompactionConfig.COMPACTION_STRATEGY));
   }
