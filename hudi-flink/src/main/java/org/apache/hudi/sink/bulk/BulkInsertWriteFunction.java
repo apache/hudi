@@ -206,7 +206,6 @@ public class BulkInsertWriteFunction<I, O>
     TimeWait timeWait = TimeWait.builder()
         .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
         .action("instant initialize")
-        .throwsT(true)
         .build();
     while (instant == null || instant.equals(this.initInstant)) {
       // wait condition:

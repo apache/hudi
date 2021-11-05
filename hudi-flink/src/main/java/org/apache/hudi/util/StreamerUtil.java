@@ -465,7 +465,7 @@ public class StreamerUtil {
     if (reloadTimeline) {
       metaClient.reloadActiveTimeline();
     }
-    return metaClient.getCommitsTimeline().filterInflightsAndRequested()
+    return metaClient.getCommitsTimeline().filterInflights()
         .lastInstant()
         .map(HoodieInstant::getTimestamp)
         .orElse(null);

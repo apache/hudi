@@ -177,11 +177,6 @@ public class StreamWriteFunction<K, I, O>
   private List<WriteStatus> writeStatuses;
 
   /**
-   * Current checkpoint id.
-   */
-  private long checkpointId = -1;
-
-  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -222,7 +217,6 @@ public class StreamWriteFunction<K, I, O>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
-    this.checkpointId = functionSnapshotContext.getCheckpointId();
     // Based on the fact that the coordinator starts the checkpoint first,
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
@@ -349,10 +343,7 @@ public class StreamWriteFunction<K, I, O>
   public void handleOperatorEvent(OperatorEvent event) {
     ValidationUtils.checkArgument(event instanceof CommitAckEvent,
         "The write function can only handle CommitAckEvent");
-    long checkpointId = ((CommitAckEvent) event).getCheckpointId();
-    if (checkpointId == -1 || checkpointId == this.checkpointId) {
-      this.confirming = false;
-    }
+    this.confirming = false;
   }
 
   /**
@@ -588,16 +579,9 @@ public class StreamWriteFunction<K, I, O>
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
       if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
-        boolean timeout = timeWait.waitFor();
-        if (timeout && instant != null) {
-          // if the timeout threshold hits but the last instant still not commit,
-          // and the task does not receive commit ask event(no data or aborted checkpoint),
-          // assumes the checkpoint was canceled silently and unblock the data flushing
-          confirming = false;
-        } else {
-          // refresh the inflight instant
-          instant = lastPendingInstant();
-        }
+        timeWait.waitFor();
+        // refresh the inflight instant
+        instant = lastPendingInstant();
       } else {
         // the pending instant changed, that means the last instant was committed
         // successfully.

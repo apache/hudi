@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.util.StreamerUtil;
@@ -56,12 +57,12 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTE
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -213,8 +214,8 @@ public class TestWriteCopyOnWrite {
     }
 
     // this returns early because there is no inflight instant
-    assertDoesNotThrow(() -> funcWrapper.checkpointFunction(2),
-        "The stream writer reuse the last instant time when waiting for the last instant commit timeout");
+    assertThrows(HoodieException.class, () -> funcWrapper.checkpointFunction(2),
+        "Timeout(1000ms) while waiting for instant initialize");
     // do not send the write event and fails the checkpoint,
     // behaves like the last checkpoint is successful.
     funcWrapper.checkpointFails(2);
@@ -886,11 +887,11 @@ public class TestWriteCopyOnWrite {
     // checkpoint for the next round
     funcWrapper.checkpointFunction(2);
 
-    assertDoesNotThrow(() -> {
+    assertThrows(HoodieException.class, () -> {
       for (RowData rowData : TestData.DATA_SET_INSERT) {
         funcWrapper.invoke(rowData);
       }
-    }, "The stream writer reuse the last instant time when waiting for the last instant commit timeout");
+    }, "Timeout(1000ms) while waiting for instant initialize");
   }
 
   @Test
