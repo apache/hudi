@@ -1299,8 +1299,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieHBaseIndexConfig.PUT_BATCH_SIZE);
   }
 
-  public Boolean getHbaseIndexPutBatchSizeAutoCompute() {
-    return getBoolean(HoodieHBaseIndexConfig.PUT_BATCH_SIZE_AUTO_COMPUTE);
+  public boolean getHbaseIndexPutBatchSizeAutoCompute() {
+    return getBooleanOrDefault(HoodieHBaseIndexConfig.PUT_BATCH_SIZE_AUTO_COMPUTE);
   }
 
   public String getHBaseQPSResourceAllocatorClass() {
@@ -1361,7 +1361,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean getHbaseIndexUpdatePartitionPath() {
-    return getBoolean(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
+    return getBooleanOrDefault(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
   }
 
   public int getBloomIndexParallelism() {
