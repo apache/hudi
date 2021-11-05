@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -702,16 +703,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return metaClient.getTableConfig().getLogFileFormat();
   }
 
-  public HoodieLogBlockType getLogDataBlockFormat() {
-    switch (getBaseFileFormat()) {
-      case PARQUET:
-      case ORC:
-        return HoodieLogBlockType.AVRO_DATA_BLOCK;
-      case HFILE:
-        return HoodieLogBlockType.HFILE_DATA_BLOCK;
-      default:
-        throw new HoodieException("Base file format " + getBaseFileFormat()
-            + " does not have associated log block format");
+  public HoodieLogBlockType getLogDataBlockType() {
+    HoodieLogBlock.HoodieLogBlockType logBlockType = metaClient.getTableConfig().getLogBlockFormat();
+    if (logBlockType != null) {
+      return logBlockType;
+    } else {
+      switch (getBaseFileFormat()) {
+        case PARQUET:
+        case ORC:
+          return HoodieLogBlockType.AVRO_DATA_BLOCK;
+        case HFILE:
+          return HoodieLogBlockType.HFILE_DATA_BLOCK;
+        default:
+          throw new HoodieException("Base file format " + getBaseFileFormat()
+              + " does not have associated log block type");
+      }
     }
   }
 
