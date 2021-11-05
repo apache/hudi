@@ -27,6 +27,7 @@ import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.command.RunnableCommand
@@ -90,6 +91,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
    * TODO Currently Non-equivalent conditions are not supported.
    */
   private lazy val targetKey2SourceExpression: Map[String, Expression] = {
+    val resolver = sparkSession.sessionState.conf.resolver
     val conditions = splitByAnd(mergeInto.mergeCondition)
     val allEqs = conditions.forall(p => p.isInstanceOf[EqualTo])
     if (!allEqs) {
@@ -101,11 +103,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     val target2Source = conditions.map(_.asInstanceOf[EqualTo])
       .map {
         case EqualTo(left: AttributeReference, right)
-          if targetAttrs.indexOf(left) >= 0 => // left is the target field
-          left.name -> right
+          if targetAttrs.exists(f => attributeEqual(f, left, resolver)) => // left is the target field
+            targetAttrs.find(f => resolver(f.name, left.name)).get.name -> right
         case EqualTo(left, right: AttributeReference)
-          if targetAttrs.indexOf(right) >= 0 => // right is the target field
-          right.name -> left
+          if targetAttrs.exists(f => attributeEqual(f, right, resolver)) => // right is the target field
+            targetAttrs.find(f => resolver(f.name, right.name)).get.name -> left
         case eq =>
           throw new AnalysisException(s"Invalidate Merge-On condition: ${eq.sql}." +
             "The validate condition should be 'targetColumn = sourceColumnExpression', e.g." +
@@ -196,13 +198,22 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
   }
 
   private def isEqualToTarget(targetColumnName: String, sourceExpression: Expression): Boolean = {
-    val sourceColNameMap = sourceDFOutput.map(attr => (attr.name.toLowerCase, attr.name)).toMap
+    val sourceColumnName = sourceDFOutput.map(_.name)
+    val resolver = sparkSession.sessionState.conf.resolver
 
     sourceExpression match {
-      case attr: AttributeReference if sourceColNameMap(attr.name.toLowerCase).equals(targetColumnName) => true
-      case Cast(attr: AttributeReference, _, _) if sourceColNameMap(attr.name.toLowerCase).equals(targetColumnName) => true
+      case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+      case Cast(attr: AttributeReference, _, _) if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
       case _=> false
     }
+  }
+
+  /**
+   * Compare a [[Attribute]] to another, return true if they have the same column name(by resolver) and exprId
+   */
+  private def attributeEqual(
+      attr: Attribute, other: Attribute, resolver: Resolver): Boolean = {
+    resolver(attr.name, other.name) && attr.exprId == other.exprId
   }
 
   /**
@@ -361,9 +372,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     mergeInto.targetTable.output
       .filterNot(attr => isMetaField(attr.name))
       .map(attr => {
-        val assignment = attr2Assignment.getOrElse(attr,
-          throw new IllegalArgumentException(s"Cannot find related assignment for field: ${attr.name}"))
-        castIfNeeded(assignment, attr.dataType, sparkSession.sqlContext.conf)
+        val assignment = attr2Assignment.find(f => attributeEqual(f._1, attr, sparkSession.sessionState.conf.resolver))
+          .getOrElse(throw new IllegalArgumentException(s"Cannot find related assignment for field: ${attr.name}"))
+        castIfNeeded(assignment._2, attr.dataType, sparkSession.sqlContext.conf)
       })
   }
 
