@@ -186,6 +186,7 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-column</artifactId>
+      <scope>compile</scope>
     </dependency>
 
     <!-- Spark -->
