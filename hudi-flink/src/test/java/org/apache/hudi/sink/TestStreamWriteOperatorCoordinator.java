@@ -204,7 +204,7 @@ public class TestStreamWriteOperatorCoordinator {
     HoodieTableMetaClient metadataTableMetaClient = StreamerUtil.createMetaClient(metadataTableBasePath);
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(1L));
-    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is("0000000000000"));
+    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
 
     // test metadata table compaction
     // write another 3 commits
