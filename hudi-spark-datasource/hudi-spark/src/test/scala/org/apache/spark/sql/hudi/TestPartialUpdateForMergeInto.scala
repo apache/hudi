@@ -32,7 +32,7 @@ class TestPartialUpdateForMergeInto extends TestHoodieSqlBase {
              | price double,
              | _ts long
              |) using hudi
-             |options(
+             |tblproperties(
              | type ='$tableType',
              | primaryKey = 'id',
              | preCombineField = '_ts'
@@ -60,7 +60,7 @@ class TestPartialUpdateForMergeInto extends TestHoodieSqlBase {
              | name string,
              | price double
              |) using hudi
-             |options(
+             |tblproperties(
              | type ='$tableType',
              | primaryKey = 'id'
              |)
@@ -92,7 +92,7 @@ class TestPartialUpdateForMergeInto extends TestHoodieSqlBase {
          | price double,
          | _ts long
          |) using hudi
-         |options(
+         |tblproperties(
          | type = 'cow',
          | primaryKey = 'id',
          | preCombineField = '_ts'
@@ -117,7 +117,7 @@ class TestPartialUpdateForMergeInto extends TestHoodieSqlBase {
          | price double,
          | _ts long
          |) using hudi
-         |options(
+         |tblproperties(
          | type = 'mor',
          | primaryKey = 'id',
          | preCombineField = '_ts'

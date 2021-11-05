@@ -105,8 +105,13 @@ object AlterHoodieTableAddColumnsCommand {
     val path = getTableLocation(table, sparkSession)
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
-    val client = DataSourceUtils.createHoodieClient(jsc, schema.toString,
-      path, table.identifier.table, HoodieWriterUtils.parametersWithWriteDefaults(table.storage.properties).asJava)
+    val client = DataSourceUtils.createHoodieClient(
+      jsc,
+      schema.toString,
+      path,
+      table.identifier.table,
+      HoodieWriterUtils.parametersWithWriteDefaults(table.storage.properties ++ table.properties).asJava
+    )
 
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(hadoopConf).build()

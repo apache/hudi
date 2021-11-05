@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
+
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -30,7 +31,8 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
@@ -40,9 +42,12 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 
 import java.util.Properties
+
+import scala.collection.JavaConverters._
 
 /**
  * Command for insert into hoodie table.
@@ -194,46 +199,39 @@ object InsertIntoHoodieTableCommand extends Logging {
         s"[${insertPartitions.keys.mkString(" " )}]" +
         s" not equal to the defined partition in table[${table.partitionColumnNames.mkString(",")}]")
     }
-    val options = table.storage.properties ++ extraOptions
-    val parameters = withSparkConf(sparkSession, options)()
-
-    val tableType = parameters.getOrElse(TABLE_TYPE.key, TABLE_TYPE.defaultValue)
-    val primaryColumns = HoodieOptionConfig.getPrimaryColumns(options)
-    val partitionFields = table.partitionColumnNames.mkString(",")
-
     val path = getTableLocation(table, sparkSession)
     val conf = sparkSession.sessionState.newHadoopConf()
     val isTableExists = tableExistsInPath(path, conf)
-    val tableConfig = if (isTableExists) {
-      HoodieTableMetaClient.builder()
+    val (tableConfig, tableSchema) = if (isTableExists) {
+      val metaClient = HoodieTableMetaClient.builder()
         .setBasePath(path)
         .setConf(conf)
         .build()
-        .getTableConfig
+      (metaClient.getTableConfig, getTableSqlSchema(metaClient).get)
     } else {
-      null
+      (new HoodieTableConfig(), table.schema)
     }
-    val hiveStylePartitioningEnable = if (null == tableConfig || null == tableConfig.getHiveStylePartitioningEnable) {
-      "true"
+    val partitionColumns = tableConfig.getPartitionFieldProp
+    val partitionSchema = if (null == partitionColumns || partitionColumns.isEmpty) {
+      table.partitionSchema
     } else {
-      tableConfig.getHiveStylePartitioningEnable
-    }
-    val urlEncodePartitioning = if (null == tableConfig || null == tableConfig.getUrlEncodePartitoning) {
-      "false"
-    } else {
-      tableConfig.getUrlEncodePartitoning
-    }
-    val keyGeneratorClassName = if (null == tableConfig || null == tableConfig.getKeyGeneratorClassName) {
-      if (primaryColumns.nonEmpty) {
-        classOf[ComplexKeyGenerator].getCanonicalName
-      } else {
-        classOf[UuidKeyGenerator].getCanonicalName
-      }
-    } else {
-      tableConfig.getKeyGeneratorClassName
+      StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
     }
 
-    val tableSchema = table.schema
+    val options = table.storage.properties ++ table.properties ++ tableConfig.getProps.asScala.toMap ++ extraOptions
+    val parameters = withSparkConf(sparkSession, options)()
+
+    val tableName = Option(tableConfig.getTableName).getOrElse(table.identifier.table)
+    val tableType = Option(tableConfig.getTableType.name).getOrElse(TABLE_TYPE.defaultValue)
+    val primaryColumns = tableConfig.getRecordKeyFields.orElse(HoodieOptionConfig.getPrimaryColumns(options))
+    val preCombineColumn = Option(tableConfig.getPreCombineField)
+      .getOrElse(HoodieOptionConfig.getPreCombineField(options).getOrElse(""))
+    val partitionFields = Option(tableConfig.getPartitionFieldProp)
+      .getOrElse(table.partitionColumnNames.mkString(","))
+    val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
+    val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitoning).getOrElse("false")
+    val keyGeneratorClassName = Option(tableConfig.getKeyGeneratorClassName)
+      .getOrElse(classOf[ComplexKeyGenerator].getCanonicalName)
 
     val dropDuplicate = sparkSession.conf
       .getOption(INSERT_DROP_DUPS.key)
@@ -242,35 +240,33 @@ object InsertIntoHoodieTableCommand extends Logging {
 
     val enableBulkInsert = parameters.getOrElse(DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key,
       DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
+    val hasPrecombineColumn = preCombineColumn.nonEmpty
     val isPartitionedTable = table.partitionColumnNames.nonEmpty
-    val isPrimaryKeyTable = primaryColumns.nonEmpty
     val insertMode = InsertMode.of(parameters.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
 
     val operation =
-      (isPrimaryKeyTable, enableBulkInsert, isOverwrite, dropDuplicate) match {
-        case (true, true, _, _) if !isNonStrictMode =>
+      (enableBulkInsert, isOverwrite, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
+        case (true, _, _, false, _) =>
           throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-        case (_, true, true, _) if isPartitionedTable =>
+        case (true, true, _, _, true) =>
           throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
-        case (_, true, _, true) =>
+        case (true, _, true, _, _) =>
           throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
             s" Please disable $INSERT_DROP_DUPS and try again.")
         // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
-        case (_, true, true, _) if !isPartitionedTable => BULK_INSERT_OPERATION_OPT_VAL
-        // insert overwrite partition
-        case (_, _, true, _) if isPartitionedTable => INSERT_OVERWRITE_OPERATION_OPT_VAL
+        case (true, true, _, _, false) => BULK_INSERT_OPERATION_OPT_VAL
         // insert overwrite table
-        case (_, _, true, _) if !isPartitionedTable => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
-        // if it is pk table and the dropDuplicate has disable, use the upsert operation for strict and upsert mode.
-        case (true, false, false, false) if !isNonStrictMode => UPSERT_OPERATION_OPT_VAL
-        // if enableBulkInsert is true and the table is non-primaryKeyed, use the bulk insert operation
-        case (false, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL
+        case (false, true, _, _, false) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+        // insert overwrite partition
+        case (_, true, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+        // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
+        case (false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
         // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-        case (true, true, _, _) if isNonStrictMode => BULK_INSERT_OPERATION_OPT_VAL
+        case (true, _, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
         // for the rest case, use the insert operation
-        case (_, _, _, _) => INSERT_OPERATION_OPT_VAL
+        case _ => INSERT_OPERATION_OPT_VAL
       }
 
     val payloadClassName = if (operation ==  UPSERT_OPERATION_OPT_VAL &&
@@ -288,17 +284,18 @@ object InsertIntoHoodieTableCommand extends Logging {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
-        TBL_NAME.key -> table.identifier.table,
-        PRECOMBINE_FIELD.key -> tableSchema.fields.last.name,
+        TBL_NAME.key -> tableName,
+        PRECOMBINE_FIELD.key -> preCombineColumn,
         OPERATION.key -> operation,
         HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
-        KEYGENERATOR_CLASS_NAME.key -> keyGeneratorClassName,
+        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
         RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
         PARTITIONPATH_FIELD.key -> partitionFields,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
-        HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> isPrimaryKeyTable.toString,
+        HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
         META_SYNC_ENABLED.key -> enableHive.toString,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",

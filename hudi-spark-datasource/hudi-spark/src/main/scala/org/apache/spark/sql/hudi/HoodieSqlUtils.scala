@@ -90,7 +90,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = new Properties()
-      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties).asJava)
+      properties.putAll((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
     FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala

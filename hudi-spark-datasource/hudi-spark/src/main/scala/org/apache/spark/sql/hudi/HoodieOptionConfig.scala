@@ -20,6 +20,10 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.ValidationUtils
+
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.types.StructType
 
 
 /**
@@ -43,6 +47,7 @@ object HoodieOptionConfig {
     .withSqlKey("primaryKey")
     .withHoodieKey(DataSourceWriteOptions.RECORDKEY_FIELD.key)
     .withTableConfigKey(HoodieTableConfig.RECORDKEY_FIELDS.key)
+    .defaultValue(DataSourceWriteOptions.RECORDKEY_FIELD.defaultValue())
     .build()
 
   val SQL_KEY_TABLE_TYPE: HoodieOption[String] = buildConf()
@@ -102,6 +107,8 @@ object HoodieOptionConfig {
 
   private lazy val reverseValueMapping = valueMapping.map(f => f._2 -> f._1)
 
+  def withDefaultSqlOption(options: Map[String, String]): Map[String, String] = defaultSqlOption ++ options
+
   /**
    * Mapping the sql's short name key/value in the options to the hoodie's config key/value.
    * @param options
@@ -119,14 +126,13 @@ object HoodieOptionConfig {
    * @return
    */
   def mappingSqlOptionToTableConfig(options: Map[String, String]): Map[String, String] = {
-    defaultTableConfig ++
-      options.map { case (k, v) =>
-        if (keyTableConfigMapping.contains(k)) {
-          keyTableConfigMapping(k) -> valueMapping.getOrElse(v, v)
-        } else {
-          k -> v
-        }
+    options.map { case (k, v) =>
+      if (keyTableConfigMapping.contains(k)) {
+        keyTableConfigMapping(k) -> valueMapping.getOrElse(v, v)
+      } else {
+        k -> v
       }
+    }
   }
 
   /**
@@ -136,14 +142,17 @@ object HoodieOptionConfig {
     options.map(kv => tableConfigKeyToSqlKey.getOrElse(kv._1, kv._1) -> reverseValueMapping.getOrElse(kv._2, kv._2))
   }
 
-  private lazy val defaultTableConfig: Map[String, String] = {
+  private lazy val defaultSqlOption: Map[String, String] = {
     HoodieOptionConfig.getClass.getDeclaredFields
       .filter(f => f.getType == classOf[HoodieOption[_]])
       .map(f => {f.setAccessible(true); f.get(HoodieOptionConfig).asInstanceOf[HoodieOption[_]]})
       .filter(option => option.tableConfigKey.isDefined && option.defaultValue.isDefined)
-      .map(option => option.tableConfigKey.get ->
-        valueMapping.getOrElse(option.defaultValue.get.toString, option.defaultValue.get.toString))
+      .map(option => option.sqlKeyName -> option.defaultValue.get.toString)
       .toMap
+  }
+
+  private lazy val defaultTableConfig: Map[String, String] = {
+    mappingSqlOptionToHoodieParam(defaultSqlOption)
   }
 
   /**
@@ -154,7 +163,7 @@ object HoodieOptionConfig {
   def getPrimaryColumns(options: Map[String, String]): Array[String] = {
     val params = mappingSqlOptionToHoodieParam(options)
     params.get(DataSourceWriteOptions.RECORDKEY_FIELD.key)
-      .map(_.split(",").filter(_.length > 0))
+      .map(_.split(",").filter(_.nonEmpty))
       .getOrElse(Array.empty)
   }
 
@@ -171,7 +180,48 @@ object HoodieOptionConfig {
 
   def getPreCombineField(options: Map[String, String]): Option[String] = {
     val params = mappingSqlOptionToHoodieParam(options)
-    params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)
+    params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key).filter(_.nonEmpty)
+  }
+
+  def deleteHooideOptions(options: Map[String, String]): Map[String, String] = {
+    options.filterNot(_._1.startsWith("hoodie.")).filterNot(kv => keyMapping.contains(kv._1))
+  }
+
+  // extract primaryKey, preCombineField, type options
+  def extractSqlOptions(options: Map[String, String]): Map[String, String] = {
+    val targetOptions = keyMapping.keySet -- Set(SQL_PAYLOAD_CLASS.sqlKeyName)
+    options.filterKeys(targetOptions.contains)
+  }
+
+  // validate primaryKey, preCombineField and type options
+  def validateTable(spark: SparkSession, schema: StructType, options: Map[String, String]): Unit = {
+    val resolver = spark.sessionState.conf.resolver
+
+    // validate primary key
+    val primaryKeys = options.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)
+      .map(_.split(",")
+      .filter(_.length > 0))
+    ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
+    primaryKeys.get.foreach { primaryKey =>
+      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, primaryKey)),
+        s"Can't find primary key `$primaryKey` in ${schema.treeString}.")
+    }
+
+    // validate precombine key
+    val precombineKey = options.get(SQL_KEY_PRECOMBINE_FIELD.sqlKeyName)
+    if (precombineKey.isDefined && precombineKey.get.nonEmpty) {
+      ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, precombineKey.get)),
+        s"Can't find precombine key `${precombineKey.get}` in ${schema.treeString}.")
+    }
+
+    // validate table type
+    val tableType = options.get(SQL_KEY_TABLE_TYPE.sqlKeyName)
+    ValidationUtils.checkArgument(tableType.nonEmpty, "No `tableType` is specified.")
+    ValidationUtils.checkArgument(
+      tableType.get.equalsIgnoreCase(HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_COW) ||
+      tableType.get.equalsIgnoreCase(HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_MOR),
+      s"'type' must be '${HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_COW}' or " +
+        s"'${HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_MOR}'")
   }
 
   def buildConf[T](): HoodieOptions[T] = {

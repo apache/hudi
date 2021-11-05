@@ -92,7 +92,7 @@ extends RunnableCommand {
       .build()
     val tableConfig = metaClient.getTableConfig
 
-    val optParams = withSparkConf(sparkSession, table.storage.properties) {
+    withSparkConf(sparkSession, table.storage.properties) {
       Map(
         "path" -> path,
         TBL_NAME.key -> tableIdentifier.table,
@@ -104,10 +104,6 @@ extends RunnableCommand {
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp
       )
     }
-
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
-    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
-    translatedOptions
   }
 
   def normalizePartitionSpec[T](
