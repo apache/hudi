@@ -1439,6 +1439,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
   }
 
+  public String parquetWriteLegacyFormatEnabled() {
+    return getString(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED);
+  }
+
+  public String parquetOutputTimestampType() {
+    return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
+  }
+
   public long getLogFileMaxSize() {
     return getLong(HoodieStorageConfig.LOGFILE_MAX_SIZE);
   }
