@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
@@ -51,11 +52,11 @@ import java.util.stream.Collectors;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -151,10 +152,8 @@ public class TestWriteBase {
       return this;
     }
 
-    public TestHarness assertConsumeDoesNotThrow(List<RowData> inputs) {
-      assertDoesNotThrow(() -> {
-        consume(inputs);
-      }, "The stream writer reuse the last instant time when waiting for the last instant commit timeout");
+    public TestHarness assertConsumeThrows(List<RowData> inputs, String message) {
+      assertThrows(HoodieException.class, () -> consume(inputs), message);
       return this;
     }
 
@@ -294,9 +293,9 @@ public class TestWriteBase {
       return this;
     }
 
-    public TestHarness checkpointNotThrow(long checkpointId, String message) {
+    public TestHarness checkpointThrows(long checkpointId, String message) {
       // this returns early because there is no inflight instant
-      assertDoesNotThrow(() -> checkpoint(checkpointId), message);
+      assertThrows(HoodieException.class, () -> checkpoint(checkpointId), message);
       return this;
     }
 

@@ -183,14 +183,20 @@ public class BulkInsertWriteFunction<I>
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }
 
+  /**
+   * Returns the last pending instant time.
+   */
+  protected String lastPendingInstant() {
+    return StreamerUtil.getLastPendingInstant(this.metaClient);
+  }
+
   private String instantToWrite() {
-    String instant = StreamerUtil.getLastPendingInstant(this.metaClient);
+    String instant = lastPendingInstant();
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
     TimeWait timeWait = TimeWait.builder()
         .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
         .action("instant initialize")
-        .throwsT(true)
         .build();
     while (instant == null || instant.equals(this.initInstant)) {
       // wait condition:
@@ -199,7 +205,7 @@ public class BulkInsertWriteFunction<I>
       // sleep for a while
       timeWait.waitFor();
       // refresh the inflight instant
-      instant = StreamerUtil.getLastPendingInstant(this.metaClient);
+      instant = lastPendingInstant();
     }
     return instant;
   }

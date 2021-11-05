@@ -95,8 +95,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertEmptyEvent()
         .checkpointFails(1)
         .consume(TestData.DATA_SET_INSERT)
-        .checkpointNotThrow(2,
-            "The stream writer reuse the last instant time when waiting for the last instant commit timeout")
+        .checkpointThrows(2,
+            "Timeout(1000ms) while waiting for instant initialize")
         // do not send the write event and fails the checkpoint,
         // behaves like the last checkpoint is successful.
         .checkpointFails(2)
@@ -390,7 +390,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .consume(TestData.DATA_SET_INSERT)
         .assertNotConfirming()
         .checkpoint(2)
-        .assertConsumeDoesNotThrow(TestData.DATA_SET_INSERT)
+        .assertConsumeThrows(TestData.DATA_SET_INSERT,
+            "Timeout(1000ms) while waiting for instant initialize")
         .end();
   }
 

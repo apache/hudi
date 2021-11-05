@@ -236,16 +236,6 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void notifyCheckpointAborted(long checkpointId) {
-    // once the checkpoint was aborted, unblock the writer tasks to
-    // reuse the last instant.
-    if (!WriteMetadataEvent.BOOTSTRAP_INSTANT.equals(this.instant)) {
-      executor.execute(() -> sendCommitAckEvents(checkpointId),
-          "unblock data write with aborted checkpoint %s", checkpointId);
-    }
-  }
-
-  @Override
   public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
     // no operation
   }
@@ -334,8 +324,10 @@ public class StreamWriteOperatorCoordinator
 
   private void startInstant() {
     final String instant = HoodieActiveTimeline.createNewInstantTime();
-    this.writeClient.startCommitWithTime(instant, tableState.commitAction);
+    // put the assignment in front of metadata generation,
+    // because the instant request from write task is asynchronous.
     this.instant = instant;
+    this.writeClient.startCommitWithTime(instant, tableState.commitAction);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     this.writeClient.upgradeDowngrade(this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
