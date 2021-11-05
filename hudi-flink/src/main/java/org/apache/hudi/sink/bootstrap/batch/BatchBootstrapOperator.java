@@ -39,7 +39,7 @@ import java.util.Set;
  *
  * <p>The input records should shuffle by the partition path to avoid repeated loading.
  */
-public class BatchBootstrapOperator<I, O extends HoodieRecord>
+public class BatchBootstrapOperator<I, O extends HoodieRecord<?>>
     extends BootstrapOperator<I, O> {
 
   private Set<String> partitionPathSet;
@@ -64,7 +64,7 @@ public class BatchBootstrapOperator<I, O extends HoodieRecord>
   @Override
   @SuppressWarnings("unchecked")
   public void processElement(StreamRecord<I> element) throws Exception {
-    final HoodieRecord record = (HoodieRecord<?>) element.getValue();
+    final HoodieRecord<?> record = (HoodieRecord<?>) element.getValue();
     final String partitionPath = record.getKey().getPartitionPath();
 
     if (haveSuccessfulCommits && !partitionPathSet.contains(partitionPath)) {
