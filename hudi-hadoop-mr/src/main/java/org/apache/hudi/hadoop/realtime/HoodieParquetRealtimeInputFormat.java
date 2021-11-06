@@ -98,7 +98,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           // For e:g _hoodie_record_key would be missing and merge step would throw exceptions.
           // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
           // time.
-          HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
             HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf, realtimeSplit.getHoodieVirtualKeyInfo());
           }
@@ -107,6 +106,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
         }
       }
     }
+    HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
   }
 
   @Override
