@@ -60,14 +60,14 @@ public class HoodieSparkBootstrapExample {
 
     Dataset df =  spark.emptyDataFrame();
 
-    df.write().format("hudi").option(HoodieWriteConfig.TABLE_NAME.key(), tableName)
+    df.write().format("hudi").option(HoodieWriteConfig.TBL_NAME.key(), tableName)
             .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
             .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey)
             .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionPath)
             .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), preCombineField)
-            .option(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.key(), HoodieFileFormat.ORC.name())
-            .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key(), basePath)
-            .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key(), NonpartitionedKeyGenerator.class.getCanonicalName())
+            .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.ORC.name())
+            .option(HoodieBootstrapConfig.BASE_PATH.key(), basePath)
+            .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getCanonicalName())
             .mode(SaveMode.Overwrite).save("/hudi/"+tableName);
 
     df.count();

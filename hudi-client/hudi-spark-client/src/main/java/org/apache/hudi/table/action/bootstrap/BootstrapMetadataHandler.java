@@ -21,7 +21,17 @@ package org.apache.hudi.table.action.bootstrap;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 
-public interface MetadataHandler {
+/**
+ * Bootstrap metadata handler to assist in bootstrapping only metadata.
+ */
+public interface BootstrapMetadataHandler {
+  /**
+   * Execute bootstrap with only metatata.
+   * @param srcPartitionPath source partition path.
+   * @param partitionPath destination partition path.
+   * @param keyGenerator key generator to use.
+   * @return the {@link BootstrapWriteStatus} which has the result of execution.
+   */
   BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator);
 }
 

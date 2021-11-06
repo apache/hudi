@@ -30,15 +30,15 @@ import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 public class MetadataBootstrapHandlerFactory {
 
-  public static MetadataHandler getMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
+  public static BootstrapMetadataHandler getMetadataHandler(HoodieWriteConfig config, HoodieTable table, HoodieFileStatus srcFileStatus) {
     Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
 
     String extension = FSUtils.getFileExtension(sourceFilePath.toString());
-    MetadataHandler metadataHandler;
+    BootstrapMetadataHandler bootstrapMetadataHandler;
     if (ORC.getFileExtension().equals(extension)) {
-      return new OrcMetadataHandler(config, table, srcFileStatus);
+      return new OrcBootstrapMetadataHandler(config, table, srcFileStatus);
     } else if (PARQUET.getFileExtension().equals(extension)) {
-      return new ParquetMetadataHandler(config, table, srcFileStatus);
+      return new ParquetBootstrapMetadataHandler(config, table, srcFileStatus);
     } else {
       throw new HoodieIOException("Bootstrap Metadata Handler not implemented for base file format " + extension);
     }
