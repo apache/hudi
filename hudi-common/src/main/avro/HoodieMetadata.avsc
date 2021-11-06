@@ -89,6 +89,40 @@
                     ]
                 }
             ]
+        },
+        {
+            "name": "ColumnStatsMetadata",
+            "doc": "Contains information about column ranges for all data files in the table",
+            "type": [
+                "null",
+                {
+                    "type": "record",
+                    "name": "HoodieColumnStats",
+                    "fields": [
+                        {
+                            "name": "rangeLow",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "doc": "Low end of the range. For now, this is a String. Based on main data table schema, we can convert it to appropriate type"
+                        },
+                        {
+                            "name": "rangeHigh",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "doc": "High end of the range. For now, this is a String. Based on main data table schema, we can convert it to appropriate type"
+                        },
+                        {
+                            "name": "isDeleted",
+                            "type": "boolean",
+                            "doc": "True if this file has been deleted"
+                        }
+                    ]
+                }
+            ]
         }
     ]
 }

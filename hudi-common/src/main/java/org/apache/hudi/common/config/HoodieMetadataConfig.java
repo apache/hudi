@@ -53,6 +53,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Enable indexing base files bloom filters for quicker key lookups");
 
+  // When the internal Metadata Table is enabled, can it
+  // index base file bloom filters for quicker key lookups?
+  public static final ConfigProperty<Boolean> COLUMN_STATS_METADATA_ENABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".column_stats.enable")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable indexing base files column stats for quicker key lookups");
+
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
   // Enable metrics for internal Metadata Table
@@ -159,6 +167,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isBloomFiltersEnabled() {
     return getBoolean(BLOOM_FILTER_METADATA_ENABLE);
+  }
+
+  public boolean isColumnStatsEnabled() {
+    return getBoolean(COLUMN_STATS_METADATA_ENABLE);
   }
 
   public boolean enableMetrics() {

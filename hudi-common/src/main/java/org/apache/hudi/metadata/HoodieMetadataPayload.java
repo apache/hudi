@@ -18,9 +18,11 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.model.HoodieColumnStatsMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -40,6 +42,7 @@ import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,18 +80,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   // has a bug - https://issues.apache.org/jira/browse/AVRO-1810
   protected static final int METADATA_TYPE_PARTITION_LIST = 1;
   protected static final int METADATA_TYPE_FILE_LIST = 2;
-  //protected static final int METADATA_TYPE_COLUMN_STATS = 3;
+  protected static final int METADATA_TYPE_COLUMN_STATS = 3;
   protected static final int METADATA_TYPE_BLOOM_FILTER = 4;
 
   // Various metadata type record names in the payload
   private static final String METADATA_RECORD_FILESYSTEM = "filesystemMetadata";
-  //private static final String METADATA_RECORD_COLUMN_STATS = "ColumnStatsMetadata";
+  private static final String METADATA_RECORD_COLUMN_STATS = "ColumnStatsMetadata";
   private static final String METADATA_RECORD_BLOOM_FILTER = "BloomFilterMetadata";
 
   private String key = null;
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
+  private HoodieColumnStats columnStats = null;
 
   public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
     this(Option.of(record));
@@ -127,24 +131,39 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             (Boolean) metadataRecord.get(FIELD_VALID)
         );
       }
+
+      if (type == METADATA_TYPE_COLUMN_STATS) {
+        GenericRecord v = (GenericRecord) record.get().get(METADATA_RECORD_COLUMN_STATS);
+        if (v == null) {
+          throw new HoodieMetadataException("Valid " + METADATA_RECORD_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
+        }
+        columnStats = new HoodieColumnStats(String.valueOf(v.get("rangeLow")), String.valueOf(v.get("rangeHigh")),
+            (Boolean) v.get("isDeleted"));
+      }
     }
   }
 
   private HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    this(key, type, filesystemMetadata, null);
+    this(key, type, filesystemMetadata, null, null);
   }
 
   private HoodieMetadataPayload(String key, int type, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, type, null, metadataBloomFilter);
+    this(key, type, null, metadataBloomFilter, null);
+  }
+
+  private HoodieMetadataPayload(String key, int type, HoodieColumnStats columnStats) {
+    this(key, type, null, null, columnStats);
   }
 
   protected HoodieMetadataPayload(String key, int type,
                                   Map<String, HoodieMetadataFileInfo> filesystemMetadata,
-                                  HoodieMetadataBloomFilter metadataBloomFilter) {
+                                  HoodieMetadataBloomFilter metadataBloomFilter,
+                                  HoodieColumnStats columnStats) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
     this.bloomFilterMetadata = metadataBloomFilter;
+    this.columnStats = columnStats;
   }
 
   /**
@@ -158,7 +177,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.partitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
-        fileInfo, null);
+        fileInfo);
     return new HoodieRecord<>(key, payload);
   }
 
@@ -179,8 +198,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L, true))));
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.partitionPath());
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo,
-        null);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
     return new HoodieRecord<>(key, payload);
   }
 
@@ -220,6 +238,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       case METADATA_TYPE_BLOOM_FILTER:
         HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
         return new HoodieMetadataPayload(key, type, combineBloomFilterMetadata);
+      case METADATA_TYPE_COLUMN_STATS:
+        return new HoodieMetadataPayload(key, type, combineColumnStats(previousRecord));
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
@@ -227,6 +247,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   private HoodieMetadataBloomFilter combineBloomFilterMetadata(HoodieMetadataPayload previousRecord) {
     return this.bloomFilterMetadata;
+  }
+
+  private HoodieColumnStats combineColumnStats(HoodieMetadataPayload previousRecord) {
+    return this.columnStats;
   }
 
   @Override
@@ -242,7 +266,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata);
+    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
+        columnStats);
     return Option.of(record);
   }
 
@@ -317,6 +342,43 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     return combinedFileInfo;
+  }
+
+  public static Stream<HoodieRecord> createColumnStatsRecords(
+      Collection<HoodieColumnStatsMetadata<Comparable>> columnRangeInfo) {
+    return columnRangeInfo.stream().map(columnStatsMetadata -> {
+      HoodieKey key = new HoodieKey(getColumnStatsRecordKey(columnStatsMetadata),
+          MetadataPartitionType.COLUMN_STATS.partitionPath());
+
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
+          HoodieColumnStats.newBuilder()
+              //TODO: we are storing range for all columns as string. add support for other primitive types
+              // also if min/max is null, we store null for these columns. Should we consider storing String "null"
+              // instead?
+              .setRangeHigh(columnStatsMetadata.getMinValue() == null ? "0" :
+                  columnStatsMetadata.getMaxValue().toString())
+              .setRangeLow(columnStatsMetadata.getMinValue() == null ? "0" :
+                  columnStatsMetadata.getMaxValue().toString())
+              .setIsDeleted(false)
+              .build());
+
+      return new HoodieRecord<>(key, payload);
+    });
+  }
+
+  // get record key from column stats metadata
+  public static String getColumnStatsRecordKey(HoodieColumnStatsMetadata<Comparable> columnStatsMetadata) {
+    return "column||" + columnStatsMetadata.getColumnName() + ";;partitionPath||"
+        + columnStatsMetadata.getPartitionPath() + ";;fileName||" + columnStatsMetadata.getFilePath();
+  }
+
+  // parse attribute in record key. TODO: find better way to get this attribute instaed of parsing key
+  public static String getAttributeFromRecordKey(String recordKey, String attribute) {
+    String[] attributeNameValuePairs = recordKey.split(";;");
+    return Arrays.stream(attributeNameValuePairs)
+        .filter(nameValue -> nameValue.startsWith(attribute))
+        .findFirst()
+        .map(s -> s.split("\\|\\|")[1]).orElse(null);
   }
 
   @Override

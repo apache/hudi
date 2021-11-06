@@ -59,7 +59,7 @@ public class HoodieMetadataBloomFilterUtil {
     HoodieMetadataBloomFilter metadataBloomFilter = new HoodieMetadataBloomFilter();
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
         HoodieMetadataPayload.METADATA_TYPE_BLOOM_FILTER, fileInfo,
-        null);
+        null, null);
     return new HoodieRecord<>(key, payload);
   }
 

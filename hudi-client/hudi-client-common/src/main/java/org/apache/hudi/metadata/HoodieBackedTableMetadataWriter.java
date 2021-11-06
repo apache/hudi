@@ -101,6 +101,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
   protected boolean isBloomFilterEnabled;
+  protected boolean isColumnStatsEnabled;
 
   /**
    * Hudi backed table metadata writer.
@@ -122,6 +123,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     if (writeConfig.isMetadataTableEnabled()) {
       this.isBloomFilterEnabled = writeConfig.getMetadataConfig().isBloomFiltersEnabled();
+      this.isColumnStatsEnabled = writeConfig.getMetadataConfig().isColumnStatsEnabled();
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig);
       enabled = true;
@@ -377,11 +379,16 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
 
     initTableMetadata();
+
     initializeFileGroups(dataMetaClient, MetadataPartitionType.FILES, createInstantTime,
         MetadataPartitionType.FILES.getFileGroupCount());
     if (isBloomFilterEnabled) {
       initializeFileGroups(dataMetaClient, MetadataPartitionType.BLOOM_FILTERS, createInstantTime,
           MetadataPartitionType.BLOOM_FILTERS.getFileGroupCount());
+    }
+    if (isColumnStatsEnabled) {
+      initializeFileGroups(dataMetaClient, MetadataPartitionType.COLUMN_STATS, createInstantTime,
+          MetadataPartitionType.COLUMN_STATS.getFileGroupCount());
     }
 
     // List all partitions in the basePath of the containing dataset
@@ -547,7 +554,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata,
-        dataMetaClient, instantTime));
+        dataMetaClient, instantTime, engineContext));
   }
 
   /**

@@ -22,21 +22,30 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieColumnStatsMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -50,6 +59,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -57,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
@@ -81,10 +92,8 @@ public class HoodieTableMetadataUtil {
     switch (partitionPath) {
       case PARTITION_NAME_FILES:
         return Option.of(MetadataPartitionType.FILES);
-      /*
       case PARTITION_NAME_COLUMN_STATS:
         return Option.of(MetadataPartitionType.COLUMN_STATS);
-      */
       case PARTITION_NAME_BLOOM_FILTERS:
         return Option.of(MetadataPartitionType.BLOOM_FILTERS);
       default:
@@ -120,15 +129,24 @@ public class HoodieTableMetadataUtil {
    * @return
    */
   public static Map<MetadataPartitionType, List<HoodieRecord>> convertMetadataToRecords(
-      HoodieCommitMetadata commitMetadata, HoodieTableMetaClient dataMetaClient, String instantTime) {
+      HoodieCommitMetadata commitMetadata, HoodieTableMetaClient dataMetaClient, String instantTime,
+      HoodieEngineContext context) {
     Map<MetadataPartitionType, List<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     partitionToRecordsMap.put(MetadataPartitionType.FILES, convertMetadataToFilesPartitionRecords(commitMetadata,
         instantTime));
+
     final List<HoodieRecord> metadataBloomFilterRecords = convertMetadataToBloomFilterRecords(commitMetadata,
         dataMetaClient, instantTime);
     if (!metadataBloomFilterRecords.isEmpty()) {
       partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS, metadataBloomFilterRecords);
     }
+
+    final List<HoodieRecord> metadataColumnStats = convertMetadataToColumnStatsRecords(commitMetadata, context,
+        dataMetaClient, instantTime);
+    if (!metadataColumnStats.isEmpty()) {
+      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS, metadataColumnStats);
+    }
+
     return partitionToRecordsMap;
   }
 
@@ -291,7 +309,6 @@ public class HoodieTableMetadataUtil {
         metadataTableTimeline, restoreMetadata, instantTime, lastSyncTs));
     return partitionToRecordsMap;
   }
-
 
   /**
    * Aggregates all files deleted and appended to from all rollbacks associated with a restore operation then
@@ -530,4 +547,106 @@ public class HoodieTableMetadataUtil {
     return fsView.getLatestFileSlices(partition).sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
         .collect(Collectors.toList());
   }
+
+  public static List<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCommitMetadata commitMetadata,
+                                                                       HoodieEngineContext engineContext,
+                                                                       HoodieTableMetaClient dataMetaClient,
+                                                                       String instantTime) {
+
+    try {
+      List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
+          .flatMap(entry -> entry.stream()).collect(Collectors.toList());
+      //TODO this result may be too large to fit into memory. We may need to convert to dataframe and move this to
+      // spark-client
+      return HoodieTableMetadataUtil.createColumnStatsFromWriteStats(engineContext, dataMetaClient, allWriteStats);
+
+      /*LOG.info("Creating " + columnStatsPartitionRecords.size() + " records for column stats from " + columnStats
+      .keySet().size()
+          + " files created as part of instant " + instantTime);
+      return HoodieList.of(columnStatsPartitionRecords);*/
+    } catch (Exception e) {
+      throw new HoodieException("Failed to generate column stats records for metadata table ", e);
+    }
+  }
+
+  public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCleanMetadata cleanMetadata,
+                                                                             HoodieEngineContext engineContext,
+                                                                             HoodieTableMetaClient datasetMetaClient,
+                                                                             String instantTime) throws Exception {
+    List<Pair<String, String>> deleteFileInfos = new ArrayList<>();
+    cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
+      // Files deleted from a partition
+      List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+      deletedFiles.forEach(entry -> deleteFileInfos.add(Pair.of(partition, entry)));
+    });
+
+    List<String> latestColumns = getLatestColumns(datasetMetaClient);
+
+    return HoodieList.of(engineContext.flatMap(deleteFileInfos,
+        deleteFileInfo -> getColumnStats(deleteFileInfo.getKey(), deleteFileInfo.getValue(), datasetMetaClient,
+            Option.of(latestColumns), true),
+        deleteFileInfos.size()));
+    //LOG.info("Updating at " + instantTime + " from Clean. #partitions_updated=" + records.size()
+    //  + ", #files_deleted=" + fileDeleteCount[0]);
+    //return HoodieList.of(records);
+  }
+
+  /**
+   * @param engineContext
+   * @param datasetMetaClient
+   * @param allWriteStats
+   * @return a Map < Pair (partition path, file path)> -> collection of stats >
+   */
+  public static List<HoodieRecord> createColumnStatsFromWriteStats(HoodieEngineContext engineContext,
+                                                                   HoodieTableMetaClient datasetMetaClient,
+                                                                   List<HoodieWriteStat> allWriteStats) throws Exception {
+    if (allWriteStats.isEmpty()) {
+      return Collections.emptyList();
+    }
+
+    return engineContext.flatMap(allWriteStats,
+        writeStat -> translateWriteStatToColumnStats(writeStat, datasetMetaClient,
+            Option.of(getLatestColumns(datasetMetaClient))), allWriteStats.size());
+  }
+
+  private static List<String> getLatestColumns(HoodieTableMetaClient datasetMetaClient) throws Exception {
+    if (datasetMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 1) {
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(datasetMetaClient);
+      // consider nested fields as well.
+      // if column stats is enabled only for a subset of columns, directly use them instead of all columns from
+      // latest table schema
+      return schemaResolver.getTableAvroSchema().getFields().stream().map(entry -> entry.name()).collect(Collectors.toList());
+    } else {
+      return Collections.emptyList();
+    }
+  }
+
+  public static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
+                                                                     HoodieTableMetaClient datasetMetaClient,
+                                                                     Option<List<String>> latestColumns) throws Exception {
+    return getColumnStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, latestColumns, false);
+  }
+
+  public static Stream<HoodieRecord> getColumnStats(final String partitionpath, final String path,
+                                                    HoodieTableMetaClient datasetMetaClient,
+                                                    Option<List<String>> latestColumns,
+                                                    boolean isDeleted) throws Exception {
+    if (path.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+      //TODO: we are capturing range for most columns in the schema. Should we have allowList/denyList to reduce
+      // storage size of index?
+      Collection<HoodieColumnStatsMetadata<Comparable>> columnStatsMetadata = new ArrayList<>();
+      if (!isDeleted) {
+        columnStatsMetadata = new ParquetUtils().readColumnStatsFromParquetMetadata(
+            datasetMetaClient.getHadoopConf(), partitionpath, new Path(datasetMetaClient.getBasePath(), path));
+      } else {
+        columnStatsMetadata =
+            latestColumns.get().stream().map(entry -> new HoodieColumnStatsMetadata<Comparable>(partitionpath, path,
+                entry, null, null, true)).collect(Collectors.toList());
+      }
+      return HoodieMetadataPayload.createColumnStatsRecords(columnStatsMetadata);
+    } else {
+      throw new HoodieException("range index not supported for path " + path);
+    }
+  }
+
 }
