@@ -24,15 +24,15 @@ import org.apache.hudi.common.config.TypedProperties;
 /**
  * Spark Data frame based bootstrap input provider.
  */
-public class SparkParquetBootstrapDataProvider extends SparkFullBootstrapDataProviderBase {
+public class SparkOrcBootstrapDataProvider extends SparkFullBootstrapDataProviderBase {
 
-  public SparkParquetBootstrapDataProvider(TypedProperties props,
-                                           HoodieSparkEngineContext context) {
+  public SparkOrcBootstrapDataProvider(TypedProperties props,
+                                       HoodieSparkEngineContext context) {
     super(props, context);
   }
 
   @Override
   protected String getFormat() {
-    return "parquet";
+    return "orc";
   }
 }

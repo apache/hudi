@@ -19,8 +19,6 @@
 package org.apache.hudi.common.util;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,8 +47,6 @@ import org.apache.orc.Reader;
 import org.apache.orc.Reader.Options;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
-
-import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_SCHEMA_METADATA_KEY;
 
 /**
  * Utility functions for ORC files.
@@ -226,9 +222,8 @@ public class OrcUtils extends BaseFileUtils {
   public Schema readAvroSchema(Configuration conf, Path orcFilePath) {
     try {
       Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
-      ByteBuffer schemaBuffer = reader.getMetadataValue(HOODIE_AVRO_SCHEMA_METADATA_KEY);
-      String schemaText = StandardCharsets.UTF_8.decode(schemaBuffer).toString();
-      return new Schema.Parser().parse(schemaText);
+      TypeDescription orcSchema = reader.getSchema();
+      return AvroOrcUtils.createAvroSchema(orcSchema);
     } catch (IOException io) {
       throw new HoodieIOException("Unable to get Avro schema for ORC file:" + orcFilePath, io);
     }

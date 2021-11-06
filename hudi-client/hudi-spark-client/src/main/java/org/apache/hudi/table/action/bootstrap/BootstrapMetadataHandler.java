@@ -16,23 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.bootstrap;
+package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
+import org.apache.hudi.keygen.KeyGeneratorInterface;
 
 /**
- * Spark Data frame based bootstrap input provider.
+ * Bootstrap metadata handler to assist in bootstrapping only metadata.
  */
-public class SparkParquetBootstrapDataProvider extends SparkFullBootstrapDataProviderBase {
-
-  public SparkParquetBootstrapDataProvider(TypedProperties props,
-                                           HoodieSparkEngineContext context) {
-    super(props, context);
-  }
-
-  @Override
-  protected String getFormat() {
-    return "parquet";
-  }
+public interface BootstrapMetadataHandler {
+  /**
+   * Execute bootstrap with only metatata.
+   * @param srcPartitionPath source partition path.
+   * @param partitionPath destination partition path.
+   * @param keyGenerator key generator to use.
+   * @return the {@link BootstrapWriteStatus} which has the result of execution.
+   */
+  BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator);
 }
+
+
