@@ -398,7 +398,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     List<Path> pathsToList = new LinkedList<>();
     pathsToList.add(new Path(dataWriteConfig.getBasePath()));
 
-    List<DirectoryInfo> foundPartitionsList = new LinkedList<>();
+    List<DirectoryInfo> partitionsToBootstrap = new LinkedList<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     SerializableConfiguration conf = new SerializableConfiguration(dataMetaClient.getHadoopConf());
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
@@ -408,7 +408,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // In each round we will list a section of directories
       int numDirsToList = Math.min(fileListingParallelism, pathsToList.size());
       // List all directories in parallel
-      List<DirectoryInfo> foundDirsList = engineContext.map(pathsToList.subList(0,  numDirsToList), path -> {
+      List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0,  numDirsToList), path -> {
         FileSystem fs = path.getFileSystem(conf.get());
         String relativeDirPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), path);
         return new DirectoryInfo(relativeDirPath, fs.listStatus(path));
@@ -418,7 +418,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
-      for (DirectoryInfo dirInfo : foundDirsList) {
+      for (DirectoryInfo dirInfo : processedDirectories) {
         if (!dirFilterRegex.isEmpty()) {
           final String relativePath = dirInfo.getRelativePath();
           if (!relativePath.isEmpty()) {
@@ -432,7 +432,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
         if (dirInfo.isPartition()) {
           // Add to result
-          foundPartitionsList.add(dirInfo);
+          partitionsToBootstrap.add(dirInfo);
         } else {
           // Add sub-dirs to the queue
           pathsToList.addAll(dirInfo.getSubdirs());
@@ -440,7 +440,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       }
     }
 
-    return foundPartitionsList;
+    return partitionsToBootstrap;
   }
 
   /**
@@ -640,10 +640,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   public static class DirectoryInfo implements Serializable {
     // Relative path of the directory (relative to the base directory)
     private String relativePath;
-    // List of filenames within this partition
-    private List<String> filenames;
-    // Length of the various files
-    private List<Long> filelengths;
+    // Map of filenames within this partition to their respective sizes
+    HashMap<String, Long> filenameToSizeMap;
     // List of directories within this partition
     private List<Path> subdirs = new ArrayList<>();
     // Is this a HUDI partition
@@ -653,19 +651,20 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       this.relativePath = relativePath;
 
       // Pre-allocate with the maximum length possible
-      filenames = new ArrayList<>(fileStatus.length);
-      filelengths = new ArrayList<>(fileStatus.length);
+      filenameToSizeMap = new HashMap<>(fileStatus.length);
 
       for (FileStatus status : fileStatus) {
         if (status.isDirectory()) {
-          this.subdirs.add(status.getPath());
+          // Ignore .hoodie directory as there cannot be any partitions inside it
+          if (!status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+            this.subdirs.add(status.getPath());
+          }
         } else if (status.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
           // Presence of partition meta file implies this is a HUDI partition
           this.isPartition = true;
         } else if (FSUtils.isDataFile(status.getPath())) {
           // Regular HUDI data file (base file or log file)
-          filenames.add(status.getPath().getName());
-          filelengths.add(status.getLen());
+          filenameToSizeMap.put(status.getPath().getName(), status.getLen());
         }
       }
     }
@@ -675,7 +674,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     public int getTotalFiles() {
-      return filenames.size();
+      return filenameToSizeMap.size();
     }
 
     public boolean isPartition() {
@@ -688,11 +687,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // Returns a map of filenames mapped to their lengths
     public Map<String, Long> getFileMap() {
-      Map<String, Long> fileMap = new HashMap<>();
-      for (int index = 0; index < filenames.size(); ++index) {
-        fileMap.put(filenames.get(index), filelengths.get(index));
-      }
-      return fileMap;
+      return filenameToSizeMap;
     }
   }
 }
