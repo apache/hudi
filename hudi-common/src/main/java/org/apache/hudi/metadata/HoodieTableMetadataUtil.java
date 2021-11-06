@@ -215,6 +215,7 @@ public class HoodieTableMetadataUtil {
 
         Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
+          // TODO:
           HoodieFileReader<IndexedRecord> fileReader =
               HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), writeFilePath);
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileReader.readBloomFilter().serializeToString().getBytes());
