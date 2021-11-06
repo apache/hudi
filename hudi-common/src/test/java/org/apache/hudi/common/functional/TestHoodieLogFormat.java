@@ -51,9 +51,11 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.CorruptedLogFileException;
 
+import org.apache.hudi.exception.HoodieIOException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -383,6 +385,66 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(copyOfRecords, dataBlockRead.getRecords(),
         "Both records lists should be the same. (ordering guaranteed)");
     reader.close();
+  }
+
+  @Test
+  public void testHugeLogFileWrite() throws IOException, URISyntaxException, InterruptedException {
+    Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).withSizeThreshold(3L * 1024 * 1024 * 1024)
+            .build();
+    Schema schema = getSimpleSchema();
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 1000);
+    List<IndexedRecord> copyOfRecords = records.stream()
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+    byte[] dataBlockContentBytes = getDataBlock(records, header).getContentBytes();
+    HoodieDataBlock reusableDataBlock = new HoodieAvroDataBlock(null, null,
+        Option.ofNullable(dataBlockContentBytes), false, 0, dataBlockContentBytes.length,
+        0, getSimpleSchema(), header, new HashMap<>());
+    long writtenSize = 0;
+    int logBlockWrittenNum = 0;
+    while (writtenSize < Integer.MAX_VALUE) {
+      AppendResult appendResult = writer.appendBlock(reusableDataBlock);
+      assertTrue(appendResult.size() > 0);
+      writtenSize += appendResult.size();
+      logBlockWrittenNum++;
+    }
+    writer.close();
+
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
+        true, true);
+    assertTrue(reader.hasNext(), "We wrote a block, we should be able to read it");
+    HoodieLogBlock nextBlock = reader.next();
+    assertEquals(dataBlockType, nextBlock.getBlockType(), "The next block should be a data block");
+    HoodieDataBlock dataBlockRead = (HoodieDataBlock) nextBlock;
+    assertEquals(copyOfRecords.size(), dataBlockRead.getRecords().size(),
+        "Read records size should be equal to the written records size");
+    assertEquals(copyOfRecords, dataBlockRead.getRecords(),
+        "Both records lists should be the same. (ordering guaranteed)");
+    int logBlockReadNum = 1;
+    while (reader.hasNext()) {
+      reader.next();
+      logBlockReadNum++;
+    }
+    assertEquals(logBlockWrittenNum, logBlockReadNum, "All written log should be correctly found");
+    reader.close();
+
+    // test writing oversize data block which should be rejected
+    Writer oversizeWriter =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("test-fileid1").overBaseCommit("100").withSizeThreshold(3L * 1024 * 1024 * 1024).withFs(fs)
+            .build();
+    List<HoodieLogBlock> dataBlocks = new ArrayList<>(logBlockWrittenNum + 1);
+    for (int i = 0; i < logBlockWrittenNum + 1; i++) {
+      dataBlocks.add(reusableDataBlock);
+    }
+    assertThrows(HoodieIOException.class, () -> {
+      oversizeWriter.appendBlocks(dataBlocks);
+    }, "Blocks appended may overflow. Please decrease log block size or log block amount");
+    oversizeWriter.close();
   }
 
   @Test
