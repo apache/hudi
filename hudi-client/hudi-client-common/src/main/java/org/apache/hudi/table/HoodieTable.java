@@ -41,6 +41,7 @@ import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -726,6 +727,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter() {
     return getMetadataWriter(Option.empty());
+  }
+
+  public boolean isTableService(String actionType) {
+    return !((getMetaClient().getTableType() == HoodieTableType.COPY_ON_WRITE && actionType.equals(HoodieTimeline.COMMIT_ACTION))
+        || (getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ && actionType.equals(HoodieTimeline.DELTA_COMMIT_ACTION)));
   }
 
   /**
