@@ -21,7 +21,8 @@ package org.apache.hudi.io;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.SimpleBloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -62,6 +63,7 @@ public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, 
                                              Pair<String, String> partitionPathFileIdPair, String fileName) {
     super(config, null, hoodieTable, partitionPathFileIdPair);
     this.tableType = hoodieTable.getMetaClient().getTableType();
+
     this.candidateRecordKeys = new ArrayList<>();
     this.totalKeysChecked = 0;
     HoodieTimer timer = new HoodieTimer().startTimer();
@@ -71,8 +73,14 @@ public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, 
     if (!bloomFilterByteBuffer.isPresent()) {
       throw new HoodieIndexException("BloomFilter missing for " + fileName);
     }
-    this.bloomFilter = new SimpleBloomFilter(StandardCharsets.UTF_8.decode(bloomFilterByteBuffer.get()).toString());
-    LOG.error(String.format("Read bloom filter from %s in %d ms", partitionPathFileIdPair, timer.endTimer()));
+
+    // TODO: Go via the factory and the filter type
+    this.bloomFilter =
+        new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(bloomFilterByteBuffer.get()).toString(),
+            BloomFilterTypeCode.DYNAMIC_V0);
+
+    LOG.debug(String.format("Read bloom filter from %s,%s, size: %s in %d ms", partitionPathFileIdPair, fileName,
+        bloomFilterByteBuffer.get().array().length, timer.endTimer()));
   }
 
   /**
@@ -87,9 +95,9 @@ public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, 
         HoodieTimer timer = new HoodieTimer().startTimer();
         Set<String> fileRowKeys = createNewFileReader().filterRowKeys(new HashSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
-        LOG.error(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
+        LOG.debug(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
-        LOG.error("Keys matching for file " + filePath + " => " + foundRecordKeys);
+        LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
       }
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
@@ -122,7 +130,7 @@ public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, 
     HoodieBaseFile dataFile = getLatestDataFile();
     List<String> matchingKeys =
         checkCandidatesAgainstFile(hoodieTable.getHadoopConf(), candidateRecordKeys, new Path(dataFile.getPath()));
-    LOG.error(
+    LOG.debug(
         String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)", totalKeysChecked,
             candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
     return new MetaBloomIndexKeyLookupResult(partitionPathFilePair.getRight(), partitionPathFilePair.getLeft(),
