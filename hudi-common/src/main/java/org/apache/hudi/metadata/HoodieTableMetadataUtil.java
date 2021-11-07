@@ -22,6 +22,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -221,7 +222,7 @@ public class HoodieTableMetadataUtil {
         String pathWithPartition = hoodieWriteStat.getPath();
         if (pathWithPartition == null) {
           // Empty partition
-          LOG.warn("Unable to find path in write stat to update metadata table " + hoodieWriteStat);
+          LOG.error("Failed to find path in write stat to update metadata table " + hoodieWriteStat);
           return;
         }
 
@@ -233,10 +234,14 @@ public class HoodieTableMetadataUtil {
 
         Path writeFilePath = new Path(dataMetaClient.getBasePath(), pathWithPartition);
         try {
-          // TODO:
           HoodieFileReader<IndexedRecord> fileReader =
               HoodieFileReaderFactory.getFileReader(dataMetaClient.getHadoopConf(), writeFilePath);
-          ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileReader.readBloomFilter().serializeToString().getBytes());
+          final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
+          if (fileBloomFilter == null) {
+            LOG.error("Failed to read bloom filter for " + writeFilePath);
+            return;
+          }
+          ByteBuffer bloomByteBuffer = ByteBuffer.wrap(fileBloomFilter.serializeToString().getBytes());
 
           // TODO: Improve the schema to include the filter type also
           HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
@@ -604,9 +609,11 @@ public class HoodieTableMetadataUtil {
       return Collections.emptyList();
     }
 
+    // Considering only HoodieRecord.RECORD_KEY_METADATA_FIELD for index lookup
+    // TODO: Use all latest columns for full col index build and lookup
     return engineContext.flatMap(allWriteStats,
         writeStat -> translateWriteStatToColumnStats(writeStat, datasetMetaClient,
-            Option.of(getLatestColumns(datasetMetaClient))), allWriteStats.size());
+            Option.of(Collections.singletonList(HoodieRecord.RECORD_KEY_METADATA_FIELD))), allWriteStats.size());
   }
 
   private static List<String> getLatestColumns(HoodieTableMetaClient datasetMetaClient) throws Exception {
@@ -627,7 +634,7 @@ public class HoodieTableMetadataUtil {
     return getColumnStats(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, latestColumns, false);
   }
 
-  public static Stream<HoodieRecord> getColumnStats(final String partitionpath, final String path,
+  public static Stream<HoodieRecord> getColumnStats(final String partitionPath, final String path,
                                                     HoodieTableMetaClient datasetMetaClient,
                                                     Option<List<String>> latestColumns,
                                                     boolean isDeleted) throws Exception {
@@ -637,10 +644,11 @@ public class HoodieTableMetadataUtil {
       Collection<HoodieColumnStatsMetadata<Comparable>> columnStatsMetadata = new ArrayList<>();
       if (!isDeleted) {
         columnStatsMetadata = new ParquetUtils().readColumnStatsFromParquetMetadata(
-            datasetMetaClient.getHadoopConf(), partitionpath, new Path(datasetMetaClient.getBasePath(), path));
+            datasetMetaClient.getHadoopConf(), partitionPath, new Path(datasetMetaClient.getBasePath(), path),
+            latestColumns);
       } else {
         columnStatsMetadata =
-            latestColumns.get().stream().map(entry -> new HoodieColumnStatsMetadata<Comparable>(partitionpath, path,
+            latestColumns.get().stream().map(entry -> new HoodieColumnStatsMetadata<Comparable>(partitionPath, path,
                 entry, null, null, true)).collect(Collectors.toList());
       }
       return HoodieMetadataPayload.createColumnStatsRecords(columnStatsMetadata);

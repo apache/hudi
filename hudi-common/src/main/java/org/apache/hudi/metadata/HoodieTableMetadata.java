@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieColumnStats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -123,6 +124,16 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @throws HoodieMetadataException
    */
   Map<String, ByteBuffer> getBloomFilters(final List<FileID> fileIDList) throws HoodieMetadataException;
+
+  /**
+   * TODO: Comment.
+   *
+   * @param keyList
+   * @param keySet
+   * @return
+   * @throws HoodieMetadataException
+   */
+  Map<String, HoodieColumnStats> getColumnStats(final List<String> keySet) throws HoodieMetadataException;
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

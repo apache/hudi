@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieColumnStats;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -145,11 +146,16 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
   @Override
   public Option<ByteBuffer> getBloomFilter(FileID fileID) throws HoodieMetadataException {
-    return Option.empty();
+    throw new HoodieMetadataException("Unsupported operation - getBloomFilter for " + fileID);
   }
 
   @Override
   public Map<String, ByteBuffer> getBloomFilters(List<FileID> fileIDList) throws HoodieMetadataException {
-    return Collections.emptyMap();
+    throw new HoodieMetadataException("Unsupported operation - getBloomFilters!");
+  }
+
+  @Override
+  public Map<String, HoodieColumnStats> getColumnStats(List<String> keySet) throws HoodieMetadataException {
+    throw new HoodieMetadataException("Unsupported operation - getColumnsStats!");
   }
 }

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.hash.ColumnID;
 import org.apache.hudi.common.util.hash.FileID;
 
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -38,6 +39,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.io.api.Binary;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -92,7 +94,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
-  private HoodieColumnStats columnStats = null;
+  private HoodieColumnStats columnStatMetadata = null;
 
   public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
     this(Option.of(record));
@@ -137,7 +139,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         if (v == null) {
           throw new HoodieMetadataException("Valid " + METADATA_RECORD_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
         }
-        columnStats = new HoodieColumnStats(String.valueOf(v.get("rangeLow")), String.valueOf(v.get("rangeHigh")),
+        columnStatMetadata = new HoodieColumnStats(
+            (String) v.get("rangeLow"),
+            (String) v.get("rangeHigh"),
             (Boolean) v.get("isDeleted"));
       }
     }
@@ -163,7 +167,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
     this.bloomFilterMetadata = metadataBloomFilter;
-    this.columnStats = columnStats;
+    this.columnStatMetadata = columnStats;
   }
 
   /**
@@ -250,7 +254,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private HoodieColumnStats combineColumnStats(HoodieMetadataPayload previousRecord) {
-    return this.columnStats;
+    return this.columnStatMetadata;
   }
 
   @Override
@@ -267,7 +271,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
-        columnStats);
+        columnStatMetadata);
     return Option.of(record);
   }
 
@@ -294,6 +298,17 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     return Option.of(bloomFilterMetadata);
+  }
+
+  /**
+   * Get the bloom filter metadata from this payload.
+   */
+  public Option<HoodieColumnStats> getColumnStatMetadata() {
+    if (columnStatMetadata == null) {
+      return Option.empty();
+    }
+
+    return Option.of(columnStatMetadata);
   }
 
   /**
@@ -355,10 +370,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               //TODO: we are storing range for all columns as string. add support for other primitive types
               // also if min/max is null, we store null for these columns. Should we consider storing String "null"
               // instead?
-              .setRangeHigh(columnStatsMetadata.getMinValue() == null ? "0" :
-                  columnStatsMetadata.getMaxValue().toString())
-              .setRangeLow(columnStatsMetadata.getMinValue() == null ? "0" :
-                  columnStatsMetadata.getMaxValue().toString())
+              .setRangeHigh(columnStatsMetadata.getMaxValue() == null ? null :
+                  new String(((Binary) columnStatsMetadata.getMaxValue()).getBytes()))
+              .setRangeLow(columnStatsMetadata.getMinValue() == null ? null :
+                  new String(((Binary) columnStatsMetadata.getMinValue()).getBytes()))
               .setIsDeleted(false)
               .build());
 
@@ -368,17 +383,20 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   // get record key from column stats metadata
   public static String getColumnStatsRecordKey(HoodieColumnStatsMetadata<Comparable> columnStatsMetadata) {
-    return "column||" + columnStatsMetadata.getColumnName() + ";;partitionPath||"
-        + columnStatsMetadata.getPartitionPath() + ";;fileName||" + columnStatsMetadata.getFilePath();
+    final ColumnID columnID = new ColumnID(columnStatsMetadata.getColumnName());
+    // TODO: Have partition ID enabled for the real benchmark test
+    // final PartitionID partitionID = new PartitionID(columnStatsMetadata.getPartitionPath());
+    final FileID fileID = new FileID(columnStatsMetadata.getFilePath());
+    return columnID.asBase64EncodedString()
+        //.concat(partitionID.asBase64EncodedString())
+        .concat(fileID.asBase64EncodedString());
   }
 
   // parse attribute in record key. TODO: find better way to get this attribute instaed of parsing key
   public static String getAttributeFromRecordKey(String recordKey, String attribute) {
-    String[] attributeNameValuePairs = recordKey.split(";;");
-    return Arrays.stream(attributeNameValuePairs)
-        .filter(nameValue -> nameValue.startsWith(attribute))
-        .findFirst()
-        .map(s -> s.split("\\|\\|")[1]).orElse(null);
+    final String columnIDBase64EncodedString = recordKey.substring(0, ColumnID.ID_COLUMN_HASH_SIZE.bits());
+
+    return "";
   }
 
   @Override

@@ -37,7 +37,6 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.function.Function2;
 import scala.Tuple2;
 
@@ -50,6 +49,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
@@ -77,12 +77,20 @@ public class HoodieBloomMetaIndexGroupedFunction
     // <PartitionPath, FileName> => List<HoodieKey>
     Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
 
+    // TODO: use getBloomFilters instead o getBloomFilter
+
     while (tupleIterator.hasNext()) {
       Tuple2<Tuple2<String, String>, HoodieKey> entry = tupleIterator.next();
       fileToKeysMap.computeIfAbsent(Pair.of(entry._2.getPartitionPath(), entry._1._1), k -> new ArrayList<>()).add(entry._2);
     }
 
-    TaskContext tc = TaskContext.get();
+    List<FileID> fileIDs = fileToKeysMap.keySet().stream().map(partitionFileNamePair -> {
+      return new FileID(partitionFileNamePair.getRight());
+    }).collect(Collectors.toList());
+
+    Map<String, ByteBuffer> fileIDToBloomFilterByteBufferMap =
+        hoodieTable.getMetadataTable().getBloomFilters(fileIDs);
+
     fileToKeysMap.forEach((partitionPathFileNamePair, hoodieKeyList) -> {
       final String partitionPath = partitionPathFileNamePair.getLeft();
       final String fileName = partitionPathFileNamePair.getRight();
@@ -90,15 +98,14 @@ public class HoodieBloomMetaIndexGroupedFunction
       final String fileId = FSUtils.getFileId(fileName);
       ValidationUtils.checkState(!fileId.isEmpty());
 
-      Option<ByteBuffer> fileBloomFilterByteBuffer =
-          hoodieTable.getMetadataTable().getBloomFilter(new FileID(fileName));
-      if (!fileBloomFilterByteBuffer.isPresent()) {
-        LOG.error("Failed to find the bloom filter for " + partitionPathFileNamePair.getLeft());
+      final String fileIDHash = new FileID(fileName).asBase64EncodedString();
+      if (!fileIDToBloomFilterByteBufferMap.containsKey(fileIDHash)) {
+        throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileNamePair);
       }
+      final ByteBuffer fileBloomFilterByteBuffer = fileIDToBloomFilterByteBufferMap.get(fileIDHash);
 
-      // TODO: use factory
       HoodieDynamicBoundedBloomFilter fileBloomFilter =
-          new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(fileBloomFilterByteBuffer.get()).toString(),
+          new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(fileBloomFilterByteBuffer).toString(),
               BloomFilterTypeCode.DYNAMIC_V0);
 
       List<String> candidateRecordKeys = new ArrayList<>();

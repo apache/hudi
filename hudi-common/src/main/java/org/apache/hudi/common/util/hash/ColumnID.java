@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.Base64CodecUtil;
 public class ColumnID extends HoodieID {
 
   private static final Type TYPE = Type.COLUMN;
-  private static final HashID.Size ID_COLUMN_HASH_SIZE = HashID.Size.BITS_64;
+  public static final HashID.Size ID_COLUMN_HASH_SIZE = HashID.Size.BITS_64;
   private final byte[] hash;
 
   public ColumnID(final String message) {

@@ -111,27 +111,30 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
   private HoodiePairData<HoodieKey, HoodieRecordLocation> lookupIndex(
       HoodiePairData<String, String> partitionRecordKeyPairs, final HoodieEngineContext context,
       final HoodieTable hoodieTable) {
-    // Obtain records per partition, in the incoming records
+    // Step 1: Obtain records per partition, in the incoming records
     Map<String, Long> recordsPerPartition = partitionRecordKeyPairs.countByKey();
     List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
     // Step 2: Load all involved files as <Partition, filename> pairs
     List<Pair<String, BloomIndexFileInfo>> fileInfoList =
         loadInvolvedFiles(affectedPartitionPathList, context, hoodieTable);
-    final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo =
+    final Map<String, List<BloomIndexFileInfo>> partitionToFilesMap =
         fileInfoList.stream().collect(groupingBy(Pair::getLeft, mapping(Pair::getRight, toList())));
 
-    // Step 3: Obtain a HoodieData, for each incoming record, that already exists, with the file id,
-    // that contains it.
+    // Step 3: Generate the HoodieData of Pair<FileId, HoodieKey> and the file pruning
+    // will be done based on column stats by derived implementations
     HoodieData<ImmutablePair<String, HoodieKey>> fileComparisonPairs =
-        explodeRecordsWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairs);
+        partitionRecordKeyPairs.map(partitionRecordKeyPair -> {
+          String partitionPath = partitionRecordKeyPair.getLeft();
+          String recordKey = partitionRecordKeyPair.getRight();
 
-    //TODO: Remove the below debug print
-    // fileComparisonPairs.collectAsList().forEach(entry -> LOG.error("XXX LookupIndex 2:  FileComparisonPairs: " +
-    // entry.left + ", " + entry.right.getRecordKey() + ", " + entry.right.getPartitionPath()));
+          return partitionToFilesMap.getOrDefault(partitionPath, new ArrayList<>()).stream().map(fileInfo -> {
+            return new ImmutablePair<>(fileInfo.getFileId(), new HoodieKey(recordKey, partitionPath));
+          }).collect(Collectors.toList());
+        }).flatMap(List::iterator);
 
     return bloomIndexHelper.findMatchingFilesForRecordKeys(config, context, hoodieTable,
-        partitionRecordKeyPairs, fileComparisonPairs, partitionToFileInfo, recordsPerPartition);
+        partitionRecordKeyPairs, fileComparisonPairs, partitionToFilesMap, recordsPerPartition);
   }
 
   /**
@@ -140,7 +143,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
   List<Pair<String, BloomIndexFileInfo>> loadInvolvedFiles(
       List<String> partitions, final HoodieEngineContext context, final HoodieTable hoodieTable) {
     // Obtain the latest data files from all the partitions.
-    List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
+    List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context,
+        hoodieTable).stream()
         .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
         .collect(toList());
 
