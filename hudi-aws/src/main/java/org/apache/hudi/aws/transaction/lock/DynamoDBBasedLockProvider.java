@@ -74,7 +74,6 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
   private static final String DYNAMODB_ATTRIBUTE_NAME = "key";
 
   private final AmazonDynamoDBLockClient client;
-  private final long leaseDuration;
   private final String tableName;
   private final String dynamoDBPartitionKey;
   protected LockConfiguration lockConfiguration;
@@ -84,39 +83,35 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     this(lockConfiguration, conf, null);
   }
 
-  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, final AmazonDynamoDBLockClient client) {
+  public DynamoDBBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, AmazonDynamoDB dynamoDB) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     this.tableName = lockConfiguration.getConfig().getString(DYNAMODB_LOCK_TABLE_NAME_PROP_KEY);
     this.dynamoDBPartitionKey = lockConfiguration.getConfig().getString(DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY);
-    this.leaseDuration = Long.parseLong(lockConfiguration.getConfig().getString(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY));
-    AmazonDynamoDB dynamoDB = getDynamoDBClient();
+    long leaseDuration = Long.parseLong(lockConfiguration.getConfig().getString(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY));
+    if (dynamoDB == null) {
+      dynamoDB = getDynamoDBClient();
+    }
     // build the dynamoDb lock client
-    this.client = client != null ? client : new AmazonDynamoDBLockClient(
+    this.client = new AmazonDynamoDBLockClient(
         AmazonDynamoDBLockClientOptions.builder(dynamoDB, tableName)
                 .withTimeUnit(TimeUnit.MILLISECONDS)
                 .withLeaseDuration(leaseDuration)
                 .withHeartbeatPeriod(leaseDuration / 3)
                 .withCreateHeartbeatBackgroundThread(true)
                 .build());
-    if (client != null && !client.lockTableExists()) {
-      createLockTableInDynamoDB(
-              dynamoDB,
-              tableName,
-              lockConfiguration.getConfig().getString(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY),
-              Long.parseLong(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY)),
-              Long.parseLong(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY)),
-              Integer.parseInt(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY)));
+
+    if (!this.client.lockTableExists()) {
+      createLockTableInDynamoDB(dynamoDB, tableName);
     }
   }
 
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
     LOG.info(generateLogStatement(LockState.ACQUIRING, generateLogSuffixString()));
-    long millisTime = unit.toMillis(time);
     try {
       lock = client.acquireLock(AcquireLockOptions.builder(dynamoDBPartitionKey)
-              .withAdditionalTimeToWaitForLock(millisTime - leaseDuration > 0 ? millisTime - leaseDuration : 0)
+              .withAdditionalTimeToWaitForLock(time)
               .withTimeUnit(TimeUnit.MILLISECONDS)
               .build());
       LOG.info(generateLogStatement(LockState.ACQUIRED, generateLogSuffixString()));
@@ -176,8 +171,8 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
             .build();
   }
 
-  public static void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName, String billingMode,
-                                               Long readCapacityUnits, Long writeCapacityUnits, int tableCreationTimeout) {
+  private void createLockTableInDynamoDB(AmazonDynamoDB dynamoDB, String tableName) {
+    String billingMode = lockConfiguration.getConfig().getString(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY);
     KeySchemaElement partitionKeyElement = new KeySchemaElement();
     partitionKeyElement.setAttributeName(DYNAMODB_ATTRIBUTE_NAME);
     partitionKeyElement.setKeyType(KeyType.HASH);
@@ -192,14 +187,15 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     createTableRequest.setAttributeDefinitions(attributeDefinitions);
     createTableRequest.setBillingMode(billingMode);
     if (billingMode.equals(BillingMode.PROVISIONED.name())) {
-      createTableRequest.setProvisionedThroughput(
-              new ProvisionedThroughput().withReadCapacityUnits(readCapacityUnits).withWriteCapacityUnits(writeCapacityUnits));
+      createTableRequest.setProvisionedThroughput(new ProvisionedThroughput()
+              .withReadCapacityUnits(Long.parseLong(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY)))
+              .withWriteCapacityUnits(Long.parseLong(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY))));
     }
     dynamoDB.createTable(createTableRequest);
 
     LOG.info("Creating dynamoDB table " + tableName + ", waiting for table to be active");
     try {
-      TableUtils.waitUntilActive(dynamoDB, tableName, tableCreationTimeout, 20 * 1000);
+      TableUtils.waitUntilActive(dynamoDB, tableName, Integer.parseInt(lockConfiguration.getConfig().getString(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY)), 20 * 1000);
     } catch (TableUtils.TableNeverTransitionedToStateException e) {
       throw new HoodieLockException("Created dynamoDB table never transits to active", e);
     } catch (InterruptedException e) {
@@ -214,9 +210,9 @@ public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
     ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_LOCK_REGION_PROP_KEY) != null);
     ValidationUtils.checkArgument(config.getConfig().getString(DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY) != null);
     config.getConfig().putIfAbsent(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY, BillingMode.PAY_PER_REQUEST.name());
-    config.getConfig().putIfAbsent(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY, 20);
-    config.getConfig().putIfAbsent(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY, 10);
-    config.getConfig().putIfAbsent(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY, 600000);
+    config.getConfig().putIfAbsent(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY, "20");
+    config.getConfig().putIfAbsent(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY, "10");
+    config.getConfig().putIfAbsent(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY, "600000");
   }
 
   private String generateLogSuffixString() {
