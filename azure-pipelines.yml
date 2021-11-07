@@ -34,14 +34,6 @@ stages:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
         steps:
-          - task: Cache@2
-            displayName: set cache
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
           - task: Maven@3
             displayName: maven install
             inputs:
@@ -72,14 +64,6 @@ stages:
       - job: UT_FT_2
         displayName: FT client/spark-client
         steps:
-          - task: Cache@2
-            displayName: set cache
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
           - task: Maven@3
             displayName: maven install
             inputs:
@@ -101,14 +85,6 @@ stages:
       - job: UT_FT_3
         displayName: UT FT cli & utilities & sync/hive-sync
         steps:
-          - task: Cache@2
-            displayName: set cache
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
           - task: Maven@3
             displayName: maven install
             inputs:
@@ -139,14 +115,6 @@ stages:
       - job: UT_FT_4
         displayName: UT FT other modules
         steps:
-          - task: Cache@2
-            displayName: set cache
-            inputs:
-              key: 'maven | "$(Agent.OS)" | **/pom.xml'
-              restoreKeys: |
-                maven | "$(Agent.OS)"
-                maven
-              path: $(MAVEN_CACHE_FOLDER)
           - task: Maven@3
             displayName: maven install
             inputs:
