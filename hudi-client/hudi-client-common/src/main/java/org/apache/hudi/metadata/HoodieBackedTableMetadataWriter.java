@@ -182,6 +182,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withAvroSchemaValidate(true)
         .withEmbeddedTimelineServerEnabled(false)
         .withMarkersType(MarkerType.DIRECT.name())
+        .withRollbackUsingMarkers(false)
         .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
