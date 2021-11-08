@@ -122,6 +122,10 @@ object DataSourceReadOptions {
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
       "skipping over files")
 
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
+    .defaultValue("false")
+    .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()
