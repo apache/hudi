@@ -248,7 +248,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MARKERS_TYPE = ConfigProperty
       .key("hoodie.write.markers.type")
-      .defaultValue(MarkerType.DIRECT.toString())
+      .defaultValue(MarkerType.TIMELINE_SERVER_BASED.toString())
       .sinceVersion("0.9.0")
       .withDocumentation("Marker type to use.  Two modes are supported: "
           + "- DIRECT: individual marker file corresponding to each data file is directly "
