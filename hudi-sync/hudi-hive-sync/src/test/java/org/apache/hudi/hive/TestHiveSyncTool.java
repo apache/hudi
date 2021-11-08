@@ -66,6 +66,7 @@ public class TestHiveSyncTool {
 
   private static final List<Object> SYNC_MODES = Arrays.asList(
       "hms",
+      "thrift",
       "hiveql",
       "jdbc");
 

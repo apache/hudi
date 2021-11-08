@@ -27,6 +27,10 @@ public enum HiveSyncMode {
    */
   HMS,
   /**
+   * The Thrift mode use the hivemetastore thrift client to sync metadata.
+   */
+  THRIFT,
+  /**
    * The HIVEQL mode execute hive ql to sync metadata.
    */
   HIVEQL,

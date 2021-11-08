@@ -228,6 +228,12 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>com.akolb</groupId>
+      <artifactId>metastore-tools-common</artifactId>
+      <version>1.0-SNAPSHOT</version>
+    </dependency>
+
   </dependencies>
 
   <build>
