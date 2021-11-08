@@ -131,13 +131,24 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
               .sortBy(entry -> entry._1._2, true, joinParallelism);
 
       // Step 4: Use bloom filter to filter and the actual log file to get the record location
-      return HoodieJavaPairRDD.of(sortedFileNameHashAndKeyTuples.mapPartitionsWithIndex(
-              new HoodieBloomMetaIndexGroupedFunction(hoodieTable, config), true)
-          .flatMap(List::iterator).filter(lr -> lr.getMatchingRecordKeys().size() > 0)
-          .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
-              .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
-                  new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
-              .collect(Collectors.toList()).iterator()));
+      final boolean isBloomFiltersBatchLoadEnabled = config.getMetadataConfig().isBloomFiltersBatchLoadEnabled();
+      if (isBloomFiltersBatchLoadEnabled) {
+        return HoodieJavaPairRDD.of(sortedFileNameHashAndKeyTuples.mapPartitionsWithIndex(
+                new HoodieBloomMetaIndexGroupedFunction(hoodieTable, config), true)
+            .flatMap(List::iterator).filter(lr -> lr.getMatchingRecordKeys().size() > 0)
+            .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
+                .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
+                    new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
+                .collect(Collectors.toList()).iterator()));
+      } else {
+        return HoodieJavaPairRDD.of(sortedFileNameHashAndKeyTuples.mapPartitionsWithIndex(
+                new HoodieBloomMetaIndexCheckFunction(hoodieTable, config), true)
+            .flatMap(List::iterator).filter(lr -> lr.getMatchingRecordKeys().size() > 0)
+            .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
+                .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
+                    new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
+                .collect(Collectors.toList()).iterator()));
+      }
     }
 
     return HoodieJavaPairRDD.of(fileComparisonsRDD.mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(hoodieTable, config), true)

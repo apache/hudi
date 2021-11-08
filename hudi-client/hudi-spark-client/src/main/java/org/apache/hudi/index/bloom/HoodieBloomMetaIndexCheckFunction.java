@@ -31,7 +31,6 @@ import org.apache.hudi.io.HoodieKeyMetaBloomIndexLookupHandle.MetaBloomIndexKeyL
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.function.Function2;
 import scala.Tuple2;
 
@@ -77,8 +76,6 @@ public class HoodieBloomMetaIndexCheckFunction
 
     @Override
     protected List<MetaBloomIndexKeyLookupResult> computeNext() {
-
-      TaskContext tc = TaskContext.get();
 
       List<MetaBloomIndexKeyLookupResult> ret = new ArrayList<>();
       try {

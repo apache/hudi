@@ -130,10 +130,12 @@ public class HoodieBloomMetaIndexGroupedFunction
       List<String> matchingKeys =
           checkCandidatesAgainstFile(candidateRecordKeys, new Path(dataFile.get().getPath()));
 
-      LOG.error(
-          String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
-              hoodieKeyList.size(), candidateRecordKeys.size(),
-              candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
+      if (config.getMetadataConfig().isIndexLookupLoggingEnabled()) {
+        LOG.error(
+            String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
+                hoodieKeyList.size(), candidateRecordKeys.size(),
+                candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
+      }
 
       ArrayList<MetaBloomIndexGroupedKeyLookupResult> subList = new ArrayList<>();
       subList.add(new MetaBloomIndexGroupedKeyLookupResult(fileId, partitionPath, dataFile.get().getCommitTime(),
@@ -156,10 +158,12 @@ public class HoodieBloomMetaIndexGroupedFunction
             latestDataFilePath);
         Set<String> fileRowKeys = fileReader.filterRowKeys(new HashSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
-        LOG.debug(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)",
-            latestDataFilePath,
-            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
-        LOG.debug("Keys matching for file " + latestDataFilePath + " => " + foundRecordKeys);
+        if (config.getMetadataConfig().isIndexLookupLoggingEnabled()) {
+          LOG.error(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)",
+              latestDataFilePath,
+              timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
+          LOG.error("Keys matching for file " + latestDataFilePath + " => " + foundRecordKeys);
+        }
       }
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);

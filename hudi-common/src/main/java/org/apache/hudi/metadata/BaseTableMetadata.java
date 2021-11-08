@@ -166,7 +166,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(fileID.asBase64EncodedString(),
+    final String bloomKey = partitionID.asBase64EncodedString().concat(fileID.asBase64EncodedString());
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(bloomKey,
         MetadataPartitionType.BLOOM_FILTERS.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
 
@@ -192,10 +193,12 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<String> partitionIDFileIDStrings = new ArrayList<>();
-    partitionIDFileIDList.forEach(partitionIDFileIDPair ->
-        partitionIDFileIDStrings.add(
-            partitionIDFileIDPair.getLeft().asBase64EncodedString()
-                .concat(partitionIDFileIDPair.getRight().asBase64EncodedString())));
+    partitionIDFileIDList.forEach(partitionIDFileIDPair -> {
+          final String bloomKey = partitionIDFileIDPair.getLeft().asBase64EncodedString()
+              .concat(partitionIDFileIDPair.getRight().asBase64EncodedString());
+          partitionIDFileIDStrings.add(bloomKey);
+        }
+    );
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
         getRecordsByKeys(partitionIDFileIDStrings, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));

@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -89,9 +90,14 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     HoodiePairData<String, String> partitionRecordKeyPairs = records.mapToPair(
         record -> new ImmutablePair<>(record.getPartitionPath(), record.getRecordKey()));
 
+    HoodieTimer timer = new HoodieTimer().startTimer();
     // Step 2: Lookup indexes for all the partition/recordkey pair
     HoodiePairData<HoodieKey, HoodieRecordLocation> keyFilenamePairs =
         lookupIndex(partitionRecordKeyPairs, context, hoodieTable);
+    final long indexLookupTime = timer.endTimer();
+    if (config.getMetadataConfig().isIndexLookupTimerEnabled()) {
+      LOG.error("Index lookup for " + records.count() + " records took: " + (indexLookupTime / 1000.0) + " sec");
+    }
 
     // Cache the result, for subsequent stages.
     if (config.getBloomIndexUseCaching()) {
@@ -125,8 +131,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
     List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
     // Step 2: Load all involved files as <Partition, filename> pairs
-    List<Pair<String, BloomIndexFileInfo>> fileInfoList =
-        loadColumnStats(affectedPartitionPathList, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> fileInfoList = (config.getMetadataConfig().isColumnStatsEnabled()
+        ? loadColumnStats(affectedPartitionPathList, context, hoodieTable) :
+        loadInvolvedFiles(affectedPartitionPathList, context, hoodieTable));
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFilesMap =
         fileInfoList.stream().collect(groupingBy(Pair::getLeft, mapping(Pair::getRight, toList())));
@@ -227,7 +234,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload<T>>
             throw new HoodieMetadataException("Unable to find range metadata in file :" + partitionName);
           }
         }
-      }, 1);
+      }, Math.max(partitions.size(), 1));
 
     } else {
       return partitionPathFileIDList.stream()

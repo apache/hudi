@@ -61,6 +61,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Enable indexing base files column stats for quicker key lookups");
 
+  public static final ConfigProperty<Boolean> INDEX_LOOKUP_LOGGING = ConfigProperty
+      .key(METADATA_PREFIX + ".index.lookup.logging")
+      .defaultValue(false)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable indexing lookup verbose logging");
+
+  public static final ConfigProperty<Boolean> INDEX_LOOKUP_TIMER = ConfigProperty
+      .key(METADATA_PREFIX + ".index.lookup.timer")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable indexing lookups timer logging");
+
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
   // Enable metrics for internal Metadata Table
@@ -135,16 +147,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".enable.inline.reading")
       .defaultValue(true)
       .sinceVersion("0.10.0")
-      .withDocumentation("Enable inline reading of Log files. By default log block contents are read as byte[] using regular input stream and records "
-          + "are deserialized from it. Enabling this will read each log block as an inline file and read records from the same. For instance, "
+      .withDocumentation("Enable inline reading of Log files. By default log block contents are read as byte[] using "
+          + "regular input stream and records "
+          + "are deserialized from it. Enabling this will read each log block as an inline file and read records from"
+          + " the same. For instance, "
           + "for HFileDataBlock, a inline file will be read using HFileReader.");
 
   // TODO: for the test
   public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up"
+          + " of only interested entries.");
+
+  public static final ConfigProperty<Boolean> BLOOM_FILTER_METADATA_BATCH_LOAD_ENABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".bloom_filter.batch_load.enable")
       .defaultValue(false)
       .sinceVersion("0.10.0")
-      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
+      .withDocumentation("Enable batch/bulk loading of bloom filter metadata for the entire partition when looking"
+          + " up index.");
 
   private HoodieMetadataConfig() {
     super();
@@ -168,6 +190,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isBloomFiltersEnabled() {
     return getBoolean(BLOOM_FILTER_METADATA_ENABLE);
+  }
+
+  public boolean isBloomFiltersBatchLoadEnabled() {
+    return getBoolean(BLOOM_FILTER_METADATA_BATCH_LOAD_ENABLE);
+  }
+
+  public boolean isIndexLookupLoggingEnabled() {
+    return getBoolean(INDEX_LOOKUP_LOGGING);
+  }
+
+  public boolean isIndexLookupTimerEnabled() {
+    return getBoolean(INDEX_LOOKUP_TIMER);
   }
 
   public boolean isColumnStatsEnabled() {
@@ -204,6 +238,31 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder enable(boolean enable) {
       metadataConfig.setValue(ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder bloomFilterIndex(boolean enable) {
+      metadataConfig.setValue(BLOOM_FILTER_METADATA_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder bloomFilterIndexBatchLoad(boolean enable) {
+      metadataConfig.setValue(BLOOM_FILTER_METADATA_BATCH_LOAD_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder columnStatsIndex(boolean enable) {
+      metadataConfig.setValue(COLUMN_STATS_METADATA_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder indexLookupLogging(boolean enable) {
+      metadataConfig.setValue(INDEX_LOOKUP_LOGGING, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder indexLookupTimer(boolean enable) {
+      metadataConfig.setValue(INDEX_LOOKUP_TIMER, String.valueOf(enable));
       return this;
     }
 
