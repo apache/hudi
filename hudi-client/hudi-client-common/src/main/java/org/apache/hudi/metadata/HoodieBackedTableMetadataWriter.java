@@ -536,11 +536,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Update from {@code HoodieCommitMetadata}.
    * @param commitMetadata {@code HoodieCommitMetadata}
    * @param instantTime Timestamp at which the commit was performed
-   * @param isTableService
+   * @param isTableServiceAction {@code true} if commit metadata is pertaining to a table service. {@code false} otherwise.
    */
   @Override
-  public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableService) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata, instantTime), !isTableService);
+  public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction) {
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata, instantTime), !isTableServiceAction);
   }
 
   /**

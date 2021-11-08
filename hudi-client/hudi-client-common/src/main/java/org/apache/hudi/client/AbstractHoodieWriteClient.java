@@ -245,15 +245,15 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   /**
    * Any pre-commit actions like conflict resolution or updating metadata table goes here.
-   * @param hoodieInstant hoodie instant of inflight operation.
+   * @param inflightInstant instant of inflight operation.
    * @param metadata commit metadata for which pre commit is being invoked.
    */
-  protected void preCommit(HoodieInstant hoodieInstant, HoodieCommitMetadata metadata) {
+  protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
     // Create a Hoodie table after starting the transaction which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
-    boolean isTableService = table.isTableService(hoodieInstant.getAction());
-    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, hoodieInstant.getTimestamp(), isTableService));
+    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, inflightInstant.getTimestamp(),
+        table.isTableServiceAction(inflightInstant.getAction())));
   }
 
   /**

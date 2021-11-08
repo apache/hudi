@@ -291,7 +291,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
     doWriteOperation(testTable, "0000001", INSERT);
-    //doWriteOperation(testTable, "0000002");
     doCleanAndValidate(testTable, "0000003", Arrays.asList("0000001"));
 
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
@@ -499,7 +498,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
 
       // Write 1
       String commitTime = "0000001";
@@ -533,7 +533,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
 
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";

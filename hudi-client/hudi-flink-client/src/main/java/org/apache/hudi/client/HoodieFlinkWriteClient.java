@@ -258,11 +258,10 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void preCommit(HoodieInstant hoodieInstant, HoodieCommitMetadata metadata) {
+  protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
     this.metadataWriterOption.ifPresent(w -> {
       w.initTableMetadata(); // refresh the timeline
-      boolean isTableService = getHoodieTable().isTableService(hoodieInstant.getAction());
-      w.update(metadata, hoodieInstant.getTimestamp(), isTableService);
+      w.update(metadata, inflightInstant.getTimestamp(), getHoodieTable().isTableServiceAction(inflightInstant.getAction()));
     });
   }
 
@@ -407,8 +406,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       this.txnManager.beginTransaction(Option.of(hoodieInstant), Option.empty());
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      boolean isTableService = table.isTableService(hoodieInstant.getAction());
-      table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableService));
+      table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), table.isTableServiceAction(hoodieInstant.getAction())));
     } finally {
       this.txnManager.endTransaction();
     }
