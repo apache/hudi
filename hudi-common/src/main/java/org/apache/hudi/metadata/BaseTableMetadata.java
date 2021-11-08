@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.common.util.hash.PartitionID;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -158,7 +159,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Option<ByteBuffer> getBloomFilter(FileID fileID) throws HoodieMetadataException {
+  public Option<ByteBuffer> getBloomFilter(final PartitionID partitionID, final FileID fileID) throws HoodieMetadataException {
     if (!isBloomFilterMetadataEnabled) {
       throw new HoodieMetadataException("Metadata table or the bloom filter indexing is disabled! Cannot get bloom "
           + "filter for " + fileID);
@@ -184,16 +185,19 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Map<String, ByteBuffer> getBloomFilters(List<FileID> fileIDList) throws HoodieMetadataException {
+  public Map<String, ByteBuffer> getBloomFilters(final List<Pair<PartitionID, FileID>> partitionIDFileIDList) throws HoodieMetadataException {
     if (!isBloomFilterMetadataEnabled) {
       throw new HoodieMetadataException("Metadata table or the bloom filter indexing is disabled!");
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<String> fileIDStrings = new ArrayList<>();
-    fileIDList.forEach(fileID -> fileIDStrings.add(fileID.asBase64EncodedString()));
+    List<String> partitionIDFileIDStrings = new ArrayList<>();
+    partitionIDFileIDList.forEach(partitionIDFileIDPair ->
+        partitionIDFileIDStrings.add(
+            partitionIDFileIDPair.getLeft().asBase64EncodedString()
+                .concat(partitionIDFileIDPair.getRight().asBase64EncodedString())));
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> hoodieRecordList =
-        getRecordsByKeys(fileIDStrings, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
+        getRecordsByKeys(partitionIDFileIDStrings, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
 
     Map<String, ByteBuffer> fileIDBloomFilterMap = new HashMap<>();

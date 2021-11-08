@@ -498,8 +498,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .bloomIndexPruneByRanges(false)
-            .bloomIndexTreebasedFilter(false)
             .bloomIndexBucketizedChecking(false).build())
         .build();
 

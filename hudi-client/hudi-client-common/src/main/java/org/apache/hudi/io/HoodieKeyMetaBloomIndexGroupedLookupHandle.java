@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.common.util.hash.PartitionID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
@@ -69,7 +70,8 @@ public class HoodieKeyMetaBloomIndexGroupedLookupHandle<T extends HoodieRecordPa
     HoodieTimer timer = new HoodieTimer().startTimer();
 
     Option<ByteBuffer> bloomFilterByteBuffer =
-        hoodieTable.getMetadataTable().getBloomFilter(new FileID(fileName));
+        hoodieTable.getMetadataTable().getBloomFilter(new PartitionID(partitionPathFileIdPair.getLeft()),
+            new FileID(fileName));
     if (!bloomFilterByteBuffer.isPresent()) {
       throw new HoodieIndexException("BloomFilter missing for " + fileName);
     }

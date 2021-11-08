@@ -23,11 +23,9 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.hash.ColumnID;
 import org.apache.hudi.common.util.hash.FileID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -104,6 +102,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       // that used to happen at HoodieBloomIndex::explodeRecordsWithFileComparisons()
       // <<ColStatHash, filename> key>
       // RDD Tuple2<Tuple2<ColumnIDHash|FileIDHash>, filename>, HoodieKey>
+      /*
       JavaRDD<Tuple2<Tuple2<String, String>, HoodieKey>> columnStatHashAndKeyTuple = fileComparisonsRDD.map(entry -> {
         String fileName = entry._1;
         String columnName = HoodieRecord.RECORD_KEY_METADATA_FIELD; // this is the only col for index lookup
@@ -121,6 +120,14 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       JavaRDD<Tuple2<Tuple2<String, String>, HoodieKey>> sortedFileNameHashAndKeyTuples =
           colStatFilteredFileNames.map(entry -> new Tuple2<Tuple2<String, String>, HoodieKey>(new Tuple2<>(entry._1._2,
                   new FileID(entry._1._2).asBase64EncodedString()), entry._2))
+              .sortBy(entry -> entry._1._2, true, joinParallelism);
+       */
+
+      // Step 3: Sort by file hash
+      // <<fileName, hash>, key>
+      JavaRDD<Tuple2<Tuple2<String, String>, HoodieKey>> sortedFileNameHashAndKeyTuples =
+          fileComparisonsRDD.map(entry -> new Tuple2<Tuple2<String, String>, HoodieKey>(new Tuple2<>(entry._1,
+                  new FileID(entry._1).asBase64EncodedString()), entry._2))
               .sortBy(entry -> entry._1._2, true, joinParallelism);
 
       // Step 4: Use bloom filter to filter and the actual log file to get the record location

@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.common.util.hash.PartitionID;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
@@ -245,7 +246,7 @@ public class HoodieTableMetadataUtil {
 
           // TODO: Improve the schema to include the filter type also
           HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              new FileID(filename), instantTime, bloomByteBuffer, true);
+              new PartitionID(partition), new FileID(filename), instantTime, bloomByteBuffer, true);
 
           records.add(record);
           fileReader.close();

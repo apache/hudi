@@ -31,6 +31,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.common.util.hash.PartitionID;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
@@ -145,12 +146,12 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public Option<ByteBuffer> getBloomFilter(FileID fileID) throws HoodieMetadataException {
+  public Option<ByteBuffer> getBloomFilter(final PartitionID partitionID, final FileID fileID) throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation - getBloomFilter for " + fileID);
   }
 
   @Override
-  public Map<String, ByteBuffer> getBloomFilters(List<FileID> fileIDList) throws HoodieMetadataException {
+  public Map<String, ByteBuffer> getBloomFilters(final List<Pair<PartitionID, FileID>> partitionIDFileIDList) throws HoodieMetadataException {
     throw new HoodieMetadataException("Unsupported operation - getBloomFilters!");
   }
 

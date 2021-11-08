@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.common.util.hash.PartitionID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieKeyMetaBloomIndexGroupedLookupHandle.MetaBloomIndexGroupedKeyLookupResult;
@@ -77,19 +78,21 @@ public class HoodieBloomMetaIndexGroupedFunction
     // <PartitionPath, FileName> => List<HoodieKey>
     Map<Pair<String, String>, List<HoodieKey>> fileToKeysMap = new HashMap<>();
 
-    // TODO: use getBloomFilters instead o getBloomFilter
+    // TODO: use getBloomFilter based lazy iterator
 
     while (tupleIterator.hasNext()) {
       Tuple2<Tuple2<String, String>, HoodieKey> entry = tupleIterator.next();
       fileToKeysMap.computeIfAbsent(Pair.of(entry._2.getPartitionPath(), entry._1._1), k -> new ArrayList<>()).add(entry._2);
     }
 
-    List<FileID> fileIDs = fileToKeysMap.keySet().stream().map(partitionFileNamePair -> {
-      return new FileID(partitionFileNamePair.getRight());
-    }).collect(Collectors.toList());
+    List<Pair<PartitionID, FileID>> partitionIDFileIDList =
+        fileToKeysMap.keySet().stream().map(partitionFileNamePair -> {
+          return Pair.of(new PartitionID(partitionFileNamePair.getLeft()),
+              new FileID(partitionFileNamePair.getRight()));
+        }).collect(Collectors.toList());
 
     Map<String, ByteBuffer> fileIDToBloomFilterByteBufferMap =
-        hoodieTable.getMetadataTable().getBloomFilters(fileIDs);
+        hoodieTable.getMetadataTable().getBloomFilters(partitionIDFileIDList);
 
     fileToKeysMap.forEach((partitionPathFileNamePair, hoodieKeyList) -> {
       final String partitionPath = partitionPathFileNamePair.getLeft();
@@ -98,11 +101,13 @@ public class HoodieBloomMetaIndexGroupedFunction
       final String fileId = FSUtils.getFileId(fileName);
       ValidationUtils.checkState(!fileId.isEmpty());
 
+      final String partitionIDHash = new PartitionID(partitionPath).asBase64EncodedString();
       final String fileIDHash = new FileID(fileName).asBase64EncodedString();
-      if (!fileIDToBloomFilterByteBufferMap.containsKey(fileIDHash)) {
+      final String bloomKey = partitionIDHash.concat(fileIDHash);
+      if (!fileIDToBloomFilterByteBufferMap.containsKey(bloomKey)) {
         throw new HoodieIndexException("Failed to get the bloom filter for " + partitionPathFileNamePair);
       }
-      final ByteBuffer fileBloomFilterByteBuffer = fileIDToBloomFilterByteBufferMap.get(fileIDHash);
+      final ByteBuffer fileBloomFilterByteBuffer = fileIDToBloomFilterByteBufferMap.get(bloomKey);
 
       HoodieDynamicBoundedBloomFilter fileBloomFilter =
           new HoodieDynamicBoundedBloomFilter(StandardCharsets.UTF_8.decode(fileBloomFilterByteBuffer).toString(),
@@ -125,7 +130,7 @@ public class HoodieBloomMetaIndexGroupedFunction
       List<String> matchingKeys =
           checkCandidatesAgainstFile(candidateRecordKeys, new Path(dataFile.get().getPath()));
 
-      LOG.debug(
+      LOG.error(
           String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
               hoodieKeyList.size(), candidateRecordKeys.size(),
               candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));

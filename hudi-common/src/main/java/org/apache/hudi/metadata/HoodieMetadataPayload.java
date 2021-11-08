@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.ColumnID;
 import org.apache.hudi.common.util.hash.FileID;
 
+import org.apache.hudi.common.util.hash.PartitionID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -215,11 +216,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param isValid     - Is the valid and the bloom filter valid
    * @return Metadata payload containing the fileID and its bloom filter record
    */
-  public static HoodieRecord<HoodieMetadataPayload> createBloomFilterMetadataRecord(final FileID fileID,
+  public static HoodieRecord<HoodieMetadataPayload> createBloomFilterMetadataRecord(final PartitionID partitionID,
+                                                                                    final FileID fileID,
                                                                                     final String timestamp,
                                                                                     final ByteBuffer bloomFilter,
                                                                                     final boolean isValid) {
-    HoodieKey key = new HoodieKey(fileID.asBase64EncodedString(), MetadataPartitionType.BLOOM_FILTERS.partitionPath());
+    final String bloomFilterKey = partitionID.asBase64EncodedString().concat(fileID.asBase64EncodedString());
+    HoodieKey key = new HoodieKey(bloomFilterKey, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
 
     HoodieMetadataBloomFilter metadataBloomFilter =
         new HoodieMetadataBloomFilter(HoodieMetadataBloomFilterUtil.VERSION_METADATA_BLOOM_FILTER,
@@ -384,11 +387,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   // get record key from column stats metadata
   public static String getColumnStatsRecordKey(HoodieColumnStatsMetadata<Comparable> columnStatsMetadata) {
     final ColumnID columnID = new ColumnID(columnStatsMetadata.getColumnName());
-    // TODO: Have partition ID enabled for the real benchmark test
-    // final PartitionID partitionID = new PartitionID(columnStatsMetadata.getPartitionPath());
+    final PartitionID partitionID = new PartitionID(columnStatsMetadata.getPartitionPath());
     final FileID fileID = new FileID(columnStatsMetadata.getFilePath());
     return columnID.asBase64EncodedString()
-        //.concat(partitionID.asBase64EncodedString())
+        .concat(partitionID.asBase64EncodedString())
         .concat(fileID.asBase64EncodedString());
   }
 
