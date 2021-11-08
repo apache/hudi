@@ -62,7 +62,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                       HoodieWriteConfig writeConfig,
                                                                       HoodieEngineContext engineContext,
                                                                       Option<T> actionMetadata) {
-    super(hadoopConf, writeConfig, engineContext, actionMetadata);
+    super(hadoopConf, writeConfig, engineContext, actionMetadata, Option.empty());
   }
 
   @Override
@@ -78,10 +78,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
-                                                           Option<T> actionMetadata) {
+                                                           Option<T> actionMetadata,
+                                                           Option<String> instantInProgressTimestamp) {
     try {
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata);
+        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, instantInProgressTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);

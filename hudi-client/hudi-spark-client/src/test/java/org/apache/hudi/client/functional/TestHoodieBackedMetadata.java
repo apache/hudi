@@ -935,25 +935,19 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // set hoodie.table.version to 2 in hoodie.properties file
     changeTableVersion(HoodieTableVersion.TWO);
 
-    // With next commit the table should be deleted (as part of upgrade)
+    // With next commit the table should be deleted (as part of upgrade) and then re-bootstrapped automatically
     commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
     metaClient.reloadActiveTimeline();
+    FileStatus prevStatus = fs.getFileStatus(new Path(metadataTableBasePath));
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
       records = dataGen.generateInserts(commitTimestamp, 5);
       client.startCommitWithTime(commitTimestamp);
       writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamp).collect();
       assertNoWriteErrors(writeStatuses);
     }
-    assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not exist");
-
-    // With next commit the table should be re-bootstrapped (currently in the constructor. To be changed)
-    commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
-      records = dataGen.generateInserts(commitTimestamp, 5);
-      client.startCommitWithTime(commitTimestamp);
-      writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamp).collect();
-      assertNoWriteErrors(writeStatuses);
-    }
+    assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
+    FileStatus currentStatus = fs.getFileStatus(new Path(metadataTableBasePath));
+    assertTrue(currentStatus.getModificationTime() > prevStatus.getModificationTime());
 
     initMetaClient();
     assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.THREE.versionCode());

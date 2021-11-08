@@ -96,10 +96,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-    bootstrapMetadataTable();
+    bootstrapMetadataTable(Option.empty());
   }
 
-  private void bootstrapMetadataTable() {
+  private void bootstrapMetadataTable(Option<String> instantInProgressTimestamp) {
     if (config.isMetadataTableEnabled()) {
       // Defer bootstrap if upgrade / downgrade is pending
       HoodieTableMetaClient metaClient = createMetaClient(true);
@@ -107,7 +107,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
           metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
       if (!upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
         // TODO: Check if we can remove this requirement - auto bootstrap on commit
-        SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context);
+        SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context, Option.empty(),
+                                                    instantInProgressTimestamp);
       }
     }
   }
@@ -377,7 +378,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   private void completeClustering(HoodieReplaceCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                     String clusteringCommitTime) {
-    
+
     List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
         e.getValue().stream()).collect(Collectors.toList());
 
@@ -447,6 +448,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
       }
       metaClient.reloadActiveTimeline();
+
+      // re-bootstrap metadata table if required
+      bootstrapMetadataTable(Option.of(instantTime));
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
