@@ -22,13 +22,9 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.hive.ddl.*;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
-import org.apache.hudi.hive.ddl.DDLExecutor;
-import org.apache.hudi.hive.ddl.HMSDDLExecutor;
-import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
-import org.apache.hudi.hive.ddl.HiveSyncMode;
-import org.apache.hudi.hive.ddl.JDBCExecutor;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -73,6 +69,9 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         switch (syncMode) {
           case HMS:
             ddlExecutor = new HMSDDLExecutor(configuration, cfg, fs);
+            break;
+          case THRIFT:
+            ddlExecutor = new ThriftDDLExecutor(configuration,cfg,fs);
             break;
           case HIVEQL:
             ddlExecutor = new HiveQueryDDLExecutor(cfg, fs, configuration);
