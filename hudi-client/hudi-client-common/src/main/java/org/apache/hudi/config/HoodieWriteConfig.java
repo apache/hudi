@@ -116,7 +116,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned off by default.");
 
@@ -155,12 +155,12 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.insert.shuffle.parallelism")
-      .defaultValue("1500")
+      .defaultValue("200")
       .withDocumentation("Parallelism for inserting records into the table. Inserts can shuffle data before writing to tune file sizes and optimize the storage layout.");
 
   public static final ConfigProperty<String> BULKINSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.bulkinsert.shuffle.parallelism")
-      .defaultValue("1500")
+      .defaultValue("200")
       .withDocumentation("For large initial imports using bulk_insert operation, controls the parallelism to use for sort modes or custom partitioning done"
           + "before writing records to the table.");
 
@@ -179,13 +179,13 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> UPSERT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.upsert.shuffle.parallelism")
-      .defaultValue("1500")
+      .defaultValue("200")
       .withDocumentation("Parallelism to use for upsert operation on the table. Upserts can shuffle data to perform index lookups, file sizing, bin packing records optimally"
           + "into file groups.");
 
   public static final ConfigProperty<String> DELETE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.delete.shuffle.parallelism")
-      .defaultValue("1500")
+      .defaultValue("200")
       .withDocumentation("Parallelism used for “delete” operation. Delete operations also performs shuffles, similar to upsert operation.");
 
   public static final ConfigProperty<String> ROLLBACK_PARALLELISM_VALUE = ConfigProperty
@@ -237,14 +237,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> FINALIZE_WRITE_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.finalize.write.parallelism")
-      .defaultValue("1500")
+      .defaultValue("200")
       .withDocumentation("Parallelism for the write finalization internal operation, which involves removing any partially written "
           + "files from lake storage, before committing the write. Reduce this value, if the high number of tasks incur delays for smaller tables "
           + "or low latency writes.");
 
   public static final ConfigProperty<String> MARKERS_TYPE = ConfigProperty
       .key("hoodie.write.markers.type")
-      .defaultValue(MarkerType.DIRECT.toString())
+      .defaultValue(MarkerType.TIMELINE_SERVER_BASED.toString())
       .sinceVersion("0.9.0")
       .withDocumentation("Marker type to use.  Two modes are supported: "
           + "- DIRECT: individual marker file corresponding to each data file is directly "
@@ -312,7 +312,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> EMBEDDED_TIMELINE_SERVER_USE_ASYNC_ENABLE = ConfigProperty
       .key("hoodie.embed.timeline.server.async")
-      .defaultValue("false")
+      .defaultValue("true")
       .withDocumentation("Controls whether or not, the requests to the timeline server are processed in asynchronous fashion, "
           + "potentially improving throughput.");
 
