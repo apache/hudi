@@ -32,9 +32,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException;
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.apache.spark.sql.types.StructType;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 
 public class HiveSchemaProvider extends SchemaProvider {
 
@@ -80,15 +78,7 @@ public class HiveSchemaProvider extends SchemaProvider {
                 "hoodie." + targetSchemaDBName);
       }
     } catch (NoSuchTableException | NoSuchDatabaseException e) {
-      List<String> tables = new ArrayList<String>() {
-        {
-          add(sourceSchemaTableName);
-        }
-      };
-      if (props.containsKey(Config.TARGET_SCHEMA_TABLE_PROP)) {
-        tables.add(props.getString(Config.SOURCE_SCHEMA_TABLE_PROP));
-      }
-      String message = String.format("Can't find Hive table(s): %s", String.join(",", tables));
+      String message = String.format("Can't find Hive table(s): %s", sourceSchemaTableName + "," + props.getString(Config.TARGET_SCHEMA_TABLE_PROP));
       throw new IllegalArgumentException(message, e);
     }
   }
