@@ -111,7 +111,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
-      .defaultValue(1500)
+      .defaultValue(200)
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
 
