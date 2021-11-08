@@ -491,17 +491,48 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
-  @Test
-  public void testTableOperationsForMetaIndex() throws Exception {
-    HoodieTableType tableType = COPY_ON_WRITE;
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testTableOperationsWithMetaIndexLazyLoad(HoodieTableType tableType) throws Exception {
     init(tableType);
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .bloomIndexPruneByRanges(false)
-            .bloomIndexTreebasedFilter(false)
-            .bloomIndexBucketizedChecking(false).build())
+            .bloomIndexBucketizedChecking(false)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .bloomFilterIndex(true)
+            .bloomFilterIndexBatchLoad(false)
+            .columnStatsIndex(true)
+            .indexLookupLogging(false)
+            .indexLookupTimer(true)
+            .build())
         .build();
+    testTableOperationsForMetaIndexImpl(writeConfig);
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testTableOperationsWithMetaIndexBatchLoad(HoodieTableType tableType) throws Exception {
+    init(tableType);
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .bloomIndexBucketizedChecking(false)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .bloomFilterIndex(true)
+            .bloomFilterIndexBatchLoad(true)
+            .columnStatsIndex(true)
+            .indexLookupLogging(false)
+            .indexLookupTimer(true)
+            .build())
+        .build();
+    testTableOperationsForMetaIndexImpl(writeConfig);
+  }
+
+  private void testTableOperationsForMetaIndexImpl(final HoodieWriteConfig writeConfig) throws Exception {
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       LOG.error("XXX 1 Bulk insert!");

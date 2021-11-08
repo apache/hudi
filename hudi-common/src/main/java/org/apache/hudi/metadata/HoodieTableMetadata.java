@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieColumnStats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -25,7 +26,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.common.util.hash.PartitionID;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
@@ -113,16 +116,26 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return BloomFilter byte buffer if available, otherwise empty
    * @throws HoodieMetadataException
    */
-  Option<ByteBuffer> getBloomFilter(final FileID fileID) throws HoodieMetadataException;
+  Option<ByteBuffer> getBloomFilter(final PartitionID partitionID, final FileID fileID) throws HoodieMetadataException;
 
   /**
    * Get bloom filters for the list of FileIDs from the metadata table.
    *
-   * @param fileIDList - List of FileIDs for which bloom filters need to be retrieved
+   * @param partitionIDFileIDList - List of FileIDs for which bloom filters need to be retrieved
    * @return Map of FileID to its bloom filter byte buffer
    * @throws HoodieMetadataException
    */
-  Map<String, ByteBuffer> getBloomFilters(final List<FileID> fileIDList) throws HoodieMetadataException;
+  Map<String, ByteBuffer> getBloomFilters(final List<Pair<PartitionID, FileID>> partitionIDFileIDList) throws HoodieMetadataException;
+
+  /**
+   * TODO: Comment.
+   *
+   * @param keyList
+   * @param keySet
+   * @return
+   * @throws HoodieMetadataException
+   */
+  Map<String, HoodieColumnStats> getColumnStats(final List<String> keySet) throws HoodieMetadataException;
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

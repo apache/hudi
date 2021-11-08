@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.hash.FileID;
+import org.apache.hudi.common.util.hash.PartitionID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
@@ -69,7 +70,8 @@ public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, 
     HoodieTimer timer = new HoodieTimer().startTimer();
 
     Option<ByteBuffer> bloomFilterByteBuffer =
-        hoodieTable.getMetadataTable().getBloomFilter(new FileID(fileName));
+        hoodieTable.getMetadataTable().getBloomFilter(new PartitionID(partitionPathFileIdPair.getLeft()),
+            new FileID(fileName));
     if (!bloomFilterByteBuffer.isPresent()) {
       throw new HoodieIndexException("BloomFilter missing for " + fileName);
     }
@@ -95,9 +97,11 @@ public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, 
         HoodieTimer timer = new HoodieTimer().startTimer();
         Set<String> fileRowKeys = createNewFileReader().filterRowKeys(new HashSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
-        LOG.debug(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
-            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
-        LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
+        if (config.getMetadataConfig().isIndexLookupLoggingEnabled()) {
+          LOG.error(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
+              timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
+          LOG.error("Keys matching for file " + filePath + " => " + foundRecordKeys);
+        }
       }
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
@@ -130,9 +134,12 @@ public class HoodieKeyMetaBloomIndexLookupHandle<T extends HoodieRecordPayload, 
     HoodieBaseFile dataFile = getLatestDataFile();
     List<String> matchingKeys =
         checkCandidatesAgainstFile(hoodieTable.getHadoopConf(), candidateRecordKeys, new Path(dataFile.getPath()));
-    LOG.debug(
-        String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)", totalKeysChecked,
-            candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
+    if (config.getMetadataConfig().isIndexLookupLoggingEnabled()) {
+      LOG.error(
+          String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
+              totalKeysChecked,
+              candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
+    }
     return new MetaBloomIndexKeyLookupResult(partitionPathFilePair.getRight(), partitionPathFilePair.getLeft(),
         dataFile.getCommitTime(), matchingKeys);
   }

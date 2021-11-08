@@ -32,6 +32,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -56,6 +59,8 @@ import java.util.stream.Collectors;
  * Utility functions involving with parquet.
  */
 public class ParquetUtils extends BaseFileUtils {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieTableMetadataUtil.class);
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
@@ -343,13 +348,19 @@ public class ParquetUtils extends BaseFileUtils {
    */
   public Collection<HoodieColumnStatsMetadata<Comparable>> readColumnStatsFromParquetMetadata(Configuration conf,
                                                                                               String partitionPath,
-                                                                                              Path parquetFilePath) {
+                                                                                              Path parquetFilePath,
+                                                                                              Option<List<String>> latestColumns) {
 
     ParquetMetadata metadata = readMetadata(conf, parquetFilePath);
     // collect stats from all parquet blocks
     Map<String, List<HoodieColumnStatsMetadata<Comparable>>> columnToStatsListMap =
         metadata.getBlocks().stream().flatMap(blockMetaData -> {
-          return blockMetaData.getColumns().stream().map(
+          return blockMetaData.getColumns().stream().filter(columnChunkMetaData -> {
+            if (latestColumns.isPresent()) {
+              return latestColumns.get().contains(columnChunkMetaData.getPath().toDotString());
+            }
+            return true;
+          }).map(
               columnChunkMetaData -> new HoodieColumnStatsMetadata<>(partitionPath, parquetFilePath.getName(),
                   columnChunkMetaData.getPath().toDotString(),
                   columnChunkMetaData.getStatistics().genericGetMin(),
