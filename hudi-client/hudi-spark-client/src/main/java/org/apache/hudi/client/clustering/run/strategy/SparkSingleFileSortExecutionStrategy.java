@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.io.SingleFileHandleCreateFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
@@ -62,7 +63,7 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
                                                               Schema schema,
                                                               List<HoodieFileGroupId> fileGroupIdList,
                                                               boolean preserveHoodieMetadata) {
-    if (numOutputGroups != 1 && fileGroupIdList.size() != 1) {
+    if (numOutputGroups != 1 || fileGroupIdList.size() != 1) {
       throw new HoodieClusteringException("Expect only one file group for strategy: " + getClass().getName());
     }
     LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
@@ -74,6 +75,6 @@ public class SparkSingleFileSortExecutionStrategy<T extends HoodieRecordPayload<
     props.put(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(Long.MAX_VALUE));
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
     return (JavaRDD<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
-        false, getPartitioner(strategyParams, schema), true, numOutputGroups, preserveHoodieMetadata);
+        false, getPartitioner(strategyParams, schema), true, numOutputGroups, new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), preserveHoodieMetadata));
   }
 }

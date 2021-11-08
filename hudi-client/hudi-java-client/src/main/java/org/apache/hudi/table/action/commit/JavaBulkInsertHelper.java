@@ -29,6 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
 import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
 import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.FileIdPrefixProvider;
 import org.apache.hudi.table.HoodieTable;
@@ -76,7 +77,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abst
     }
 
     // write new files
-    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism(), false);
+    List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
     //update index
     ((BaseJavaCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
@@ -91,7 +92,7 @@ public class JavaBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abst
                                       Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
                                       boolean useWriterSchema,
                                       int parallelism,
-                                      boolean preserveHoodieMetadata) {
+                                      WriteHandleFactory writeHandleFactory) {
 
     // De-dupe/merge if needed
     List<HoodieRecord<T>> dedupedRecords = inputRecords;

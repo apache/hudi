@@ -19,22 +19,23 @@
 
 package org.apache.hudi.client.clustering.plan.strategy;
 
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkMergeOnReadTable;
 
-import java.util.Properties;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * In this strategy, clustering group for each partition is built in the same way as {@link SparkSizeBasedClusteringPlanStrategy}.
- * The difference is that {@link HoodieClusteringConfig#PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP} is set to a small value so that
- * each file is considered as separate clustering group. This ensures that each clustering group has just one file group.
- * Since file could be huge as data will be sorted and clustered in the single file group, so
- * {@link HoodieStorageConfig#PARQUET_MAX_FILE_SIZE} is set to a large value.
+ * The difference is that the output groups is 1 and file group id remains the same.
  */
 public class SparkSingleFileSortPlanStrategy<T extends HoodieRecordPayload<T>>
     extends SparkSizeBasedClusteringPlanStrategy<T> {
@@ -47,10 +48,13 @@ public class SparkSingleFileSortPlanStrategy<T extends HoodieRecordPayload<T>>
     super(table, engineContext, writeConfig);
   }
 
-  protected HoodieWriteConfig getWriteConfig() {
-    Properties props = super.getWriteConfig().getProps();
-    props.put(HoodieClusteringConfig.PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP.key(), String.valueOf(0));
-    props.put(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(Long.MAX_VALUE));
-    return HoodieWriteConfig.newBuilder().withProps(props).build();
+  protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
+    List<Pair<List<FileSlice>, Integer>> fileSliceGroups = fileSlices.stream()
+        .map(fileSlice -> Pair.of(Collections.singletonList(fileSlice), 1)).collect(Collectors.toList());
+    return fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
+        .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
+        .setNumOutputFileGroups(fileSliceGroup.getRight())
+        .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
+        .build());
   }
 }
