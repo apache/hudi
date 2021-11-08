@@ -119,6 +119,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " keep the metadata overhead constant, even as the table size grows."
           + "This config controls the maximum number of instants to retain in the active timeline. ");
 
+  public static final ConfigProperty<String> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
+      .key("hoodie.archive.delete.parallelism")
+      .defaultValue("100")
+      .withDocumentation("Parallelism for deleting archived hoodie commits.");
+
   public static final ConfigProperty<String> MIN_COMMITS_TO_KEEP = ConfigProperty
       .key("hoodie.keep.min.commits")
       .defaultValue("20")
@@ -565,6 +570,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
       compactionConfig.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      return this;
+    }
+
+    public Builder withArchiveDeleteParallelism(int archiveDeleteParallelism) {
+      compactionConfig.setValue(DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE, String.valueOf(archiveDeleteParallelism));
       return this;
     }
 
