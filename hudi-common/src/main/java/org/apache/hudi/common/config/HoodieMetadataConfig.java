@@ -153,7 +153,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + " the same. For instance, "
           + "for HFileDataBlock, a inline file will be read using HFileReader.");
 
-  // TODO: for the test
   public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
       .defaultValue(true)
