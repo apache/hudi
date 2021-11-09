@@ -539,6 +539,9 @@ object HoodieSparkSqlWriter {
     val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, hoodieConfig, sqlConf)
     val hiveConf: HiveConf = new HiveConf()
     hiveConf.addResource(fs.getConf)
+    if (StringUtils.isNullOrEmpty(hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname))) {
+      hiveConf.set(HiveConf.ConfVars.METASTOREURIS.varname, hiveSyncConfig.metastoreUris)
+    }
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable()
     true
   }
@@ -554,6 +557,7 @@ object HoodieSparkSqlWriter {
     hiveSyncConfig.hiveUser = hoodieConfig.getString(HIVE_USER)
     hiveSyncConfig.hivePass = hoodieConfig.getString(HIVE_PASS)
     hiveSyncConfig.jdbcUrl = hoodieConfig.getString(HIVE_URL)
+    hiveSyncConfig.metastoreUris = hoodieConfig.getStringOrDefault(METASTORE_URIS)
     hiveSyncConfig.skipROSuffix = hoodieConfig.getStringOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE,
       DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.defaultValue).toBoolean
     hiveSyncConfig.partitionFields =

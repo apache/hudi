@@ -72,6 +72,7 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(HIVE_USER)
     hoodieConfig.setDefaultValue(HIVE_PASS)
     hoodieConfig.setDefaultValue(HIVE_URL)
+    hoodieConfig.setDefaultValue(METASTORE_URIS)
     hoodieConfig.setDefaultValue(HIVE_PARTITION_FIELDS)
     hoodieConfig.setDefaultValue(HIVE_PARTITION_EXTRACTOR_CLASS)
     hoodieConfig.setDefaultValue(HIVE_STYLE_PARTITIONING)
