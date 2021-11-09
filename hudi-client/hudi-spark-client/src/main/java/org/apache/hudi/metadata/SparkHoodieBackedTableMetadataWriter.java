@@ -22,6 +22,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
@@ -39,12 +40,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
 
@@ -104,14 +102,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
   }
 
-  @Override
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService) {
-    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
-    commit(jsc.parallelize(records, 1), partitionName, instantTime, canTriggerTableService);
-  }
-
-  private void commit(JavaRDD<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService) {
+  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String partitionName, String instantTime, boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
+    JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) hoodieDataRecords.get();
     JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
@@ -163,30 +156,5 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       return r;
     });
-  }
-
-  @Override
-  protected void commit(List<DirectoryInfo> partitionInfoList, String createInstantTime, boolean canTriggerTableService) {
-    ValidationUtils.checkState(!partitionInfoList.isEmpty());
-
-    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
-    List<String> partitions = partitionInfoList.stream().map(p -> p.getRelativePath()).collect(Collectors.toList());
-    final int totalFiles = partitionInfoList.stream().mapToInt(p -> p.getTotalFiles()).sum();
-
-    // Record which saves the list of all partitions
-    HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
-    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record), 1);
-    if (!partitionInfoList.isEmpty()) {
-      JavaRDD<HoodieRecord> fileListRecords = jsc.parallelize(partitionInfoList, partitionInfoList.size()).map(pinfo -> {
-        // Record which saves files within a partition
-        return HoodieMetadataPayload.createPartitionFilesRecord(
-            pinfo.getRelativePath(), Option.of(pinfo.getFileMap()), Option.empty());
-      });
-      recordRDD = recordRDD.union(fileListRecords);
-    }
-
-    LOG.info("Committing " + partitions.size() + " partitions and " + totalFiles + " files to metadata");
-    ValidationUtils.checkState(recordRDD.count() == (partitions.size() + 1));
-    commit(recordRDD, MetadataPartitionType.FILES.partitionPath(), createInstantTime, canTriggerTableService);
   }
 }

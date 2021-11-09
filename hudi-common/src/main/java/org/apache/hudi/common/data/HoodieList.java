@@ -133,6 +133,14 @@ public class HoodieList<T> extends HoodieData<T> {
   }
 
   @Override
+  public HoodieData<T> union(HoodieData<T> other) {
+    List<T> unionResult = new ArrayList<>();
+    unionResult.addAll(listData);
+    unionResult.addAll(other.collectAsList());
+    return HoodieList.of(unionResult);
+  }
+
+  @Override
   public List<T> collectAsList() {
     return listData;
   }
