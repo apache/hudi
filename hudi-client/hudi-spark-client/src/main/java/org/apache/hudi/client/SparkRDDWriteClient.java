@@ -410,9 +410,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
                                   HoodieInstant hoodieInstant) {
     try {
       this.txnManager.beginTransaction(Option.of(hoodieInstant), Option.empty());
+      boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp()));
+      table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
     } finally {
       this.txnManager.endTransaction();
     }
@@ -478,13 +479,14 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void preCommit(String instantTime, HoodieCommitMetadata metadata) {
+  protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
     // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
     TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
         Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner());
-    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime));
+    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, inflightInstant.getTimestamp(),
+        table.isTableServiceAction(inflightInstant.getAction())));
   }
 
   @Override

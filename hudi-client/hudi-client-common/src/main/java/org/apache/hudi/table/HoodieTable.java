@@ -739,6 +739,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * Check if action type is a table service.
+   * @param actionType action type of interest.
+   * @return true if action represents a table service. false otherwise.
+   */
+  public abstract boolean isTableServiceAction(String actionType);
+
+  /**
    * Get Table metadata writer.
    *
    * @return instance of {@link HoodieTableMetadataWriter}

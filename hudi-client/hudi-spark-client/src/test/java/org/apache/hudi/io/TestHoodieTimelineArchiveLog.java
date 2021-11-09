@@ -305,18 +305,20 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       }
     }
 
-    // move inflight compaction to complete. archival should archive more commits.
-    // before this move, timeline 2_inflight_compaction, 3,4,5,6,7.
-    // after this move. 6,7. (2,3,4,5 will be archived)
+    // move inflight compaction to complete and add one regular write commit. archival should archive more commits.
+    // an extra one commit is required, bcoz compaction in data table will not trigger table services in metadata table.
+    // before this move, timeline : 2_inflight_compaction, 3,4,5,6,7.
+    // after this move: 6,7,8 (2,3,4,5 will be archived)
     testTable.moveInflightCompactionToComplete("00000002", inflightCompactionMetadata);
+    testTable.doWriteOperation("00000008", WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), 2);
+
     Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
-    List<HoodieInstant> originalCommits = commitsList.getKey();
     List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
 
-    List<HoodieInstant> archivedInstants = getAllArchivedCommitInstants(Arrays.asList("00000001", "00000003", "00000004", "00000005"), HoodieTimeline.DELTA_COMMIT_ACTION);
+    List<HoodieInstant> archivedInstants = getAllArchivedCommitInstants(Arrays.asList("00000001", "00000003", "00000004", "00000005", "00000006"), HoodieTimeline.DELTA_COMMIT_ACTION);
     archivedInstants.add(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "00000002"));
     archivedInstants.add(new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "00000002"));
-    verifyArchival(archivedInstants, getActiveCommitInstants(Arrays.asList("00000006", "00000007"), HoodieTimeline.DELTA_COMMIT_ACTION), commitsAfterArchival);
+    verifyArchival(archivedInstants, getActiveCommitInstants(Arrays.asList("00000007", "00000008"), HoodieTimeline.DELTA_COMMIT_ACTION), commitsAfterArchival);
   }
 
   @Test
@@ -379,7 +381,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   public void testArchiveTableWithCleanCommits(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2);
 
-    // min archival commits is 2 and max archival commits is 4(either clean commits has to be > 4 or commits has to be greater than 4. and so, after 5th commit, 3 commits will be archived.
+    // min archival commits is 2 and max archival commits is 4(either clean commits has to be > 4 or commits has to be greater than 4.
+    // and so, after 5th commit, 3 commits will be archived.
     // 1,2,3,4,5,6 : after archival -> 1,5,6 (because, 2,3,4,5 and 6 are clean commits and are eligible for archival)
     // after 7th and 8th commit no-op wrt archival.
     Map<String, Integer> cleanStats = new HashMap<>();
@@ -400,13 +403,35 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       if (i < 6) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else if (i == 6) {
-        // 1,2,3,4,5,6 : after archival -> 1,5,6 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
-        List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
-        expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001")));
-        expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
-        verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
+        if (!enableMetadata) {
+          // 1,2,3,4,5,6 : after archival -> 1,5,6 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
+          List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
+          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001")));
+          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
+          verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
+        } else {
+          // with metadata enabled, archival in data table is fenced based on compaction in metadata table. Clean commits in data table will not trigger compaction in
+          // metadata table.
+          List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
+          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001")));
+          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000002", "00000003", "00000004", "00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
+          verifyArchival(getAllArchivedCommitInstants(Collections.emptyList(), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
+        }
       } else {
-        assertEquals(originalCommits, commitsAfterArchival);
+        if (!enableMetadata) {
+          assertEquals(originalCommits, commitsAfterArchival);
+        } else {
+          if (i == 7) {
+            // when i == 7 compaction in metadata table will be triggered and hence archival in datatable will kick in.
+            // 1,2,3,4,5,6 : after archival -> 1,5,6 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
+            List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
+            expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001", "00000007")));
+            expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
+            verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
+          } else {
+            assertEquals(originalCommits, commitsAfterArchival);
+          }
+        }
       }
     }
   }

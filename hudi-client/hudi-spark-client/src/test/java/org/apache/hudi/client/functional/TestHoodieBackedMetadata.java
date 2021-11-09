@@ -274,6 +274,37 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   /**
+   * Tests that table services in data table won't trigger table services in metadata table.
+   * @throws Exception
+   */
+  @Test
+  public void testMetadataTableServices() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableFullScan(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(3) // after 3 delta commits for regular writer operations, compaction should kick in.
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    doWriteOperation(testTable, "0000001", INSERT);
+    doCleanAndValidate(testTable, "0000003", Arrays.asList("0000001"));
+
+    HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
+    // since clean was the last commit, table servives should not get triggered in metadata table.
+    assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
+
+    doWriteOperation(testTable, "0000004", UPSERT);
+    // this should have triggered compaction in metadata table
+    tableMetadata = metadata(writeConfig, context);
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+    assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000004001");
+  }
+
+  /**
    * Test rollback of various table operations sync to Metadata Table correctly.
    */
   //@ParameterizedTest
@@ -467,7 +498,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
 
       // Write 1
       String commitTime = "0000001";
@@ -501,7 +533,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
+        getWriteConfigBuilder(true, true, false).withRollbackUsingMarkers(false).build())) {
 
       // Write 1 (Bulk insert)
       String newCommitTime = "0000001";
@@ -685,8 +718,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Lets say clustering commit succeeded in metadata table, but failed before committing to datatable.
-   * Next time, when clustering kicks in, hudi will rollback pending clustering and re-attempt the clustering with same instant time.
-   * So, this test ensures the 2nd attempt succeeds with metadata enabled.
+   * Next time, when clustering kicks in, hudi will rollback pending clustering (in data table) and re-attempt the clustering with same
+   * instant time. So, this test ensures the 2nd attempt succeeds with metadata enabled.
    * This is applicable to any table service where instant time is fixed. So, how many ever times the operation fails, re attempt will
    * be made with same commit time.
    * Tests uses clustering to test out the scenario.
