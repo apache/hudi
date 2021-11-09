@@ -133,6 +133,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .build();
     if (!scanner.iterator().hasNext()) {
+      scanner.close();
       return new ArrayList<>();
     }
 
@@ -150,6 +151,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
       result = hoodieCopyOnWriteTable.handleInsert(instantTime, operation.getPartitionPath(), operation.getFileId(),
           scanner.getRecords());
     }
+    scanner.close();
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
       s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
@@ -164,7 +166,6 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
       s.getStat().setRuntimeStats(runtimeStats);
-      scanner.close();
     }).collect(toList());
   }
 
