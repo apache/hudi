@@ -94,7 +94,8 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
-                              SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException {
+                              SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType,
+                              boolean isCompressionEnabled) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.baseFilePath = baseFilePath;
     this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * sizingFactorForInMemoryMap);
@@ -116,7 +117,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
                 break;
               case BITCASK:
               default:
-                diskBasedMap =  new BitCaskDiskMap<>(baseFilePath, isCompressionEnabled);
+                diskBasedMap = new BitCaskDiskMap<>(baseFilePath, isCompressionEnabled);
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
@@ -204,11 +205,13 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   public R put(T key, R value) {
     if (this.currentInMemoryMapSize < maxInMemorySizeInBytes || inMemoryMap.containsKey(key)) {
       if (shouldEstimatePayloadSize && estimatedPayloadSize == 0) {
-        // At first, use the sizeEstimate of a record being inserted into the spillable map.
-        // Note, the converter may over estimate the size of a record in the JVM
+        // At first, use the size estimate of a record being inserted into the Spillable map.
+        // Note, the converter may overestimate the size of a record in the JVM.
         this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-        LOG.info("Estimated Payload size => " + estimatedPayloadSize);
-      } else if (shouldEstimatePayloadSize && inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
+        LOG.debug("Estimated Payload size => " + estimatedPayloadSize);
+      } else if (shouldEstimatePayloadSize
+          && !inMemoryMap.isEmpty()
+          && (inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0)) {
         // Re-estimate the size of a record by calculating the size of the entire map containing
         // N entries and then dividing by the number of entries present (N). This helps to get a
         // correct estimation of the size of each record in the JVM.
@@ -216,7 +219,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
         this.currentInMemoryMapSize = totalMapSize;
         this.estimatedPayloadSize = totalMapSize / inMemoryMap.size();
         shouldEstimatePayloadSize = false;
-        LOG.info("New Estimated Payload size => " + this.estimatedPayloadSize);
+        LOG.debug("New Estimated Payload size => " + this.estimatedPayloadSize);
       }
       if (!inMemoryMap.containsKey(key)) {
         // TODO : Add support for adjusting payloadSize for updates to the same key
