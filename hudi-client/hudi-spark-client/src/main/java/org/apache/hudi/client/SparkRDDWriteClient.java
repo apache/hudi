@@ -84,22 +84,32 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Deprecated
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending) {
-    super(context, writeConfig);
+    this(context, writeConfig, Option.empty());
   }
 
   @Deprecated
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending,
                              Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, timelineService);
+    this(context, writeConfig, timelineService);
   }
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
+    initializeMetadataTable(Option.empty());
+  }
+
+  private void initializeMetadataTable(Option<String> inflightInstantTimestamp) {
     if (config.isMetadataTableEnabled()) {
-      // If the metadata table does not exist, it should be bootstrapped here
-      // TODO: Check if we can remove this requirement - auto bootstrap on commit
-      SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context);
+      // Defer bootstrap if upgrade / downgrade is pending
+      HoodieTableMetaClient metaClient = createMetaClient(true);
+      UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
+          metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
+      if (!upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
+        // TODO: Check if we can remove this requirement - auto bootstrap on commit
+        SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context, Option.empty(),
+                                                    inflightInstantTimestamp);
+      }
     }
   }
 
@@ -212,7 +222,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieWriteMetadata result = table.insertOverwrite(context, instantTime, records);
     return new HoodieWriteResult(postWrite(result, instantTime, table), result.getPartitionToReplaceFileIds());
   }
-
 
   /**
    * Removes all existing records of the Hoodie table and inserts the given HoodieRecords, into the table.
@@ -369,7 +378,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   private void completeClustering(HoodieReplaceCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                     String clusteringCommitTime) {
-    
+
     List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
         e.getValue().stream()).collect(Collectors.toList());
 
@@ -440,6 +449,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
       }
       metaClient.reloadActiveTimeline();
+
+      // re-bootstrap metadata table if required
+      initializeMetadataTable(Option.of(instantTime));
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);

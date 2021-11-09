@@ -104,16 +104,18 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Hudi backed table metadata writer.
    *
-   * @param hadoopConf     - Hadoop configuration to use for the metadata writer
-   * @param writeConfig    - Writer config
-   * @param engineContext  - Engine context
-   * @param actionMetadata - Optional action metadata to help decide bootstrap operations
-   * @param <T>            - Action metadata types extending Avro generated SpecificRecordBase
+   * @param hadoopConf               - Hadoop configuration to use for the metadata writer
+   * @param writeConfig              - Writer config
+   * @param engineContext            - Engine context
+   * @param actionMetadata           - Optional action metadata to help decide bootstrap operations
+   * @param <T>                      - Action metadata types extending Avro generated SpecificRecordBase
+   * @param inflightInstantTimestamp - Timestamp of any instant in progress
    */
   protected <T extends SpecificRecordBase> HoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                            HoodieWriteConfig writeConfig,
                                                                            HoodieEngineContext engineContext,
-                                                                           Option<T> actionMetadata) {
+                                                                           Option<T> actionMetadata,
+                                                                           Option<String> inflightInstantTimestamp) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
@@ -137,12 +139,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       initRegistry();
       this.dataMetaClient =
           HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(dataWriteConfig.getBasePath()).build();
-      initialize(engineContext, actionMetadata);
+      initialize(engineContext, actionMetadata, inflightInstantTimestamp);
       initTableMetadata();
     } else {
       enabled = false;
       this.metrics = Option.empty();
     }
+  }
+
+  public HoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig,
+      HoodieEngineContext engineContext) {
+    this(hadoopConf, writeConfig, engineContext, Option.empty(), Option.empty());
   }
 
   protected abstract void initRegistry();
@@ -234,11 +241,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   /**
    * Initialize the metadata table if it does not exist.
-   * <p>
+   *
    * If the metadata table does not exist, then file and partition listing is used to bootstrap the table.
+   *
+   * @param engineContext
+   * @param actionMetadata Action metadata types extending Avro generated SpecificRecordBase
+   * @param inflightInstantTimestamp Timestamp of an instant in progress on the dataset. This instant is ignored
+   *                                   while deciding to bootstrap the metadata table.
    */
   protected abstract <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
-                                                                    Option<T> actionMetadata);
+                                                                    Option<T> actionMetadata,
+                                                                    Option<String> inflightInstantTimestamp);
 
   public void initTableMetadata() {
     try {
@@ -260,11 +273,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * @param dataMetaClient - Meta client for the data table
    * @param actionMetadata - Optional action metadata
    * @param <T>            - Action metadata types extending Avro generated SpecificRecordBase
+   * @param inflightInstantTimestamp - Timestamp of an instant in progress on the dataset. This instant is ignored
    * @throws IOException
    */
   protected <T extends SpecificRecordBase> void bootstrapIfNeeded(HoodieEngineContext engineContext,
                                                                   HoodieTableMetaClient dataMetaClient,
-                                                                  Option<T> actionMetadata) throws IOException {
+                                                                  Option<T> actionMetadata,
+                                                                  Option<String> inflightInstantTimestamp) throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
 
     boolean exists = dataMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(),
@@ -291,7 +306,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     if (!exists) {
       // Initialize for the first time by listing partitions and files directly from the file system
-      if (bootstrapFromFilesystem(engineContext, dataMetaClient)) {
+      if (bootstrapFromFilesystem(engineContext, dataMetaClient, inflightInstantTimestamp)) {
         metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       }
     }
@@ -347,23 +362,29 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Initialize the Metadata Table by listing files and partitions from the file system.
    *
    * @param dataMetaClient {@code HoodieTableMetaClient} for the dataset.
+   * @param inflightInstantTimestamp
    */
-  private boolean bootstrapFromFilesystem(HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient) throws IOException {
+  private boolean bootstrapFromFilesystem(HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient,
+      Option<String> inflightInstantTimestamp) throws IOException {
     ValidationUtils.checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
 
     // We can only bootstrap if there are no pending operations on the dataset
-    Option<HoodieInstant> pendingDataInstant = Option.fromJavaOptional(dataMetaClient.getActiveTimeline()
-        .getReverseOrderedInstants().filter(i -> !i.isCompleted()).findFirst());
-    if (pendingDataInstant.isPresent()) {
+    List<HoodieInstant> pendingDataInstant = dataMetaClient.getActiveTimeline()
+        .getInstants().filter(i -> !i.isCompleted())
+        .filter(i -> !inflightInstantTimestamp.isPresent() || !i.getTimestamp().equals(inflightInstantTimestamp.get()))
+        .collect(Collectors.toList());
+
+    if (!pendingDataInstant.isEmpty()) {
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-      LOG.warn("Cannot bootstrap metadata table as operation is in progress in dataset: " + pendingDataInstant.get());
+      LOG.warn("Cannot bootstrap metadata table as operation(s) are in progress on the dataset: "
+          + Arrays.toString(pendingDataInstant.toArray()));
       return false;
     }
 
     // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
-    // Otherwise, we use the latest commit timestamp.
-    String createInstantTime = dataMetaClient.getActiveTimeline().getReverseOrderedInstants().findFirst()
-        .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+    // Otherwise, we use the timestamp of the latest completed action.
+    String createInstantTime = dataMetaClient.getActiveTimeline().filterCompletedInstants()
+        .getReverseOrderedInstants().findFirst().map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
     LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
 
     HoodieTableMetaClient.withPropertyBuilder()

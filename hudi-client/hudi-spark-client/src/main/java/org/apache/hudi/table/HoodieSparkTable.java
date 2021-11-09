@@ -128,7 +128,7 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     }
     if (isMetadataTableAvailable) {
       return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context,
-          actionMetadata));
+          actionMetadata, Option.empty()));
     } else {
       return Option.empty();
     }
