@@ -431,10 +431,15 @@ public class FSUtils {
 
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
-    String suffix =
-        (writeToken == null) ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
-            : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
+    String suffix = (writeToken == null)
+        ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
+        : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
     return LOG_FILE_PREFIX + suffix;
+  }
+
+  public static boolean isBaseFile(Path path) {
+    String extension = getFileExtension(path.getName());
+    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
   }
 
   public static boolean isLogFile(Path logPath) {
@@ -446,7 +451,7 @@ public class FSUtils {
    * Returns true if the given path is a Base file or a Log file.
    */
   public static boolean isDataFile(Path path) {
-    return HoodieFileFormat.isBaseFile(path) || FSUtils.isLogFile(path);
+    return isBaseFile(path) || isLogFile(path);
   }
 
   /**
