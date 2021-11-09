@@ -67,7 +67,7 @@ import java.util.stream.Collectors;
  * <p><h2>The Semantics</h2>
  *
  * <p>The task implements exactly-once semantics by buffering the data between checkpoints. The operator coordinator
- * starts a new instant on the time line when a checkpoint triggers, the coordinator checkpoints always
+ * starts a new instant on the timeline when a checkpoint triggers, the coordinator checkpoints always
  * start before its operator, so when this function starts a checkpoint, a REQUESTED instant already exists.
  *
  * <p>The function process thread blocks data buffering after the checkpoint thread finishes flushing the existing data buffer until
@@ -155,7 +155,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   // -------------------------------------------------------------------------
   //  Getter/Setter
   // -------------------------------------------------------------------------
-
   @VisibleForTesting
   @SuppressWarnings("rawtypes")
   public Map<String, List<HoodieRecord>> getDataBuffer() {
@@ -378,6 +377,8 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
     final DataItem item = DataItem.fromHoodieRecord(value);
 
+    bucket.records.add(item);
+
     boolean flushBucket = bucket.detector.detect(item);
     boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
     if (flushBucket) {
@@ -398,7 +399,6 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
       }
     }
-    bucket.records.add(item);
   }
 
   private boolean hasData() {
@@ -418,7 +418,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
 
     List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
-    if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
+    if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
       records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
     }
     bucket.preWrite(records);
@@ -453,7 +453,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
           .forEach(bucket -> {
             List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
-              if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
+              if (config.getBoolean(FlinkOptions.PRE_COMBINE)) {
                 records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
               }
               bucket.preWrite(records);

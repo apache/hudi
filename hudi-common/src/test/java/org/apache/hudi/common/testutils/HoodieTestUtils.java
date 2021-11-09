@@ -63,9 +63,10 @@ public class HoodieTestUtils {
     return init(getDefaultHadoopConf(), basePath, tableType);
   }
 
-  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath) throws IOException {
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, boolean bootstrapIndexEnable) throws IOException {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
+    props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), bootstrapIndexEnable);
     return init(getDefaultHadoopConf(), basePath, tableType, props);
   }
 
@@ -110,8 +111,15 @@ public class HoodieTestUtils {
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat) throws IOException {
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key(), bootstrapBasePath);
+    props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
+    return init(getDefaultHadoopConf(), basePath, tableType, props);
+  }
+
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
-    // Using Kyro as the default serializer in Spark Jobs
+    // Using Kryo as the default serializer in Spark Jobs
     Kryo kryo = new Kryo();
     kryo.register(HoodieTableMetaClient.class, new JavaSerializer());
 
@@ -121,9 +129,9 @@ public class HoodieTestUtils {
     output.close();
 
     Input input = new Input(new ByteArrayInputStream(baos.toByteArray()));
-    T deseralizedObject = kryo.readObject(input, clazz);
+    T deserializedObject = kryo.readObject(input, clazz);
     input.close();
-    return deseralizedObject;
+    return deserializedObject;
   }
 
   public static List<HoodieWriteStat> generateFakeHoodieWriteStat(int limit) {

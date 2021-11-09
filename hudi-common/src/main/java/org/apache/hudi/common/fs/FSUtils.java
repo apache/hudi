@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -167,6 +166,9 @@ public class FSUtils {
   }
 
   public static String getCommitTime(String fullFileName) {
+    if (isLogFile(new Path(fullFileName))) {
+      return fullFileName.split("_")[1].split("\\.")[0];
+    }
     return fullFileName.split("_")[2].split("\\.")[0];
   }
 
@@ -268,11 +270,10 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, String basePathStr,
-                                                  boolean useFileListingFromMetadata, boolean verifyListings,
+                                                  boolean useFileListingFromMetadata,
                                                   boolean assumeDatePartitioning) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(useFileListingFromMetadata)
-        .validate(verifyListings)
         .withAssumeDatePartitioning(assumeDatePartitioning)
         .build();
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
@@ -532,15 +533,6 @@ public class FSUtils {
       Thread.sleep(1000);
     }
     return recovered;
-  }
-
-  public static void deleteInstantFile(FileSystem fs, String metaPath, HoodieInstant instant) {
-    try {
-      LOG.warn("try to delete instant file: " + instant);
-      fs.delete(new Path(metaPath, instant.getFileName()), false);
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not delete instant file" + instant.getFileName(), e);
-    }
   }
 
   public static void createPathIfNotExists(FileSystem fs, Path partitionPath) throws IOException {

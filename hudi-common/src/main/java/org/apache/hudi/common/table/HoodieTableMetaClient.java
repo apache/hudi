@@ -49,7 +49,6 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -76,10 +75,11 @@ public class HoodieTableMetaClient implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetaClient.class);
   public static final String METAFOLDER_NAME = ".hoodie";
-  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
-  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
-  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + File.separator + ".bootstrap";
-  public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + File.separator + ".heartbeat";
+  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".temp";
+  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".aux";
+  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + Path.SEPARATOR + ".bootstrap";
+  public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".heartbeat";
+  public static final String ZINDEX_NAME = ".zindex";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
       + Path.SEPARATOR + ".partitions";
   public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + Path.SEPARATOR
@@ -178,6 +178,13 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * @return z-index path
+   */
+  public String getZindexPath() {
+    return new Path(metaPath, ZINDEX_NAME).toString();
+  }
+
+  /**
    * @return Temp Folder path
    */
   public String getTempFolderPath() {
@@ -205,7 +212,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Heartbeat folder path.
    */
   public static String getHeartbeatFolderPath(String basePath) {
-    return String.format("%s%s%s", basePath, File.separator, HEARTBEAT_FOLDER_NAME);
+    return String.format("%s%s%s", basePath, Path.SEPARATOR, HEARTBEAT_FOLDER_NAME);
   }
 
   /**
@@ -227,7 +234,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getArchivePath() {
     String archiveFolder = tableConfig.getArchivelogFolder();
-    return getMetaPath() + "/" + archiveFolder;
+    return getMetaPath() + Path.SEPARATOR + archiveFolder;
   }
 
   /**
@@ -627,8 +634,11 @@ public class HoodieTableMetaClient implements Serializable {
     private String partitionFields;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
+    private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
     private String keyGeneratorClassProp;
+    private Boolean hiveStylePartitioningEnable;
+    private Boolean urlEncodePartitioning;
 
     private PropertyBuilder() {
 
@@ -702,6 +712,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setBootstrapIndexEnable(Boolean bootstrapIndexEnable) {
+      this.bootstrapIndexEnable = bootstrapIndexEnable;
+      return this;
+    }
+
     public PropertyBuilder setPopulateMetaFields(boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
       return this;
@@ -709,6 +724,16 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setKeyGeneratorClassProp(String keyGeneratorClassProp) {
       this.keyGeneratorClassProp = keyGeneratorClassProp;
+      return this;
+    }
+
+    public PropertyBuilder setHiveStylePartitioningEnable(Boolean hiveStylePartitioningEnable) {
+      this.hiveStylePartitioningEnable = hiveStylePartitioningEnable;
+      return this;
+    }
+
+    public PropertyBuilder setUrlEncodePartitioning(Boolean urlEncodePartitioning) {
+      this.urlEncodePartitioning = urlEncodePartitioning;
       return this;
     }
 
@@ -749,6 +774,11 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_BASE_PATH)) {
         setBootstrapBasePath(hoodieConfig.getString(HoodieTableConfig.BOOTSTRAP_BASE_PATH));
       }
+
+      if (hoodieConfig.contains(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE)) {
+        setBootstrapIndexEnable(hoodieConfig.getBoolean(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE));
+      }
+
       if (hoodieConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)) {
         setPreCombineField(hoodieConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
       }
@@ -767,6 +797,12 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
         setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)) {
+        setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING)) {
+        setUrlEncodePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.URL_ENCODE_PARTITIONING));
       }
       return this;
     }
@@ -807,6 +843,10 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME, bootstrapIndexClass);
       }
 
+      if (null != bootstrapIndexEnable) {
+        tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE, Boolean.toString(bootstrapIndexEnable));
+      }
+
       if (null != bootstrapBasePath) {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_BASE_PATH, bootstrapBasePath);
       }
@@ -826,6 +866,12 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != keyGeneratorClassProp) {
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+      }
+      if (null != hiveStylePartitioningEnable) {
+        tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));
+      }
+      if (null != urlEncodePartitioning) {
+        tableConfig.setValue(HoodieTableConfig.URL_ENCODE_PARTITIONING, Boolean.toString(urlEncodePartitioning));
       }
       return tableConfig.getProps();
     }

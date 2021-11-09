@@ -18,12 +18,14 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -33,6 +35,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -49,8 +52,8 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitActionExecutor;
-import org.apache.hudi.table.action.clean.SparkCleanActionExecutor;
-import org.apache.hudi.table.action.clean.SparkCleanPlanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanActionExecutor;
+import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.SparkClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.SparkExecuteClusteringCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
@@ -64,18 +67,22 @@ import org.apache.hudi.table.action.commit.SparkInsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.commit.SparkMergeHelper;
 import org.apache.hudi.table.action.commit.SparkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkUpsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.restore.SparkCopyOnWriteRestoreActionExecutor;
-import org.apache.hudi.table.action.rollback.SparkCopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
+import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
+import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.ZCurveOptimizeHelper;
 import org.apache.spark.api.java.JavaRDD;
+import scala.collection.JavaConversions;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
@@ -85,12 +92,18 @@ import java.util.Map;
  * <p>
  * UPDATES - Produce a new version of the file, just replacing the updated records with new values
  */
-public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieSparkTable<T> {
+public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
+    extends HoodieSparkTable<T> implements HoodieCompactionHandler<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkCopyOnWriteTable.class);
 
   public HoodieSparkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
+  }
+
+  @Override
+  public boolean isTableServiceAction(String actionType) {
+    return !actionType.equals(HoodieTimeline.COMMIT_ACTION);
   }
 
   @Override
@@ -150,12 +163,39 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public void updateStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime, Boolean isOptimizeOperation) {
+    // deal with z-order/hilbert statistic info
+    if (isOptimizeOperation) {
+      updateOptimizeOperationStatistics(context, stats, instantTime);
+    }
+  }
+
+  private void updateOptimizeOperationStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime) {
+    String cols = config.getClusteringSortColumns();
+    String basePath = metaClient.getBasePath();
+    String indexPath = metaClient.getZindexPath();
+    List<String> validateCommits = metaClient.getCommitsTimeline()
+        .filterCompletedInstants().getInstants().map(f -> f.getTimestamp()).collect(Collectors.toList());
+    List<String> touchFiles = stats.stream().map(s -> new Path(basePath, s.getPath()).toString()).collect(Collectors.toList());
+    if (touchFiles.isEmpty() || cols.isEmpty() || indexPath.isEmpty()) {
+      LOG.warn("save nothing to index table");
+      return;
+    }
+    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
+    ZCurveOptimizeHelper.saveStatisticsInfo(sparkEngineContext
+        .getSqlContext().sparkSession().read().load(JavaConversions.asScalaBuffer(touchFiles)),
+        cols, indexPath, instantTime, validateCommits);
+    LOG.info(String.format("save statistic info sucessfully at commitTime: %s", instantTime));
+  }
+
+  @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 
   @Override
-  public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
+  public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(
+      HoodieEngineContext context, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
 
@@ -179,23 +219,32 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
-    new SparkCopyOnWriteRestoreActionExecutor((HoodieSparkEngineContext) context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
+    new CopyOnWriteRestoreActionExecutor(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
   }
 
   @Override
   public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new SparkCleanPlanActionExecutor<>(context, config,this, instantTime, extraMetadata).execute();
+    return new CleanPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
   }
 
-  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
+  @Override
+  public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
+                                                     String instantTime,
+                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish) {
+    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdate(
+      String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, instantTime, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String instantTime,
-      String fileId) throws IOException {
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
+                                                             String fileId) throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
@@ -232,22 +281,26 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
     }
   }
 
-  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
+  @Override
+  public Iterator<List<WriteStatus>> handleInsert(
+      String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
-    HoodieCreateHandle<?,?,?,?> createHandle =
+    HoodieCreateHandle<?, ?, ?, ?> createHandle =
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }
 
   @Override
-  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
-    return new SparkCleanActionExecutor((HoodieSparkEngineContext)context, config, this, cleanInstantTime).execute();
+  public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking) {
+    return new CleanActionExecutor(context, config, this, cleanInstantTime, skipLocking).execute();
   }
 
   @Override
-  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants) {
-    return new SparkCopyOnWriteRollbackActionExecutor((HoodieSparkEngineContext) context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
+  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant,
+                                         boolean deleteInstants, boolean skipLocking) {
+    return new CopyOnWriteRollbackActionExecutor((HoodieSparkEngineContext) context, config, this, rollbackInstantTime, commitInstant,
+        deleteInstants, skipLocking).execute();
   }
 
   @Override
@@ -257,7 +310,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieRestoreMetadata restore(HoodieEngineContext context, String restoreInstantTime, String instantToRestore) {
-    return new SparkCopyOnWriteRestoreActionExecutor((HoodieSparkEngineContext) context, config, this, restoreInstantTime, instantToRestore).execute();
+    return new CopyOnWriteRestoreActionExecutor(context, config, this, restoreInstantTime, instantToRestore).execute();
   }
 
 }

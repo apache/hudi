@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
@@ -26,6 +27,7 @@ import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.command.RunnableCommand
@@ -34,7 +36,6 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, SerDeUtils}
 import org.apache.spark.sql.types.{BooleanType, StructType}
-
 import java.util.Base64
 
 /**
@@ -90,6 +91,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
    * TODO Currently Non-equivalent conditions are not supported.
    */
   private lazy val targetKey2SourceExpression: Map[String, Expression] = {
+    val resolver = sparkSession.sessionState.conf.resolver
     val conditions = splitByAnd(mergeInto.mergeCondition)
     val allEqs = conditions.forall(p => p.isInstanceOf[EqualTo])
     if (!allEqs) {
@@ -101,11 +103,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     val target2Source = conditions.map(_.asInstanceOf[EqualTo])
       .map {
         case EqualTo(left: AttributeReference, right)
-          if targetAttrs.indexOf(left) >= 0 => // left is the target field
-          left.name -> right
+          if targetAttrs.exists(f => attributeEqual(f, left, resolver)) => // left is the target field
+            targetAttrs.find(f => resolver(f.name, left.name)).get.name -> right
         case EqualTo(left, right: AttributeReference)
-          if targetAttrs.indexOf(right) >= 0 => // right is the target field
-          right.name -> left
+          if targetAttrs.exists(f => attributeEqual(f, right, resolver)) => // right is the target field
+            targetAttrs.find(f => resolver(f.name, right.name)).get.name -> left
         case eq =>
           throw new AnalysisException(s"Invalidate Merge-On condition: ${eq.sql}." +
             "The validate condition should be 'targetColumn = sourceColumnExpression', e.g." +
@@ -196,11 +198,22 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
   }
 
   private def isEqualToTarget(targetColumnName: String, sourceExpression: Expression): Boolean = {
+    val sourceColumnName = sourceDFOutput.map(_.name)
+    val resolver = sparkSession.sessionState.conf.resolver
+
     sourceExpression match {
-      case attr: AttributeReference if attr.name.equalsIgnoreCase(targetColumnName) => true
-      case Cast(attr: AttributeReference, _, _) if attr.name.equalsIgnoreCase(targetColumnName) => true
+      case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+      case Cast(attr: AttributeReference, _, _) if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
       case _=> false
     }
+  }
+
+  /**
+   * Compare a [[Attribute]] to another, return true if they have the same column name(by resolver) and exprId
+   */
+  private def attributeEqual(
+      attr: Attribute, other: Attribute, resolver: Resolver): Boolean = {
+    resolver(attr.name, other.name) && attr.exprId == other.exprId
   }
 
   /**
@@ -359,9 +372,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     mergeInto.targetTable.output
       .filterNot(attr => isMetaField(attr.name))
       .map(attr => {
-        val assignment = attr2Assignment.getOrElse(attr,
-          throw new IllegalArgumentException(s"Cannot find related assignment for field: ${attr.name}"))
-        castIfNeeded(assignment, attr.dataType, sparkSession.sqlContext.conf)
+        val assignment = attr2Assignment.find(f => attributeEqual(f._1, attr, sparkSession.sessionState.conf.resolver))
+          .getOrElse(throw new IllegalArgumentException(s"Cannot find related assignment for field: ${attr.name}"))
+        castIfNeeded(assignment._2, attr.dataType, sparkSession.sqlContext.conf)
       })
   }
 
@@ -417,7 +430,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     val targetTableDb = targetTableIdentify.database.getOrElse("default")
     val targetTableName = targetTableIdentify.identifier
     val path = getTableLocation(targetTable, sparkSession)
-
+    val conf = sparkSession.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(path)
+      .setConf(conf)
+      .build()
+    val tableConfig = metaClient.getTableConfig
     val options = targetTable.storage.properties
     val definedPk = HoodieOptionConfig.getPrimaryColumns(options)
     // TODO Currently the mergeEqualConditionKeys must be the same the primary key.
@@ -427,31 +445,30 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     }
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isEnableHive(sparkSession)
-    HoodieWriterUtils.parametersWithWriteDefaults(
-      withSparkConf(sparkSession, options) {
-        Map(
-          "path" -> path,
-          RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
-          KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
-          PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
-          TBL_NAME.key -> targetTableName,
-          PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
-          PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
-          META_SYNC_ENABLED.key -> enableHive.toString,
-          HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
-          HIVE_USE_JDBC.key -> "false",
-          HIVE_DATABASE.key -> targetTableDb,
-          HIVE_TABLE.key -> targetTableName,
-          HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
-          HIVE_STYLE_PARTITIONING.key -> "true",
-          HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
-          HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-          URL_ENCODE_PARTITIONING.key -> "true", // enable the url decode for sql.
-          HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200", // set the default parallelism to 200 for sql
-          HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
-          HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
-          SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
-        )
-      })
+    withSparkConf(sparkSession, options) {
+      Map(
+        "path" -> path,
+        RECORDKEY_FIELD.key -> targetKey2SourceExpression.keySet.mkString(","),
+        PRECOMBINE_FIELD.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
+        TBL_NAME.key -> targetTableName,
+        PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
+        PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
+        HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
+        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitoning,
+        KEYGENERATOR_CLASS_NAME.key -> tableConfig.getKeyGeneratorClassName,
+        META_SYNC_ENABLED.key -> enableHive.toString,
+        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
+        HIVE_USE_JDBC.key -> "false",
+        HIVE_DATABASE.key -> targetTableDb,
+        HIVE_TABLE.key -> targetTableName,
+        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
+        HIVE_PARTITION_FIELDS.key -> targetTable.partitionColumnNames.mkString(","),
+        HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+        HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200", // set the default parallelism to 200 for sql
+        HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
+        HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
+        SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
+      )
+    }
   }
 }

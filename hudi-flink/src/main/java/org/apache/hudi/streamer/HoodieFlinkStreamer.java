@@ -41,8 +41,9 @@ import org.apache.flink.table.types.logical.RowType;
 import java.util.Properties;
 
 /**
- * An Utility which can incrementally consume data from Kafka and apply it to the target table.
- * currently, it only supports COW table and insert, upsert operation.
+ * A utility which can incrementally consume data from Kafka and apply it to the target table.
+ * It has the similar functionality with SQL data source except that the source is bind to Kafka
+ * and the format is bind to JSON.
  */
 public class HoodieFlinkStreamer {
   public static void main(String[] args) throws Exception {

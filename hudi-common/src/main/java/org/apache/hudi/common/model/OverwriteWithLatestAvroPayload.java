@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -99,6 +100,9 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * Return true if value equals defaultValue otherwise false.
    */
   public Boolean overwriteField(Object value, Object defaultValue) {
+    if (JsonProperties.NULL_VALUE.equals(defaultValue)) {
+      return value == null;
+    }
     return Objects.equals(value, defaultValue);
   }
 }

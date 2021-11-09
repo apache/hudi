@@ -40,13 +40,13 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
   public String baseFileFormat = "PARQUET";
 
-  @Parameter(names = {"--user"}, description = "Hive username", required = true)
+  @Parameter(names = {"--user"}, description = "Hive username")
   public String hiveUser;
 
-  @Parameter(names = {"--pass"}, description = "Hive password", required = true)
+  @Parameter(names = {"--pass"}, description = "Hive password")
   public String hivePass;
 
-  @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url", required = true)
+  @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url")
   public String jdbcUrl;
 
   @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
@@ -88,9 +88,6 @@ public class HiveSyncConfig implements Serializable {
 
   @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
   public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-
-  @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-  public Boolean verifyMetadataFileListing = HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue();
 
   @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
   public String tableProperties;
@@ -137,7 +134,6 @@ public class HiveSyncConfig implements Serializable {
     newConfig.tableName = cfg.tableName;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
-    newConfig.verifyMetadataFileListing = cfg.verifyMetadataFileListing;
     newConfig.supportTimestamp = cfg.supportTimestamp;
     newConfig.decodePartition = cfg.decodePartition;
     newConfig.tableProperties = cfg.tableProperties;
@@ -169,7 +165,6 @@ public class HiveSyncConfig implements Serializable {
       + ", ignoreExceptions=" + ignoreExceptions
       + ", skipROSuffix=" + skipROSuffix
       + ", useFileListingFromMetadata=" + useFileListingFromMetadata
-      + ", verifyMetadataFileListing=" + verifyMetadataFileListing
       + ", tableProperties='" + tableProperties + '\''
       + ", serdeProperties='" + serdeProperties + '\''
       + ", help=" + help

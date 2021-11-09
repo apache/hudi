@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -34,14 +35,14 @@ import org.apache.log4j.Logger;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.text.SimpleDateFormat;
+import java.text.ParseException;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 /**
@@ -58,8 +59,6 @@ import java.util.function.Function;
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
-  public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
-
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
       DELTA_COMMIT_EXTENSION, INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION,
@@ -67,32 +66,48 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
       INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION,
       INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION,
-      ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
+      ROLLBACK_EXTENSION, REQUESTED_ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION));
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
-  private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
 
   /**
-   * Returns next instant time in the {@link #COMMIT_FORMATTER} format.
-   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   * Parse the timestamp of an Instant and return a {@code SimpleDateFormat}.
    */
-  public static String createNewInstantTime() {
-    return createNewInstantTime(0);
+  public static Date parseInstantTime(String timestamp) throws ParseException {
+    return HoodieInstantTimeGenerator.parseInstantTime(timestamp);
   }
 
   /**
-   * Returns next instant time that adds N milliseconds in the {@link #COMMIT_FORMATTER} format.
+   * Format the java.time.Instant to a String representing the timestamp of a Hoodie Instant.
+   */
+  public static String formatInstantTime(Instant timestamp) {
+    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
+  }
+
+  /**
+   * Format the Date to a String representing the timestamp of a Hoodie Instant.
+   */
+  public static String formatInstantTime(Date timestamp) {
+    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
+  }
+
+  /**
+   * Returns next instant time in the correct format.
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
    */
+  public static String createNewInstantTime() {
+    return HoodieInstantTimeGenerator.createNewInstantTime(0);
+  }
+
+  /**
+   * Returns next instant time that adds N milliseconds to current time.
+   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   *
+   * @param milliseconds Milliseconds to add to current time while generating the new instant time
+   */
   public static String createNewInstantTime(long milliseconds) {
-    return lastInstantTime.updateAndGet((oldVal) -> {
-      String newCommitTime;
-      do {
-        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(System.currentTimeMillis() + milliseconds));
-      } while (HoodieTimeline.compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
-      return newCommitTime;
-    });
+    return HoodieInstantTimeGenerator.createNewInstantTime(milliseconds);
   }
 
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions) {
@@ -128,6 +143,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
+  @Deprecated
   public HoodieActiveTimeline() {
   }
 
@@ -136,6 +152,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
+  @Deprecated
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
   }
@@ -170,6 +187,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void deletePending(HoodieInstant instant) {
     ValidationUtils.checkArgument(!instant.isCompleted());
     deleteInstantFile(instant);
+  }
+
+  public static void deleteInstantFile(FileSystem fs, String metaPath, HoodieInstant instant) {
+    try {
+      fs.delete(new Path(metaPath, instant.getFileName()), false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not delete instant file" + instant.getFileName(), e);
+    }
   }
 
   public void deletePendingIfExists(HoodieInstant.State state, String action, String instantStr) {
@@ -226,6 +251,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant) {
     // Cleaner metadata are always stored only in timeline .hoodie
+    return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
+  }
+
+  public Option<byte[]> readRollbackInfoAsBytes(HoodieInstant instant) {
+    // Rollback metadata are always stored only in timeline .hoodie
     return readDataFromPath(new Path(metaClient.getMetaPath(), instant.getFileName()));
   }
 
@@ -335,6 +365,37 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, CLEAN_ACTION, requestedInstant.getTimestamp());
+    transitionState(requestedInstant, inflight, data);
+    return inflight;
+  }
+
+  /**
+   * Transition Rollback State from inflight to Committed.
+   *
+   * @param inflightInstant Inflight instant
+   * @param data Extra Metadata
+   * @return commit instant
+   */
+  public HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, inflightInstant.getTimestamp());
+    // Then write to timeline
+    transitionState(inflightInstant, commitInstant, data);
+    return commitInstant;
+  }
+
+  /**
+   * Transition Rollback State from requested to inflight.
+   *
+   * @param requestedInstant requested instant
+   * @param data Optional data to be stored
+   * @return commit instant
+   */
+  public HoodieInstant transitionRollbackRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
+    ValidationUtils.checkArgument(requestedInstant.isRequested());
+    HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, ROLLBACK_ACTION, requestedInstant.getTimestamp());
     transitionState(requestedInstant, inflight, data);
     return inflight;
   }
@@ -460,6 +521,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
+  public void transitionRequestedToInflight(String commitType, String inFlightInstant) {
+    HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, commitType, inFlightInstant);
+    transitionRequestedToInflight(requested, Option.empty(), false);
+  }
+
   public void transitionRequestedToInflight(HoodieInstant requested, Option<byte[]> content) {
     transitionRequestedToInflight(requested, content, false);
   }
@@ -492,6 +558,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
+    ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
+    // Plan is stored in meta path
+    createFileInMetaPath(instant.getFileName(), content, false);
+  }
+
+  public void saveToRollbackRequested(HoodieInstant instant, Option<byte[]> content) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
     // Plan is stored in meta path
     createFileInMetaPath(instant.getFileName(), content, false);

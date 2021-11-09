@@ -18,7 +18,10 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -26,7 +29,6 @@ import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
@@ -38,7 +40,6 @@ import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
-import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.hadoop.fs.Path;
@@ -60,10 +61,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
-    FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
-    helper.validate();
-
-    Configuration conf = (Configuration) helper.getOptions();
+    Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
@@ -117,25 +115,46 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // validate record key in pk absence.
     if (!schema.getPrimaryKey().isPresent()) {
-      Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
+      String[] recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      if (recordKeys.length == 1
+          && FlinkOptions.RECORD_KEY_FIELD.defaultValue().equals(recordKeys[0])
+          && !fields.contains(recordKeys[0])) {
+        throw new HoodieValidationException("Primary key definition is required, use either PRIMARY KEY syntax "
+            + "or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+      }
+
+      Arrays.stream(recordKeys)
           .filter(field -> !fields.contains(field))
           .findAny()
           .ifPresent(f -> {
-            throw new ValidationException("Field '" + f + "' does not exist in the table schema."
-                + "Please define primary key or modify 'hoodie.datasource.write.recordkey.field' option.");
+            throw new HoodieValidationException("Field '" + f + "' specified in option "
+                + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
     }
 
     // validate pre_combine key
     String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
     if (!fields.contains(preCombineField)) {
-      throw new ValidationException("Field " + preCombineField + " does not exist in the table schema."
-          + "Please check 'write.precombine.field' option.");
+      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
+        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
+            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
+      }
+      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
+        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+      } else {
+        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
+            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
+      }
+    } else if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PAYLOAD_CLASS_NAME)) {
+      // if precombine field is specified but payload clazz is default,
+      // use DefaultHoodieRecordPayload to make sure the precombine field is always taken for
+      // comparing.
+      conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, EventTimeAvroPayload.class.getName());
     }
   }
 
   /**
-   * Setup the config options based on the table definition, for e.g the table name, primary key.
+   * Sets up the config options based on the table definition, for e.g the table name, primary key.
    *
    * @param conf      The configuration to setup
    * @param tableName The table name
@@ -155,6 +174,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupCompactionOptions(conf);
     // hive options
     setupHiveOptions(conf);
+    // read options
+    setupReadOptions(conf);
+    // write options
+    setupWriteOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toPhysicalRowDataType().notNull().getLogicalType());
   }
@@ -247,17 +270,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
       conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
     }
-    if (conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED)
-        && !conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)
-        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
-      // if compaction schedule is on, tweak the target io to 500GB
-      conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
-    }
-    if (StreamerUtil.allowDuplicateInserts(conf)) {
-      // no need for compaction if insert duplicates is allowed
-      conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-      conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
-    }
   }
 
   /**
@@ -267,6 +279,26 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING)
         && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME)) {
       conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME, MultiPartKeysValueExtractor.class.getName());
+    }
+  }
+
+  /**
+   * Sets up the read options from the table definition.
+   */
+  private static void setupReadOptions(Configuration conf) {
+    if (!conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
+        && (conf.getOptional(FlinkOptions.READ_START_COMMIT).isPresent() || conf.getOptional(FlinkOptions.READ_END_COMMIT).isPresent())) {
+      conf.setString(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    }
+  }
+
+  /**
+   * Sets up the write options from the table definition.
+   */
+  private static void setupWriteOptions(Configuration conf) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)
+        && OptionsResolver.isCowTable(conf)) {
+      conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
     }
   }
 

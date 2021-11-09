@@ -29,9 +29,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.index.JavaHoodieIndex;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.JavaHoodieIndexFactory;
 
 import java.util.List;
 
@@ -56,14 +55,14 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
       case COPY_ON_WRITE:
         return new HoodieJavaCopyOnWriteTable<>(config, context, metaClient);
       case MERGE_ON_READ:
-        throw new HoodieNotSupportedException("MERGE_ON_READ is not supported yet");
+        return new HoodieJavaMergeOnReadTable<>(config, context, metaClient);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
   }
 
   @Override
-  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return JavaHoodieIndex.createIndex(config);
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return JavaHoodieIndexFactory.createIndex(config);
   }
 }

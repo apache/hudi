@@ -36,6 +36,28 @@
       <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
+        <configuration>
+          <excludeSubProjects>false</excludeSubProjects>
+          <numUnapprovedLicenses>0</numUnapprovedLicenses>
+          <excludes>
+            <exclude>NOTICE</exclude>
+            <exclude>DISCLAIMER</exclude>
+            <exclude>**/.*</exclude>
+            <exclude>**/*.json</exclude>
+            <exclude>**/*.log</exclude>
+            <exclude>**/*.sqltemplate</exclude>
+            <exclude>**/compose_env</exclude>
+            <exclude>**/*NOTICE*</exclude>
+            <exclude>**/*LICENSE*</exclude>
+            <exclude>**/dependency-reduced-pom.xml</exclude>
+            <exclude>**/test/resources/*.data</exclude>
+            <exclude>**/test/resources/*.commit</exclude>
+            <exclude>**/target/**</exclude>
+            <exclude>**/generated-sources/**</exclude>
+            <exclude>.github/**</exclude>
+            <exclude>**/*.sql</exclude>
+          </excludes>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -317,6 +339,10 @@
       <version>${hbase.version}</version>
       <scope>compile</scope>
       <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-common</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>

@@ -22,10 +22,12 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.exception.HoodieException;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Properties;
 
 /**
@@ -39,6 +41,9 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
+
+  // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
+  public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
 
   public static final ConfigProperty<String> DAYBASED_LOOKBACK_PARTITIONS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
@@ -133,9 +138,58 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.clustering.preserve.commit.metadata")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.9.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
+
+  public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "enable")
+      .defaultValue(false)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable use z-ordering/space-filling curves to optimize the layout of table to boost query performance. "
+          + "This parameter takes precedence over clustering strategy set using " + EXECUTION_STRATEGY_CLASS_NAME.key());
+
+  public static final ConfigProperty LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
+      .defaultValue("z-order")
+      .sinceVersion("0.10.0")
+      .withDocumentation("Type of layout optimization to be applied, current only supports `z-order` and `hilbert` curves.");
+
+  /**
+   * There exists two method to build z-curve.
+   * one is directly mapping sort cols to z-value to build z-curve;
+   * we can find this method in Amazon DynamoDB https://aws.amazon.com/cn/blogs/database/tag/z-order/
+   * the other one is Boundary-based Interleaved Index method which we proposed. simply call it sample method.
+   * Refer to rfc-28 for specific algorithm flow.
+   * Boundary-based Interleaved Index method has better generalization, but the build speed is slower than direct method.
+   */
+  public static final ConfigProperty LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
+      .defaultValue("direct")
+      .sinceVersion("0.10.0")
+      .withDocumentation("Controls how data is sampled to build the space filling curves. two methods: `direct`,`sample`."
+          + "The direct method is faster than the sampling, however sample method would produce a better data layout.");
+  /**
+   * Doing sample for table data is the first step in Boundary-based Interleaved Index method.
+   * larger sample number means better optimize result, but more memory consumption
+   */
+  public static final ConfigProperty LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "build.curve.sample.size")
+      .defaultValue("200000")
+      .sinceVersion("0.10.0")
+      .withDocumentation("when setting" + LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD.key() + " to `sample`, the amount of sampling to be done."
+          + "Large sample size leads to better results, at the expense of more memory usage.");
+
+  /**
+   * The best way to use Z-order/Space-filling curves is to cooperate with Data-Skipping
+   * with data-skipping query engine can greatly reduce the number of table files to be read.
+   * otherwise query engine can only do row-group skipping for files (parquet/orc)
+   */
+  public static final ConfigProperty LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "data.skipping.enable")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable data skipping by collecting statistics once layout optimization is complete.");
 
   /**
    * @deprecated Use {@link #PLAN_STRATEGY_CLASS_NAME} and its methods instead
@@ -350,9 +404,58 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withSpaceFillingCurveDataOptimizeEnable(Boolean enable) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withDataOptimizeStrategy(String strategy) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_STRATEGY, strategy);
+      return this;
+    }
+
+    public Builder withDataOptimizeBuildCurveStrategy(String method) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD, method);
+      return this;
+    }
+
+    public Builder withDataOptimizeBuildCurveSampleNumber(int sampleNumber) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE, String.valueOf(sampleNumber));
+      return this;
+    }
+
+    public Builder withDataOptimizeDataSkippingEnable(boolean dataSkipping) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE, String.valueOf(dataSkipping));
+      return this;
+    }
+
     public HoodieClusteringConfig build() {
       clusteringConfig.setDefaults(HoodieClusteringConfig.class.getName());
       return clusteringConfig;
+    }
+  }
+
+  /**
+   * strategy types for build z-ordering/space-filling curves.
+   */
+  public enum BuildCurveStrategyType {
+    DIRECT("direct"),
+    SAMPLE("sample");
+    private final String value;
+
+    BuildCurveStrategyType(String value) {
+      this.value = value;
+    }
+
+    public static BuildCurveStrategyType fromValue(String value) {
+      switch (value.toLowerCase(Locale.ROOT)) {
+        case "direct":
+          return DIRECT;
+        case "sample":
+          return SAMPLE;
+        default:
+          throw new HoodieException("Invalid value of Type.");
+      }
     }
   }
 }

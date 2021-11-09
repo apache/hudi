@@ -31,7 +31,6 @@ import org.apache.flink.formats.parquet.vector.reader.LongColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.ShortColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader;
 import org.apache.flink.table.data.DecimalData;
-import org.apache.flink.table.data.DecimalDataUtils;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.vector.ColumnVector;
 import org.apache.flink.table.data.vector.VectorizedColumnBatch;
@@ -46,7 +45,6 @@ import org.apache.flink.table.data.vector.heap.HeapShortVector;
 import org.apache.flink.table.data.vector.heap.HeapTimestampVector;
 import org.apache.flink.table.data.vector.writable.WritableColumnVector;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.BigIntType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -110,9 +108,7 @@ public class ParquetSplitReaderUtil {
       for (int i = 0; i < vectors.length; i++) {
         String name = fullFieldNames[selectedFields[i]];
         LogicalType type = fullFieldTypes[selectedFields[i]].getLogicalType();
-        vectors[i] = partitionSpec.containsKey(name)
-            ? createVectorFromConstant(type, partitionSpec.get(name), batchSize)
-            : readVectors[selNonPartNames.indexOf(name)];
+        vectors[i] = createVector(readVectors, selNonPartNames, name, type, partitionSpec, batchSize);
       }
       return new VectorizedColumnBatch(vectors);
     };
@@ -130,6 +126,24 @@ public class ParquetSplitReaderUtil {
         new org.apache.hadoop.fs.Path(path.toUri()),
         splitStart,
         splitLength);
+  }
+
+  private static ColumnVector createVector(
+      ColumnVector[] readVectors,
+      List<String> selNonPartNames,
+      String name,
+      LogicalType type,
+      Map<String, Object> partitionSpec,
+      int batchSize) {
+    if (partitionSpec.containsKey(name)) {
+      return createVectorFromConstant(type, partitionSpec.get(name), batchSize);
+    }
+    ColumnVector readVector = readVectors[selNonPartNames.indexOf(name)];
+    if (readVector == null) {
+      // when the read vector is null, use a constant null vector instead
+      readVector = createVectorFromConstant(type, null, batchSize);
+    }
+    return readVector;
   }
 
   private static ColumnVector createVectorFromConstant(
@@ -197,23 +211,10 @@ public class ParquetSplitReaderUtil {
         DecimalData decimal = value == null
             ? null
             : Preconditions.checkNotNull(DecimalData.fromBigDecimal((BigDecimal) value, precision, scale));
-        ColumnVector internalVector;
-        if (DecimalDataUtils.is32BitDecimal(precision)) {
-          internalVector = createVectorFromConstant(
-              new IntType(),
-              decimal == null ? null : (int) decimal.toUnscaledLong(),
-              batchSize);
-        } else if (DecimalDataUtils.is64BitDecimal(precision)) {
-          internalVector = createVectorFromConstant(
-              new BigIntType(),
-              decimal == null ? null : decimal.toUnscaledLong(),
-              batchSize);
-        } else {
-          internalVector = createVectorFromConstant(
-              new VarBinaryType(),
-              decimal == null ? null : decimal.toUnscaledBytes(),
-              batchSize);
-        }
+        ColumnVector internalVector = createVectorFromConstant(
+            new VarBinaryType(),
+            decimal == null ? null : decimal.toUnscaledBytes(),
+            batchSize);
         return new ParquetDecimalVector(internalVector);
       case FLOAT:
         HeapFloatVector fv = new HeapFloatVector(batchSize);
@@ -365,29 +366,10 @@ public class ParquetSplitReaderUtil {
             "TIME_MICROS original type is not ");
         return new HeapTimestampVector(batchSize);
       case DECIMAL:
-        DecimalType decimalType = (DecimalType) fieldType;
-        if (DecimalDataUtils.is32BitDecimal(decimalType.getPrecision())) {
-          checkArgument(
-              (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
-                  || typeName == PrimitiveType.PrimitiveTypeName.INT32)
-                  && primitiveType.getOriginalType() == OriginalType.DECIMAL,
-              "Unexpected type: %s", typeName);
-          return new HeapIntVector(batchSize);
-        } else if (DecimalDataUtils.is64BitDecimal(decimalType.getPrecision())) {
-          checkArgument(
-              (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
-                  || typeName == PrimitiveType.PrimitiveTypeName.INT64)
-                  && primitiveType.getOriginalType() == OriginalType.DECIMAL,
-              "Unexpected type: %s", typeName);
-          return new HeapLongVector(batchSize);
-        } else {
-          checkArgument(
-              (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
-                  || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
-                  && primitiveType.getOriginalType() == OriginalType.DECIMAL,
-              "Unexpected type: %s", typeName);
-          return new HeapBytesVector(batchSize);
-        }
+        checkArgument(typeName == PrimitiveType.PrimitiveTypeName.BINARY
+                && primitiveType.getOriginalType() == OriginalType.DECIMAL,
+            "Unexpected type: %s", typeName);
+        return new HeapBytesVector(batchSize);
       default:
         throw new UnsupportedOperationException(fieldType + " is not supported now.");
     }

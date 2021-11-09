@@ -41,23 +41,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Enable the internal Metadata Table which saves file listings
   public static final ConfigProperty<Boolean> ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
-
-  // Enable syncing the Metadata Table
-  public static final ConfigProperty<Boolean> SYNC_ENABLE = ConfigProperty
-      .key(METADATA_PREFIX + ".sync.enable")
-      .defaultValue(true)
-      .sinceVersion("0.9.0")
-      .withDocumentation("Enable syncing of metadata table from actions on the dataset");
-
-  // Validate contents of Metadata Table on each access against the actual filesystem
-  public static final ConfigProperty<Boolean> VALIDATE_ENABLE = ConfigProperty
-      .key(METADATA_PREFIX + ".validate")
-      .defaultValue(false)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Validate contents of metadata table on each access; e.g against the actual listings from lake storage");
 
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
@@ -85,7 +71,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Maximum delta commits before compaction occurs
   public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.commits")
-      .defaultValue(24)
+      .defaultValue(10)
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
@@ -129,6 +115,20 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
 
+  public static final ConfigProperty<Boolean> ENABLE_INLINE_READING = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.inline.reading")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable inline reading of Log files. By default log block contents are read as byte[] using regular input stream and records "
+          + "are deserialized from it. Enabling this will read each log block as an inline file and read records from the same. For instance, "
+          + "for HFileDataBlock, a inline file will be read using HFileReader.");
+
+  public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.full.scan.log.files")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -149,20 +149,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(ENABLE);
   }
 
-  public boolean enableSync() {
-    return enabled() && getBoolean(HoodieMetadataConfig.SYNC_ENABLE);
-  }
-
-  public boolean validateFileListingMetadata() {
-    return getBoolean(VALIDATE_ENABLE);
-  }
-
   public boolean enableMetrics() {
     return getBoolean(METRICS_ENABLE);
   }
 
   public String getDirectoryFilterRegex() {
     return getString(DIR_FILTER_REGEX);
+  }
+
+  public boolean enableFullScan() {
+    return getBoolean(ENABLE_FULL_SCAN_LOG_FILES);
   }
 
   public static class Builder {
@@ -186,18 +182,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder enableSync(boolean enable) {
-      metadataConfig.setValue(SYNC_ENABLE, String.valueOf(enable));
-      return this;
-    }
-
     public Builder enableMetrics(boolean enableMetrics) {
       metadataConfig.setValue(METRICS_ENABLE, String.valueOf(enableMetrics));
-      return this;
-    }
-
-    public Builder validate(boolean validate) {
-      metadataConfig.setValue(VALIDATE_ENABLE, String.valueOf(validate));
       return this;
     }
 
@@ -242,6 +228,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder enableFullScan(boolean enableFullScan) {
+      metadataConfig.setValue(ENABLE_FULL_SCAN_LOG_FILES, String.valueOf(enableFullScan));
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
@@ -258,16 +249,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
    */
   @Deprecated
   public static final boolean DEFAULT_METADATA_ENABLE = ENABLE.defaultValue();
-  /**
-   * @deprecated Use {@link #VALIDATE_ENABLE} and its methods.
-   */
-  @Deprecated
-  public static final String METADATA_VALIDATE_PROP = VALIDATE_ENABLE.key();
-  /**
-   * @deprecated Use {@link #VALIDATE_ENABLE} and its methods.
-   */
-  @Deprecated
-  public static final boolean DEFAULT_METADATA_VALIDATE = VALIDATE_ENABLE.defaultValue();
 
   /**
    * @deprecated Use {@link #METRICS_ENABLE} and its methods.

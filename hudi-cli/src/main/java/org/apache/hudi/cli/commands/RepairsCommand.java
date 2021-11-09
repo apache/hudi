@@ -28,6 +28,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -186,11 +187,11 @@ public class RepairsCommand implements CommandMarker {
         CleanerUtils.getCleanerPlan(client, instant);
       } catch (AvroRuntimeException e) {
         LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-        FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+        HoodieActiveTimeline.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
       } catch (IOException ioe) {
         if (ioe.getMessage().contains("Not an Avro data file")) {
           LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-          FSUtils.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
+          HoodieActiveTimeline.deleteInstantFile(client.getFs(), client.getMetaPath(), instant);
         } else {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }

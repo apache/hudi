@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -41,7 +42,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Map;
@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
         + "initializing a path as hoodie base path and rarely changes during "
         + "the lifetime of the table. Writers/Queries' configurations are validated against these "
         + " each time for compatibility.")
-public class HoodieTableConfig extends HoodieConfig implements Serializable {
+public class HoodieTableConfig extends HoodieConfig {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
 
@@ -136,10 +136,10 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
       .defaultValue("archived")
       .withDocumentation("path under the meta folder, to store archived timeline instants at.");
 
-  public static final ConfigProperty<String> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
+  public static final ConfigProperty<Boolean> BOOTSTRAP_INDEX_ENABLE = ConfigProperty
       .key("hoodie.bootstrap.index.enable")
-      .noDefaultValue()
-      .withDocumentation("Whether or not, this is a bootstrapped table, with bootstrap base data and an mapping index defined.");
+      .defaultValue(true)
+      .withDocumentation("Whether or not, this is a bootstrapped table, with bootstrap base data and an mapping index defined, default true.");
 
   public static final ConfigProperty<String> BOOTSTRAP_INDEX_CLASS_NAME = ConfigProperty
       .key("hoodie.bootstrap.index.class")
@@ -161,6 +161,9 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
+
+  public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
+  public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
@@ -298,8 +301,9 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
   }
 
   public static String getDefaultBootstrapIndexClass(Properties props) {
+    HoodieConfig hoodieConfig = new HoodieConfig(props);
     String defaultClass = BOOTSTRAP_INDEX_CLASS_NAME.defaultValue();
-    if ("false".equalsIgnoreCase(props.getProperty(BOOTSTRAP_INDEX_ENABLE.key()))) {
+    if (!hoodieConfig.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)) {
       defaultClass = NO_OP_BOOTSTRAP_INDEX_CLASS;
     }
     return defaultClass;
@@ -361,6 +365,18 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
    */
   public String getRecordKeyFieldProp() {
     return getString(RECORDKEY_FIELDS);
+  }
+
+  public String getKeyGeneratorClassName() {
+    return getString(KEY_GENERATOR_CLASS_NAME);
+  }
+
+  public String getHiveStylePartitioningEnable() {
+    return getString(HIVE_STYLE_PARTITIONING_ENABLE);
+  }
+
+  public String getUrlEncodePartitoning() {
+    return getString(URL_ENCODE_PARTITIONING);
   }
 
   public Map<String, String> propsMap() {

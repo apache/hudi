@@ -21,14 +21,14 @@ package org.apache.hudi.connect.writers;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.keygen.KeyGenerator;
@@ -40,8 +40,8 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Specific implementation of a Hudi Writer that buffers all incoming records,
@@ -53,9 +53,8 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
 
   private final HoodieEngineContext context;
   private final HoodieJavaWriteClient writeClient;
-  private final String instantTime;
   private final HoodieWriteConfig config;
-  private ExternalSpillableMap<String, HoodieRecord<HoodieAvroPayload>> bufferedRecords;
+  private ExternalSpillableMap<String, HoodieRecord<?>> bufferedRecords;
 
   public BufferedConnectWriter(HoodieEngineContext context,
                                HoodieJavaWriteClient writeClient,
@@ -64,10 +63,9 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
                                HoodieWriteConfig config,
                                KeyGenerator keyGenerator,
                                SchemaProvider schemaProvider) {
-    super(connectConfigs, keyGenerator, schemaProvider);
+    super(connectConfigs, keyGenerator, schemaProvider, instantTime);
     this.context = context;
     this.writeClient = writeClient;
-    this.instantTime = instantTime;
     this.config = config;
     init();
   }
@@ -89,12 +87,12 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
   }
 
   @Override
-  public void writeHudiRecord(HoodieRecord<HoodieAvroPayload> record) {
+  public void writeHudiRecord(HoodieRecord<?> record) {
     bufferedRecords.put(record.getRecordKey(), record);
   }
 
   @Override
-  public List<WriteStatus> flushHudiRecords() {
+  public List<WriteStatus> flushRecords() {
     try {
       LOG.info("Number of entries in MemoryBasedMap => "
           + bufferedRecords.getInMemoryMapNumEntries()
@@ -103,18 +101,28 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
           + bufferedRecords.getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
           + bufferedRecords.getSizeOfFileOnDiskInBytes());
       List<WriteStatus> writeStatuses = new ArrayList<>();
+
+      boolean isMorTable = Option.ofNullable(connectConfigs.getString(HoodieTableConfig.TYPE))
+          .map(t -> t.equals(HoodieTableType.MERGE_ON_READ.name()))
+          .orElse(false);
+
       // Write out all records if non-empty
       if (!bufferedRecords.isEmpty()) {
-        writeStatuses = writeClient.bulkInsertPreppedRecords(
-          bufferedRecords.values().stream().collect(Collectors.toList()),
-        instantTime, Option.empty());
+        if (isMorTable) {
+          writeStatuses = writeClient.upsertPreppedRecords(
+              new LinkedList<>(bufferedRecords.values()),
+              instantTime);
+        } else {
+          writeStatuses = writeClient.bulkInsertPreppedRecords(
+              new LinkedList<>(bufferedRecords.values()),
+              instantTime, Option.empty());
+        }
       }
       bufferedRecords.close();
-      LOG.info("Flushed hudi records and got writeStatuses: "
-          + writeStatuses);
+      LOG.info("Flushed hudi records and got writeStatuses: " + writeStatuses);
       return writeStatuses;
     } catch (Exception e) {
-      throw new HoodieException("Write records failed", e);
+      throw new HoodieIOException("Write records failed", new IOException(e));
     }
   }
 }

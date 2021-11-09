@@ -47,6 +47,7 @@ public class CleanFunction<T> extends AbstractRichFunction
   private final Configuration conf;
 
   protected HoodieFlinkWriteClient writeClient;
+
   private NonThrownExecutor executor;
 
   private volatile boolean isCleaning;
@@ -60,7 +61,7 @@ public class CleanFunction<T> extends AbstractRichFunction
     super.open(parameters);
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
-      this.executor = new NonThrownExecutor(LOG);
+      this.executor = NonThrownExecutor.builder(LOG).build();
     }
   }
 
@@ -81,8 +82,13 @@ public class CleanFunction<T> extends AbstractRichFunction
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
-      this.writeClient.startAsyncCleaning();
-      this.isCleaning = true;
+      try {
+        this.writeClient.startAsyncCleaning();
+        this.isCleaning = true;
+      } catch (Throwable throwable) {
+        // catch the exception to not affect the normal checkpointing
+        LOG.warn("Error while start async cleaning", throwable);
+      }
     }
   }
 

@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -72,7 +71,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.VALIDATE_ENABLE;
 
 public class HoodieInputFormatUtils {
 
@@ -419,7 +417,6 @@ public class HoodieInputFormatUtils {
   public static HoodieMetadataConfig buildMetadataConfig(Configuration conf) {
     return HoodieMetadataConfig.newBuilder()
         .enable(conf.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
-        .validate(conf.getBoolean(VALIDATE_ENABLE.key(), VALIDATE_ENABLE.defaultValue()))
         .build();
   }
 
@@ -489,43 +486,50 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Iterate through a list of commits in ascending order, and extract the file status of
-   * all affected files from the commits metadata grouping by partition path. If the files has
+   * Iterate through a list of commit metadata in natural order, and extract the file status of
+   * all affected files from the commits metadata grouping by file full path. If the files has
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit.
-   * @param basePath
-   * @param commitsToCheck
-   * @param timeline
-   * @return HashMap<partitionPath, HashMap<fileName, FileStatus>>
-   * @throws IOException
+   *
+   * @param basePath     The table base path
+   * @param metadataList The metadata list to read the data from
+   *
+   * @return the affected file status array
    */
-  public static HashMap<String, HashMap<String, FileStatus>> listAffectedFilesForCommits(
-      Path basePath, List<HoodieInstant> commitsToCheck, HoodieTimeline timeline) throws IOException {
+  public static FileStatus[] listAffectedFilesForCommits(Path basePath, List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
-    HashMap<String, HashMap<String, FileStatus>> partitionToFileStatusesMap = new HashMap<>();
-    List<HoodieInstant> sortedCommitsToCheck = new ArrayList<>(commitsToCheck);
-    sortedCommitsToCheck.sort(HoodieInstant::compareTo);
+    HashMap<String, FileStatus> fullPathToFileStatus = new HashMap<>();
     // Iterate through the given commits.
-    for (HoodieInstant commit: sortedCommitsToCheck) {
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(),
-          HoodieCommitMetadata.class);
-      // Iterate through all the affected partitions of a commit.
-      for (Map.Entry<String, List<HoodieWriteStat>> entry: commitMetadata.getPartitionToWriteStats().entrySet()) {
-        if (!partitionToFileStatusesMap.containsKey(entry.getKey())) {
-          partitionToFileStatusesMap.put(entry.getKey(), new HashMap<>());
-        }
-        // Iterate through all the written files of this partition.
-        for (HoodieWriteStat stat : entry.getValue()) {
-          String relativeFilePath = stat.getPath();
-          Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
-          if (fullPath != null) {
-            FileStatus fs = new FileStatus(stat.getFileSizeInBytes(), false, 0, 0,
-                0, fullPath);
-            partitionToFileStatusesMap.get(entry.getKey()).put(fullPath.getName(), fs);
-          }
-        }
-      }
+    for (HoodieCommitMetadata metadata: metadataList) {
+      fullPathToFileStatus.putAll(metadata.getFullPathToFileStatus(basePath.toString()));
     }
-    return partitionToFileStatusesMap;
+    return fullPathToFileStatus.values().toArray(new FileStatus[0]);
+  }
+
+  /**
+   * Returns all the incremental write partition paths as a set with the given commits metadata.
+   *
+   * @param metadataList The commits metadata
+   * @return the partition path set
+   */
+  public static Set<String> getWritePartitionPaths(List<HoodieCommitMetadata> metadataList) {
+    return metadataList.stream()
+        .map(HoodieCommitMetadata::getWritePartitionPaths)
+        .flatMap(Collection::stream)
+        .collect(Collectors.toSet());
+  }
+
+  /**
+   * Returns the commit metadata of the given instant.
+   *
+   * @param instant   The hoodie instant
+   * @param timeline  The timeline
+   * @return the commit metadata
+   */
+  public static HoodieCommitMetadata getCommitMetadata(
+      HoodieInstant instant,
+      HoodieTimeline timeline) throws IOException {
+    byte[] data = timeline.getInstantDetails(instant).get();
+    return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
   }
 }

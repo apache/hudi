@@ -55,17 +55,15 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -101,6 +99,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFactory.getMetadataHandler;
 
 public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieBootstrapWriteMetadata> {
@@ -185,8 +185,8 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     writeStatusRDD = writeStatusRDD.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
     Instant indexStartTime = Instant.now();
     // Update the index back
-    JavaRDD<WriteStatus> statuses = table.getIndex().updateLocation(writeStatusRDD, context,
-        table);
+    JavaRDD<WriteStatus> statuses = HoodieJavaRDD.getJavaRDD(
+        table.getIndex().updateLocation(HoodieJavaRDD.of(writeStatusRDD), context, table));
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     commitOnAutoCommit(result);
@@ -226,17 +226,6 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     LOG.info("Committing metadata bootstrap !!");
   }
 
-  @Override
-  protected void syncTableMetadata() {
-    // Open up the metadata table again, for syncing
-    try (HoodieTableMetadataWriter writer =
-             SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
-      LOG.info("Successfully synced to metadata table");
-    } catch (Exception e) {
-      throw new HoodieMetadataException("Error syncing to metadata table.", e);
-    }
-  }
-
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<JavaRDD<WriteStatus>> result, List<HoodieWriteStat> stats) {
     String actionType = table.getMetaClient().getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
@@ -252,13 +241,14 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
 
     // Finalize write
     finalizeWrite(instantTime, stats, result);
-    syncTableMetadata();
     // add in extra metadata
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(metadata::addMetadata);
     }
     metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
     metadata.setOperationType(operationType);
+
+    writeTableMetadata(metadata, actionType);
 
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
@@ -410,8 +400,8 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         .collect(Collectors.toList());
 
     return jsc.parallelize(bootstrapPaths, config.getBootstrapParallelism())
-        .map(partitionFsPair -> handleMetadataBootstrap(partitionFsPair.getLeft(), partitionFsPair.getRight().getLeft(),
-            partitionFsPair.getRight().getRight(), keyGenerator));
+        .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
+                partitionFsPair.getRight().getLeft(), keyGenerator));
   }
 
   @Override

@@ -479,7 +479,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public void sync() {
-    // noop
+    refresh();
   }
 
   @Override

@@ -21,7 +21,6 @@ package org.apache.hudi.connect;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.transaction.ConnectTransactionParticipant;
-import org.apache.hudi.connect.transaction.ControlEvent;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
@@ -68,44 +67,47 @@ public class TestConnectTransactionParticipant {
   @EnumSource(value = CoordinatorFailureTestScenarios.class)
   public void testAllCoordinatorFailureScenarios(CoordinatorFailureTestScenarios testScenario) {
     int expectedRecordsWritten = 0;
-    switch (testScenario) {
-      case REGULAR_SCENARIO:
-        expectedRecordsWritten += testKafkaConnect.putRecordsToParticipant();
-        assertTrue(testKafkaConnect.isPaused());
-        break;
-      case COORDINATOR_FAILED_AFTER_START_COMMIT:
-        testKafkaConnect.putRecordsToParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.START_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        // Coordinator Failed
-        initializeCoordinator();
-        break;
-      case COORDINATOR_FAILED_AFTER_END_COMMIT:
-        testKafkaConnect.putRecordsToParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.START_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.END_COMMIT);
-        expectedRecordsWritten += testKafkaConnect.putRecordsToParticipant();
-        // Coordinator Failed
-        initializeCoordinator();
-        break;
-      default:
-        throw new HoodieException("Unknown test scenario " + testScenario);
+    try {
+      switch (testScenario) {
+        case REGULAR_SCENARIO:
+          expectedRecordsWritten += testKafkaConnect.putRecordsToParticipant();
+          assertTrue(testKafkaConnect.isPaused());
+          break;
+        case COORDINATOR_FAILED_AFTER_START_COMMIT:
+          testKafkaConnect.putRecordsToParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.START_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          // Coordinator Failed
+          initializeCoordinator();
+          break;
+        case COORDINATOR_FAILED_AFTER_END_COMMIT:
+          testKafkaConnect.putRecordsToParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.START_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.END_COMMIT);
+          expectedRecordsWritten += testKafkaConnect.putRecordsToParticipant();
+          // Coordinator Failed
+          initializeCoordinator();
+          break;
+        default:
+          throw new HoodieException("Unknown test scenario " + testScenario);
+      }
+
+      // Regular Case or Coordinator Recovery Case
+      coordinator.sendEventFromCoordinator(ControlMessage.EventType.START_COMMIT);
+      expectedRecordsWritten += testKafkaConnect.putRecordsToParticipant();
+      assertTrue(testKafkaConnect.isResumed());
+      coordinator.sendEventFromCoordinator(ControlMessage.EventType.END_COMMIT);
+      testKafkaConnect.putRecordsToParticipant();
+      assertTrue(testKafkaConnect.isPaused());
+      coordinator.sendEventFromCoordinator(ControlMessage.EventType.ACK_COMMIT);
+      testKafkaConnect.putRecordsToParticipant();
+      assertEquals(testHudiWriterProvider.getLatestNumberWrites(), expectedRecordsWritten);
+      // Ensure Coordinator and participant are in sync in the kafka offsets
+      assertEquals(participant.getLastKafkaCommittedOffset(), coordinator.getCommittedKafkaOffset());
+    } catch (Exception exception) {
+      throw new HoodieException("Unexpected test failure ", exception);
     }
-
-    // Regular Case or Coordinator Recovery Case
-    coordinator.sendEventFromCoordinator(ControlEvent.MsgType.START_COMMIT);
-    expectedRecordsWritten += testKafkaConnect.putRecordsToParticipant();
-    assertTrue(testKafkaConnect.isResumed());
-    coordinator.sendEventFromCoordinator(ControlEvent.MsgType.END_COMMIT);
-    testKafkaConnect.putRecordsToParticipant();
-    assertTrue(testKafkaConnect.isPaused());
-    coordinator.sendEventFromCoordinator(ControlEvent.MsgType.ACK_COMMIT);
-    testKafkaConnect.putRecordsToParticipant();
-    assertEquals(testHudiWriterProvider.getLatestNumberWrites(), expectedRecordsWritten);
-    // Ensure Coordinator and participant are in sync in the kafka offsets
-    assertEquals(participant.getLastKafkaCommittedOffset(), coordinator.getCommittedKafkaOffset());
-
     participant.stop();
   }
 
@@ -113,59 +115,63 @@ public class TestConnectTransactionParticipant {
   @EnumSource(value = ParticipantFailureTestScenarios.class)
   public void testAllParticipantFailureScenarios(ParticipantFailureTestScenarios testScenario) {
     int expectedRecordsWritten = 0;
-    switch (testScenario) {
-      case FAILURE_BEFORE_START_COMMIT:
-        testKafkaConnect.putRecordsToParticipant();
-        // Participant fails
-        initializeParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.START_COMMIT);
-        expectedRecordsWritten += testKafkaConnect.putRecordsToParticipant();
-        assertTrue(testKafkaConnect.isResumed());
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.END_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        assertTrue(testKafkaConnect.isPaused());
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.ACK_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        assertEquals(testHudiWriterProvider.getLatestNumberWrites(), expectedRecordsWritten);
-        // Ensure Coordinator and participant are in sync in the kafka offsets
-        assertEquals(participant.getLastKafkaCommittedOffset(), coordinator.getCommittedKafkaOffset());
-        break;
-      case FAILURE_AFTER_START_COMMIT:
-        testKafkaConnect.putRecordsToParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.START_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        // Participant fails
-        initializeParticipant();
-        testKafkaConnect.putRecordsToParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.END_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        assertTrue(testKafkaConnect.isPaused());
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.ACK_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        assertEquals(testHudiWriterProvider.getLatestNumberWrites(), expectedRecordsWritten);
-        // Ensure Coordinator and participant are in sync in the kafka offsets
-        assertEquals(participant.getLastKafkaCommittedOffset(), coordinator.getCommittedKafkaOffset());
-        break;
-      case FAILURE_AFTER_END_COMMIT:
-        testKafkaConnect.putRecordsToParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.START_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.END_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        // Participant fails
-        initializeParticipant();
-        testKafkaConnect.putRecordsToParticipant();
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.END_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        assertTrue(testKafkaConnect.isPaused());
-        coordinator.sendEventFromCoordinator(ControlEvent.MsgType.ACK_COMMIT);
-        testKafkaConnect.putRecordsToParticipant();
-        assertEquals(testHudiWriterProvider.getLatestNumberWrites(), expectedRecordsWritten);
-        // Ensure Coordinator and participant are in sync in the kafka offsets
-        assertEquals(participant.getLastKafkaCommittedOffset(), coordinator.getCommittedKafkaOffset());
-        break;
-      default:
-        throw new HoodieException("Unknown test scenario " + testScenario);
+    try {
+      switch (testScenario) {
+        case FAILURE_BEFORE_START_COMMIT:
+          testKafkaConnect.putRecordsToParticipant();
+          // Participant fails
+          initializeParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.START_COMMIT);
+          expectedRecordsWritten += testKafkaConnect.putRecordsToParticipant();
+          assertTrue(testKafkaConnect.isResumed());
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.END_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          assertTrue(testKafkaConnect.isPaused());
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.ACK_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          assertEquals(testHudiWriterProvider.getLatestNumberWrites(), expectedRecordsWritten);
+          // Ensure Coordinator and participant are in sync in the kafka offsets
+          assertEquals(participant.getLastKafkaCommittedOffset(), coordinator.getCommittedKafkaOffset());
+          break;
+        case FAILURE_AFTER_START_COMMIT:
+          testKafkaConnect.putRecordsToParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.START_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          // Participant fails
+          initializeParticipant();
+          testKafkaConnect.putRecordsToParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.END_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          assertTrue(testKafkaConnect.isPaused());
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.ACK_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          assertEquals(testHudiWriterProvider.getLatestNumberWrites(), expectedRecordsWritten);
+          // Ensure Coordinator and participant are in sync in the kafka offsets
+          assertEquals(participant.getLastKafkaCommittedOffset(), coordinator.getCommittedKafkaOffset());
+          break;
+        case FAILURE_AFTER_END_COMMIT:
+          testKafkaConnect.putRecordsToParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.START_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.END_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          // Participant fails
+          initializeParticipant();
+          testKafkaConnect.putRecordsToParticipant();
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.END_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          assertTrue(testKafkaConnect.isPaused());
+          coordinator.sendEventFromCoordinator(ControlMessage.EventType.ACK_COMMIT);
+          testKafkaConnect.putRecordsToParticipant();
+          assertEquals(testHudiWriterProvider.getLatestNumberWrites(), expectedRecordsWritten);
+          // Ensure Coordinator and participant are in sync in the kafka offsets
+          assertEquals(participant.getLastKafkaCommittedOffset(), coordinator.getCommittedKafkaOffset());
+          break;
+        default:
+          throw new HoodieException("Unknown test scenario " + testScenario);
+      }
+    } catch (Exception exception) {
+      throw new HoodieException("Unexpected test failure ", exception);
     }
   }
 
@@ -196,7 +202,7 @@ public class TestConnectTransactionParticipant {
     private final KafkaControlAgent kafkaControlAgent;
     private final TopicPartition partition;
 
-    private Option<ControlEvent> lastReceivedWriteStatusEvent;
+    private Option<ControlMessage> lastReceivedWriteStatusEvent;
     private long committedKafkaOffset;
 
     public MockCoordinator(KafkaControlAgent kafkaControlAgent) {
@@ -206,26 +212,30 @@ public class TestConnectTransactionParticipant {
       committedKafkaOffset = 0L;
     }
 
-    public void sendEventFromCoordinator(
-        ControlEvent.MsgType type) {
+    public void sendEventFromCoordinator(ControlMessage.EventType type) {
       try {
-        if (type.equals(ControlEvent.MsgType.START_COMMIT)) {
+        if (type.equals(ControlMessage.EventType.START_COMMIT)) {
           ++currentCommitTime;
         }
-        kafkaControlAgent.publishMessage(new ControlEvent.Builder(
-            type,
-            ControlEvent.SenderType.COORDINATOR,
-            String.valueOf(currentCommitTime),
-            partition)
-            .setCoordinatorInfo(new ControlEvent.CoordinatorInfo(
-                Collections.singletonMap(PARTITION_NUMBER, committedKafkaOffset)))
-            .build());
+        kafkaControlAgent.publishMessage(
+            ControlMessage.newBuilder()
+                .setType(type)
+                .setTopicName(partition.topic())
+                .setSenderType(ControlMessage.EntityType.COORDINATOR)
+                .setSenderPartition(partition.partition())
+                .setReceiverType(ControlMessage.EntityType.PARTICIPANT)
+                .setCommitTime(String.valueOf(currentCommitTime))
+                .setCoordinatorInfo(
+                    ControlMessage.CoordinatorInfo.newBuilder()
+                        .putAllGlobalKafkaCommitOffsets(Collections.singletonMap(PARTITION_NUMBER, committedKafkaOffset))
+                        .build()
+                ).build());
       } catch (Exception exception) {
         throw new HoodieException("Fatal error sending control event to Participant");
       }
     }
 
-    public Option<ControlEvent> getLastReceivedWriteStatusEvent() {
+    public Option<ControlMessage> getLastReceivedWriteStatusEvent() {
       return lastReceivedWriteStatusEvent;
     }
 
@@ -249,11 +259,11 @@ public class TestConnectTransactionParticipant {
     }
 
     @Override
-    public void processControlEvent(ControlEvent message) {
-      if (message.getMsgType().equals(ControlEvent.MsgType.WRITE_STATUS)) {
+    public void processControlEvent(ControlMessage message) {
+      if (message.getType().equals(ControlMessage.EventType.WRITE_STATUS)) {
         lastReceivedWriteStatusEvent = Option.of(message);
-        assertTrue(message.getParticipantInfo().getKafkaCommitOffset() >= committedKafkaOffset);
-        committedKafkaOffset = message.getParticipantInfo().getKafkaCommitOffset();
+        assertTrue(message.getParticipantInfo().getKafkaOffset() >= committedKafkaOffset);
+        committedKafkaOffset = message.getParticipantInfo().getKafkaOffset();
       }
     }
   }

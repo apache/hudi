@@ -22,7 +22,8 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
-import org.apache.hudi.table.action.compact.FlinkCompactHelpers;
+import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
+import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -77,7 +78,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
     if (this.asyncCompaction) {
-      this.executor = new NonThrownExecutor(LOG);
+      this.executor = NonThrownExecutor.builder(LOG).build();
     }
   }
 
@@ -89,6 +90,7 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
       // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
       executor.execute(
           () -> doCompaction(instantTime, compactionOperation, collector),
+          (errMsg, t) -> collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID)),
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
@@ -98,8 +100,18 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
   }
 
   private void doCompaction(String instantTime, CompactionOperation compactionOperation, Collector<CompactionCommitEvent> collector) throws IOException {
-    List<WriteStatus> writeStatuses = FlinkCompactHelpers.compact(writeClient, instantTime, compactionOperation);
-    collector.collect(new CompactionCommitEvent(instantTime, writeStatuses, taskID));
+    HoodieFlinkMergeOnReadTableCompactor compactor = new HoodieFlinkMergeOnReadTableCompactor();
+    List<WriteStatus> writeStatuses = compactor.compact(
+        new HoodieFlinkCopyOnWriteTable<>(
+            writeClient.getConfig(),
+            writeClient.getEngineContext(),
+            writeClient.getHoodieTable().getMetaClient()),
+        writeClient.getHoodieTable().getMetaClient(),
+        writeClient.getConfig(),
+        compactionOperation,
+        instantTime,
+        writeClient.getHoodieTable().getTaskContextSupplier());
+    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
 
   @VisibleForTesting

@@ -19,6 +19,8 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -27,37 +29,50 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 
-import java.io.File;
-import java.util.Collections;
-
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Common test utils.
  */
 public class TestUtils {
-
-  public static String getLatestCommit(String basePath) {
+  public static String getLastPendingInstant(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
-    return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
+    return StreamerUtil.getLastPendingInstant(metaClient);
   }
 
-  public static String getFirstCommit(String basePath) {
+  public static String getLastCompleteInstant(String basePath) {
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
-    return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().firstInstant().get().getTimestamp();
+    return StreamerUtil.getLastCompletedInstant(metaClient);
+  }
+
+  public static String getLastDeltaCompleteInstant(String basePath) {
+    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
+    return metaClient.getCommitsTimeline().filterCompletedInstants()
+        .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
+        .lastInstant()
+        .map(HoodieInstant::getTimestamp)
+        .orElse(null);
+  }
+
+  public static String getFirstCompleteInstant(String basePath) {
+    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
+    return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().firstInstant()
+        .map(HoodieInstant::getTimestamp).orElse(null);
   }
 
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
     assertTrue(split.getLogPaths().isPresent());
     final String logPath = split.getLogPaths().get().get(0);
-    String[] paths = logPath.split(File.separator);
+    String[] paths = logPath.split(Path.SEPARATOR);
     return paths[paths.length - 2];
   }
 
   public static StreamReadMonitoringFunction getMonitorFunc(Configuration conf) {
     final String basePath = conf.getString(FlinkOptions.PATH);
-    return new StreamReadMonitoringFunction(conf, new Path(basePath), 1024 * 1024L, Collections.emptySet());
+    return new StreamReadMonitoringFunction(conf, new Path(basePath), 1024 * 1024L, null);
   }
 }

@@ -91,6 +91,7 @@
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
+                  <include>io.dropwizard.metrics:metrics-jmx</include>
                   <include>io.prometheus:simpleclient</include>
                   <include>io.prometheus:simpleclient_httpserver</include>
                   <include>io.prometheus:simpleclient_dropwizard</include>
@@ -320,6 +321,10 @@
       <version>${hbase.version}</version>
       <scope>compile</scope>
       <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-common</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>

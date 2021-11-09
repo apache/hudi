@@ -64,7 +64,7 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
     String tblName = options.get(HoodieWriteConfig.TBL_NAME.key()).get();
     boolean populateMetaFields = options.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
         Boolean.parseBoolean(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
-    // 1st arg to createHooodieConfig is not really reuqired to be set. but passing it anyways.
+    // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()).get(), path, tblName, options.asMap());
     boolean arePartitionRecordsSorted = HoodieInternalConfig.getBulkInsertIsPartitionRecordsSorted(
         options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).isPresent()

@@ -40,11 +40,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.SparkHoodieIndex;
+import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -52,10 +52,10 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.SparkCompactHelpers;
+import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.table.upgrade.AbstractUpgradeDowngrade;
-import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
+import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
+import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
@@ -79,7 +79,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   private static final Logger LOG = LogManager.getLogger(SparkRDDWriteClient.class);
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
+    this(context, clientConfig, Option.empty());
   }
 
   @Deprecated
@@ -96,6 +96,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
+    if (config.isMetadataTableEnabled()) {
+      // If the metadata table does not exist, it should be bootstrapped here
+      // TODO: Check if we can remove this requirement - auto bootstrap on commit
+      SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context);
+    }
   }
 
   /**
@@ -110,8 +115,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> createIndex(HoodieWriteConfig writeConfig) {
-    return SparkHoodieIndex.createIndex(config);
+  protected HoodieIndex createIndex(HoodieWriteConfig writeConfig) {
+    return SparkHoodieIndexFactory.createIndex(config);
   }
 
   /**
@@ -126,8 +131,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> createTable(HoodieWriteConfig config,
-                                                                                                           Configuration hadoopConf) {
-    return HoodieSparkTable.create(config, context);
+                                                                                                           Configuration hadoopConf,
+                                                                                                           boolean refreshTimeline) {
+    return HoodieSparkTable.create(config, context, refreshTimeline);
   }
 
   @Override
@@ -135,7 +141,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
     Timer.Context indexTimer = metrics.getIndexCtx();
-    JavaRDD<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(hoodieRecords, context, table);
+    JavaRDD<HoodieRecord<T>> recordsWithLocation = HoodieJavaRDD.getJavaRDD(
+        getIndex().tagLocation(HoodieJavaRDD.of(hoodieRecords), context, table));
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
     return recordsWithLocation.filter(v1 -> !v1.isCurrentLocationKnown());
   }
@@ -286,8 +293,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public void commitCompaction(String compactionInstantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata) throws IOException {
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
-    HoodieCommitMetadata metadata = SparkCompactHelpers.newInstance().createCompactionMetadata(
-        table, compactionInstantTime, writeStatuses, config.getSchema());
+    HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
+        table, compactionInstantTime, HoodieJavaRDD.of(writeStatuses), config.getSchema());
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
     completeCompaction(metadata, writeStatuses, table, compactionInstantTime);
   }
@@ -298,14 +305,17 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
                                     String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
+    writeTableMetadata(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime));
+    // commit to data table after committing to metadata table.
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
-    SparkCompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
-
+    CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+    WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       try {
-        metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(compactionCommitTime).getTime(),
+        metrics.updateCommitMetrics(HoodieActiveTimeline.parseInstantTime(compactionCommitTime).getTime(),
             durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
       } catch (ParseException e) {
         throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
@@ -317,16 +327,17 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected JavaRDD<WriteStatus> compact(String compactionInstantTime, boolean shouldComplete) {
-    HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
+    HoodieSparkTable<T> table = HoodieSparkTable.create(config, context, true);
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-      rollbackInflightCompaction(inflightInstant, table);
+      table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();
     }
     compactionTimer = metrics.getCompactionCtx();
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = table.compact(context, compactionInstantTime);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata =
+        table.compact(context, compactionInstantTime);
     JavaRDD<WriteStatus> statuses = compactionMetadata.getWriteStatuses();
     if (shouldComplete && compactionMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.COMPACT, compactionMetadata.getCommitMetadata().get(), statuses, table, compactionInstantTime);
@@ -336,7 +347,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> cluster(String clusteringInstant, boolean shouldComplete) {
-    HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
+    HoodieSparkTable<T> table = HoodieSparkTable.create(config, context, config.isMetadataTableEnabled());
     preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
@@ -366,21 +377,26 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       throw new HoodieClusteringException("Clustering failed to write to files:"
           + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(s -> s.getFileId()).collect(Collectors.joining(",")));
     }
+    writeTableMetadata(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime));
     finalizeWrite(table, clusteringCommitTime, writeStats);
     try {
+      // try to save statistics info to hudi
+      if (config.isDataSkippingEnabled() && config.isLayoutOptimizationEnabled() && !config.getClusteringSortColumns().isEmpty()) {
+        table.updateStatistics(context, writeStats, clusteringCommitTime, true);
+      }
       LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     } catch (IOException e) {
-      throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime,  e);
+      throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       try {
-        metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(clusteringCommitTime).getTime(),
+        metrics.updateCommitMetrics(HoodieActiveTimeline.parseInstantTime(clusteringCommitTime).getTime(),
             durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
       } catch (ParseException e) {
         throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
@@ -390,24 +406,40 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     LOG.info("Clustering successfully on commit " + clusteringCommitTime);
   }
 
+  private void writeTableMetadata(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieCommitMetadata commitMetadata,
+                                  HoodieInstant hoodieInstant) {
+    try {
+      this.txnManager.beginTransaction(Option.of(hoodieInstant), Option.empty());
+      boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
+      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
+      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
+      table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
+    } finally {
+      this.txnManager.endTransaction();
+    }
+  }
+
   @Override
   protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    AbstractUpgradeDowngrade upgradeDowngrade = new SparkUpgradeDowngrade(metaClient, config, context);
+    UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
+        metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
     if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
       if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
         this.txnManager.beginTransaction();
         try {
           // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
-          this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER));
-          new SparkUpgradeDowngrade(metaClient, config, context)
-              .run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
+          this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime)), true);
+          new UpgradeDowngrade(
+              metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+              .run(HoodieTableVersion.current(), instantTime);
         } finally {
           this.txnManager.endTransaction();
         }
       } else {
-        upgradeDowngrade.run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
+        upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
       }
+      metaClient.reloadActiveTimeline();
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
@@ -436,37 +468,25 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       setWriteSchemaForDeletes(metaClient);
     }
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieSparkTable<T> table = HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient);
+    HoodieSparkTable<T> table = HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient, config.isMetadataTableEnabled());
     if (table.getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {
       writeTimer = metrics.getCommitCtx();
     } else {
       writeTimer = metrics.getDeltaCommitCtx();
     }
+    table.getHoodieView().sync();
     return table;
   }
 
   @Override
-  public void syncTableMetadata() {
-    if (!config.getMetadataConfig().enableSync()) {
-      LOG.info("Metadata table sync is disabled in the config.");
-      return;
-    }
-
-    // Open up the metadata table again, for syncing
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
-      LOG.info("Successfully synced to metadata table");
-    } catch (Exception e) {
-      throw new HoodieMetadataException("Error syncing to metadata table.", e);
-    }
-  }
-
-  @Override
-  protected void preCommit(String instantTime, HoodieCommitMetadata metadata) {
+  protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
     // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
     HoodieTable table = createTable(config, hadoopConf);
     TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
         Option.of(metadata), config, txnManager.getLastCompletedTransactionOwner());
+    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, inflightInstant.getTimestamp(),
+        table.isTableServiceAction(inflightInstant.getAction())));
   }
 
   @Override

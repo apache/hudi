@@ -20,6 +20,9 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.exception.HoodieException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -27,9 +30,12 @@ import java.util.concurrent.TimeUnit;
  * Tool used for time waiting.
  */
 public class TimeWait {
-  private final long timeout;  // timeout in SECONDS
-  private final long interval; // interval in MILLISECONDS
-  private final String action; // action to report error message
+  private static final Logger LOG = LoggerFactory.getLogger(TimeWait.class);
+
+  private final long timeout;    // timeout in SECONDS
+  private final long interval;   // interval in MILLISECONDS
+  private final String action;   // action to report error message
+
   private long waitingTime = 0L;
 
   private TimeWait(long timeout, long interval, String action) {
@@ -61,17 +67,17 @@ public class TimeWait {
    * Builder.
    */
   public static class Builder {
-    private long timeout;
-    private long interval;
+    private long timeout = 5 * 60 * 1000L; // default 5 minutes
+    private long interval = 1000;
     private String action;
 
-    public Builder() {
-      this.timeout = 3600;
-      this.interval = 500;
+    private Builder() {
     }
 
     public Builder timeout(long timeout) {
-      this.timeout = timeout;
+      if (timeout > 0) {
+        this.timeout = timeout;
+      }
       return this;
     }
 

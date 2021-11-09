@@ -33,6 +33,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 
 public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
@@ -120,6 +122,13 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     TypedProperties properties = getCommonProps(false, useKeyGeneratorClassName);
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     return properties;
+  }
+
+  private String stackTraceToString(Throwable e) {
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    e.printStackTrace(pw);
+    return sw.toString();
   }
 
   @Test
@@ -259,7 +268,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
             .getMessage()
             .contains("Property hoodie.datasource.write.recordkey.field not found"));
       } else {
-        Assertions.assertTrue(e.getMessage().contains("Property hoodie.datasource.write.recordkey.field not found"));
+        Assertions.assertTrue(stackTraceToString(e).contains("Property hoodie.datasource.write.recordkey.field not found"));
       }
 
     }
@@ -282,7 +291,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
             .getMessage()
             .contains("Property hoodie.datasource.write.recordkey.field not found"));
       } else {
-        Assertions.assertTrue(e.getMessage().contains("Property hoodie.datasource.write.recordkey.field not found"));
+        Assertions.assertTrue(stackTraceToString(e).contains("Property hoodie.datasource.write.recordkey.field not found"));
       }
     }
   }

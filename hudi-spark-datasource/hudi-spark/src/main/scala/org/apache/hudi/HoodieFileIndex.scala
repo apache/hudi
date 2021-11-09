@@ -28,19 +28,20 @@ import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTab
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.avro.SchemaConverters
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.HoodieSqlUtils
+import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieSqlUtils}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
-
 import java.util.Properties
+
 import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 import scala.collection.mutable
 
 /**
@@ -56,7 +57,7 @@ import scala.collection.mutable
  *
  * 2、If the partition columns size is not equal to the partition path level, but the partition
  * column size is "1" (e.g. partition column is "dt", but the partition path is "2021/03/10"
- * who'es directory level is 3).We can still read it as a partitioned table. We will mapping the
+ * who's directory level is 3).We can still read it as a partitioned table. We will mapping the
  * partition path (e.g. 2021/03/10) to the only partition column (e.g. "dt").
  *
  * 3、Else the the partition columns size is not equal to the partition directory level and the
@@ -85,6 +86,12 @@ case class HoodieFileIndex(
     .map(HoodieSqlUtils.formatQueryInstant)
 
   /**
+    * Get all completeCommits.
+    */
+  lazy val completedCommits = metaClient.getCommitsTimeline
+    .filterCompletedInstants().getInstants.iterator().toList.map(_.getTimestamp)
+
+  /**
    * Get the schema of the table.
    */
   lazy val schema: StructType = schemaSpec.getOrElse({
@@ -106,7 +113,7 @@ case class HoodieFileIndex(
         nameFieldMap.getOrElse(column, throw new IllegalArgumentException(s"Cannot find column: '" +
           s"$column' in the schema[${schema.fields.mkString(",")}]")))
       new StructType(partitionFields)
-    } else { // If the partition columns have not stored in hoodie.properites(the table that was
+    } else { // If the partition columns have not stored in hoodie.properties(the table that was
       // created earlier), we trait it as a non-partitioned table.
       logWarning("No partition columns available from hoodie.properties." +
         " Partition pruning will not work")
@@ -125,9 +132,6 @@ case class HoodieFileIndex(
     properties.put(HoodieMetadataConfig.ENABLE,
       sqlConf.getConfString(HoodieMetadataConfig.ENABLE.key(),
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
-    properties.put(HoodieMetadataConfig.VALIDATE_ENABLE,
-      sqlConf.getConfString(HoodieMetadataConfig.VALIDATE_ENABLE.key(),
-        HoodieMetadataConfig.VALIDATE_ENABLE.defaultValue().toString))
     properties.putAll(options.asJava)
     properties
   }
@@ -150,6 +154,48 @@ case class HoodieFileIndex(
 
   override def rootPaths: Seq[Path] = queryPath :: Nil
 
+  def enableDataSkipping(): Boolean = {
+    options.getOrElse(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(),
+      spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
+  }
+
+  private def filterFilesByDataSkippingIndex(dataFilters: Seq[Expression]): Set[String] = {
+    var allFiles: Set[String] = Set.empty
+    var candidateFiles: Set[String] = Set.empty
+    val indexPath = metaClient.getZindexPath
+    val fs = metaClient.getFs
+    if (fs.exists(new Path(indexPath)) && dataFilters.nonEmpty) {
+      // try to load latest index table from index path
+      val candidateIndexTables = fs.listStatus(new Path(indexPath)).filter(_.isDirectory)
+        .map(_.getPath.getName).filter(f => completedCommits.contains(f)).sortBy(x => x)
+      if (candidateIndexTables.nonEmpty) {
+        val dataFrameOpt = try {
+          Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
+        } catch {
+          case _: Throwable =>
+            logError("missing index skip data-skipping")
+            None
+        }
+
+        if (dataFrameOpt.isDefined) {
+          val indexSchema = dataFrameOpt.get.schema
+          val indexFiles = DataSkippingUtils.getIndexFiles(spark.sparkContext.hadoopConfiguration, new Path(indexPath, candidateIndexTables.last).toString)
+          val indexFilter = dataFilters.map(DataSkippingUtils.createZindexFilter(_, indexSchema)).reduce(And)
+          logInfo(s"index filter condition: $indexFilter")
+          dataFrameOpt.get.persist()
+          if (indexFiles.size <= 4) {
+            allFiles = DataSkippingUtils.readParquetFile(spark, indexFiles)
+          } else {
+            allFiles = dataFrameOpt.get.select("file").collect().map(_.getString(0)).toSet
+          }
+          candidateFiles = dataFrameOpt.get.filter(new Column(indexFilter)).select("file").collect().map(_.getString(0)).toSet
+          dataFrameOpt.get.unpersist()
+        }
+      }
+    }
+    allFiles -- candidateFiles
+  }
+
   /**
    * Invoked by Spark to fetch list of latest base files per partition.
    *
@@ -159,12 +205,29 @@ case class HoodieFileIndex(
    */
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    // try to load filterFiles from index
+    val filterFiles: Set[String] = if (enableDataSkipping()) {
+      filterFilesByDataSkippingIndex(dataFilters)
+    } else {
+      Set.empty
+    }
     if (queryAsNonePartitionedTable) { // Read as Non-Partitioned table.
-      Seq(PartitionDirectory(InternalRow.empty, allFiles))
+      val candidateFiles = if (!filterFiles.isEmpty) {
+        allFiles.filterNot(fileStatus => filterFiles.contains(fileStatus.getPath.getName))
+      } else {
+        allFiles
+      }
+      logInfo(s"Total files : ${allFiles.size}," +
+        s" candidate files after data skipping: ${candidateFiles.size} " +
+        s" skipping percent ${if (allFiles.length != 0) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+      Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
       val prunedPartitions = prunePartition(cachedAllInputFileSlices.keys.toSeq, partitionFilters)
-      prunedPartitions.map { partition =>
+      var totalFileSize = 0
+      var candidateFileSize = 0
+
+      val result = prunedPartitions.map { partition =>
         val baseFileStatuses = cachedAllInputFileSlices(partition).map(fileSlice => {
           if (fileSlice.getBaseFile.isPresent) {
             fileSlice.getBaseFile.get().getFileStatus
@@ -172,9 +235,19 @@ case class HoodieFileIndex(
             null
           }
         }).filterNot(_ == null)
-
-        PartitionDirectory(partition.values, baseFileStatuses)
+        val candidateFiles = if (!filterFiles.isEmpty) {
+          baseFileStatuses.filterNot(fileStatus => filterFiles.contains(fileStatus.getPath.getName))
+        } else {
+          baseFileStatuses
+        }
+        totalFileSize += baseFileStatuses.size
+        candidateFileSize += candidateFiles.size
+        PartitionDirectory(partition.values, candidateFiles)
       }
+      logInfo(s"Total files: ${totalFileSize}," +
+        s" Candidate files after data skipping : ${candidateFileSize} " +
+        s"skipping percent ${if (allFiles.length != 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+      result
     }
   }
 
@@ -256,7 +329,7 @@ case class HoodieFileIndex(
             .iterator().asScala.toSeq
           (p._1, fileSlices)
         })
-        cachedFileSize = cachedAllInputFileSlices.values.flatten.map(_.getBaseFile.get().getFileLen).sum
+        cachedFileSize = cachedAllInputFileSlices.values.flatten.map(fileSliceSize).sum
     }
 
     // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
@@ -264,6 +337,15 @@ case class HoodieFileIndex(
     val flushSpend = System.currentTimeMillis() - startTime
     logInfo(s"Refresh table ${metaClient.getTableConfig.getTableName}," +
       s" spend: $flushSpend ms")
+  }
+
+  private def fileSliceSize(fileSlice: FileSlice): Long = {
+    val logFileSize = fileSlice.getLogFiles.iterator().asScala.map(_.getFileSize).filter(_ > 0).sum
+    if (fileSlice.getBaseFile.isPresent) {
+      fileSlice.getBaseFile.get().getFileLen + logFileSize
+    } else {
+      logFileSize
+    }
   }
 
   override def sizeInBytes: Long = {
