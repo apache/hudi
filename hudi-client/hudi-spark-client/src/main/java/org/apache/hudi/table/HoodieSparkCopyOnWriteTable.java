@@ -78,7 +78,7 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
+import org.apache.spark.SpaceCurveOptimizeHelper;
 import org.apache.spark.api.java.JavaRDD;
 
 import javax.annotation.Nonnull;
@@ -213,7 +213,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
             new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
         );
 
-    ZOrderingIndexHelper.updateZIndexFor(
+    SpaceCurveOptimizeHelper.updateZIndexFor(
         sparkEngineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(tableWriteSchema),
         touchedFiles,
