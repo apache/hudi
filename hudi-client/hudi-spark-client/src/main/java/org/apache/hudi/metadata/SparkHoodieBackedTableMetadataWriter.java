@@ -59,17 +59,17 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * @param writeConfig
    * @param context
    * @param actionMetadata
-   * @param instantInProgressTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
-   *                                   attempting to bootstrap the table.
+   * @param inflightInstantTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
+   *                                 attempting to bootstrap the table.
    * @return An instance of the {@code HoodieTableMetadataWriter}
    */
   public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
                                                                                 HoodieWriteConfig writeConfig,
                                                                                 HoodieEngineContext context,
                                                                                 Option<T> actionMetadata,
-                                                                                Option<String> instantInProgressTimestamp) {
+                                                                                Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata,
-                                                    instantInProgressTimestamp);
+                                                    inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
@@ -81,8 +81,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                       HoodieWriteConfig writeConfig,
                                                                       HoodieEngineContext engineContext,
                                                                       Option<T> actionMetadata,
-                                                                      Option<String> instantInProgressTimestamp) {
-    super(hadoopConf, writeConfig, engineContext, actionMetadata, instantInProgressTimestamp);
+                                                                      Option<String> inflightInstantTimestamp) {
+    super(hadoopConf, writeConfig, engineContext, actionMetadata, inflightInstantTimestamp);
   }
 
   @Override
@@ -103,7 +103,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
                                                            Option<T> actionMetadata,
-                                                           Option<String> instantInProgressTimestamp) {
+                                                           Option<String> inflightInstantTimestamp) {
     try {
       metrics.map(HoodieMetadataMetrics::registry).ifPresent(registry -> {
         if (registry instanceof DistributedRegistry) {
@@ -113,7 +113,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       });
 
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, instantInProgressTimestamp);
+        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, inflightInstantTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);

@@ -96,10 +96,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-    bootstrapMetadataTable(Option.empty());
+    initializeMetadataTable(Option.empty());
   }
 
-  private void bootstrapMetadataTable(Option<String> instantInProgressTimestamp) {
+  private void initializeMetadataTable(Option<String> inflightInstantTimestamp) {
     if (config.isMetadataTableEnabled()) {
       // Defer bootstrap if upgrade / downgrade is pending
       HoodieTableMetaClient metaClient = createMetaClient(true);
@@ -108,7 +108,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       if (!upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
         // TODO: Check if we can remove this requirement - auto bootstrap on commit
         SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context, Option.empty(),
-                                                    instantInProgressTimestamp);
+                                                    inflightInstantTimestamp);
       }
     }
   }
@@ -450,7 +450,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       metaClient.reloadActiveTimeline();
 
       // re-bootstrap metadata table if required
-      bootstrapMetadataTable(Option.of(instantTime));
+      initializeMetadataTable(Option.of(instantTime));
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);

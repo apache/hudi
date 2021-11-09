@@ -79,10 +79,10 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
                                                            Option<T> actionMetadata,
-                                                           Option<String> instantInProgressTimestamp) {
+                                                           Option<String> inflightInstantTimestamp) {
     try {
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, instantInProgressTimestamp);
+        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, inflightInstantTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
