@@ -373,12 +373,12 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "if a conflict (writes affect the same file group) is detected.");
 
   public static final ConfigProperty<Boolean> WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE = ConfigProperty
-          .key("hoodie.write.concurrency.merge.deltastreamer.state")
-          .defaultValue(false)
-          .withDocumentation("If enabled, this writer will merge Deltastreamer state "
-                  + "from the previous checkpoint in order to allow both realtime "
-                  + "and batch writers to ingest into a single table. "
-                  + "This should not be enabled on Deltastreamer writers.");
+      .key("hoodie.write.concurrency.merge.deltastreamer.state")
+      .defaultValue(false)
+      .withAlternatives("hoodie.write.meta.key.prefixes")
+      .withDocumentation("If enabled, this writer will merge Deltastreamer state from the previous checkpoint in order to allow both realtime "
+          + "and batch writers to ingest into a single table. This should not be enabled on Deltastreamer writers. Enabling this config means,"
+          + "for a spark writer, deltastreamer checkpoint will be copied over from previous commit to the current one.");
 
   /**
    * Currently the  use this to specify the write schema.

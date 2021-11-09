@@ -159,7 +159,6 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
-    // enable carrying forward latest checkpoint
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
@@ -181,7 +180,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     HoodieCommitMetadata commitMetadataForFirstInstant = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
 
-    // run the backfill job, enable overriding checkpoint from the latest commit
+    // run the backfill job
     props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
@@ -199,6 +198,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
     // Save the checkpoint information from the deltastreamer run and perform next write
     String checkpointAfterDeltaSync = getLatestMetadata(meta).getMetadata(CHECKPOINT_KEY);
+    // this writer will enable HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key() so that deltastreamer checkpoint will be carried over.
     performWriteWithDeltastreamerStateMerge();
 
     // Verify that the checkpoint is carried over
