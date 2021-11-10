@@ -48,23 +48,41 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   private static final Logger LOG = LogManager.getLogger(SparkHoodieBackedTableMetadataWriter.class);
 
-  public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
-                                                 HoodieEngineContext context) {
-    return create(conf, writeConfig, context, Option.empty());
-  }
-
+  /**
+   * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
+   * write to the metadata table.
+   *
+   * If the metadata table does not exist, an attempt is made to bootstrap it but there is no guarantted that
+   * table will end up bootstrapping at this time.
+   *
+   * @param conf
+   * @param writeConfig
+   * @param context
+   * @param actionMetadata
+   * @param inflightInstantTimestamp Timestamp of an instant which is in-progress. This instant is ignored while
+   *                                 attempting to bootstrap the table.
+   * @return An instance of the {@code HoodieTableMetadataWriter}
+   */
   public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
                                                                                 HoodieWriteConfig writeConfig,
                                                                                 HoodieEngineContext context,
-                                                                                Option<T> actionMetadata) {
-    return new SparkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata);
+                                                                                Option<T> actionMetadata,
+                                                                                Option<String> inflightInstantTimestamp) {
+    return new SparkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata,
+                                                    inflightInstantTimestamp);
+  }
+
+  public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
+                                                 HoodieEngineContext context) {
+    return create(conf, writeConfig, context, Option.empty(), Option.empty());
   }
 
   <T extends SpecificRecordBase> SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                       HoodieWriteConfig writeConfig,
                                                                       HoodieEngineContext engineContext,
-                                                                      Option<T> actionMetadata) {
-    super(hadoopConf, writeConfig, engineContext, actionMetadata);
+                                                                      Option<T> actionMetadata,
+                                                                      Option<String> inflightInstantTimestamp) {
+    super(hadoopConf, writeConfig, engineContext, actionMetadata, inflightInstantTimestamp);
   }
 
   @Override
@@ -84,7 +102,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
-                                                           Option<T> actionMetadata) {
+                                                           Option<T> actionMetadata,
+                                                           Option<String> inflightInstantTimestamp) {
     try {
       metrics.map(HoodieMetadataMetrics::registry).ifPresent(registry -> {
         if (registry instanceof DistributedRegistry) {
@@ -94,7 +113,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       });
 
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata);
+        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, inflightInstantTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
@@ -103,7 +122,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
+  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
     JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
 
@@ -132,8 +151,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       // reload timeline
       metadataMetaClient.reloadActiveTimeline();
-      compactIfNecessary(writeClient, instantTime);
-      doClean(writeClient, instantTime);
+      if (canTriggerTableService) {
+        compactIfNecessary(writeClient, instantTime);
+        doClean(writeClient, instantTime);
+      }
     }
 
     // Update total size of the metadata and count of base/log files

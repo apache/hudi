@@ -73,6 +73,14 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
   }
 
+  protected FileStatus[] getStatus(JobConf job) throws IOException {
+    return super.listStatus(job);
+  }
+
+  protected boolean includeLogFilesForSnapShotView() {
+    return false;
+  }
+
   @Override
   public FileStatus[] listStatus(JobConf job) throws IOException {
     // Segregate inputPaths[] to incremental, snapshot and non hoodie paths
@@ -108,7 +116,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // process snapshot queries next.
     List<Path> snapshotPaths = inputPathHandler.getSnapshotPaths();
     if (snapshotPaths.size() > 0) {
-      returns.addAll(HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths));
+      returns.addAll(HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths, includeLogFilesForSnapShotView()));
     }
     return returns.toArray(new FileStatus[0]);
   }
@@ -120,7 +128,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * partitions and then filtering based on the commits of interest, this logic first extracts the
    * partitions touched by the desired commits and then lists only those partitions.
    */
-  private List<FileStatus> listStatusForIncrementalMode(
+  protected List<FileStatus> listStatusForIncrementalMode(
       JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
     String tableName = tableMetaClient.getTableConfig().getTableName();
     Job jobContext = Job.getInstance(job);

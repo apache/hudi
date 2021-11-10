@@ -85,6 +85,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   private static final long serialVersionUID = 0L;
 
+  // This is a constant as is should never be changed via config (will invalidate previous commits)
+  // It is here so that both the client and deltastreamer use the same reference
+  public static final String DELTASTREAMER_CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
+
   public static final ConfigProperty<String> TBL_NAME = ConfigProperty
       .key("hoodie.table.name")
       .noDefaultValue()
@@ -368,11 +372,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table and exactly one of them succeed "
           + "if a conflict (writes affect the same file group) is detected.");
 
-  public static final ConfigProperty<String> WRITE_META_KEY_PREFIXES = ConfigProperty
-      .key("hoodie.write.meta.key.prefixes")
-      .defaultValue("")
-      .withDocumentation("Comma separated metadata key prefixes to override from latest commit "
-          + "during overlapping commits via multi writing");
+  public static final ConfigProperty<Boolean> WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE = ConfigProperty
+      .key("hoodie.write.concurrency.merge.deltastreamer.state")
+      .defaultValue(false)
+      .withAlternatives("hoodie.write.meta.key.prefixes")
+      .withDocumentation("If enabled, this writer will merge Deltastreamer state from the previous checkpoint in order to allow both realtime "
+          + "and batch writers to ingest into a single table. This should not be enabled on Deltastreamer writers. Enabling this config means,"
+          + "for a spark writer, deltastreamer checkpoint will be copied over from previous commit to the current one.");
 
   /**
    * Currently the  use this to specify the write schema.
@@ -783,16 +789,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_WRITE_CONCURRENCY_MODE = WRITE_CONCURRENCY_MODE.defaultValue();
-  /**
-   * @deprecated Use {@link #WRITE_META_KEY_PREFIXES} and its methods instead
-   */
-  @Deprecated
-  public static final String WRITE_META_KEY_PREFIXES_PROP = WRITE_META_KEY_PREFIXES.key();
-  /**
-   * @deprecated Use {@link #WRITE_META_KEY_PREFIXES} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_WRITE_META_KEY_PREFIXES = WRITE_META_KEY_PREFIXES.defaultValue();
   /**
    * @deprecated Use {@link #ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE} and its methods instead
    */
@@ -1764,12 +1760,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
   }
 
-  public Boolean inlineTableServices() {
-    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
+  public Boolean mergeDeltastreamerStateFromPreviousCommit() {
+    return getBoolean(HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE);
   }
 
-  public String getWriteMetaKeyPrefixes() {
-    return getString(WRITE_META_KEY_PREFIXES);
+  public Boolean inlineTableServices() {
+    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
   }
 
   public String getPreCommitValidators() {
@@ -2128,11 +2124,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
       writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.value());
-      return this;
-    }
-
-    public Builder withWriteMetaKeyPrefixes(String writeMetaKeyPrefixes) {
-      writeConfig.setValue(WRITE_META_KEY_PREFIXES, writeMetaKeyPrefixes);
       return this;
     }
 

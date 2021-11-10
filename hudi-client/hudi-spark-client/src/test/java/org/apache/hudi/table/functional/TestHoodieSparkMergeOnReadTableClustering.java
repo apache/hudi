@@ -93,6 +93,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringMaxNumGroups(10)
             .withClusteringTargetPartitions(0)
+            .withInlineClustering(true)
             .withInlineClusteringNumCommits(1)
             .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build())
         .withRollbackUsingMarkers(false);

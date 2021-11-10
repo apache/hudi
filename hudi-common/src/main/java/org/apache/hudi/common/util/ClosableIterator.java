@@ -16,22 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieTable;
+import java.util.Iterator;
 
-import java.io.Serializable;
-
-public abstract class WriteHandleFactory<T extends HoodieRecordPayload, I, K, O> implements Serializable {
-  private int numFilesWritten = 0;
-
-  public abstract HoodieWriteHandle<T, I, K, O> create(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
-      String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier);
-
-  protected String getNextFileId(String idPfx) {
-    return String.format("%s-%d", idPfx, numFilesWritten++);
-  }
+/**
+ * An iterator that give a chance to release resources.
+ *
+ * @param <R> The return type
+ */
+public interface ClosableIterator<R> extends Iterator<R>, AutoCloseable {
+  @Override
+  void close(); // override to not throw exception
 }

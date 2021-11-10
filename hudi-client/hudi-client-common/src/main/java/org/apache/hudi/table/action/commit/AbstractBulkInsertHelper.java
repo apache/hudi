@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -44,5 +45,5 @@ public abstract class AbstractBulkInsertHelper<T extends HoodieRecordPayload, I,
                                Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
                                boolean addMetadataFields,
                                int parallelism,
-                               boolean preserveMetadata);
+                               WriteHandleFactory writeHandleFactory);
 }

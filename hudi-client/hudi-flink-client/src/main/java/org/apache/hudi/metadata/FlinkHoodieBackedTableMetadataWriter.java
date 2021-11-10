@@ -62,7 +62,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                       HoodieWriteConfig writeConfig,
                                                                       HoodieEngineContext engineContext,
                                                                       Option<T> actionMetadata) {
-    super(hadoopConf, writeConfig, engineContext, actionMetadata);
+    super(hadoopConf, writeConfig, engineContext, actionMetadata, Option.empty());
   }
 
   @Override
@@ -78,10 +78,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
-                                                           Option<T> actionMetadata) {
+                                                           Option<T> actionMetadata,
+                                                           Option<String> inflightInstantTimestamp) {
     try {
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata);
+        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, inflightInstantTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
@@ -90,7 +91,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
+  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
     List<HoodieRecord> recordList = prepRecords(records, partitionName, 1);
 
@@ -125,8 +126,10 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       // reload timeline
       metadataMetaClient.reloadActiveTimeline();
-      compactIfNecessary(writeClient, instantTime);
-      doClean(writeClient, instantTime);
+      if (canTriggerTableService) {
+        compactIfNecessary(writeClient, instantTime);
+        doClean(writeClient, instantTime);
+      }
     }
 
     // Update total size of the metadata and count of base/log files

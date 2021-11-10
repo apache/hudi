@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
@@ -447,12 +448,6 @@ public class MergeOnReadInputFormat
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
-
-  private interface ClosableIterator<E> extends Iterator<E>, AutoCloseable {
-    @Override
-    void close(); // override to not throw exception
-  }
-
   private interface RecordIterator {
     boolean reachedEnd() throws IOException;
 
