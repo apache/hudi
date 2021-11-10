@@ -76,7 +76,7 @@ Creates a Flink Hudi table first and insert data into the Hudi table using SQL `
 set execution.result-mode=tableau;
 
 CREATE TABLE t1(
-  uuid VARCHAR(20),
+  uuid VARCHAR(20) PRIMARY KEY NOT ENFORCED,
   name VARCHAR(10),
   age INT,
   ts TIMESTAMP(3),
@@ -85,7 +85,7 @@ CREATE TABLE t1(
 PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
-  'path' = 'schema://base-path',
+  'path' = '${path}',
   'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, by default is COPY_ON_WRITE
 );
 
@@ -135,7 +135,7 @@ We do not need to specify endTime, if we want all changes after the given commit
 
 ```sql
 CREATE TABLE t1(
-  uuid VARCHAR(20),
+  uuid VARCHAR(20) PRIMARY KEY NOT ENFORCED,
   name VARCHAR(10),
   age INT,
   ts TIMESTAMP(3),
@@ -144,10 +144,10 @@ CREATE TABLE t1(
 PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
-  'path' = 'oss://vvr-daily/hudi/t1',
+  'path' = '${path}',
   'table.type' = 'MERGE_ON_READ',
   'read.streaming.enabled' = 'true',  -- this option enable the streaming read
-  'read.streaming.start-commit' = '20210316134557' -- specifies the start commit instant time
+  'read.start-commit' = '20210316134557' -- specifies the start commit instant time
   'read.streaming.check-interval' = '4' -- specifies the check interval for finding new source commits, default 60s.
 );
 
@@ -157,7 +157,6 @@ select * from t1;
 
 This will give all changes that happened after the `read.streaming.start-commit` commit. The unique thing about this
 feature is that it now lets you author streaming pipelines on streaming or batch data source.
-{: .notice--info}
 
 ### Delete Data {#deletes}
 
@@ -460,11 +459,11 @@ CREATE TABLE t1(
 PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
-  'path' = 'oss://vvr-daily/hudi/t1',
+  'path' = '${db_path}/t1',
   'table.type' = 'COPY_ON_WRITE',  --If MERGE_ON_READ, hive query will not have output until the parquet file is generated
   'hive_sync.enable' = 'true',     -- Required. To enable hive synchronization
   'hive_sync.mode' = 'hms'         -- Required. Setting hive sync mode to hms, default jdbc
-  'hive_sync.metastore.uris' = 'thrift://ip:9083' -- Required. The port need set on hive-site.xml
+  'hive_sync.metastore.uris' = 'thrift://${ip}:9083' -- Required. The port need set on hive-site.xml
 );
 
 
@@ -479,16 +478,16 @@ CREATE TABLE t1(
 PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
-  'path' = 'oss://vvr-daily/hudi/t1',
+  'path' = '${db_path}/t1',
   'table.type' = 'COPY_ON_WRITE',  --If MERGE_ON_READ, hive query will not have output until the parquet file is generated
   'hive_sync.enable' = 'true',     -- Required. To enable hive synchronization
   'hive_sync.mode' = 'hms'         -- Required. Setting hive sync mode to hms, default jdbc
-  'hive_sync.metastore.uris' = 'thrift://ip:9083'  -- Required. The port need set on hive-site.xml
-  'hive_sync.jdbc_url'='jdbc:hive2://ip:10000',    -- required, hiveServer port
+  'hive_sync.metastore.uris' = 'thrift://${ip}:9083'  -- Required. The port need set on hive-site.xml
+  'hive_sync.jdbc_url'='jdbc:hive2://${ip}:10000',    -- required, hiveServer port
   'hive_sync.table'='t1',                          -- required, hive table name
   'hive_sync.db'='testDB',                         -- required, hive database name
-  'hive_sync.username'='root',                     -- required, HMS username
-  'hive_sync.password'='your password'             -- required, HMS password
+  'hive_sync.username'='${user_name}',                     -- required, HMS username
+  'hive_sync.password'='${password}'             -- required, HMS password
 );
 ```
 
@@ -497,17 +496,6 @@ WITH (
 While using hive beeline query, you need to enter settings:
 ```bash
 set hive.input.format = org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
-```
-
-### Conflict
-
-When there is a `flink-sql-connector-hive-xxx.jar` under Flink lib/, there will be a jar conflicts between `flink-sql-connector-hive-xxx.jar`
-and `hudi-flink-bundle_2.11.xxx.jar`. The solution is to use another profile `include-flink-sql-connector-hive` when install and delete
-the `flink-sql-connector-hive-xxx.jar` under Flink lib/. install command :
-
-```bash
-# Maven install command
-mvn install -DskipTests -Drat.skip=true -Pflink-bundle-shade-hive2 -Pinclude-flink-sql-connector-hive
 ```
 
 ## Presto Query
