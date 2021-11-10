@@ -71,9 +71,9 @@ public class LogReaderUtils {
     List<String> deltaPaths = deltaFileStatus.stream().map(s -> new HoodieLogFile(s.getPath()))
         .sorted(HoodieLogFile.getReverseLogFileComparator()).map(s -> s.getPath().toString())
         .collect(Collectors.toList());
-    Map<String, FileStatus> deltaFilePathToFileStatus = deltaFileStatus.stream().map(entry -> Pair.of(entry.getPath().toString(), entry))
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     if (deltaPaths.size() > 0) {
+      Map<String, FileStatus> deltaFilePathToFileStatus = deltaFileStatus.stream().map(entry -> Pair.of(entry.getPath().toString(), entry))
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
       for (String logPath : deltaPaths) {
         FileSystem fs = FSUtils.getFs(logPath, config);
         Schema schemaFromLogFile =

@@ -27,6 +27,7 @@ import org.apache.hadoop.mapred.FileSplit;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,7 +37,7 @@ import java.util.stream.Collectors;
 public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
 
   private List<String> deltaLogPaths;
-  private List<FileStatus> deltaLogFileStatus;
+  private List<FileStatus> deltaLogFileStatus = new ArrayList<>();
 
   private String maxInstantTime;
 
