@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -341,11 +342,6 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     assertEquals(gRecord.get(fieldName).toString(), newValue);
   }
 
-  // TODO : come up with a performance eval test for spillableMap
-  @Test
-  public void testLargeInsertUpsert() {
-  }
-
   @Test
   public void testPayloadSizeEstimate() throws IOException, URISyntaxException {
     final ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.BITCASK;
@@ -368,7 +364,9 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     // Payload size re-estimation should not happen as the map
     // size has not reached the minimum size threshold for
     // recalculation.
-    records.put(seedRecord.getRecordKey(), seedRecord);
+    assertDoesNotThrow(() -> {
+      records.put(seedRecord.getRecordKey(), seedRecord);
+    }, "ExternalSpillableMap put() should not throw exception!");
 
     // Put more records than the threshold to trigger payload size re-estimation
     while (records.getDiskBasedMapNumEntries() < 1) {
