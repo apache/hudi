@@ -102,7 +102,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     // if CTAS, we treat the table we just created as nonexistent
     val isTableExists = if (ctas) false else tableExistsInPath(path, conf)
     var existingTableConfig = Map.empty[String, String]
-    val sqlOptions = HoodieOptionConfig.withDefaultSqlOption(tblProperties)
+    val sqlOptions = HoodieOptionConfig.withDefaultSqlOptions(tblProperties)
     val catalogTableProps = HoodieOptionConfig.mappingSqlOptionToTableConfig(tblProperties)
 
     // get final schema and parameters

@@ -116,7 +116,9 @@ object HoodieWriterUtils {
     }
   }
 
-  // Detects conflicts between new parameters and existing table configurations
+  /**
+   * Detects conflicts between new parameters and existing table configurations
+   */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
       tableConfig: HoodieConfig): Unit = {
     val resolver = spark.sessionState.conf.resolver

@@ -107,7 +107,7 @@ object HoodieOptionConfig {
 
   private lazy val reverseValueMapping = valueMapping.map(f => f._2 -> f._1)
 
-  def withDefaultSqlOption(options: Map[String, String]): Map[String, String] = defaultSqlOption ++ options
+  def withDefaultSqlOptions(options: Map[String, String]): Map[String, String] = defaultSqlOptions ++ options
 
   /**
    * Mapping the sql's short name key/value in the options to the hoodie's config key/value.
@@ -142,7 +142,7 @@ object HoodieOptionConfig {
     options.map(kv => tableConfigKeyToSqlKey.getOrElse(kv._1, kv._1) -> reverseValueMapping.getOrElse(kv._2, kv._2))
   }
 
-  private lazy val defaultSqlOption: Map[String, String] = {
+  private lazy val defaultSqlOptions: Map[String, String] = {
     HoodieOptionConfig.getClass.getDeclaredFields
       .filter(f => f.getType == classOf[HoodieOption[_]])
       .map(f => {f.setAccessible(true); f.get(HoodieOptionConfig).asInstanceOf[HoodieOption[_]]})
@@ -152,7 +152,7 @@ object HoodieOptionConfig {
   }
 
   private lazy val defaultTableConfig: Map[String, String] = {
-    mappingSqlOptionToHoodieParam(defaultSqlOption)
+    mappingSqlOptionToHoodieParam(defaultSqlOptions)
   }
 
   /**
