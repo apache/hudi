@@ -24,7 +24,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.{DataFrame,  SparkSession}
 
-import org.junit.jupiter.api.{ BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 class TestGenericRecordAndRowConsistency extends HoodieClientTestBase {
 
