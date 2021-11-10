@@ -1788,7 +1788,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isPreCommitValidationConfigSet = false;
     private boolean isMetricsJmxConfigSet = false;
     private boolean isMetricsGraphiteConfigSet = false;
-    private boolean isAWSConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -2019,12 +2018,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAWSConfig(HoodieAWSConfig awsConfig) {
-      writeConfig.getProps().putAll(awsConfig.getProps());
-      isAWSConfigSet = true;
-      return this;
-    }
-
     public Builder withFinalizeWriteParallelism(int parallelism) {
       writeConfig.setValue(FINALIZE_WRITE_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
@@ -2163,8 +2156,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
           HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
-      writeConfig.setDefaultOnCondition(!isAWSConfigSet,
-          HoodieAWSConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+      //writeConfig.setDefaultOnCondition(!isAWSConfigSet,
+      //  HoodieAWSConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
     }
 

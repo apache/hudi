@@ -29,12 +29,19 @@ import java.io.IOException;
 import java.util.Properties;
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_BILLING_MODE;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_PARTITION_KEY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_READ_CAPACITY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_REGION;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_TABLE_NAME;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_WRITE_CAPACITY;
+
 /**
  * Configurations used by the AWS credentials.
  */
 @Immutable
 @ConfigClassProperty(name = "AWS credential Configs",
-        groupName = ConfigGroups.Names.WRITE_CLIENT,
+        groupName = ConfigGroups.Names.AWS_DYNAMO_DB,
         description = "Configurations used for AWS credentials to get AWS resources.")
 public class HoodieAWSConfig extends HoodieConfig {
   public static final ConfigProperty<String> AWS_ACCESS_KEY = ConfigProperty
@@ -100,6 +107,36 @@ public class HoodieAWSConfig extends HoodieConfig {
 
     public HoodieAWSConfig.Builder withSessionToken(String sessionToken) {
       awsConfig.setValue(AWS_SESSION_TOKEN, sessionToken);
+      return this;
+    }
+
+    public Builder withDynamoDBTable(String dynamoDbTableName) {
+      awsConfig.setValue(DYNAMODB_LOCK_TABLE_NAME, dynamoDbTableName);
+      return this;
+    }
+
+    public Builder withDynamoDBPartitionKey(String partitionKey) {
+      awsConfig.setValue(DYNAMODB_LOCK_PARTITION_KEY, partitionKey);
+      return this;
+    }
+
+    public Builder withDynamoDBRegion(String region) {
+      awsConfig.setValue(DYNAMODB_LOCK_REGION, region);
+      return this;
+    }
+
+    public Builder withDynamoDBBillingMode(String mode) {
+      awsConfig.setValue(DYNAMODB_LOCK_BILLING_MODE, mode);
+      return this;
+    }
+
+    public Builder withDynamoDBReadCapacity(String capacity) {
+      awsConfig.setValue(DYNAMODB_LOCK_READ_CAPACITY, capacity);
+      return this;
+    }
+
+    public Builder withDynamoDBWriteCapacity(String capacity) {
+      awsConfig.setValue(DYNAMODB_LOCK_WRITE_CAPACITY, capacity);
       return this;
     }
 

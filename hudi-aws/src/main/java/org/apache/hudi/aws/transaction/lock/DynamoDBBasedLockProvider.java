@@ -53,13 +53,13 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.NotThreadSafe;
 
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_BILLING_MODE_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_REGION_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_TABLE_NAME_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_BILLING_MODE_PROP_KEY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_REGION_PROP_KEY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_TABLE_NAME_PROP_KEY;
+import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
 
 /**

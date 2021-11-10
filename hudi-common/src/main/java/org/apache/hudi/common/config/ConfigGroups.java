@@ -31,7 +31,8 @@ public class ConfigGroups {
     WRITE_CLIENT("Write Client Configs"),
     METRICS("Metrics Configs"),
     RECORD_PAYLOAD("Record Payload Config"),
-    KAFKA_CONNECT("Kafka Connect Configs");
+    KAFKA_CONNECT("Kafka Connect Configs"),
+    AWS_DYNAMO_DB("aws-dynamo-db");
 
     public final String name;
 

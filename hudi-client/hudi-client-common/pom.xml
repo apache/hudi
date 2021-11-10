@@ -41,11 +41,11 @@
       <artifactId>hudi-timeline-service</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
+    <!--dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-aws</artifactId>
       <version>${project.version}</version>
-    </dependency>
+    </dependency-->
 
     <dependency>
       <groupId>joda-time</groupId>
