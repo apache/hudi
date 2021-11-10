@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
@@ -189,7 +190,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           fileStatus.setBelongToIncrementalFileStatus(true);
           fileStatus.setBasePath(basePath);
           fileStatus.setBaseFilePath(baseFilePath);
-          fileStatus.setDeltaLogPaths(f.getLatestFileSlice().get().getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList()));
+          fileStatus.setDeltaLogPathSizePairs(f.getLatestFileSlice().get().getLogFiles().map(l -> Pair.of(l.getPath().toString(), l.getFileSize())).collect(Collectors.toList()));
           // try to set bootstrapfileStatus
           if (baseFileStatus instanceof LocatedFileStatusWithBootstrapBaseFile || baseFileStatus instanceof FileStatusWithBootstrapBaseFile) {
             fileStatus.setBootStrapFileStatus(baseFileStatus);
@@ -202,7 +203,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           if (logFileStatus.size() > 0) {
             RealtimeFileStatus fileStatus = new RealtimeFileStatus(logFileStatus.get(0));
             fileStatus.setBelongToIncrementalFileStatus(true);
-            fileStatus.setDeltaLogPaths(logFileStatus.stream().map(l -> l.getPath().toString()).collect(Collectors.toList()));
+            fileStatus.setDeltaLogPathSizePairs(logFileStatus.stream().map(l -> Pair.of(l.getPath().toString(), l.getLen())).collect(Collectors.toList()));
             fileStatus.setMaxCommitTime(maxCommitTime);
             fileStatus.setBasePath(basePath);
             result.add(fileStatus);
@@ -256,7 +257,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
               ? super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts)
               : super.makeSplit(path.getPathWithBootstrapFileStatus(), start, length, hosts, inMemoryHosts);
       return HoodieRealtimeInputFormatUtils
-          .createRealtimeBoostrapBaseFileSplit((BootstrapBaseFileSplit) bf, path.getBasePath(), path.getDeltaLogPaths(), path.getMaxCommitTime());
+          .createRealtimeBoostrapBaseFileSplit((BootstrapBaseFileSplit) bf, path.getBasePath(), path.getDeltaLogPathSizePairs(), path.getMaxCommitTime());
     }
   }
 

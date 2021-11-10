@@ -19,9 +19,9 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit implements RealtimeSplit {
 
   private List<String> deltaLogPaths;
-  private List<FileStatus> deltaLogFileStatus = new ArrayList<>();
+  private List<Pair<String, Long>> deltaLogFilePathSizePairs = new ArrayList<>();
 
   private String maxInstantTime;
 
@@ -47,12 +47,12 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
     super();
   }
 
-  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit, String basePath, List<FileStatus> deltaLogFileStatus,
+  public RealtimeBootstrapBaseFileSplit(FileSplit baseSplit, String basePath, List<Pair<String, Long>> deltaLogFilePathSizePairs,
                                         String maxInstantTime, FileSplit externalFileSplit) throws IOException {
     super(baseSplit, externalFileSplit);
     this.maxInstantTime = maxInstantTime;
-    this.deltaLogFileStatus = deltaLogFileStatus;
-    this.deltaLogPaths = deltaLogFileStatus.stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
+    this.deltaLogFilePathSizePairs = deltaLogFilePathSizePairs;
+    this.deltaLogPaths = deltaLogFilePathSizePairs.stream().map(entry -> entry.getKey()).collect(Collectors.toList());
     this.basePath = basePath;
   }
 
@@ -74,8 +74,8 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   }
 
   @Override
-  public List<FileStatus> getDeltaLogFileStatus() {
-    return deltaLogFileStatus;
+  public List<Pair<String, Long>> getDeltaLogFilePathSizePairs() {
+    return deltaLogFilePathSizePairs;
   }
 
   @Override
