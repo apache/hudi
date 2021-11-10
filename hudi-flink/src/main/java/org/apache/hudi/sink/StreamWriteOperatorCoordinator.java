@@ -29,11 +29,13 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -221,11 +223,13 @@ public class StreamWriteOperatorCoordinator
           // the stream write task snapshot and flush the data buffer synchronously in sequence,
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
           final boolean committed = commitInstant(this.instant, checkpointId);
+
+          if (tableState.scheduleCompaction) {
+            // if async compaction is on, schedule the compaction
+            CompactionUtil.scheduleCompaction(metaClient, writeClient, tableState.isDeltaTimeCompaction, committed);
+          }
+
           if (committed) {
-            if (tableState.scheduleCompaction) {
-              // if async compaction is on, schedule the compaction
-              writeClient.scheduleCompaction(Option.empty());
-            }
             // start new instant.
             startInstant();
             // sync Hive if is enabled
@@ -557,6 +561,7 @@ public class StreamWriteOperatorCoordinator
     final boolean scheduleCompaction;
     final boolean syncHive;
     final boolean syncMetadata;
+    final boolean isDeltaTimeCompaction;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
@@ -566,6 +571,7 @@ public class StreamWriteOperatorCoordinator
       this.scheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
       this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
+      this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
     }
 
     public static TableState create(Configuration conf) {
