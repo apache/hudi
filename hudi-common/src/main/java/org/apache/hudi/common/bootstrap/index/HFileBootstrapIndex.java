@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.HoodieKVComparator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -576,6 +575,13 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     public String getName() {
       return toString();
     }
+  }
+
+  /**
+   * This class is explicitly used as Key Comparator to workaround hard coded
+   * legacy format class names inside HBase. Otherwise we will face issues with shading.
+   */
+  public static class HoodieKVComparator extends KeyValue.KVComparator {
   }
 
 }
