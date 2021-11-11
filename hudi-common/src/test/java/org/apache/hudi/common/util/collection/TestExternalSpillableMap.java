@@ -361,21 +361,14 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     // Remove the key immediately to make the map empty again.
     records.remove(seedRecord.getRecordKey());
 
-    // Payload size re-estimation should not happen as the map
-    // size has not reached the minimum size threshold for
-    // recalculation.
-    assertDoesNotThrow(() -> {
-      records.put(seedRecord.getRecordKey(), seedRecord);
-    }, "ExternalSpillableMap put() should not throw exception!");
-
-    // Put more records than the threshold to trigger payload size re-estimation
-    while (records.getDiskBasedMapNumEntries() < 1) {
-      List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 250);
-      hoodieRecords.stream().forEach(r -> {
-        records.put(r.getRecordKey(), r);
-        recordKeys.add(r.getRecordKey());
-      });
-    }
+    // Verify payload size re-estimation does not throw exception
+    List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 250);
+    hoodieRecords.stream().forEach(hoodieRecord -> {
+      assertDoesNotThrow(() -> {
+        records.put(hoodieRecord.getRecordKey(), hoodieRecord);
+      }, "ExternalSpillableMap put() should not throw exception!");
+      recordKeys.add(hoodieRecord.getRecordKey());
+    });
   }
 
   private static Stream<Arguments> testArguments() {
