@@ -105,14 +105,14 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   public static Stream<Arguments> downGradeConfigParams() {
     Object[][] data = new Object[][] {
-        /*{true, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.TWO},
+        {true, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.TWO},
         {false, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.TWO},
         {true, HoodieTableType.MERGE_ON_READ, HoodieTableVersion.TWO},
-        {false, HoodieTableType.MERGE_ON_READ, HoodieTableVersion.TWO},*/
-        {true, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.ONE}
-        /*{false, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.ONE},
+        {false, HoodieTableType.MERGE_ON_READ, HoodieTableVersion.TWO},
+        {true, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.ONE},
+        {false, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.ONE},
         {true, HoodieTableType.MERGE_ON_READ, HoodieTableVersion.ONE},
-        {false, HoodieTableType.MERGE_ON_READ, HoodieTableVersion.ONE}*/
+        {false, HoodieTableType.MERGE_ON_READ, HoodieTableVersion.ONE}
     };
     return Stream.of(data).map(Arguments::of);
   }

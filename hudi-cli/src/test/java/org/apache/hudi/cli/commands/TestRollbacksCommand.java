@@ -90,6 +90,7 @@ public class TestRollbacksCommand extends CLIFunctionalTestHarness {
         .withBaseFilesInPartitions(partitionAndFileId);
     // generate two rollback
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
+        .withRollbackUsingMarkers(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     try (AbstractHoodieWriteClient client = new SparkRDDWriteClient(context(), config)) {
