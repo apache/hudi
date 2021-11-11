@@ -37,6 +37,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterFSPath;
@@ -294,6 +297,29 @@ public class TestInLineFileSystem {
     assertThrows(UnsupportedOperationException.class, () -> {
       inlinePath.getFileSystem(conf).setWorkingDirectory(inlinePath);
     }, "Should have thrown exception");
+  }
+
+  @Test
+  public void testInLineFSPathConversions() {
+    final Map<Path, Path> expectedInLinePaths = Stream.of(new Path[][]{
+        {new Path("file:/tmp/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs:/tmp/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10")},
+        {new Path("s3://tmp/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs:/tmp/524bae7e-f01d-47ae-b7cd-910400a81336/s3/?start_offset=10&length=10")},
+        {new Path("s3a://tmp/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs:/tmp/524bae7e-f01d-47ae-b7cd-910400a81336/s3a/?start_offset=10&length=10")}
+    }).collect(Collectors.toMap(entry -> entry[0], entry -> entry[1]));
+
+    for (Map.Entry<Path, Path> entry : expectedInLinePaths.entrySet()) {
+      final Path inputPath = entry.getKey();
+      final Path expectedInLineFSPath = entry.getValue();
+      final Path actualInLineFSPath = InLineFSUtils.getInlineFilePath(inputPath,
+          inputPath.toString().split(":")[0], 10, 10);
+      assertEquals(expectedInLineFSPath, actualInLineFSPath);
+
+      final Path actualOuterFilePath = InLineFSUtils.getOuterFilePathFromInlinePath(actualInLineFSPath);
+      assertEquals(inputPath, actualOuterFilePath);
+    }
   }
 
   @Test
