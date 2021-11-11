@@ -35,7 +35,6 @@ import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
-import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.table.format.FilePathUtils;
 
@@ -44,6 +43,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
@@ -163,7 +163,7 @@ public class Pipelines {
         .transform(
             "bucket_assigner",
             TypeInformation.of(HoodieRecord.class),
-            new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
+            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
         .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
         .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(defaultParallelism))
         // shuffle by fileId(bucket id)
