@@ -190,9 +190,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
         if (baseRecord.isPresent()) {
           hoodieRecord = metadataTableConfig.populateMetaFields()
-              ? SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(), metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(), false)
-              : SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(), metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
-              Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()), false);
+              ? SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
+              metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(), false)
+              : SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
+              metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
+              Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
+              false, Option.empty());
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
           // merge base file record w/ log record if present
           if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {
@@ -241,7 +244,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
 
         // Open the log record scanner using the log files from the latest file slice
-        Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair = getLogRecordScanner(slice);
+        Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair = getLogRecordScanner(slice,
+            partitionName);
         logRecordScanner = logRecordScannerOpenTimePair.getKey();
         logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
 
@@ -293,7 +297,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return validInstantTimestamps;
   }
 
-  private Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(FileSlice slice) {
+  private Pair<HoodieMetadataMergedLogRecordReader, Long> getLogRecordScanner(FileSlice slice, String partitionName) {
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<String> logFilePaths = slice.getLogFiles()
         .sorted(HoodieLogFile.getLogFileComparator())
@@ -323,6 +327,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withBitCaskDiskMapCompressionEnabled(commonConfig.isBitCaskDiskMapCompressionEnabled())
         .withLogBlockTimestamps(validInstantTimestamps)
         .enableFullScan(metadataConfig.enableFullScan())
+        .withPartition(partitionName)
         .build();
 
     Long logScannerOpenMs = timer.endTimer();

@@ -1672,9 +1672,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                        Map<HeaderMetadataType, String> header) {
     switch (dataBlockType) {
       case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(records, header);
+        return new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(records, header);
+        return new HoodieHFileDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }

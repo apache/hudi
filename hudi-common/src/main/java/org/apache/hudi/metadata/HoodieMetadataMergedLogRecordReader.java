@@ -49,13 +49,17 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   // Set of all record keys that are to be read in memory
   private Set<String> mergeKeyFilter;
 
-  private HoodieMetadataMergedLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
-                                              Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes, int bufferSize,
+  private HoodieMetadataMergedLogRecordReader(FileSystem fs, String basePath, String partitionName,
+                                              List<String> logFilePaths,
+                                              Schema readerSchema, String latestInstantTime,
+                                              Long maxMemorySizeInBytes, int bufferSize,
                                               String spillableMapBasePath, Set<String> mergeKeyFilter,
-                                              ExternalSpillableMap.DiskMapType diskMapType, boolean isBitCaskDiskMapCompressionEnabled,
+                                              ExternalSpillableMap.DiskMapType diskMapType,
+                                              boolean isBitCaskDiskMapCompressionEnabled,
                                               Option<InstantRange> instantRange, boolean enableFullScan) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
-        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false, enableFullScan);
+        spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false,
+        enableFullScan, Option.of(partitionName));
     this.mergeKeyFilter = mergeKeyFilter;
     if (enableFullScan) {
       performScan();
@@ -162,6 +166,12 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     }
 
     @Override
+    public Builder withPartition(String partitionName) {
+      this.partitionName = partitionName;
+      return this;
+    }
+
+    @Override
     public Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       return this;
@@ -202,7 +212,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
 
     @Override
     public HoodieMetadataMergedLogRecordReader build() {
-      return new HoodieMetadataMergedLogRecordReader(fs, basePath, logFilePaths, readerSchema,
+      return new HoodieMetadataMergedLogRecordReader(fs, basePath, partitionName, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter,
           diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, enableFullScan);
     }

@@ -39,6 +39,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final List<HoodieLogFile> logFiles;
   // Readers for previously scanned log-files that are still open
   private final List<HoodieLogFileReader> prevReadersInOpenState;
+  // Key field to read get the key from record
+  private final String keyField;
   private HoodieLogFileReader currentReader;
   private final FileSystem fs;
   private final Schema readerSchema;
@@ -50,12 +52,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private static final Logger LOG = LogManager.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
-                        boolean reverseLogReader, int bufferSize) throws IOException {
-    this(fs, logFiles, readerSchema, readBlocksLazily, reverseLogReader, bufferSize, false);
-  }
-
-  HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
-      boolean reverseLogReader, int bufferSize, boolean enableInlineReading) throws IOException {
+                        boolean reverseLogReader, int bufferSize, boolean enableInlineReading,
+                        String keyField) throws IOException {
     this.logFiles = logFiles;
     this.fs = fs;
     this.readerSchema = readerSchema;
@@ -64,9 +62,11 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.bufferSize = bufferSize;
     this.prevReadersInOpenState = new ArrayList<>();
     this.enableInLineReading = enableInlineReading;
+    this.keyField = keyField;
     if (logFiles.size() > 0) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
-      this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false, enableInlineReading);
+      this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
+          enableInlineReading, this.keyField);
     }
   }
 

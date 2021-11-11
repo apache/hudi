@@ -120,28 +120,32 @@ public abstract class AbstractHoodieLogRecordReader {
   private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
+  // Partition name
+  private Option<String> partitionName;
+  // Virtual keys
+  private boolean virtualKeysEnabled = false;
 
-  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
+                                          Schema readerSchema,
                                           String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
-                                          int bufferSize, Option<InstantRange> instantRange, boolean withOperationField) {
-    this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField,
-        true);
+                                          int bufferSize, Option<InstantRange> instantRange,
+                                          boolean withOperationField) {
+    this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+        instantRange, withOperationField, true, Option.empty());
   }
 
-  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
-                                          int bufferSize, Option<InstantRange> instantRange, boolean withOperationField,
-                                          boolean enableFullScan) {
+  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
+                                          Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
+                                          boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
+                                          boolean withOperationField, boolean enableFullScan,
+                                          Option<String> partitionName) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
-    this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
-    this.preCombineField = this.hoodieTableMetaClient.getTableConfig().getPreCombineField();
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
-    if (!tableConfig.populateMetaFields()) {
-      this.simpleKeyGenFields = Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
-    }
+    this.payloadClassFQN = tableConfig.getPayloadClass();
+    this.preCombineField = tableConfig.getPreCombineField();
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
@@ -151,6 +155,14 @@ public abstract class AbstractHoodieLogRecordReader {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.enableFullScan = enableFullScan;
+
+    // virtual keys handling
+    if (!tableConfig.populateMetaFields()) {
+      this.virtualKeysEnabled = true;
+      this.simpleKeyGenFields = Option.of(
+          Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
+    }
+    this.partitionName = partitionName;
   }
 
   public void scan() {
@@ -170,10 +182,17 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
-      // iterate over the paths
+
+      // If virtual keys are enabled, set the key field accordingly.
+      String keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
+      if (virtualKeysEnabled) {
+        keyField = this.simpleKeyGenFields.get().getKey();
+      }
+
+      // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField);
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
@@ -343,11 +362,13 @@ public abstract class AbstractHoodieLogRecordReader {
     }
   }
 
-  protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
-    if (!simpleKeyGenFields.isPresent()) {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.preCombineField, this.withOperationField);
+  private HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
+    if (!virtualKeysEnabled) {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN,
+          this.preCombineField, this.withOperationField);
     } else {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.preCombineField, this.simpleKeyGenFields.get(), this.withOperationField);
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN,
+          this.preCombineField, simpleKeyGenFields.get(), this.withOperationField, this.partitionName);
     }
   }
 
@@ -450,6 +471,10 @@ public abstract class AbstractHoodieLogRecordReader {
     public abstract Builder withReverseReader(boolean reverseReader);
 
     public abstract Builder withBufferSize(int bufferSize);
+
+    public Builder withPartition(String partitionName) {
+      throw new UnsupportedOperationException();
+    }
 
     public Builder withInstantRange(Option<InstantRange> instantRange) {
       throw new UnsupportedOperationException();

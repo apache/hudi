@@ -91,6 +91,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadataWriter.class);
 
+  // Virtual keys support for metadata table
+  private static final String RECORD_KEY_FIELD = "key";
+  private static final boolean POPULATE_META_FIELDS = false;
+
   protected HoodieWriteConfig metadataWriteConfig;
   protected HoodieWriteConfig dataWriteConfig;
   protected String tableName;
@@ -202,7 +206,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)
         .withFinalizeWriteParallelism(parallelism)
-        .withAllowMultiWriteOnSameInstant(true);
+        .withAllowMultiWriteOnSameInstant(true)
+        .withPopulateMetaFields(POPULATE_META_FIELDS);
 
     if (writeConfig.isMetricsOn()) {
       builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
@@ -395,9 +400,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(tableName)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-      .setPayloadClassName(HoodieMetadataPayload.class.getName())
-      .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
-      .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
+        .setPayloadClassName(HoodieMetadataPayload.class.getName())
+        .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
+        .setRecordKeyFields(RECORD_KEY_FIELD)
+        .setPopulateMetaFields(POPULATE_META_FIELDS)
+        .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
 
     initTableMetadata();
     initializeFileGroups(dataMetaClient, MetadataPartitionType.FILES, createInstantTime, 1);
