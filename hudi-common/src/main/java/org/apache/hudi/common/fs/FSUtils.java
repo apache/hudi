@@ -239,7 +239,7 @@ public class FSUtils {
   /**
    * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
    * are skipped
-   * 
+   *
    * @param fs File System
    * @param basePathStr Base-Path
    * @param consumer Callback for processing
@@ -431,15 +431,27 @@ public class FSUtils {
 
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
-    String suffix =
-        (writeToken == null) ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
-            : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
+    String suffix = (writeToken == null)
+        ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
+        : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
     return LOG_FILE_PREFIX + suffix;
+  }
+
+  public static boolean isBaseFile(Path path) {
+    String extension = getFileExtension(path.getName());
+    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
   }
 
   public static boolean isLogFile(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
     return matcher.find() && logPath.getName().contains(".log");
+  }
+
+  /**
+   * Returns true if the given path is a Base file or a Log file.
+   */
+  public static boolean isDataFile(Path path) {
+    return isBaseFile(path) || isLogFile(path);
   }
 
   /**

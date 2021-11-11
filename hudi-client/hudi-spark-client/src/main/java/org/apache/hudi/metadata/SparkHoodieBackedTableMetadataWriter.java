@@ -22,6 +22,7 @@ import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
@@ -39,7 +40,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
 import java.util.List;
@@ -121,9 +121,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
   }
 
-  @Override
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService) {
+  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String partitionName, String instantTime, boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
+    JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) hoodieDataRecords.get();
     JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
@@ -166,12 +166,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    *
    * The record is tagged with respective file slice's location based on its record key.
    */
-  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int numFileGroups) {
+  private JavaRDD<HoodieRecord> prepRecords(JavaRDD<HoodieRecord> recordsRDD, String partitionName, int numFileGroups) {
     List<FileSlice> fileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
     ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
 
-    JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
-    return jsc.parallelize(records, 1).map(r -> {
+    return recordsRDD.map(r -> {
       FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups));
       r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       return r;

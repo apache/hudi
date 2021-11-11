@@ -27,6 +27,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -39,7 +40,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -51,7 +51,6 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -68,6 +67,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -175,7 +176,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withMaxConsistencyChecks(writeConfig.getConsistencyGuardConfig().getMaxConsistencyChecks())
             .build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
         .withAutoCommit(true)
         .withAvroSchemaValidate(true)
         .withEmbeddedTimelineServerEnabled(false)
@@ -400,92 +401,68 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
-    Map<String, List<FileStatus>> partitionToFileStatus = getPartitionsToFilesMapping(dataMetaClient);
+    List<DirectoryInfo> dirInfoList = listAllPartitions(dataMetaClient);
 
-    // Create a HoodieCommitMetadata with writeStats for all discovered files
-    int[] stats = {0};
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-
-    partitionToFileStatus.forEach((partition, statuses) -> {
-      // Filter the statuses to only include files which were created before or on createInstantTime
-      statuses.stream().filter(status -> {
-        String filename = status.getPath().getName();
-        return !HoodieTimeline.compareTimestamps(FSUtils.getCommitTime(filename), HoodieTimeline.GREATER_THAN,
-            createInstantTime);
-      }).forEach(status -> {
-        HoodieWriteStat writeStat = new HoodieWriteStat();
-        writeStat.setPath((partition.isEmpty() ? "" : partition + Path.SEPARATOR) + status.getPath().getName());
-        writeStat.setPartitionPath(partition);
-        writeStat.setTotalWriteBytes(status.getLen());
-        commitMetadata.addWriteStat(partition, writeStat);
-        stats[0] += 1;
-      });
-
-      // If the partition has no files then create a writeStat with no file path
-      if (commitMetadata.getWriteStats(partition) == null) {
-        HoodieWriteStat writeStat = new HoodieWriteStat();
-        writeStat.setPartitionPath(partition);
-        commitMetadata.addWriteStat(partition, writeStat);
-      }
-    });
-
-    LOG.info("Committing " + partitionToFileStatus.size() + " partitions and " + stats[0] + " files to metadata");
-    update(commitMetadata, createInstantTime, false);
+    // During bootstrap, the list of files to be committed can be huge. So creating a HoodieCommitMetadata out of these
+    // large number of files and calling the existing update(HoodieCommitMetadata) function does not scale well.
+    // Hence, we have a special commit just for the bootstrap scenario.
+    bootstrapCommit(dirInfoList, createInstantTime);
     return true;
   }
 
   /**
    * Function to find hoodie partitions and list files in them in parallel.
    *
-   * @param dataMetaClient
+   * @param datasetMetaClient data set meta client instance.
    * @return Map of partition names to a list of FileStatus for all the files in the partition
    */
-  private Map<String, List<FileStatus>> getPartitionsToFilesMapping(HoodieTableMetaClient dataMetaClient) {
+  private List<DirectoryInfo> listAllPartitions(HoodieTableMetaClient datasetMetaClient) {
     List<Path> pathsToList = new LinkedList<>();
     pathsToList.add(new Path(dataWriteConfig.getBasePath()));
 
-    Map<String, List<FileStatus>> partitionToFileStatus = new HashMap<>();
+    List<DirectoryInfo> partitionsToBootstrap = new LinkedList<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
-    SerializableConfiguration conf = new SerializableConfiguration(dataMetaClient.getHadoopConf());
+    SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
+    final String datasetBasePath = datasetMetaClient.getBasePath();
 
     while (!pathsToList.isEmpty()) {
-      int listingParallelism = Math.min(fileListingParallelism, pathsToList.size());
+      // In each round we will list a section of directories
+      int numDirsToList = Math.min(fileListingParallelism, pathsToList.size());
       // List all directories in parallel
-      List<Pair<Path, FileStatus[]>> dirToFileListing = engineContext.map(pathsToList, path -> {
+      List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0,  numDirsToList), path -> {
         FileSystem fs = path.getFileSystem(conf.get());
-        return Pair.of(path, fs.listStatus(path));
-      }, listingParallelism);
-      pathsToList.clear();
+        String relativeDirPath = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), path);
+        return new DirectoryInfo(relativeDirPath, fs.listStatus(path));
+      }, numDirsToList);
+
+      pathsToList = new LinkedList<>(pathsToList.subList(numDirsToList, pathsToList.size()));
 
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
-      dirToFileListing.forEach(p -> {
-        if (!dirFilterRegex.isEmpty() && p.getLeft().getName().matches(dirFilterRegex)) {
-          LOG.info("Ignoring directory " + p.getLeft() + " which matches the filter regex " + dirFilterRegex);
-          return;
+      for (DirectoryInfo dirInfo : processedDirectories) {
+        if (!dirFilterRegex.isEmpty()) {
+          final String relativePath = dirInfo.getRelativePath();
+          if (!relativePath.isEmpty()) {
+            Path partitionPath = new Path(datasetBasePath, relativePath);
+            if (partitionPath.getName().matches(dirFilterRegex)) {
+              LOG.info("Ignoring directory " + partitionPath + " which matches the filter regex " + dirFilterRegex);
+              continue;
+            }
+          }
         }
 
-        List<FileStatus> filesInDir = Arrays.stream(p.getRight()).parallel()
-            .filter(fs -> !fs.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))
-            .collect(Collectors.toList());
-
-        if (p.getRight().length > filesInDir.size()) {
-          String partitionName = FSUtils.getRelativePartitionPath(new Path(dataMetaClient.getBasePath()), p.getLeft());
-          // deal with Non-partition table, we should exclude .hoodie
-          partitionToFileStatus.put(partitionName, filesInDir.stream()
-              .filter(f -> !f.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)).collect(Collectors.toList()));
+        if (dirInfo.isHoodiePartition()) {
+          // Add to result
+          partitionsToBootstrap.add(dirInfo);
         } else {
           // Add sub-dirs to the queue
-          pathsToList.addAll(Arrays.stream(p.getRight())
-              .filter(fs -> fs.isDirectory() && !fs.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME))
-              .map(fs -> fs.getPath())
-              .collect(Collectors.toList()));
+          pathsToList.addAll(dirInfo.getSubDirectories());
         }
-      });
+      }
     }
 
-    return partitionToFileStatus;
+    return partitionsToBootstrap;
   }
 
   /**
@@ -549,7 +526,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   private <T> void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction, boolean canTriggerTableService) {
     if (enabled && metadata != null) {
       List<HoodieRecord> records = convertMetadataFunction.convertMetadata();
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime, canTriggerTableService);
+      commit(engineContext.parallelize(records, 1), MetadataPartitionType.FILES.partitionPath(), instantTime, canTriggerTableService);
     }
   }
 
@@ -611,7 +588,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(), rollbackMetadata, instantTime,
           metadata.getSyncedInstantTime(), wasSynced);
-      commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime, false);
+      commit(engineContext.parallelize(records, 1), MetadataPartitionType.FILES.partitionPath(), instantTime, false);
     }
   }
 
@@ -624,12 +601,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
-   *  @param records The list of records to be written.
+   *  @param records The HoodieData of records to be written.
    * @param partitionName The partition to which the records are to be written.
    * @param instantTime The timestamp to use for the deltacommit.
    * @param canTriggerTableService true if table services can be scheduled and executed. false otherwise.
    */
-  protected abstract void commit(List<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService);
+  protected abstract void commit(HoodieData<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService);
 
   /**
    *  Perform a compaction on the Metadata Table.
@@ -667,5 +644,97 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
     writeClient.clean(instantTime + "002");
+  }
+
+  /**
+   * This is invoked to bootstrap metadata table for a dataset. Bootstrap Commit has special handling mechanism due to its scale compared to
+   * other regular commits.
+   *
+   */
+  protected void bootstrapCommit(List<DirectoryInfo> partitionInfoList, String createInstantTime) {
+    List<String> partitions = partitionInfoList.stream().map(p -> p.getRelativePath()).collect(Collectors.toList());
+    final int totalFiles = partitionInfoList.stream().mapToInt(p -> p.getTotalFiles()).sum();
+
+    // Record which saves the list of all partitions
+    HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
+    if (partitions.isEmpty()) {
+      // in case of boostrapping of a fresh table, there won't be any partitions, but we need to make a boostrap commit
+      commit(engineContext.parallelize(Collections.singletonList(allPartitionRecord), 1), MetadataPartitionType.FILES.partitionPath(), createInstantTime, false);
+      return;
+    }
+    HoodieData<HoodieRecord> partitionRecords = engineContext.parallelize(Arrays.asList(allPartitionRecord), 1);
+    if (!partitionInfoList.isEmpty()) {
+      HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
+        // Record which saves files within a partition
+        return HoodieMetadataPayload.createPartitionFilesRecord(
+            partitionInfo.getRelativePath(), Option.of(partitionInfo.getFileNameToSizeMap()), Option.empty());
+      });
+      partitionRecords = partitionRecords.union(fileListRecords);
+    }
+
+    LOG.info("Committing " + partitions.size() + " partitions and " + totalFiles + " files to metadata");
+    ValidationUtils.checkState(partitionRecords.count() == (partitions.size() + 1));
+    commit(partitionRecords, MetadataPartitionType.FILES.partitionPath(), createInstantTime, false);
+  }
+
+  /**
+   * A class which represents a directory and the files and directories inside it.
+   *
+   * A {@code PartitionFileInfo} object saves the name of the partition and various properties requires of each file
+   * required for bootstrapping the metadata table. Saving limited properties reduces the total memory footprint when
+   * a very large number of files are present in the dataset being bootstrapped.
+   */
+  static class DirectoryInfo implements Serializable {
+    // Relative path of the directory (relative to the base directory)
+    private final String relativePath;
+    // Map of filenames within this partition to their respective sizes
+    private HashMap<String, Long> filenameToSizeMap;
+    // List of directories within this partition
+    private final List<Path> subDirectories = new ArrayList<>();
+    // Is this a hoodie partition
+    private boolean isHoodiePartition = false;
+
+    public DirectoryInfo(String relativePath, FileStatus[] fileStatus) {
+      this.relativePath = relativePath;
+
+      // Pre-allocate with the maximum length possible
+      filenameToSizeMap = new HashMap<>(fileStatus.length);
+
+      for (FileStatus status : fileStatus) {
+        if (status.isDirectory()) {
+          // Ignore .hoodie directory as there cannot be any partitions inside it
+          if (!status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+            this.subDirectories.add(status.getPath());
+          }
+        } else if (status.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+          // Presence of partition meta file implies this is a HUDI partition
+          this.isHoodiePartition = true;
+        } else if (FSUtils.isDataFile(status.getPath())) {
+          // Regular HUDI data file (base file or log file)
+          filenameToSizeMap.put(status.getPath().getName(), status.getLen());
+        }
+      }
+    }
+
+    String getRelativePath() {
+      return relativePath;
+    }
+
+    int getTotalFiles() {
+      return filenameToSizeMap.size();
+    }
+
+    boolean isHoodiePartition() {
+      return isHoodiePartition;
+    }
+
+    List<Path> getSubDirectories() {
+      return subDirectories;
+    }
+
+    // Returns a map of filenames mapped to their lengths
+    Map<String, Long> getFileNameToSizeMap() {
+      return filenameToSizeMap;
+    }
   }
 }

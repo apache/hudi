@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
@@ -91,8 +92,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService) {
+  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String partitionName, String instantTime, boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
+    List<HoodieRecord> records = (List<HoodieRecord>) hoodieDataRecords.get();
     List<HoodieRecord> recordList = prepRecords(records, partitionName, 1);
 
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig)) {
