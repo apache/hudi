@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -124,6 +125,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                                                            HoodieTableType tableType) throws Exception {
     init(tableType);
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMarkersType(MarkerType.DIRECT.name())
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minArchivalCommits, maxArchivalCommits).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata)
@@ -211,6 +213,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMarkersType(MarkerType.DIRECT.name())
         .build();
 
     HoodieTestDataGenerator.createCommitFile(basePath, "100", wrapperFs.getConf());
@@ -329,6 +332,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+            .withMarkersType(MarkerType.DIRECT.name())
             .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -485,6 +489,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minInstantsToKeep, maxInstantsToKeep).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+            .withMarkersType(MarkerType.DIRECT.name())
             .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -520,6 +525,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
             .withParallelism(2, 2).forTable("test-trip-table")
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+            .withMarkersType(MarkerType.DIRECT.name())
             .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 

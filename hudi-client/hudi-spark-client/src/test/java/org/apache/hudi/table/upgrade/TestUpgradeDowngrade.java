@@ -327,7 +327,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
         .run(toVersion, null);
 
     // assert marker files
-    assertMarkerFilesForDowngrade(table, commitInstant, toVersion == HoodieTableVersion.ONE);
+    assertMarkerFilesForDowngrade(table, commitInstant, toVersion == HoodieTableVersion.ONE, markerType);
 
     // verify hoodie.table.version got downgraded
     metaClient = HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(cfg.getBasePath())
@@ -344,9 +344,14 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
      */
   }
 
-  private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists) throws IOException {
+  private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists, MarkerType markerType) throws IOException {
     // Verify recreated marker files are as expected
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+    WriteMarkers writeMarkers = null;
+    if (!assertExists) {
+      writeMarkers = WriteMarkersFactory.get(markerType, table, commitInstant.getTimestamp());
+    } else {
+      writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+    }
     if (assertExists) {
       assertTrue(writeMarkers.doesMarkerDirExist());
       assertEquals(0, getTimelineServerBasedMarkerFileCount(table.getMetaClient().getMarkerFolderPath(commitInstant.getTimestamp()),

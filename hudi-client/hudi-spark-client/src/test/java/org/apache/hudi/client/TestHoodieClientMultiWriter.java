@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -212,6 +213,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
                 .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
                 .withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(
             FileSystemViewStorageType.MEMORY).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(1).build())

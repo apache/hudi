@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieStorageConfig, HoodieWriteConfig}
@@ -50,7 +51,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+    HoodieWriteConfig.MARKERS_TYPE.key() -> MarkerType.DIRECT.name()
   )
 
   @BeforeEach override def setUp() {

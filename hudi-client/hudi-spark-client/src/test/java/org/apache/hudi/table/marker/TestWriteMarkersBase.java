@@ -77,6 +77,16 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testNonPartitionedDataset() throws IOException {
+    writeMarkers.create("", "file1", IOType.CREATE);
+    writeMarkers.create("", "file2", IOType.MERGE);
+
+    assertTrue(writeMarkers.doesMarkerDirExist());
+    assertTrue(writeMarkers.deleteMarkerDir(context, 2));
+    assertFalse(writeMarkers.doesMarkerDirExist());
+  }
+
+  @Test
   public void testDeletionWhenMarkerDirExists() throws IOException {
     //when
     writeMarkers.create("2020/06/01", "file1", IOType.MERGE);

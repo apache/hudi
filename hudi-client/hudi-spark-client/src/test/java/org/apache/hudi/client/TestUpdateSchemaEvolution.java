@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -228,6 +229,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
 
   private HoodieWriteConfig makeHoodieClientConfig(String name) {
     Schema schema = getSchemaFromResource(getClass(), name);
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString()).build();
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withSchema(schema.toString()).build();
   }
 }

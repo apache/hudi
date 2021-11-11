@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.Transformations;
@@ -112,7 +113,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString());
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString()).withMarkersType(MarkerType.DIRECT.name());
   }
 
   // TODO (weiy): Add testcases for crossing file writing.
@@ -405,6 +406,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     Schema schema = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString())
+        .withMarkersType(MarkerType.DIRECT.name())
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build()).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);

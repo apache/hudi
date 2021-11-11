@@ -143,7 +143,11 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
         + " in " + timer.endTimer() + " ms");
     if (success) {
-      return Option.of(new Path(new Path(markerDirPath, partitionPath), markerFileName));
+      if (partitionPath.isEmpty()) {
+        return Option.of(new Path(markerDirPath, markerFileName));
+      } else {
+        return Option.of(new Path(new Path(markerDirPath, partitionPath), markerFileName));
+      }
     } else {
       return Option.empty();
     }
