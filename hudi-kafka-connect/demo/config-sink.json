@@ -16,9 +16,8 @@
 		"hoodie.datasource.write.partitionpath.field": "date",
 		"hoodie.schemaprovider.class": "org.apache.hudi.schema.SchemaRegistryProvider",
 		"hoodie.deltastreamer.schemaprovider.registry.url": "http://localhost:8081/subjects/hudi-test-topic/versions/latest",
-		"hoodie.clustering.async.enabled": true,
-		"hoodie.clustering.async.max.commits": "3",
-		"hoodie.compact.async.enabled": true,
-		"hoodie.compact.inline.max.delta.commits": 4
+		"hoodie.keep.max.commits": 10,
+		"hoodie.keep.min.commits": 8,
+		"hoodie.cleaner.commits.retained": 6
 	}
 }

@@ -92,6 +92,22 @@ public class JavaSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T
       fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
 
+    /*
+    Stream<HoodieClusteringGroup> result = fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
+        .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
+        .setNumOutputFileGroups(fileSliceGroup.getRight())
+        .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
+        .build());
+
+    result.forEach(
+        clusteringGroup -> {
+          LOG.info("Build clustering group: ");
+          for (HoodieSliceInfo info : clusteringGroup.getSlices()) {
+            LOG.info("slice info: " + info.getDataFilePath());
+          }
+        }
+    );*/
+    
     return fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
         .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
         .setNumOutputFileGroups(fileSliceGroup.getRight())
