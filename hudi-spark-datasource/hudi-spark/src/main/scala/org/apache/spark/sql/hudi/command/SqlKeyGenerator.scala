@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
+import java.sql.Timestamp
 import java.util.concurrent.TimeUnit.{MICROSECONDS, MILLISECONDS}
 
 import org.apache.avro.generic.GenericRecord
@@ -96,7 +97,7 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
                 val timeMs = if (rowType) { // In RowType, the partitionPathValue is the time format string, convert to millis
                   SqlKeyGenerator.sqlTimestampFormat.parseMillis(_partitionValue)
                 } else {
-                  MILLISECONDS.convert(_partitionValue.toLong, MICROSECONDS)
+                  Timestamp.valueOf(_partitionValue).getTime
                 }
                 val timestampFormat = PartitionPathEncodeUtils.escapePathName(
                     SqlKeyGenerator.timestampTimeFormat.print(timeMs))

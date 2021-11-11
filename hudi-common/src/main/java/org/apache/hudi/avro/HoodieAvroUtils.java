@@ -57,6 +57,7 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -539,6 +540,8 @@ public class HoodieAvroUtils {
   private static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue) {
     if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
       return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMicros()) {
+      return new Timestamp(Long.parseLong(fieldValue.toString()) / 1000);
     } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
       Decimal dc = (Decimal) fieldSchema.getLogicalType();
       DecimalConversion decimalConversion = new DecimalConversion();
