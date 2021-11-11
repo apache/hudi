@@ -228,8 +228,8 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
     roView = getHoodieTableFileSystemView(reloadedMetaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
     dataFilesToRead = roView.getLatestBaseFiles();
-    assertTrue(dataFilesToRead.findAny().isPresent(),
-        "should list the base files we wrote in the delta commit");
+    assertEquals(!hoodieTable.getIndex().canIndexLogFiles(), dataFilesToRead.findAny().isPresent(),
+        "Must not contain data files if log files can be indexed.");
   }
 
   protected void updateRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
