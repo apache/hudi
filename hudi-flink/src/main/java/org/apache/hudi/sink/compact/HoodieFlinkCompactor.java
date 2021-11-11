@@ -75,14 +75,16 @@ public class HoodieFlinkCompactor {
     // judge whether have operation
     // to compute the compaction instant time and do compaction.
     if (cfg.schedule) {
-      String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
-      boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-      if (!scheduled) {
-        // do nothing.
-        LOG.info("No compaction plan for this job ");
-        return;
+      Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
+      if (compactionInstantTimeOption.isPresent()) {
+        boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
+        if (!scheduled) {
+          // do nothing.
+          LOG.info("No compaction plan for this job ");
+          return;
+        }
+        table.getMetaClient().reloadActiveTimeline();
       }
-      table.getMetaClient().reloadActiveTimeline();
     }
 
     // fetch the instant based on the configured execution sequence

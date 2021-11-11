@@ -109,11 +109,17 @@ public class ITTestHoodieFlinkCompactor {
     // infer changelog mode
     CompactionUtil.inferChangelogMode(conf, metaClient);
 
+    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
+
+    boolean scheduled = false;
     // judge whether have operation
     // To compute the compaction instant time and do compaction.
-    String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf);
-    boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+    Option<String> compactionInstantTimeOption = CompactionUtil.getCompactionInstantTime(metaClient);
+    if (compactionInstantTimeOption.isPresent()) {
+      scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTimeOption.get(), Option.empty());
+    }
+
+    String compactionInstantTime = compactionInstantTimeOption.get();
 
     assertTrue(scheduled, "The compaction plan should be scheduled");
 

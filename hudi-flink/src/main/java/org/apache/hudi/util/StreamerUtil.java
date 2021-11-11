@@ -407,14 +407,14 @@ public class StreamerUtil {
   /**
    * Returns the median instant time between the given two instant time.
    */
-  public static String medianInstantTime(String highVal, String lowVal) {
+  public static Option<String> medianInstantTime(String highVal, String lowVal) {
     try {
       long high = HoodieActiveTimeline.parseInstantTime(highVal).getTime();
       long low = HoodieActiveTimeline.parseInstantTime(lowVal).getTime();
       ValidationUtils.checkArgument(high > low,
           "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
       long median = low + (high - low) / 2;
-      return HoodieActiveTimeline.formatInstantTime(new Date(median));
+      return low >= median ? Option.empty() : Option.of(HoodieActiveTimeline.formatInstantTime(new Date(median)));
     } catch (ParseException e) {
       throw new HoodieException("Get median instant time with interval [" + lowVal + ", " + highVal + "] error", e);
     }

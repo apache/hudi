@@ -84,4 +84,12 @@ public class OptionsResolver {
     final String preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
     return preCombineField.equals(FlinkOptions.NO_PRE_COMBINE) ? null : preCombineField;
   }
+
+  /**
+   * Returns whether the compaction strategy is based on elapsed delta time.
+   */
+  public static boolean isDeltaTimeCompaction(Configuration conf) {
+    final String strategy = conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toLowerCase(Locale.ROOT);
+    return FlinkOptions.TIME_ELAPSED.equals(strategy) || FlinkOptions.NUM_OR_TIME.equals(strategy);
+  }
 }

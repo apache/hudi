@@ -123,13 +123,13 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
     return new HoodieCompactionPlan();
   }
 
-  private Pair<Integer, String> getLatestDeltaCommitInfo(CompactionTriggerStrategy compactionTriggerStrategy) {
+  private Pair<Integer, String> getLatestDeltaCommitInfo() {
     Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
         .filterCompletedInstants().lastInstant();
     HoodieTimeline deltaCommits = table.getActiveTimeline().getDeltaCommitTimeline();
 
     String latestInstantTs;
-    int deltaCommitsSinceLastCompaction = 0;
+    final int deltaCommitsSinceLastCompaction;
     if (lastCompaction.isPresent()) {
       latestInstantTs = lastCompaction.get().getTimestamp();
       deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(latestInstantTs, Integer.MAX_VALUE).countInstants();
@@ -143,7 +143,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
   private boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
     boolean compactable;
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
-    Pair<Integer, String> latestDeltaCommitInfo = getLatestDeltaCommitInfo(compactionTriggerStrategy);
+    Pair<Integer, String> latestDeltaCommitInfo = getLatestDeltaCommitInfo();
     int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
     int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
     switch (compactionTriggerStrategy) {

@@ -223,6 +223,10 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
   }
 
+  public void endInput() {
+    writeFunction.endInput();
+  }
+
   public void checkpointComplete(long checkpointId) {
     stateInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
     coordinator.notifyCheckpointComplete(checkpointId);
@@ -248,6 +252,11 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   public void close() throws Exception {
     coordinator.close();
     ioManager.close();
+    bucketAssignerFunction.close();
+    writeFunction.close();
+    if (compactFunctionWrapper != null) {
+      compactFunctionWrapper.close();
+    }
   }
 
   public StreamWriteOperatorCoordinator getCoordinator() {
