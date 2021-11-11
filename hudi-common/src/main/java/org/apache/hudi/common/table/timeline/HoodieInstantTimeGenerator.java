@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -35,6 +37,10 @@ public class HoodieInstantTimeGenerator {
   private static final String INSTANT_TIMESTAMP_FORMAT = "yyyyMMddHHmmss";
   // Formatter to generate Instant timestamps
   private static DateTimeFormatter INSTANT_TIME_FORMATTER = DateTimeFormatter.ofPattern(INSTANT_TIMESTAMP_FORMAT);
+  private static final String MILLIS_COMMIT_FORMAT = "yyyyMMddHHmmssSSS";
+  private static final int MILLIS_INSTANT_ID_LENGTH = MILLIS_COMMIT_FORMAT.length();
+  // Formatter to generate Instant timestamps for millsecs format
+  private static final SimpleDateFormat MILLIS_COMMIT_FORMATTER = new SimpleDateFormat(MILLIS_COMMIT_FORMAT);
   // The last Instant timestamp generated
   private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
   private static final String ALL_ZERO_TIMESTAMP = "00000000000000";
@@ -56,7 +62,7 @@ public class HoodieInstantTimeGenerator {
     });
   }
 
-  public static Date parseInstantTime(String timestamp) {
+  public static Date parseInstantTime(String timestamp) throws ParseException {
     try {
       LocalDateTime dt = LocalDateTime.parse(timestamp, INSTANT_TIME_FORMATTER);
       return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
@@ -64,6 +70,12 @@ public class HoodieInstantTimeGenerator {
       // Special handling for all zero timestamp which is not parsable by DateTimeFormatter
       if (timestamp.equals(ALL_ZERO_TIMESTAMP)) {
         return new Date(0);
+      }
+      // compaction and cleaning in metadata has special format. handling it here.
+      if (timestamp.length() == MILLIS_INSTANT_ID_LENGTH) {
+        // we could either trim the last 3 characters and parse it with Secs granularity. but we will revisit this when we add support for
+        // ms level commit timestamp.
+        return MILLIS_COMMIT_FORMATTER.parse(timestamp);
       }
 
       throw e;
