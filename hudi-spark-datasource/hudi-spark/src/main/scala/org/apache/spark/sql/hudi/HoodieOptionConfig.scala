@@ -199,8 +199,7 @@ object HoodieOptionConfig {
 
     // validate primary key
     val primaryKeys = options.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)
-      .map(_.split(",")
-      .filter(_.length > 0))
+      .map(_.split(",").filter(_.length > 0))
     ValidationUtils.checkArgument(primaryKeys.nonEmpty, "No `primaryKey` is specified.")
     primaryKeys.get.foreach { primaryKey =>
       ValidationUtils.checkArgument(schema.exists(f => resolver(f.name, primaryKey)),
@@ -216,7 +215,7 @@ object HoodieOptionConfig {
 
     // validate table type
     val tableType = options.get(SQL_KEY_TABLE_TYPE.sqlKeyName)
-    ValidationUtils.checkArgument(tableType.nonEmpty, "No `tableType` is specified.")
+    ValidationUtils.checkArgument(tableType.nonEmpty, "No `type` is specified.")
     ValidationUtils.checkArgument(
       tableType.get.equalsIgnoreCase(HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_COW) ||
       tableType.get.equalsIgnoreCase(HoodieOptionConfig.SQL_VALUE_TABLE_TYPE_MOR),

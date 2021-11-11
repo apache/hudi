@@ -75,7 +75,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     }
 
     // get schema with meta fields, table config if hudi table exists, options including
-    // table configs and properties of the catalog tabe
+    // table configs and properties of the catalog table
     val path = getTableLocation(table, sparkSession)
     val (finalSchema, existingTableConfig, tableSqlOptions) = parseSchemaAndConfigs(sparkSession, path)
 

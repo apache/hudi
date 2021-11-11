@@ -244,13 +244,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     // Append the table schema to the parameters. In the case of merge into, the schema of sourceDF
     // may be different from the target table, because the are transform logical in the update or
     // insert actions.
-    val opertion = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
+    val operation = if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, ""))) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
     }
     var writeParams = parameters +
-      (OPERATION.key -> opertion) +
+      (OPERATION.key -> operation) +
       (HoodieWriteConfig.WRITE_SCHEMA.key -> getTableSchema.toString) +
       (DataSourceWriteOptions.TABLE_TYPE.key -> targetTableType)
 
