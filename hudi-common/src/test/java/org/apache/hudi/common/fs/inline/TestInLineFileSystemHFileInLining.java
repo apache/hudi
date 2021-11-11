@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.fs.inline;
 
-import org.apache.hudi.common.io.storage.HoodieKVComparatorV2;
+import org.apache.hudi.metadata.HoodieMetadataKVComparator;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 
 import org.apache.hadoop.conf.Configuration;
@@ -93,7 +93,7 @@ public class TestInLineFileSystemHFileInLining {
     HFile.Writer writer = HFile.getWriterFactory(inMemoryConf, cacheConf)
         .withOutputStream(fout)
         .withFileContext(meta)
-        .withComparator(new HoodieKVComparatorV2())
+        .withComparator(new HoodieMetadataKVComparator())
         .create();
 
     writeRecords(writer);
