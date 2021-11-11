@@ -343,7 +343,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testPayloadSizeEstimate() throws IOException, URISyntaxException {
+  public void testEstimationWithEmptyMap() throws IOException, URISyntaxException {
     final ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.BITCASK;
     final boolean isCompressionEnabled = false;
     final Schema schema = SchemaTestUtil.getSimpleSchema();
