@@ -98,15 +98,42 @@ public class Pipelines {
         .name("dummy");
   }
 
+  /**
+   * Constructs bootstrap pipeline as streaming.
+   */
+  public static DataStream<HoodieRecord> bootstrap(
+      Configuration conf,
+      RowType rowType,
+      int defaultParallelism,
+      DataStream<RowData> dataStream) {
+    return bootstrap(conf, rowType, defaultParallelism, dataStream, false, false);
+  }
+
+  /**
+   * Constructs bootstrap pipeline.
+   *
+   * @param conf The configuration
+   * @param rowType The row type
+   * @param defaultParallelism The default parallelism
+   * @param dataStream The data stream
+   * @param bounded Whether the source is bounded
+   * @param overwrite Whether it is insert overwrite
+   */
   public static DataStream<HoodieRecord> bootstrap(
       Configuration conf,
       RowType rowType,
       int defaultParallelism,
       DataStream<RowData> dataStream,
-      boolean bounded) {
-    return bounded
-        ? boundedBootstrap(conf, rowType, defaultParallelism, dataStream)
-        : streamBootstrap(conf, rowType, defaultParallelism, dataStream);
+      boolean bounded,
+      boolean overwrite) {
+    final boolean globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
+    if (overwrite) {
+      return rowDataToHoodieRecord(conf, rowType, dataStream);
+    } else if (bounded && !globalIndex) {
+      return boundedBootstrap(conf, rowType, defaultParallelism, dataStream);
+    } else {
+      return streamBootstrap(conf, rowType, defaultParallelism, dataStream);
+    }
   }
 
   private static DataStream<HoodieRecord> streamBootstrap(
