@@ -30,10 +30,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
-
 import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.table.action.commit.UpsertPartitioner;
-import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
@@ -109,8 +107,8 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
           .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getTimestamp(), false)
           .filter(
               fileSlice ->
-                  fileSlice.getLogFiles().count() < 1 &&
-                  fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
+                  fileSlice.getLogFiles().count() < 1
+                  && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
           .min(Comparator.comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize()))
     )
         .map(Collections::singletonList)
