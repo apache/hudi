@@ -168,7 +168,7 @@ public class StreamWriteITCase extends TestLogger {
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
         .setParallelism(parallelism);
 
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, false);
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
     DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
     Pipelines.clean(conf, pipeline);
     Pipelines.compact(conf, pipeline);
@@ -225,7 +225,7 @@ public class StreamWriteITCase extends TestLogger {
     }
 
     int parallelism = execEnv.getParallelism();
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream, false);
+    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, parallelism, dataStream);
     DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, parallelism, hoodieRecordDataStream);
     execEnv.addOperator(pipeline.getTransformation());
 

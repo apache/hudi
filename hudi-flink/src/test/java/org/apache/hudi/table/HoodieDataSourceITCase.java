@@ -606,6 +606,36 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     assertRowsEquals(result, "[+I[id1, Sophia, 18, 1970-01-01T00:00:05, par1]]");
   }
 
+  @ParameterizedTest
+  @MethodSource("executionModeAndTableTypeParams")
+  void testBatchUpsertWithMiniBatchesGlobalIndex(ExecMode execMode, HoodieTableType tableType) {
+    TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.WRITE_BATCH_SIZE, "0.001")
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.INDEX_GLOBAL_ENABLED, true)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto1 = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+
+    execInsertSql(tableEnv, insertInto1);
+
+    final String insertInto2 = "insert into t1 values\n"
+        + "('id1','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par2'),\n"
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par1'),\n"
+        + "('id1','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par2'),\n"
+        + "('id1','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3')";
+
+    execInsertSql(tableEnv, insertInto2);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "[+I[id1, Sophia, 18, 1970-01-01T00:00:05, par3]]");
+  }
+
   @Test
   void testUpdateWithDefaultHoodieRecordPayload() {
     TableEnvironment tableEnv = batchTableEnv;
