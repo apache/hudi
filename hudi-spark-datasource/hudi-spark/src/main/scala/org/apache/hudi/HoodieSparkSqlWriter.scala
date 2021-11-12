@@ -145,7 +145,7 @@ object HoodieSparkSqlWriter {
           .setPartitionFields(partitionColumns)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
-          .setKeyGeneratorClassProp(HoodieWriterUtils.getRealKeyGenerator(hoodieConfig))
+          .setKeyGeneratorClassProp(HoodieWriterUtils.getOriginKeyGenerator(parameters))
           .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
           .initTable(sparkContext.hadoopConfiguration, path)

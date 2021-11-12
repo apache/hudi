@@ -478,8 +478,8 @@ class TestDataSourceForBootstrap {
   }
 
   def runMetadataBootstrapAndVerifyCommit(tableType: String,
-      partitionColumns: Option[String] = None,
-      extraOpts: Map[String, String] = Map.empty): String = {
+                                          partitionColumns: Option[String] = None,
+                                          extraOpts: Map[String, String] = Map.empty): String = {
     val bootstrapDF = spark.emptyDataFrame
     bootstrapDF.write
       .format("hudi")

@@ -107,10 +107,10 @@ object HoodieWriterUtils {
     new HoodieConfig(properties)
   }
 
-  def getRealKeyGenerator(hoodieConfig: HoodieConfig): String = {
-    val kg = hoodieConfig.getString(KEYGENERATOR_CLASS_NAME.key())
+  def getOriginKeyGenerator(parameters: Map[String, String]): String = {
+    val kg = parameters.getOrElse(KEYGENERATOR_CLASS_NAME.key(), null)
     if (classOf[SqlKeyGenerator].getCanonicalName == kg) {
-      hoodieConfig.getString(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME)
+      parameters.getOrElse(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
     } else {
       kg
     }

@@ -40,7 +40,7 @@ import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
-import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand.{initTableIfNeed, isEmptyPath}
+import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand.checkTableConfigEqual
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
@@ -80,8 +80,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     val (finalSchema, existingTableConfig, tableSqlOptions) = parseSchemaAndConfigs(sparkSession, path)
 
     // Init the hoodie.properties
-    initTableIfNeed(sparkSession, tableName, path, finalSchema,
-      table.partitionColumnNames, existingTableConfig, tableSqlOptions)
+    initTableIfNeed(sparkSession, path, finalSchema, existingTableConfig, tableSqlOptions)
 
     try {
       // Create table in the catalog
@@ -89,7 +88,6 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     } catch {
       case NonFatal(e) =>
         logWarning(s"Failed to create catalog table in metastore: ${e.getMessage}")
-        e.printStackTrace()
     }
 
     Seq.empty[Row]
@@ -355,18 +353,13 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     }
     extraConfig.toMap
   }
-}
-
-object CreateHoodieTableCommand extends Logging {
 
   /**
     * Init the hoodie.properties.
     */
   def initTableIfNeed(sparkSession: SparkSession,
-      tableName: String,
       location: String,
       schema: StructType,
-      partitionColumns: Seq[String],
       originTableConfig: Map[String, String],
       sqlOptions: Map[String, String]): Unit = {
 
@@ -388,9 +381,12 @@ object CreateHoodieTableCommand extends Logging {
       .fromProperties(properties)
       .setTableName(tableName)
       .setTableCreateSchema(SchemaConverters.toAvroType(schema).toString())
-      .setPartitionFields(partitionColumns.mkString(","))
+      .setPartitionFields(table.partitionColumnNames.mkString(","))
       .initTable(conf, location)
   }
+}
+
+object CreateHoodieTableCommand extends Logging {
 
   def checkTableConfigEqual(originTableConfig: Map[String, String],
     newTableConfig: Map[String, String], configKey: String): Unit = {
