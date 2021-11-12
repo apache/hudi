@@ -469,7 +469,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @return the next valid commit time.
    */
   private Long getNextCommitTime(long curCommitTime) {
-    if ((curCommitTime + 1) % 1000000000000L >= 60) {
+    if ((curCommitTime + 1) % 1000000000000L >= 60) { // max seconds is 60 and hence
       return Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
     } else {
       return curCommitTime + 1;

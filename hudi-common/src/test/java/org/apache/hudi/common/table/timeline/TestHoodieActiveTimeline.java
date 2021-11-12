@@ -475,13 +475,13 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   @Test
   public void testMetadataCompactionInstantDateParsing() throws ParseException {
-    // Old second granularity instant ID
+    // default second granularity instant ID
     String secondGranularityInstant = "20210101120101";
     Date defaultSecsGranularityDate = HoodieActiveTimeline.parseInstantTime(secondGranularityInstant);
-    // New ms granularity instant ID
+    // metadata table compaction/cleaning : ms granularity instant ID
     String compactionInstant = secondGranularityInstant + "001";
     Date msGranularityDate = HoodieActiveTimeline.parseInstantTime(compactionInstant);
-    assertEquals(1, msGranularityDate.getTime() - defaultSecsGranularityDate.getTime(), "Expected the ms part to be 999");
+    assertEquals(0, msGranularityDate.getTime() - defaultSecsGranularityDate.getTime(), "Expected the ms part to be 0");
     assertTrue(HoodieTimeline.compareTimestamps(secondGranularityInstant, HoodieTimeline.LESSER_THAN, compactionInstant));
     assertTrue(HoodieTimeline.compareTimestamps(compactionInstant, HoodieTimeline.GREATER_THAN, secondGranularityInstant));
   }
