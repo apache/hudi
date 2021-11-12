@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -160,6 +161,9 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
+
+  public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
+  public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
@@ -361,6 +365,18 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getRecordKeyFieldProp() {
     return getString(RECORDKEY_FIELDS);
+  }
+
+  public String getKeyGeneratorClassName() {
+    return getString(KEY_GENERATOR_CLASS_NAME);
+  }
+
+  public String getHiveStylePartitioningEnable() {
+    return getString(HIVE_STYLE_PARTITIONING_ENABLE);
+  }
+
+  public String getUrlEncodePartitoning() {
+    return getString(URL_ENCODE_PARTITIONING);
   }
 
   public Map<String, String> propsMap() {

@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -217,7 +218,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     final String testPartitionPath = "2016/09/26";
     int totalInsertNum = 2000;
 
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0)
             .insertSplitSize(totalInsertNum / 2).autoTuneInsertSplits(false).build()).build();
 

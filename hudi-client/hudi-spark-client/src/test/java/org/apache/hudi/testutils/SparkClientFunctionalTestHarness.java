@@ -41,6 +41,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -51,6 +52,7 @@ import org.apache.hudi.testutils.providers.SparkProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -114,6 +116,10 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return jsc.hadoopConfiguration();
   }
 
+  public FileSystem fs() {
+    return FSUtils.getFs(basePath(), hadoopConf());
+  }
+
   @Override
   public HoodieSparkEngineContext context() {
     return context;
@@ -171,12 +177,30 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     }
   }
 
+  /**
+   * To clean up Spark resources after all testcases have run in functional tests.
+   *
+   * Spark session and contexts were reused for testcases in the same test class. Some
+   * testcase may invoke this specifically to clean up in case of repeated test runs.
+   */
   @AfterAll
-  public static synchronized void cleanUpAfterAll() {
+  public static synchronized void resetSpark() {
     if (spark != null) {
       spark.close();
       spark = null;
     }
+  }
+
+  protected JavaRDD<HoodieRecord> tagLocation(
+      HoodieIndex index, JavaRDD<HoodieRecord> records, HoodieTable table) {
+    return HoodieJavaRDD.getJavaRDD(
+        index.tagLocation(HoodieJavaRDD.of(records), context, table));
+  }
+
+  protected JavaRDD<WriteStatus> updateLocation(
+      HoodieIndex index, JavaRDD<WriteStatus> writeStatus, HoodieTable table) {
+    return HoodieJavaRDD.getJavaRDD(
+        index.updateLocation(HoodieJavaRDD.of(writeStatus), context, table));
   }
 
   protected void insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {

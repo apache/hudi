@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, _}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.ddl.HiveSyncMode
@@ -58,7 +59,12 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
     val targetTable = sparkSession.sessionState.catalog
       .getTableMetadata(tableId)
     val path = getTableLocation(targetTable, sparkSession)
-
+    val conf = sparkSession.sessionState.newHadoopConf()
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(path)
+      .setConf(conf)
+      .build()
+    val tableConfig = metaClient.getTableConfig
     val primaryColumns = HoodieOptionConfig.getPrimaryColumns(targetTable.storage.properties)
 
     assert(primaryColumns.nonEmpty,
@@ -66,13 +72,14 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
     withSparkConf(sparkSession, targetTable.storage.properties) {
       Map(
         "path" -> path,
-        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         TBL_NAME.key -> tableId.table,
+        HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
+        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitoning,
+        KEYGENERATOR_CLASS_NAME.key -> tableConfig.getKeyGeneratorClassName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> targetTable.partitionColumnNames.mkString(","),
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
-        HIVE_STYLE_PARTITIONING.key -> "true",
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
       )

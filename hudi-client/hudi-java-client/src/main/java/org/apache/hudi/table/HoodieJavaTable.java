@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.JavaHoodieIndex;
+import org.apache.hudi.index.JavaHoodieIndexFactory;
 
 import java.util.List;
 
@@ -62,7 +62,7 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return JavaHoodieIndex.createIndex(config);
+  protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return JavaHoodieIndexFactory.createIndex(config);
   }
 }

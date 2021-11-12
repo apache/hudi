@@ -148,7 +148,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .defaultValue(false)
       .withDocumentation("Only applies if index type is HBASE. "
           + "When an already existing record is upserted to a new partition compared to whats in storage, "
-          + "this config when set, will delete old record in old paritition "
+          + "this config when set, will delete old record in old partition "
           + "and will insert it as new record in new partition.");
 
   public static final ConfigProperty<Boolean> ROLLBACK_SYNC_ENABLE = ConfigProperty

@@ -26,14 +26,11 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -59,22 +56,21 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   protected final transient HoodieEngineContext engineContext;
   protected final SerializableConfiguration hadoopConf;
-  protected final String datasetBasePath;
-  protected final HoodieTableMetaClient datasetMetaClient;
+  protected final String dataBasePath;
+  protected final HoodieTableMetaClient dataMetaClient;
   protected final Option<HoodieMetadataMetrics> metrics;
   protected final HoodieMetadataConfig metadataConfig;
   // Directory used for Spillable Map when merging records
   protected final String spillableMapDirectory;
 
   protected boolean enabled;
-  private TimelineMergedTableMetadata timelineMergedMetadata;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                              String datasetBasePath, String spillableMapDirectory) {
+                              String dataBasePath, String spillableMapDirectory) {
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(engineContext.getHadoopConf());
-    this.datasetBasePath = datasetBasePath;
-    this.datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(datasetBasePath).build();
+    this.dataBasePath = dataBasePath;
+    this.dataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(dataBasePath).build();
     this.spillableMapDirectory = spillableMapDirectory;
     this.metadataConfig = metadataConfig;
 
@@ -104,7 +100,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         throw new HoodieMetadataException("Failed to retrieve list of partition from metadata", e);
       }
     }
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath,
+    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath,
         metadataConfig.shouldAssumeDatePartitioning()).getAllPartitionPaths();
   }
 
@@ -129,28 +125,25 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
 
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath, metadataConfig.shouldAssumeDatePartitioning())
+    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath, metadataConfig.shouldAssumeDatePartitioning())
         .getAllFilesInPartition(partitionPath);
   }
 
   @Override
-  public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths)
+  public Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitions)
       throws IOException {
     if (enabled) {
-      Map<String, FileStatus[]> partitionsFilesMap = new HashMap<>();
-
       try {
-        for (String partitionPath : partitionPaths) {
-          partitionsFilesMap.put(partitionPath, fetchAllFilesInPartition(new Path(partitionPath)));
-        }
+        List<Path> partitionPaths = partitions.stream().map(entry -> new Path(entry)).collect(Collectors.toList());
+        Map<String, FileStatus[]> partitionsFilesMap = fetchAllFilesInPartitionPaths(partitionPaths);
         return partitionsFilesMap;
       } catch (Exception e) {
         throw new HoodieMetadataException("Failed to retrieve files in partition from metadata", e);
       }
     }
 
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath, metadataConfig.shouldAssumeDatePartitioning())
-        .getAllFilesInPartitions(partitionPaths);
+    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, dataBasePath, metadataConfig.shouldAssumeDatePartitioning())
+        .getAllFilesInPartitions(partitions);
   }
 
   /**
@@ -158,7 +151,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    */
   protected List<String> fetchAllPartitionPaths() throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(RECORDKEY_PARTITION_LIST);
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
 
     List<String> partitions = Collections.emptyList();
@@ -176,28 +169,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
 
-    if (metadataConfig.validateFileListingMetadata()) {
-      // Validate the Metadata Table data by listing the partitions from the file system
-      timer.startTimer();
-      FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(getEngineContext(),
-          hadoopConf, datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
-      List<String> actualPartitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_PARTITIONS_STR, timer.endTimer()));
-
-      Collections.sort(actualPartitions);
-      Collections.sort(partitions);
-      if (!actualPartitions.equals(partitions)) {
-        LOG.error("Validation of metadata partition list failed. Lists do not match.");
-        LOG.error("Partitions from metadata: " + Arrays.toString(partitions.toArray()));
-        LOG.error("Partitions from file system: " + Arrays.toString(actualPartitions.toArray()));
-
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_ERRORS_STR, 0));
-      }
-
-      // Return the direct listing as it should be correct
-      partitions = actualPartitions;
-    }
-
     LOG.info("Listed partitions from metadata: #partitions=" + partitions.size());
     return partitions;
   }
@@ -208,13 +179,13 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    * @param partitionPath The absolute path of the partition
    */
   FileStatus[] fetchAllFilesInPartition(Path partitionPath) throws IOException {
-    String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), partitionPath);
+    String partitionName = FSUtils.getRelativePartitionPath(new Path(dataBasePath), partitionPath);
     if (partitionName.isEmpty()) {
       partitionName = NON_PARTITIONED_NAME;
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(partitionName);
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKey(partitionName, MetadataPartitionType.FILES.partitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
     FileStatus[] statuses = {};
@@ -226,101 +197,52 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
     }
 
-    if (metadataConfig.validateFileListingMetadata()) {
-      // Validate the Metadata Table data by listing the partitions from the file system
-      timer.startTimer();
-
-      String partitionPathStr = FSUtils.getRelativePartitionPath(new Path(datasetMetaClient.getBasePath()), partitionPath);
-      String latestDataInstantTime = getLatestDatasetInstantTime();
-      HoodieTableFileSystemView dataFsView = new HoodieTableFileSystemView(datasetMetaClient, datasetMetaClient.getActiveTimeline());
-      List<FileStatus> directStatuses = dataFsView.getAllFileSlices(partitionPathStr).flatMap(slice -> {
-        List<FileStatus> paths = new ArrayList<>();
-        slice.getBaseFile().ifPresent(baseFile -> {
-          if (HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, latestDataInstantTime)) {
-            paths.add(baseFile.getFileStatus());
-          }
-        });
-        //TODO(metadata): this will remain problematic; no way to know the commit time based on log file written
-        slice.getLogFiles().forEach(logFile -> paths.add(logFile.getFileStatus()));
-        return paths.stream();
-      }).collect(Collectors.toList());
-
-      List<String> directFilenames = directStatuses.stream()
-          .map(fileStatus -> fileStatus.getPath().getName()).sorted()
-          .collect(Collectors.toList());
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_FILES_STR, timer.endTimer()));
-
-      List<String> metadataFilenames = Arrays.stream(statuses)
-          .map(s -> s.getPath().getName()).sorted()
-          .collect(Collectors.toList());
-
-      if (!metadataFilenames.equals(directFilenames)) {
-        LOG.error("Validation of metadata file listing for partition " + partitionName + " failed.");
-        LOG.error("File list from metadata: " + Arrays.toString(metadataFilenames.toArray()));
-        LOG.error("File list from direct listing: " + Arrays.toString(directFilenames.toArray()));
-
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_ERRORS_STR, 0));
-      }
-
-      // Return the direct listing as it should be correct
-      statuses = directStatuses.toArray(new FileStatus[0]);
-    }
-
     LOG.info("Listed file in partition from metadata: partition=" + partitionName + ", #files=" + statuses.length);
     return statuses;
   }
 
-  /**
-   * Retrieve the merged {@code HoodieRecord} mapped to the given key.
-   *
-   * @param key The key of the record
-   */
-  private Option<HoodieRecord<HoodieMetadataPayload>> getMergedRecordByKey(String key) {
-    Option<HoodieRecord<HoodieMetadataPayload>> mergedRecord;
-    Option<HoodieRecord<HoodieMetadataPayload>> metadataHoodieRecord = getRecordByKeyFromMetadata(key);
-    // Retrieve record from unsynced timeline instants
-    Option<HoodieRecord<HoodieMetadataPayload>> timelineHoodieRecord = timelineMergedMetadata.getRecordByKey(key);
-    if (timelineHoodieRecord.isPresent()) {
-      if (metadataHoodieRecord.isPresent()) {
-        HoodieRecordPayload mergedPayload = timelineHoodieRecord.get().getData().preCombine(metadataHoodieRecord.get().getData());
-        mergedRecord = Option.of(new HoodieRecord(metadataHoodieRecord.get().getKey(), mergedPayload));
+  Map<String, FileStatus[]> fetchAllFilesInPartitionPaths(List<Path> partitionPaths) throws IOException {
+    Map<String, Path> partitionInfo = new HashMap<>();
+    boolean foundNonPartitionedPath = false;
+    for (Path partitionPath: partitionPaths) {
+      String partitionName = FSUtils.getRelativePartitionPath(new Path(dataBasePath), partitionPath);
+      if (partitionName.isEmpty()) {
+        if (partitionInfo.size() > 1) {
+          throw new HoodieMetadataException("Found mix of partitioned and non partitioned paths while fetching data from metadata table");
+        }
+        partitionInfo.put(NON_PARTITIONED_NAME, partitionPath);
+        foundNonPartitionedPath = true;
       } else {
-        mergedRecord = timelineHoodieRecord;
+        if (foundNonPartitionedPath) {
+          throw new HoodieMetadataException("Found mix of partitioned and non partitioned paths while fetching data from metadata table");
+        }
+        partitionInfo.put(partitionName, partitionPath);
       }
-    } else {
-      mergedRecord = metadataHoodieRecord;
     }
-    return mergedRecord;
-  }
 
-  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key);
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> partitionsFileStatus =
+        getRecordsByKeys(new ArrayList<>(partitionInfo.keySet()), MetadataPartitionType.FILES.partitionPath());
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
+    Map<String, FileStatus[]> result = new HashMap<>();
 
-  protected void openTimelineScanner(HoodieActiveTimeline metadataTableTimeline) {
-    if (timelineMergedMetadata == null) {
-      List<HoodieInstant> unSyncedInstants = findInstantsToSyncForReader();
-      timelineMergedMetadata =
-          new TimelineMergedTableMetadata(datasetMetaClient, metadataTableTimeline, unSyncedInstants, getUpdateTime(), null);
+    for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry: partitionsFileStatus) {
+      if (entry.getValue().isPresent()) {
+        if (!entry.getValue().get().getData().getDeletions().isEmpty()) {
+          throw new HoodieMetadataException("Metadata record for partition " + entry.getKey() + " is inconsistent: "
+              + entry.getValue().get().getData());
+        }
+        result.put(partitionInfo.get(entry.getKey()).toString(), entry.getValue().get().getData().getFileStatuses(hadoopConf.get(), partitionInfo.get(entry.getKey())));
+      }
     }
+
+    LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));
+    return result;
   }
 
-  /**
-   * Return the instants which are not-synced to the {@code HoodieTableMetadata}.
-   *
-   * This is the list of all completed but un-synched instants.
-   */
-  protected abstract List<HoodieInstant> findInstantsToSyncForReader();
+  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
-  /**
-   * Return the instants which are not-synced to the {@code HoodieTableMetadataWriter}.
-   *
-   * This is the list of all completed but un-synched instants which do not have any incomplete instants in between them.
-   */
-  protected abstract List<HoodieInstant> findInstantsToSyncForWriter();
-
-  @Override
-  public boolean isInSync() {
-    return enabled && findInstantsToSyncForWriter().isEmpty();
-  }
+  protected abstract List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> key, String partitionName);
 
   protected HoodieEngineContext getEngineContext() {
     return engineContext != null ? engineContext : new HoodieLocalEngineContext(hadoopConf.get());
@@ -330,15 +252,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     return metadataConfig;
   }
 
-  protected String getLatestDatasetInstantTime() {
-    return datasetMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant()
+  protected String getLatestDataInstantTime() {
+    return dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant()
         .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
-  }
-
-  public Option<String> getReaderTime() {
-    if (timelineMergedMetadata == null) {
-      return Option.empty();
-    }
-    return timelineMergedMetadata.getSyncedInstantTime();
   }
 }

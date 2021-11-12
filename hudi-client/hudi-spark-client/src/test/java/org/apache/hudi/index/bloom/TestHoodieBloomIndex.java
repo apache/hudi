@@ -26,9 +26,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaPairRDD;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -103,7 +106,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
   @MethodSource("configParams")
   public void testLoadInvolvedFiles(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    SparkHoodieBloomIndex index = new SparkHoodieBloomIndex(config);
+    HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
 
@@ -131,7 +134,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
-    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<ImmutablePair<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -145,20 +148,20 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
     if (rangePruning) {
       // these files will not have the key ranges
-      assertNull(filesList.get(0)._2().getMaxRecordKey());
-      assertNull(filesList.get(0)._2().getMinRecordKey());
-      assertFalse(filesList.get(1)._2().hasKeyRanges());
-      assertNotNull(filesList.get(2)._2().getMaxRecordKey());
-      assertNotNull(filesList.get(2)._2().getMinRecordKey());
-      assertTrue(filesList.get(3)._2().hasKeyRanges());
+      assertNull(filesList.get(0).getRight().getMaxRecordKey());
+      assertNull(filesList.get(0).getRight().getMinRecordKey());
+      assertFalse(filesList.get(1).getRight().hasKeyRanges());
+      assertNotNull(filesList.get(2).getRight().getMaxRecordKey());
+      assertNotNull(filesList.get(2).getRight().getMinRecordKey());
+      assertTrue(filesList.get(3).getRight().hasKeyRanges());
 
       // no longer sorted, but should have same files.
 
-      List<Tuple2<String, BloomIndexFileInfo>> expected =
-          Arrays.asList(new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
+      List<ImmutablePair<String, BloomIndexFileInfo>> expected =
+          Arrays.asList(new ImmutablePair<>("2016/04/01", new BloomIndexFileInfo("2")),
+              new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("1")),
+              new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
+              new ImmutablePair<>("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
       assertEquals(expected, filesList);
     }
   }
@@ -167,7 +170,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
   @MethodSource("configParams")
   public void testRangePruning(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    SparkHoodieBloomIndex index = new SparkHoodieBloomIndex(config);
+    HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
     partitionToFileIndexInfo.put("2017/10/22",
@@ -179,12 +182,12 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"),
             new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/22", "004"))).mapToPair(t -> t);
 
-    List<Tuple2<String, HoodieKey>> comparisonKeyList =
-        index.explodeRecordRDDWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyPairRDD).collect();
+    List<Pair<String, HoodieKey>> comparisonKeyList = HoodieJavaRDD.getJavaRDD(
+        index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, HoodieJavaPairRDD.of(partitionRecordKeyPairRDD))).collect();
 
     assertEquals(10, comparisonKeyList.size());
     Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(Collectors.groupingBy(t -> t._2.getRecordKey(), Collectors.mapping(t -> t._1, Collectors.toList())));
+        .collect(Collectors.groupingBy(t -> t.getRight().getRecordKey(), Collectors.mapping(Pair::getLeft, Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new HashSet<>(Arrays.asList("f1", "f3", "f4")), new HashSet<>(recordKeyToFileComps.get("002")));
@@ -262,10 +265,10 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
 
     // Let's tag
-    SparkHoodieBloomIndex bloomIndex = new SparkHoodieBloomIndex(config);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
 
     assertDoesNotThrow(() -> {
-      bloomIndex.tagLocation(recordRDD, context, table);
+      tagLocation(bloomIndex, recordRDD, table);
     }, "EmptyRDD should not result in IllegalArgumentException: Positive number of slices required");
   }
 
@@ -301,8 +304,8 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
-    SparkHoodieBloomIndex bloomIndex = new SparkHoodieBloomIndex(config);
-    JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, context, hoodieTable);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+    JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(bloomIndex, recordRDD, hoodieTable);
 
     // Should not find any files
     for (HoodieRecord record : taggedRecordRDD.collect()) {
@@ -315,7 +318,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
 
     // We do the tag again
-    taggedRecordRDD = bloomIndex.tagLocation(recordRDD, context, HoodieSparkTable.create(config, context, metaClient));
+    taggedRecordRDD = tagLocation(bloomIndex, recordRDD, HoodieSparkTable.create(config, context, metaClient));
 
     // Check results
     for (HoodieRecord record : taggedRecordRDD.collect()) {
@@ -366,8 +369,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
-    SparkHoodieBloomIndex bloomIndex = new SparkHoodieBloomIndex(config);
-    JavaRDD<HoodieRecord> taggedRecords = bloomIndex.tagLocation(keysRDD.map(k -> new HoodieRecord(k, null)), context, hoodieTable);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+    JavaRDD<HoodieRecord> taggedRecords = tagLocation(
+        bloomIndex, keysRDD.map(k -> new HoodieRecord(k, null)), hoodieTable);
     JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocationsRDD = taggedRecords
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
@@ -387,7 +391,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    taggedRecords = bloomIndex.tagLocation(keysRDD.map(k -> new HoodieRecord(k, null)), context, hoodieTable);
+    taggedRecords = tagLocation(bloomIndex, keysRDD.map(k -> new HoodieRecord(k, null)), hoodieTable);
     recordLocationsRDD = taggedRecords
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
@@ -443,8 +447,8 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
 
-    SparkHoodieBloomIndex bloomIndex = new SparkHoodieBloomIndex(config);
-    JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, context, table);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+    JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(bloomIndex, recordRDD, table);
 
     // Check results
     for (HoodieRecord record : taggedRecordRDD.collect()) {

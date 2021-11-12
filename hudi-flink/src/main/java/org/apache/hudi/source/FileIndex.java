@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -48,10 +49,12 @@ public class FileIndex {
   private final Path path;
   private final HoodieMetadataConfig metadataConfig;
   private List<String> partitionPaths; // cache of partition paths
+  private final boolean tableExists;
 
   private FileIndex(Path path, Configuration conf) {
     this.path = path;
     this.metadataConfig = metadataConfig(conf);
+    this.tableExists = StreamerUtil.tableExists(path.toString(), StreamerUtil.getHadoopConf());
   }
 
   public static FileIndex instance(Path path, Configuration conf) {
@@ -111,6 +114,9 @@ public class FileIndex {
    * Returns all the file statuses under the table base path.
    */
   public FileStatus[] getFilesInPartitions() {
+    if (!tableExists) {
+      return new FileStatus[0];
+    }
     String[] partitions = getOrBuildPartitionPaths().stream().map(p -> fullPartitionPath(path, p)).toArray(String[]::new);
     return FSUtils.getFilesInPartitions(HoodieFlinkEngineContext.DEFAULT, metadataConfig, path.toString(),
             partitions, "/tmp/")
@@ -165,8 +171,9 @@ public class FileIndex {
     if (this.partitionPaths != null) {
       return this.partitionPaths;
     }
-    this.partitionPaths = FSUtils.getAllPartitionPaths(HoodieFlinkEngineContext.DEFAULT,
-        metadataConfig, path.toString());
+    this.partitionPaths = this.tableExists
+        ? FSUtils.getAllPartitionPaths(HoodieFlinkEngineContext.DEFAULT, metadataConfig, path.toString())
+        : Collections.emptyList();
     return this.partitionPaths;
   }
 
@@ -174,9 +181,7 @@ public class FileIndex {
     Properties properties = new Properties();
 
     // set up metadata.enabled=true in table DDL to enable metadata listing
-    properties.put(HoodieMetadataConfig.ENABLE, conf.getBoolean(FlinkOptions.METADATA_ENABLED));
-    properties.put(HoodieMetadataConfig.SYNC_ENABLE, conf.getBoolean(FlinkOptions.METADATA_ENABLED));
-    properties.put(HoodieMetadataConfig.VALIDATE_ENABLE, false);
+    properties.put(HoodieMetadataConfig.ENABLE.key(), conf.getBoolean(FlinkOptions.METADATA_ENABLED));
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
   }

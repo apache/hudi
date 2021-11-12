@@ -35,6 +35,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.configuration.FlinkOptions.PARTITION_FORMAT_DAY;
+
 /**
  * Configurations for Hoodie Flink streamer.
  */
@@ -69,8 +71,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--table-type"}, description = "Type of table. COPY_ON_WRITE (or) MERGE_ON_READ.", required = true)
   public String tableType;
 
-  @Parameter(names = {"--insert-dedup"}, description = "Whether to deduplicate for INSERT operation, if disabled, writes the base files directly.", required = true)
-  public Boolean insertDedup = true;
+  @Parameter(names = {"--insert-cluster"}, description = "Whether to merge small files for insert mode, "
+      + "if true, the write throughput will decrease because the read/write of existing small file, default false.")
+  public Boolean insertCluster = false;
 
   @Parameter(names = {"--props"}, description = "Path to properties file on localfs or dfs, with configurations for "
       + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
@@ -112,7 +115,7 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--filter-dupes"},
       description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert.")
-  public Boolean filterDupes = false;
+  public Boolean preCombine = false;
 
   @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written.")
   public Boolean commitOnErrors = false;
@@ -122,6 +125,30 @@ public class FlinkStreamerConfig extends Configuration {
           + ". Allows transforming raw source DataStream to a target DataStream (conforming to target schema) before "
           + "writing. Default : Not set. Pass a comma-separated list of subclass names to chain the transformations.")
   public List<String> transformerClassNames = null;
+
+  @Parameter(names = {"--metadata-enabled"}, description = "Enable the internal metadata table which serves table metadata like level file listings, default false.")
+  public Boolean metadataEnabled = false;
+
+  @Parameter(names = {"--metadata-compaction-delta_commits"}, description = "Max delta commits for metadata table to trigger compaction, default 10.")
+  public Integer metadataCompactionDeltaCommits = 10;
+
+  @Parameter(names = {"--write-partition-format"}, description = "Partition path format, default is 'yyyyMMdd'.")
+  public String writePartitionFormat = PARTITION_FORMAT_DAY;
+
+  @Parameter(names = {"--write-rate-limit"}, description = "Write record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit).")
+  public Long writeRateLimit = 0L;
+
+  @Parameter(names = {"--write-parquet-block-size"}, description = "Parquet RowGroup size. It's recommended to make this large enough that scan costs can be"
+      + " amortized by packing enough column values into a single row group.")
+  public Integer writeParquetBlockSize = 120;
+
+  @Parameter(names = {"--write-parquet-max-file-size"}, description = "Target size for parquet files produced by Hudi write phases. "
+      + "For DFS, this needs to be aligned with the underlying filesystem block size for optimal performance.")
+  public Integer writeParquetMaxFileSize = 120;
+
+  @Parameter(names = {"--parquet-page-size"}, description = "Parquet page size. Page is the unit of read within a parquet file. "
+      + "Within a block, pages are compressed separately.")
+  public Integer parquetPageSize = 1;
 
   /**
    * Flink checkpoint interval.
@@ -143,18 +170,18 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--partition-default-name"},
       description = "The default partition name in case the dynamic partition column value is null/empty string")
-  public String partitionDefaultName = "__DEFAULT_PARTITION__";
+  public String partitionDefaultName = "default";
 
   @Parameter(names = {"--index-bootstrap-enabled"},
       description = "Whether to bootstrap the index state from existing hoodie table, default false")
   public Boolean indexBootstrapEnabled = false;
 
-  @Parameter(names = {"--index-state-ttl"}, description = "Index state ttl in days, default 1.5 day")
-  public Double indexStateTtl = 1.5D;
+  @Parameter(names = {"--index-state-ttl"}, description = "Index state ttl in days, default stores the index permanently")
+  public Double indexStateTtl = 0D;
 
   @Parameter(names = {"--index-global-enabled"}, description = "Whether to update index for the old partition path "
-      + "if same key record with different partition path came in, default false")
-  public Boolean indexGlobalEnabled = false;
+      + "if same key record with different partition path came in, default true")
+  public Boolean indexGlobalEnabled = true;
 
   @Parameter(names = {"--index-partition-regex"},
       description = "Whether to load partitions in state if partition path matching， default *")
@@ -184,8 +211,8 @@ public class FlinkStreamerConfig extends Configuration {
   public Double writeTaskMaxSize = 1024D;
 
   @Parameter(names = {"--write-batch-size"},
-      description = "Batch buffer size in MB to flush data into the underneath filesystem, default 64MB")
-  public Double writeBatchSize = 64D;
+      description = "Batch buffer size in MB to flush data into the underneath filesystem, default 256MB")
+  public Double writeBatchSize = 256D;
 
   @Parameter(names = {"--write-log-block-size"}, description = "Max log block size in MB for log file, default 128MB")
   public Integer writeLogBlockSize = 128;
@@ -220,8 +247,8 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--compaction-max-memory"}, description = "Max memory in MB for compaction spillable map, default 100MB")
   public Integer compactionMaxMemory = 100;
 
-  @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write), default 5 GB")
-  public Long compactionTargetIo = 5120L;
+  @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write), default 500 GB")
+  public Long compactionTargetIo = 512000L;
 
   @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default")
   public Boolean cleanAsyncEnabled = true;
@@ -308,16 +335,23 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.TABLE_NAME, config.targetTableName);
     // copy_on_write works same as COPY_ON_WRITE
     conf.setString(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());
-    conf.setBoolean(FlinkOptions.INSERT_DEDUP, config.insertDedup);
+    conf.setBoolean(FlinkOptions.INSERT_CLUSTER, config.insertCluster);
     conf.setString(FlinkOptions.OPERATION, config.operation.value());
     conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
-    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, config.filterDupes);
+    conf.setBoolean(FlinkOptions.PRE_COMBINE, config.preCombine);
     conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
     conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));
     conf.setBoolean(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
+    conf.setBoolean(FlinkOptions.METADATA_ENABLED, config.metadataEnabled);
+    conf.setInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, config.metadataCompactionDeltaCommits);
+    conf.setString(FlinkOptions.PARTITION_FORMAT, config.writePartitionFormat);
+    conf.setLong(FlinkOptions.WRITE_RATE_LIMIT, config.writeRateLimit);
+    conf.setInteger(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE, config.writeParquetBlockSize);
+    conf.setInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE, config.writeParquetMaxFileSize);
+    conf.setInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE, config.parquetPageSize);
     if (!StringUtils.isNullOrEmpty(config.keygenClass)) {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, config.keygenClass);
     } else {

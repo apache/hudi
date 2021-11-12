@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -57,15 +58,18 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   protected final boolean deleteInstants;
   protected final boolean skipTimelinePublish;
   protected final boolean useMarkerBasedStrategy;
+  private final TransactionManager txnManager;
+  private final boolean skipLocking;
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
       HoodieWriteConfig config,
       HoodieTable<T, I, K, O> table,
       String instantTime,
       HoodieInstant instantToRollback,
-      boolean deleteInstants) {
+      boolean deleteInstants,
+      boolean skipLocking) {
     this(context, config, table, instantTime, instantToRollback, deleteInstants,
-        false, config.shouldRollbackUsingMarkers());
+        false, config.shouldRollbackUsingMarkers(), skipLocking);
   }
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
@@ -75,7 +79,8 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       HoodieInstant instantToRollback,
       boolean deleteInstants,
       boolean skipTimelinePublish,
-      boolean useMarkerBasedStrategy) {
+      boolean useMarkerBasedStrategy,
+      boolean skipLocking) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.deleteInstants = deleteInstants;
@@ -85,6 +90,8 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       ValidationUtils.checkArgument(!instantToRollback.isCompleted(),
           "Cannot use marker based rollback strategy on completed instant:" + instantToRollback);
     }
+    this.skipLocking = skipLocking;
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
   }
 
   /**
@@ -248,11 +255,31 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
     try {
+      writeToMetadata(rollbackMetadata);
       table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
       LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
     } catch (IOException e) {
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
+    }
+  }
+
+  /**
+   * Update metadata table if available. Any update to metadata table happens within data table lock.
+   * @param rollbackMetadata instance of {@link HoodieRollbackMetadata} to be applied to metadata.
+   */
+  private void writeToMetadata(HoodieRollbackMetadata rollbackMetadata) {
+    if (config.isMetadataTableEnabled()) {
+      try {
+        if (!skipLocking) {
+          this.txnManager.beginTransaction(Option.empty(), Option.empty());
+        }
+        writeTableMetadata(rollbackMetadata);
+      } finally {
+        if (!skipLocking) {
+          this.txnManager.endTransaction();
+        }
+      }
     }
   }
 

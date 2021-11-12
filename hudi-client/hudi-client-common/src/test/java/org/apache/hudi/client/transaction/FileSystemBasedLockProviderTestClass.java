@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
@@ -39,12 +40,12 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY
  * create operation. This lock does not support cleaning/expiring the lock after a failed write hence cannot be used
  * in production environments.
  */
-public class FileSystemBasedLockProviderTestClass implements LockProvider<String> {
+public class FileSystemBasedLockProviderTestClass implements LockProvider<String>, Serializable {
 
   private static final String LOCK_NAME = "acquired";
 
   private String lockPath;
-  private FileSystem fs;
+  private transient FileSystem fs;
   protected LockConfiguration lockConfiguration;
 
   public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final Configuration configuration) {
@@ -55,7 +56,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
 
   public void acquireLock() {
     try {
-      fs.create(new Path(lockPath + "/" + LOCK_NAME)).close();
+      fs.create(new Path(lockPath + "/" + LOCK_NAME), false).close();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to acquire lock", e);
     }
@@ -78,7 +79,12 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
           && (numRetries <= lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY))) {
         Thread.sleep(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY));
       }
-      acquireLock();
+      synchronized (LOCK_NAME) {
+        if (fs.exists(new Path(lockPath + "/" + LOCK_NAME))) {
+          return false;
+        }
+        acquireLock();
+      }
       return true;
     } catch (IOException | InterruptedException e) {
       throw new HoodieLockException("Failed to acquire lock", e);

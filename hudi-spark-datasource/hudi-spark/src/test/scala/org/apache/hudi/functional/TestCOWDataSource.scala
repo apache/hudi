@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -74,6 +75,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
+    FileSystem.closeAll()
+    System.gc()
   }
 
   @Test def testShortNameStorage() {
@@ -368,7 +371,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val  recordsDF = spark.createDataFrame(rdd, schema)
     recordsDF.write.format("org.apache.hudi")
       .options(commonOpts)
-      .mode(SaveMode.Append)
+      .mode(SaveMode.Overwrite)
       .save(basePath)
 
     val recordsReadDF = spark.read.format("org.apache.hudi")
@@ -401,11 +404,15 @@ class TestCOWDataSource extends HoodieClientTestBase {
   }
 
   private def getDataFrameWriter(keyGenerator: String): DataFrameWriter[Row] = {
+    getDataFrameWriter(keyGenerator, true)
+  }
+
+  private def getDataFrameWriter(keyGenerator: String, enableMetadata: Boolean): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-
+    val opts = commonOpts ++ Map(HoodieMetadataConfig.ENABLE.key() -> String.valueOf(enableMetadata))
     inputDF.write.format("hudi")
-      .options(commonOpts)
+      .options(opts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .mode(SaveMode.Overwrite)
   }
@@ -414,6 +421,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Without fieldType, the default is SIMPLE
     var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("current_ts")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
     var recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
@@ -424,6 +432,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     writer.partitionBy("current_ts:TIMESTAMP")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
@@ -431,10 +440,11 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
 
     // Mixed fieldType
-    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, false)
     writer.partitionBy("driver", "rider:SIMPLE", "current_ts:TIMESTAMP")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*/*")
@@ -442,7 +452,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
 
     // Test invalid partitionKeyType
-    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName, false)
     writer = writer.partitionBy("current_ts:DUMMY")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
@@ -459,9 +469,10 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
     writer.partitionBy("driver")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
     var recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*")
+      .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
 
     // Use the `driver,rider` field as the partition key, If no such field exists, the default value `default` is used
@@ -469,7 +480,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     writer.partitionBy("driver", "rider")
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*")
+      .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("default")).count() == 0)
   }
 
@@ -477,9 +488,10 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName)
     writer.partitionBy("driver")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
     var recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*")
+      .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
 
     // Use the `driver`,`rider` field as the partition key
@@ -487,7 +499,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     writer.partitionBy("driver", "rider")
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*")
+      .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= concat(col("driver"), lit("/"), col("rider"))).count() == 0)
   }
 
@@ -496,6 +508,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     writer.partitionBy("current_ts")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
 
     val recordsReadDF = spark.read.format("org.apache.hudi")
@@ -507,10 +520,11 @@ class TestCOWDataSource extends HoodieClientTestBase {
   @Test def testSparkPartitonByWithGlobalDeleteKeyGenerator() {
     val writer = getDataFrameWriter(classOf[GlobalDeleteKeyGenerator].getName)
     writer.partitionBy("driver")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
 
     val recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*")
+      .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
 
@@ -518,17 +532,19 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Empty string column
     var writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
     writer.partitionBy("")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
     var recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*")
+      .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
 
     // Non-existent column
     writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
     writer.partitionBy("abc")
+      .mode(SaveMode.Overwrite)
       .save(basePath)
     recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*")
+      .load(basePath)
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
 
@@ -597,7 +613,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val  recordsDF = spark.createDataFrame(rdd, schema1)
     recordsDF.write.format("org.apache.hudi")
       .options(opts)
-      .mode(SaveMode.Append)
+      .mode(SaveMode.Overwrite)
       .save(basePath)
 
     // 2. write records with schema2 add column age
@@ -651,10 +667,10 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val inputDF = spark.read.schema(schema1.toDDL).json(spark.sparkContext.parallelize(records, 2))
     inputDF.write.format("org.apache.hudi")
       .options(opts)
-      .mode(SaveMode.Append)
+      .mode(SaveMode.Overwrite)
       .save(basePath)
     val recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*")
+      .load(basePath)
     val resultSchema = new StructType(recordsReadDF.schema.filter(p=> !p.name.startsWith("_hoodie")).toArray)
     assertEquals(resultSchema, schema1)
   }

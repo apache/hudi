@@ -35,6 +35,13 @@ public class TestSQL {
       + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
       + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4')";
 
+  public static final String INSERT_SAME_KEY_T1 = "insert into t1 values\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:05','par1'),\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:04','par1'),\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:03','par1'),\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+      + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+
   public static final String UPDATE_INSERT_T1 = "insert into t1 values\n"
       + "('id1','Danny',24,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
       + "('id2','Stephen',34,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"

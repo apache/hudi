@@ -27,5 +27,5 @@ public interface ConnectWriter<T> {
 
   void writeRecord(SinkRecord record) throws IOException;
 
-  List<T> close() throws IOException;
+  List<T> close();
 }

@@ -62,7 +62,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private final HiveSyncConfig syncConfig;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
-    super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, cfg.withOperationField, fs);
+    super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata,  cfg.withOperationField, fs);
     this.syncConfig = cfg;
 
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should

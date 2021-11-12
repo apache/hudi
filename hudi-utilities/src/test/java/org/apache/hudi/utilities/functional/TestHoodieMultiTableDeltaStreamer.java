@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamerBase {
+public class TestHoodieMultiTableDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static volatile Logger log = LogManager.getLogger(TestHoodieMultiTableDeltaStreamer.class);
 
@@ -237,7 +237,7 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamerBa
 
   private String populateCommonPropsAndWriteToFile() throws IOException {
     TypedProperties commonProps = new TypedProperties();
-    populateCommonProps(commonProps);
+    populateCommonProps(commonProps, dfsBasePath);
     UtilitiesTestBase.Helpers.savePropsToDFS(commonProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_PARQUET);
     return PROPS_FILENAME_TEST_PARQUET;
   }

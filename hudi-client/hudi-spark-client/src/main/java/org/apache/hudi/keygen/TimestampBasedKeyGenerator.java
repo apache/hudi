@@ -29,7 +29,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 
@@ -85,7 +85,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private String getTimestampBasedPartitionPath(Object partitionPathFieldVal) {
     Object fieldVal = null;
     try {
-      if (partitionPathFieldVal == null || partitionPathFieldVal.toString().contains(DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
+      if (partitionPathFieldVal == null || partitionPathFieldVal.toString().contains(HUDI_DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
           || partitionPathFieldVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
         fieldVal = timestampBasedAvroKeyGenerator.getDefaultPartitionVal();
       } else {

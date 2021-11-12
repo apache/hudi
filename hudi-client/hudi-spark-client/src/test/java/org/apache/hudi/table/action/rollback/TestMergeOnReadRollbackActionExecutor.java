@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -98,7 +99,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         table,
         "003",
         rollBackInstant,
-        true);
+        true,
+        false);
     //3. assert the rollback stat
     Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = mergeOnReadRollbackActionExecutor.execute().getPartitionMetadata();
     assertEquals(2, rollbackMetadata.size());
@@ -147,7 +149,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
           rollBackInstant,
           true,
           true,
-          true).execute();
+          true,
+          false).execute();
     });
   }
 
@@ -157,7 +160,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   @Test
   public void testRollbackWhenFirstCommitFail() throws Exception {
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       client.startCommitWithTime("001");

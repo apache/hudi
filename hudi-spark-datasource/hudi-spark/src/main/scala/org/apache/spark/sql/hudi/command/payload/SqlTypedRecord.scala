@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command.payload
 
 import org.apache.avro.generic.IndexedRecord
 import org.apache.avro.Schema
-import org.apache.spark.sql.avro.{AvroDeserializer, SchemaConverters}
+import org.apache.spark.sql.avro.{HooodieAvroDeserializer, SchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
 
@@ -29,8 +29,8 @@ import org.apache.spark.sql.types._
 class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
 
   private lazy val sqlType = SchemaConverters.toSqlType(getSchema).dataType.asInstanceOf[StructType]
-  private lazy val avroDeserializer = new AvroDeserializer(record.getSchema, sqlType)
-  private lazy val sqlRow = avroDeserializer.deserialize(record).asInstanceOf[InternalRow]
+  private lazy val avroDeserializer = HooodieAvroDeserializer(record.getSchema, sqlType)
+  private lazy val sqlRow = avroDeserializer.deserializeData(record).asInstanceOf[InternalRow]
 
   override def put(i: Int, v: Any): Unit = {
     record.put(i, v)

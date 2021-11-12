@@ -89,11 +89,6 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   @Override
-  public boolean canWrite(HoodieRecord record) {
-    return true;
-  }
-
-  @Override
   public List<WriteStatus> close() {
     try {
       return super.close();

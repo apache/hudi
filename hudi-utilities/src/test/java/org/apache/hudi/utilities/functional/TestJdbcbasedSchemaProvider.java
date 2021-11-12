@@ -32,7 +32,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -72,11 +71,11 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
    * Initialize the H2 database and obtain a connection, then create a table as a test.
    * Based on the characteristics of the H2 in-memory database, we do not need to display the initialized database.
    * @throws SQLException
-   * @throws IOException
    */
-  private void initH2Database() throws SQLException, IOException {
-    Connection conn = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "");
-    PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/triprec.sql"));
-    ps.executeUpdate();
+  private void initH2Database() throws SQLException {
+    try (Connection conn = DriverManager.getConnection("jdbc:h2:mem:test_mem", "sa", "")) {
+      PreparedStatement ps = conn.prepareStatement(UtilitiesTestBase.Helpers.readFile("delta-streamer-config/triprec.sql"));
+      ps.executeUpdate();
+    }
   }
 }

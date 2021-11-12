@@ -39,6 +39,7 @@ import java.util.Properties;
     description = "Configurations for Kafka Connect Sink Connector for Hudi.")
 public class KafkaConnectConfigs extends HoodieConfig {
 
+  public static final int CURRENT_PROTOCOL_VERSION = 0;
   public static final String KAFKA_VALUE_CONVERTER = "value.converter";
 
   public static final ConfigProperty<String> KAFKA_BOOTSTRAP_SERVERS = ConfigProperty

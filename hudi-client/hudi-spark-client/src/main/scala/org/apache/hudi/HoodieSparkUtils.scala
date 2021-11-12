@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
@@ -35,6 +36,7 @@ import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -60,12 +62,28 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   }
 
   /**
-   * This method copied from [[org.apache.spark.deploy.SparkHadoopUtil]].
-   * [[org.apache.spark.deploy.SparkHadoopUtil]] becomes private since Spark 3.0.0 and hence we had to copy it locally.
+   * This method is inspired from [[org.apache.spark.deploy.SparkHadoopUtil]] with some modifications like
+   * skipping meta paths.
    */
   def globPath(fs: FileSystem, pattern: Path): Seq[Path] = {
-    Option(fs.globStatus(pattern)).map { statuses =>
-      statuses.map(_.getPath.makeQualified(fs.getUri, fs.getWorkingDirectory)).toSeq
+    // find base path to assist in skipping meta paths
+    var basePath = pattern.getParent
+    while (basePath.getName.equals("*")) {
+      basePath = basePath.getParent
+    }
+
+    Option(fs.globStatus(pattern)).map { statuses => {
+      val nonMetaStatuses = statuses.filterNot(entry => {
+        // skip all entries in meta path
+        var leafPath = entry.getPath
+        // walk through every parent until we reach base path. if .hoodie is found anywhere, path needs to be skipped
+        while (!leafPath.equals(basePath) && !leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+            leafPath = leafPath.getParent
+        }
+        leafPath.getName.equals(HoodieTableMetaClient.METAFOLDER_NAME)
+      })
+      nonMetaStatuses.map(_.getPath.makeQualified(fs.getUri, fs.getWorkingDirectory)).toSeq
+    }
     }.getOrElse(Seq.empty[Path])
   }
 
@@ -88,8 +106,7 @@ object HoodieSparkUtils extends SparkAdapterSupport {
   def checkAndGlobPathIfNecessary(paths: Seq[String], fs: FileSystem): Seq[Path] = {
     paths.flatMap(path => {
       val qualified = new Path(path).makeQualified(fs.getUri, fs.getWorkingDirectory)
-      val globPaths = globPathIfNecessary(fs, qualified)
-      globPaths
+      globPathIfNecessary(fs, qualified)
     })
   }
 
@@ -267,5 +284,44 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
       s"${tableSchema.fieldNames.mkString(",")}")
     AttributeReference(columnName, field.get.dataType, field.get.nullable)()
+  }
+
+  /**
+    * Create merge sql to merge leftTable and right table.
+    *
+    * @param leftTable table name.
+    * @param rightTable table name.
+    * @param cols merged cols.
+    * @return merge sql.
+    */
+  def createMergeSql(leftTable: String, rightTable: String, cols: Seq[String]): String = {
+    var selectsql = ""
+    for (i <- (0 to cols.size-1)) {
+      selectsql = selectsql + s" if (${leftTable}.${cols(0)} is null, ${rightTable}.${cols(i)}, ${leftTable}.${cols(i)}) as ${cols(i)} ,"
+    }
+    "select " + selectsql.dropRight(1) + s" from ${leftTable} full join ${rightTable} on ${leftTable}.${cols(0)} = ${rightTable}.${cols(0)}"
+  }
+
+  /**
+    * Collect min/max statistics for candidate cols.
+    * support all col types.
+    *
+    * @param df dataFrame holds read files.
+    * @param cols candidate cols to collect statistics.
+    * @return
+    */
+  def getMinMaxValueSpark(df: DataFrame, cols: Seq[String]): DataFrame = {
+    val sqlContext = df.sparkSession.sqlContext
+    import sqlContext.implicits._
+
+    val values = cols.flatMap(c => Seq( min(col(c)).as(c + "_minValue"), max(col(c)).as(c + "_maxValue"), count(c).as(c + "_noNullCount")))
+    val valueCounts = count("*").as("totalNum")
+    val projectValues = Seq(col("file")) ++ cols.flatMap(c =>
+      Seq(col(c + "_minValue"), col(c + "_maxValue"), expr(s"totalNum - ${c + "_noNullCount"}").as(c + "_num_nulls")))
+
+    val result = df.select(input_file_name() as "file", col("*"))
+      .groupBy($"file")
+      .agg(valueCounts,  values: _*).select(projectValues:_*)
+    result
   }
 }

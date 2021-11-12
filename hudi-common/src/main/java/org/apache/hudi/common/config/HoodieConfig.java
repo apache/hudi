@@ -74,6 +74,10 @@ public class HoodieConfig implements Serializable {
     }
   }
 
+  public Boolean contains(String key) {
+    return props.containsKey(key);
+  }
+
   public <T> boolean contains(ConfigProperty<T> configProperty) {
     if (props.containsKey(configProperty.key())) {
       return true;
@@ -135,7 +139,7 @@ public class HoodieConfig implements Serializable {
   public <T> boolean getBooleanOrDefault(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Boolean.parseBoolean(v.toString()))
-            .orElse((Boolean) configProperty.defaultValue());
+            .orElse(Boolean.parseBoolean(configProperty.defaultValue().toString()));
   }
 
   public <T> Long getLong(ConfigProperty<T> configProperty) {

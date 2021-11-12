@@ -120,8 +120,13 @@ object HoodieOptionConfig {
    */
   def mappingSqlOptionToTableConfig(options: Map[String, String]): Map[String, String] = {
     defaultTableConfig ++
-      options.filterKeys(k => keyTableConfigMapping.contains(k))
-        .map(kv => keyTableConfigMapping(kv._1) -> valueMapping.getOrElse(kv._2, kv._2))
+      options.map { case (k, v) =>
+        if (keyTableConfigMapping.contains(k)) {
+          keyTableConfigMapping(k) -> valueMapping.getOrElse(v, v)
+        } else {
+          k -> v
+        }
+      }
   }
 
   /**

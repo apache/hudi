@@ -22,8 +22,10 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getCommitMetadata
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getWritePartitionPaths
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
+import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hadoop.mapred.JobConf
 import org.apache.log4j.LogManager
 import org.apache.spark.rdd.RDD
@@ -35,7 +37,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext}
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable.ListBuffer
 
 /**
   * Experimental.
@@ -162,16 +163,12 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   }
 
   def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
-    val partitionsWithFileStatus = listAffectedFilesForCommits(new Path(metaClient.getBasePath),
-      commitsToReturn, commitsTimelineToReturn)
-    val affectedFileStatus = new ListBuffer[FileStatus]
-    partitionsWithFileStatus.iterator.foreach(p =>
-      p._2.iterator.foreach(status => affectedFileStatus += status._2))
-    val fsView = new HoodieTableFileSystemView(metaClient,
-      commitsTimelineToReturn, affectedFileStatus.toArray)
+    val metadataList = commitsToReturn.map(instant => getCommitMetadata(instant, commitsTimelineToReturn))
+    val affectedFileStatus = listAffectedFilesForCommits(new Path(metaClient.getBasePath), metadataList)
+    val fsView = new HoodieTableFileSystemView(metaClient, commitsTimelineToReturn, affectedFileStatus)
 
     // Iterate partitions to create splits
-    val fileGroup = partitionsWithFileStatus.keySet().flatMap(partitionPath =>
+    val fileGroup = getWritePartitionPaths(metadataList).flatMap(partitionPath =>
       fsView.getAllFileGroups(partitionPath).iterator()
     ).toList
     val latestCommit = fsView.getLastInstant.get().getTimestamp

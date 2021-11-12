@@ -56,6 +56,8 @@ public interface HoodieLogFormat {
 
   String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
+  String DEFAULT_WRITE_TOKEN = "0-0-0";
+
   /**
    * Writer interface to allow appending block to this file format.
    */

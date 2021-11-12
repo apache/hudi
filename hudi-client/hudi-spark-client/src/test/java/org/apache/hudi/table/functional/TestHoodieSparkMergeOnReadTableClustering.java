@@ -93,6 +93,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringMaxNumGroups(10)
             .withClusteringTargetPartitions(0)
+            .withInlineClustering(true)
             .withInlineClusteringNumCommits(1)
             .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build())
         .withRollbackUsingMarkers(false);
@@ -131,6 +132,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       }
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      hoodieTable.getHoodieView().sync();
       FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
       // expect 2 base files for each partition
       assertEquals(dataGen.getPartitionPaths().length * 2, allFiles.length);
@@ -146,6 +148,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       final HoodieTable clusteredTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      clusteredTable.getHoodieView().sync();
       Stream<HoodieBaseFile> dataFilesToRead = Arrays.stream(dataGen.getPartitionPaths())
           .flatMap(p -> clusteredTable.getBaseFileOnlyView().getLatestBaseFiles(p));
       // verify there should be only one base file per partition after clustering.

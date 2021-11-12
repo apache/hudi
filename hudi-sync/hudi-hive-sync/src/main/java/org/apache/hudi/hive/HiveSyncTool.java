@@ -321,7 +321,7 @@ public class HiveSyncTool extends AbstractSyncTool {
   }
 
   /**
-   * Syncs the list of storage parititions passed in (checks if the partition is in hive, if not adds it or if the
+   * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
    */
   private void syncPartitions(String tableName, List<String> writtenPartitionsSince) {

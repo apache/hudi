@@ -41,14 +41,18 @@ class TestHoodieSparkUtils {
   def testGlobPaths(@TempDir tempDir: File): Unit = {
     val folders: Seq[Path] = Seq(
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri)
+      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie", "metadata").toUri)
     )
 
     val files: Seq[Path] = Seq(
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file1").toUri),
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file2").toUri),
       new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file3").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file4").toUri)
+      new Path(Paths.get(tempDir.getAbsolutePath, "folder2","file4").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file5").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file6").toUri)
     )
 
     folders.foreach(folder => new File(folder.toUri).mkdir())
@@ -57,12 +61,14 @@ class TestHoodieSparkUtils {
     var paths = Seq(tempDir.getAbsolutePath + "/*")
     var globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(folders.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+    assertEquals(folders.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/*/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
@@ -79,7 +85,8 @@ class TestHoodieSparkUtils {
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*", tempDir.getAbsolutePath + "/folder2/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
   }
 
   @Test

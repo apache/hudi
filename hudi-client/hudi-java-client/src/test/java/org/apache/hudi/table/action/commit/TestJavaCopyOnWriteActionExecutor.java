@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -114,7 +115,8 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     return HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
-        .withSchema(SCHEMA.toString());
+        .withSchema(SCHEMA.toString())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
   }
 
   @Test

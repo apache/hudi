@@ -98,7 +98,7 @@ class TestPartialUpdateForMergeInto extends TestHoodieSqlBase {
          | preCombineField = '_ts'
          |)""".stripMargin)
 
-    checkException(
+    checkExceptionContain(
       s"""
          |merge into $tableName t0
          |using ( select 1 as id, 'a1' as name, 12 as price) s0
@@ -106,7 +106,7 @@ class TestPartialUpdateForMergeInto extends TestHoodieSqlBase {
          |when matched then update set price = s0.price
       """.stripMargin)(
       "Missing specify value for the preCombineField: _ts in merge-into update action. " +
-        "You should add '... update set _ts = xx....' to the when-matched clause.;")
+        "You should add '... update set _ts = xx....' to the when-matched clause.")
 
     val tableName2 = generateTableName
     spark.sql(
@@ -123,7 +123,7 @@ class TestPartialUpdateForMergeInto extends TestHoodieSqlBase {
          | preCombineField = '_ts'
          |)""".stripMargin)
 
-    checkException(
+    checkExceptionContain(
       s"""
          |merge into $tableName2 t0
          |using ( select 1 as id, 'a1' as name, 12 as price, 1000 as ts) s0
@@ -132,6 +132,6 @@ class TestPartialUpdateForMergeInto extends TestHoodieSqlBase {
         """.stripMargin)(
       "Missing specify the value for target field: 'id' in merge into update action for MOR table. " +
         "Currently we cannot support partial update for MOR, please complete all the target fields " +
-        "just like '...update set id = s0.id, name = s0.name ....';")
+        "just like '...update set id = s0.id, name = s0.name ....'")
   }
 }

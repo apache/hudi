@@ -201,7 +201,7 @@ public class StreamReadMonitoringFunction
     }
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
-    LOG.info(""
+    LOG.info("\n"
             + "------------------------------------------------------------\n"
             + "---------- consumed to instant: {}\n"
             + "------------------------------------------------------------",

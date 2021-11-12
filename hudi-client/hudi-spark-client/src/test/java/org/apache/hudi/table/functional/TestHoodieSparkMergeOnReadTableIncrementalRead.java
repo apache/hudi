@@ -20,6 +20,7 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -83,7 +84,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
-    HoodieWriteConfig cfg = getConfig(true);
+    HoodieWriteConfig cfg = getConfigBuilder(true).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       /*

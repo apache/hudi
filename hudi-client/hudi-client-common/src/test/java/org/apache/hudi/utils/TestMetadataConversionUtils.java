@@ -176,7 +176,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     commitMetadata.setCompacted(true);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, commitMetadata)
+        .addCommit(instantTime, Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -206,7 +206,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     commitMetadata.addMetadata("test", "test");
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, commitMetadata)
+        .addCommit(instantTime, Option.of(commitMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 

@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -168,7 +169,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testInstantiationFailure() throws IOException {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).withPath("/dummypath/abc/").build();
+    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withPath("/dummypath/abc/").build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
 
     try {

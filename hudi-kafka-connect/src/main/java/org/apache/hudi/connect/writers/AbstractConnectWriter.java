@@ -91,11 +91,11 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
   }
 
   @Override
-  public List<WriteStatus> close() throws IOException {
+  public List<WriteStatus> close() {
     return flushRecords();
   }
 
   protected abstract void writeHudiRecord(HoodieRecord<?> record);
 
-  protected abstract List<WriteStatus> flushRecords() throws IOException;
+  protected abstract List<WriteStatus> flushRecords();
 }

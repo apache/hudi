@@ -63,11 +63,8 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
     }
   }
 
-  private I tag(
-      I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table) {
-    // perform index loop up to get existing location of records
-    return table.getIndex().tagLocation(dedupedRecords, context, table);
-  }
+  protected abstract I tag(
+      I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table);
 
   public I combineOnCondition(
       boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table) {
@@ -87,5 +84,5 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<T, I, K, O> index, int parallelism);
+      I records, HoodieIndex<T, ?, ?, ?> index, int parallelism);
 }

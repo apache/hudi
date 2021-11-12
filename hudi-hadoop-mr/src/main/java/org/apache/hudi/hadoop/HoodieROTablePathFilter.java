@@ -79,6 +79,11 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   Map<String, HoodieTableMetaClient> metaClientCache;
 
   /**
+   * HoodieTableFileSystemView Cache.
+   */
+  private Map<String, HoodieTableFileSystemView> hoodieTableFileSystemViewCache;
+
+  /**
    * Hadoop configurations for the FileSystem.
    */
   private SerializableConfiguration conf;
@@ -97,6 +102,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
     this.nonHoodiePathCache = new HashSet<>();
     this.conf = new SerializableConfiguration(conf);
     this.metaClientCache = new HashMap<>();
+    this.hoodieTableFileSystemViewCache = new HashMap<>();
   }
 
   /**
@@ -175,8 +181,15 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-              metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+          HoodieTableMetaClient finalMetaClient = metaClient;
+          fsView = hoodieTableFileSystemViewCache.computeIfAbsent(baseDir.toString(), key ->
+                  FileSystemViewManager.createInMemoryFileSystemView(
+                          engineContext,
+                          finalMetaClient,
+                          HoodieInputFormatUtils.buildMetadataConfig(getConf())
+                  )
+          );
+
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache
@@ -202,10 +215,6 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
           }
           nonHoodiePathCache.add(folder.toString());
           return true;
-        } finally {
-          if (fsView != null) {
-            fsView.close();
-          }
         }
       } else {
         // files is at < 3 level depth in FS tree, can't be hoodie dataset

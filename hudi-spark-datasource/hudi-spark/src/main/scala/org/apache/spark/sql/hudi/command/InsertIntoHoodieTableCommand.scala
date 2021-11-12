@@ -21,12 +21,14 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
 import org.apache.spark.internal.Logging
@@ -90,7 +92,6 @@ object InsertIntoHoodieTableCommand extends Logging {
       // for insert into or insert overwrite partition we use append mode.
       SaveMode.Append
     }
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(config)
     val conf = sparkSession.sessionState.conf
     val alignedQuery = alignOutputFields(query, table, insertPartitions, conf)
     // If we create dataframe using the Dataset.ofRows(sparkSession, alignedQuery),
@@ -100,7 +101,7 @@ object InsertIntoHoodieTableCommand extends Logging {
     val inputDF = sparkSession.createDataFrame(
       Dataset.ofRows(sparkSession, alignedQuery).rdd, alignedQuery.schema)
     val success =
-      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, parameters, inputDF)._1
+      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, inputDF)._1
     if (success) {
       if (refreshTable) {
         sparkSession.catalog.refreshTable(table.identifier.unquotedString)
@@ -197,19 +198,42 @@ object InsertIntoHoodieTableCommand extends Logging {
     val parameters = withSparkConf(sparkSession, options)()
 
     val tableType = parameters.getOrElse(TABLE_TYPE.key, TABLE_TYPE.defaultValue)
-
+    val primaryColumns = HoodieOptionConfig.getPrimaryColumns(options)
     val partitionFields = table.partitionColumnNames.mkString(",")
+
     val path = getTableLocation(table, sparkSession)
+    val conf = sparkSession.sessionState.newHadoopConf()
+    val isTableExists = tableExistsInPath(path, conf)
+    val tableConfig = if (isTableExists) {
+      HoodieTableMetaClient.builder()
+        .setBasePath(path)
+        .setConf(conf)
+        .build()
+        .getTableConfig
+    } else {
+      null
+    }
+    val hiveStylePartitioningEnable = if (null == tableConfig || null == tableConfig.getHiveStylePartitioningEnable) {
+      "true"
+    } else {
+      tableConfig.getHiveStylePartitioningEnable
+    }
+    val urlEncodePartitioning = if (null == tableConfig || null == tableConfig.getUrlEncodePartitoning) {
+      "false"
+    } else {
+      tableConfig.getUrlEncodePartitoning
+    }
+    val keyGeneratorClassName = if (null == tableConfig || null == tableConfig.getKeyGeneratorClassName) {
+      if (primaryColumns.nonEmpty) {
+        classOf[ComplexKeyGenerator].getCanonicalName
+      } else {
+        classOf[UuidKeyGenerator].getCanonicalName
+      }
+    } else {
+      tableConfig.getKeyGeneratorClassName
+    }
 
     val tableSchema = table.schema
-
-    val primaryColumns = HoodieOptionConfig.getPrimaryColumns(options)
-
-    val keyGenClass = if (primaryColumns.nonEmpty) {
-      classOf[SqlKeyGenerator].getCanonicalName
-    } else {
-      classOf[UuidKeyGenerator].getName
-    }
 
     val dropDuplicate = sparkSession.conf
       .getOption(INSERT_DROP_DUPS.key)
@@ -267,7 +291,9 @@ object InsertIntoHoodieTableCommand extends Logging {
         TBL_NAME.key -> table.identifier.table,
         PRECOMBINE_FIELD.key -> tableSchema.fields.last.name,
         OPERATION.key -> operation,
-        KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
+        HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
+        URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
+        KEYGENERATOR_CLASS_NAME.key -> keyGeneratorClassName,
         RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
         PARTITIONPATH_FIELD.key -> partitionFields,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
@@ -279,10 +305,8 @@ object InsertIntoHoodieTableCommand extends Logging {
         HIVE_DATABASE.key -> table.identifier.database.getOrElse("default"),
         HIVE_TABLE.key -> table.identifier.table,
         HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
-        HIVE_STYLE_PARTITIONING.key -> "true",
         HIVE_PARTITION_FIELDS.key -> partitionFields,
         HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-        URL_ENCODE_PARTITIONING.key -> "true",
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200",
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> table.partitionSchema.toDDL

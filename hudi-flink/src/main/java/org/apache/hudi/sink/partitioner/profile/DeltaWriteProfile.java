@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.AbstractTableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.commit.SmallFile;
 
@@ -55,7 +56,7 @@ public class DeltaWriteProfile extends WriteProfile {
     if (!commitTimeline.empty()) {
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
       // initialize the filesystem view based on the commit metadata
-      initFSViewIfNecessary(commitTimeline);
+      initFileSystemView();
       // find smallest file in partition and append to it
       List<FileSlice> allSmallFileSlices = new ArrayList<>();
       // If we can index log files, we can add more inserts to log files for fileIds including those under
@@ -88,6 +89,10 @@ public class DeltaWriteProfile extends WriteProfile {
       }
     }
     return smallFileLocations;
+  }
+
+  protected AbstractTableFileSystemView getFileSystemView() {
+    return (AbstractTableFileSystemView) this.table.getSliceView();
   }
 
   private long getTotalFileSize(FileSlice fileSlice) {
