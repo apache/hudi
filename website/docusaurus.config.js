@@ -195,7 +195,7 @@ module.exports = {
           ],
         },
         {to: '/powered-by', label: "Who's Using", position: 'left'},
-        {to: '/releases/download', label: 'Download', position: 'left'},
+        {to: '/releases/download', label: 'Release Notes', position: 'left'},
         // right
         {
           type: 'docsVersionDropdown',
@@ -254,10 +254,6 @@ module.exports = {
             },
             {
               label: 'Releases',
-              to: '/releases/release-0.9.0',
-            },
-            {
-              label: 'Download',
               to: '/releases/download',
             },
             {

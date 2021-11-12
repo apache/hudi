@@ -1,45 +1,44 @@
 ---
-title: Download
+title: Release Notes
 sidebar_position: 1
-keywords: [ hudi, download]
+keywords: [hudi, download, release notes]
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
 ### Release 0.9.0
-* Source Release : [Apache Hudi 0.9.0 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.9.0/hudi-0.9.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.9.0/hudi-0.9.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.9.0/hudi-0.9.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.9.0](/releases/release-0.9.0))
+* Release Notes : ([Release Notes for Apache Hudi 0.9.0](/releases/release-0.9.0))
+* Download Source : [Apache Hudi 0.9.0 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.9.0/hudi-0.9.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.9.0/hudi-0.9.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.9.0/hudi-0.9.0.src.tgz.sha512))
 
 ### Release 0.8.0
-* Source Release : [Apache Hudi 0.8.0 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.8.0/hudi-0.8.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.8.0](/releases/release-0.8.0))
+* Release Notes : ([Release Notes for Apache Hudi 0.8.0](/releases/release-0.8.0))
+* Download Source : [Apache Hudi 0.8.0 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.8.0/hudi-0.8.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.sha512))
 
 ### Release 0.7.0
-* Source Release : [Apache Hudi 0.7.0 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.7.0/hudi-0.7.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.7.0](/releases/release-0.7.0))
+* Release Notes : ([Release Notes for Apache Hudi 0.7.0](/releases/release-0.7.0))
+* Download Source : [Apache Hudi 0.7.0 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.7.0/hudi-0.7.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.sha512))
 
 ### Release 0.6.0
-* Source Release : [Apache Hudi 0.6.0 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.6.0/hudi-0.6.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.6.0](/releases/release-0.6.0))
+* Release Notes: ([Release Notes for Apache Hudi 0.6.0](/releases/release-0.6.0))
+* Download Source : [Apache Hudi 0.6.0 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.6.0/hudi-0.6.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.sha512))
 
 ### Release 0.5.3
-* Source Release : [Apache Hudi 0.5.3 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.5.3/hudi-0.5.3.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.5.3](/releases/release-0.5.3))
+* Release Notes: ([Release Notes for Apache Hudi 0.5.3](/releases/release-0.5.3))
+* Download Source : [Apache Hudi 0.5.3 Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.5.3/hudi-0.5.3.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.sha512))
 
 ### Release 0.5.2-incubating
-* Source Release : [Apache Hudi 0.5.2-incubating Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.5.2](/releases/older-releases#release-052-incubating-docs))
+* Release Notes: ([Release Notes for Apache Hudi 0.5.2](/releases/older-releases#release-052-incubating-docs))
+* Download Source : [Apache Hudi 0.5.2-incubating Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
 
 ### Release 0.5.1-incubating
-* Source Release : [Apache Hudi 0.5.1-incubating Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.5.1](/releases/older-releases#release-051-incubating-docs))
+* Release Notes: ([Release Notes for Apache Hudi 0.5.1](/releases/older-releases#release-051-incubating-docs))
+* Download Source : [Apache Hudi 0.5.1-incubating Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
 
 ### Release 0.5.0-incubating
-* Source Release : [Apache Hudi 0.5.0-incubating Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.5.0](/releases/older-releases#release-050-incubating-docs))
+* Release Notes: ([Release Notes for Apache Hudi 0.5.0](/releases/older-releases#release-050-incubating-docs))
+* Download Source : [Apache Hudi 0.5.0-incubating Source Release](https://www.apache.org/dyn/closer.lua/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512))
 
-## Verify Release
-
+## Verify Release Download
 It is essential that you verify the integrity of the downloaded files using the PGP signatures. Please read [How to Verify Downloaded Files](https://www.apache.org/info/verification.html)
 for more information on how and why you should verify our releases.
 
