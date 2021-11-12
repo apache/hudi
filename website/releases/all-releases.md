@@ -1,5 +1,5 @@
 ---
-title: Release Notes
+title: Releases
 sidebar_position: 1
 keywords: [hudi, download, release notes]
 toc: true
