@@ -37,7 +37,7 @@ import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_TABLE_NA
 import static org.apache.hudi.config.AWSLockConfiguration.DYNAMODB_LOCK_WRITE_CAPACITY;
 
 /**
- * Configurations used by the AWS credentials.
+ * Configurations used by the AWS credentials and AWS DynamoDB based lock.
  */
 @Immutable
 @ConfigClassProperty(name = "AWS credential Configs",

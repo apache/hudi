@@ -31,27 +31,13 @@ public class AWSLockConfiguration {
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LOCK_PREFIX + "dynamodb.";
 
-  public static final String DYNAMODB_LOCK_TABLE_NAME_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table";
-
-  public static final String DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "partition_key";
-
-  public static final String DYNAMODB_LOCK_REGION_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region";
-
-  public static final String DYNAMODB_LOCK_BILLING_MODE_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode";
-
-  public static final String DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "read_capacity";
-
-  public static final String DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "write_capacity";
-
-  public static final String DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY = DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table_creation_timeout";
-
   public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_NAME = ConfigProperty
-      .key(DYNAMODB_LOCK_TABLE_NAME_PROP_KEY)
+      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table")
       .noDefaultValue()
       .withDocumentation("For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_PARTITION_KEY = ConfigProperty
-      .key(DYNAMODB_LOCK_PARTITION_KEY_PROP_KEY)
+      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "partition_key")
       .noDefaultValue()
       .withInferFunction(cfg -> {
         if (cfg.contains(HoodieWriteConfig.TBL_NAME)) {
@@ -64,7 +50,7 @@ public class AWSLockConfiguration {
           + " By default we use the Hudi table name specified to be the partition key");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_REGION = ConfigProperty
-      .key(DYNAMODB_LOCK_REGION_PROP_KEY)
+      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "region")
       .defaultValue("us-east-1")
       .withInferFunction(cfg -> {
         String regionFromEnv = System.getenv("AWS_REGION");
@@ -77,24 +63,22 @@ public class AWSLockConfiguration {
           + " Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_BILLING_MODE = ConfigProperty
-      .key(DYNAMODB_LOCK_BILLING_MODE_PROP_KEY)
+      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "billing_mode")
       .defaultValue(BillingMode.PAY_PER_REQUEST.name())
       .withDocumentation("For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_READ_CAPACITY = ConfigProperty
-      .key(DYNAMODB_LOCK_READ_CAPACITY_PROP_KEY)
+      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "read_capacity")
       .defaultValue("20")
       .withDocumentation("For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_WRITE_CAPACITY = ConfigProperty
-      .key(DYNAMODB_LOCK_WRITE_CAPACITY_PROP_KEY)
+      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "write_capacity")
       .defaultValue("10")
       .withDocumentation("For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode");
 
   public static final ConfigProperty<String> DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT = ConfigProperty
-      .key(DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT_PROP_KEY)
+      .key(DYNAMODB_BASED_LOCK_PROPERTY_PREFIX + "table_creation_timeout")
       .defaultValue(String.valueOf(10 * 60 * 1000))
       .withDocumentation("For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table");
-
-
 }

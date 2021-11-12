@@ -2156,8 +2156,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
           HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
-      //writeConfig.setDefaultOnCondition(!isAWSConfigSet,
-      //  HoodieAWSConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
     }
 
