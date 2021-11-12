@@ -442,12 +442,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @param context HoodieEngineContext
    * @param instantTime Instant Time for scheduling rollback
    * @param instantToRollback instant to be rolled back
+   * @param shouldRollbackUsingMarkers uses marker based rollback strategy when set to true. uses list based rollback when false.
    * @return HoodieRollbackPlan containing info on rollback.
    */
   public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                               String instantTime,
                                                               HoodieInstant instantToRollback,
-                                                              boolean skipTimelinePublish);
+                                                              boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers);
   
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
@@ -490,7 +491,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
     String commitTime = HoodieActiveTimeline.createNewInstantTime();
-    scheduleRollback(context, commitTime, inflightInstant, false);
+    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }
