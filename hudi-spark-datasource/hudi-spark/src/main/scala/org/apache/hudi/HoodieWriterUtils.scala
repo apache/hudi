@@ -145,14 +145,7 @@ object HoodieWriterUtils {
         diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
       }
 
-      val datasourceKeyGen = {
-        val kg = params.getOrElse(KEYGENERATOR_CLASS_NAME.key(), null)
-        if (classOf[SqlKeyGenerator].getCanonicalName == kg) {
-          params.getOrElse(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
-        } else {
-          kg
-        }
-      }
+      val datasourceKeyGen = getOriginKeyGenerator(params)
       val tableConfigKeyGen = tableConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)
       if (null != datasourceKeyGen && null != tableConfigKeyGen
           && datasourceKeyGen != tableConfigKeyGen) {
