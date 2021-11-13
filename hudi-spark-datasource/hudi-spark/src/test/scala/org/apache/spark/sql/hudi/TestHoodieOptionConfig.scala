@@ -24,7 +24,8 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types._
 
-import org.junit.jupiter.api.{Assertions, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import org.scalatest.Matchers.intercept
 
@@ -44,10 +45,10 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
   def testWithDefaultSqlOptions(): Unit = {
     val ops1 = Map("primaryKey" -> "id")
     val with1 = HoodieOptionConfig.withDefaultSqlOptions(ops1)
-    Assertions.assertTrue(with1.size == 3)
-    Assertions.assertTrue(with1("primaryKey") == "id")
-    Assertions.assertTrue(with1("type") == "cow")
-    Assertions.assertTrue(with1("payloadClass") == classOf[DefaultHoodieRecordPayload].getName)
+    assertTrue(with1.size == 3)
+    assertTrue(with1("primaryKey") == "id")
+    assertTrue(with1("type") == "cow")
+    assertTrue(with1("payloadClass") == classOf[DefaultHoodieRecordPayload].getName)
 
     val ops2 = Map("primaryKey" -> "id",
       "preCombineField" -> "timestamp",
@@ -55,7 +56,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
       "payloadClass" -> classOf[OverwriteWithLatestAvroPayload].getName
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)
-    Assertions.assertTrue(ops2 == with2)
+    assertTrue(ops2 == with2)
   }
 
   @Test
@@ -68,12 +69,12 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     )
     val tableConfigs = HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
 
-    Assertions.assertTrue(tableConfigs.size == 5)
-    Assertions.assertTrue(tableConfigs(HoodieTableConfig.RECORDKEY_FIELDS.key) == "id,addr")
-    Assertions.assertTrue(tableConfigs(HoodieTableConfig.PRECOMBINE_FIELD.key) == "timestamp")
-    Assertions.assertTrue(tableConfigs(HoodieTableConfig.TYPE.key) == "MERGE_ON_READ")
-    Assertions.assertTrue(tableConfigs("hoodie.index.type") == "INMEMORY")
-    Assertions.assertTrue(tableConfigs("hoodie.compact.inline") == "true")
+    assertTrue(tableConfigs.size == 5)
+    assertTrue(tableConfigs(HoodieTableConfig.RECORDKEY_FIELDS.key) == "id,addr")
+    assertTrue(tableConfigs(HoodieTableConfig.PRECOMBINE_FIELD.key) == "timestamp")
+    assertTrue(tableConfigs(HoodieTableConfig.TYPE.key) == "MERGE_ON_READ")
+    assertTrue(tableConfigs("hoodie.index.type") == "INMEMORY")
+    assertTrue(tableConfigs("hoodie.compact.inline") == "true")
   }
 
   @Test
@@ -86,8 +87,8 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
       "key123" -> "value456"
     )
     val tableConfigs = HoodieOptionConfig.deleteHooideOptions(sqlOptions)
-    Assertions.assertTrue(tableConfigs.size == 1)
-    Assertions.assertTrue(tableConfigs("key123") == "value456")
+    assertTrue(tableConfigs.size == 1)
+    assertTrue(tableConfigs("key123") == "value456")
   }
 
   @Test
@@ -100,8 +101,8 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
       "key123" -> "value456"
     )
     val tableConfigs = HoodieOptionConfig.extractSqlOptions(sqlOptions)
-    Assertions.assertTrue(tableConfigs.size == 3)
-    Assertions.assertTrue(tableConfigs.keySet == Set("primaryKey", "preCombineField", "type"))
+    assertTrue(tableConfigs.size == 3)
+    assertTrue(tableConfigs.keySet == Set("primaryKey", "preCombineField", "type"))
   }
 
   @Test
@@ -127,7 +128,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     val e1 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions1)
     }
-    Assertions.assertTrue(e1.getMessage.contains("No `primaryKey` is specified."))
+    assertTrue(e1.getMessage.contains("No `primaryKey` is specified."))
 
     // primary field not found
     val sqlOptions2 = baseSqlOptions ++ Map(
@@ -137,7 +138,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     val e2 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions2)
     }
-    Assertions.assertTrue(e2.getMessage.contains("Can't find primary key"))
+    assertTrue(e2.getMessage.contains("Can't find primary key"))
 
     // preCombine field not found
     val sqlOptions3 = baseSqlOptions ++ Map(
@@ -148,7 +149,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     val e3 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions3)
     }
-    Assertions.assertTrue(e3.getMessage.contains("Can't find precombine key"))
+    assertTrue(e3.getMessage.contains("Can't find precombine key"))
 
     // miss type parameter
     val sqlOptions4 = baseSqlOptions ++ Map(
@@ -158,7 +159,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     val e4 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions4)
     }
-    Assertions.assertTrue(e4.getMessage.contains("No `type` is specified."))
+    assertTrue(e4.getMessage.contains("No `type` is specified."))
 
     // type is invalid
     val sqlOptions5 = baseSqlOptions ++ Map(
@@ -169,7 +170,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     val e5 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions5)
     }
-    Assertions.assertTrue(e5.getMessage.contains("'type' must be 'cow' or 'mor'"))
+    assertTrue(e5.getMessage.contains("'type' must be 'cow' or 'mor'"))
 
     // right options and schema
     val sqlOptions6 = baseSqlOptions ++ Map(

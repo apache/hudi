@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test
 class HoodieSparkSqlWriterSuite2 {
 
   @Test
-  def testGetRealKeyGenerator(): Unit = {
+  def testGetOriginKeyGenerator(): Unit = {
     // for dataframe write
     val m1 = Map(
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName
