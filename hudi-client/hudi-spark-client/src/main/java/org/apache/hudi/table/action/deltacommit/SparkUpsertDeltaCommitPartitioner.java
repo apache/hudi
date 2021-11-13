@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -102,17 +101,17 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
     // it. Doing this overtime for a partition, we ensure that we handle small file issues
     // TODO : choose last N small files since there can be multiple small files written to a single partition
     // by different spark partitions in a single batch
-    return Option.fromJavaOptional(
-        table.getSliceView()
+    return table.getSliceView()
           .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getTimestamp(), false)
           .filter(
               fileSlice ->
+                  // NOTE: We can not pad slices with existing log-files w/o compacting these,
+                  //       hence skipping
                   fileSlice.getLogFiles().count() < 1
                   && fileSlice.getBaseFile().get().getFileSize() < config.getParquetSmallFileLimit())
-          .min(Comparator.comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize()))
-    )
-        .map(Collections::singletonList)
-        .orElse(Collections.emptyList());
+          .sorted(Comparator.comparing(fileSlice -> fileSlice.getBaseFile().get().getFileSize()))
+          .limit(config.getSmallFileGroupCandidatesLimit())
+          .collect(Collectors.toList());
   }
 
   public List<String> getSmallFileIds() {
