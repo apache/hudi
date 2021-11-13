@@ -76,9 +76,9 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
       .withDocumentation("Property to set which implementation of HBase QPS resource allocator to be used, which"
           + "controls the batching rate dynamically.");
 
-  public static final ConfigProperty<String> PUT_BATCH_SIZE_AUTO_COMPUTE = ConfigProperty
+  public static final ConfigProperty<Boolean> PUT_BATCH_SIZE_AUTO_COMPUTE = ConfigProperty
       .key("hoodie.index.hbase.put.batch.size.autocompute")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("Property to set to enable auto computation of put batch size");
 
   public static final ConfigProperty<Float> QPS_FRACTION = ConfigProperty
@@ -206,7 +206,7 @@ public class HoodieHBaseIndexConfig extends HoodieConfig {
    * @deprecated Use {@link #PUT_BATCH_SIZE_AUTO_COMPUTE} and its methods instead
    */
   @Deprecated
-  public static final String DEFAULT_HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE = PUT_BATCH_SIZE_AUTO_COMPUTE.defaultValue();
+  public static final Boolean DEFAULT_HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE = PUT_BATCH_SIZE_AUTO_COMPUTE.defaultValue();
   /**
    * @deprecated Use {@link #MAX_QPS_FRACTION} and its methods instead
    */
