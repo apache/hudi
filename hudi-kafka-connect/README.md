@@ -98,6 +98,13 @@ cd $HUDI_DIR/hudi-kafka-connect/demo/
 bash setupKafka.sh -n <total_kafka_messages>
 ```
 
+To generate data for long-running tests, you can add `-b` option to specify the number of batches of data
+to generate, with each batch containing a number of messages and idle time between batches, as follows:
+
+```bash
+bash setupKafka.sh -n <num_kafka_messages_per_batch> -b <num_batches>
+```
+
 ### 4 - Run the Sink connector worker (multiple workers can be run)
 
 The Kafka connect is a distributed platform, with the ability to run one or more workers (each running multiple tasks) 
