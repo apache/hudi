@@ -125,10 +125,6 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
               if (split instanceof BootstrapBaseFileSplit) {
                 BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
                 rtSplits.add(createRealtimeBoostrapBaseFileSplit(eSplit, metaClient.getBasePath(), logFilePaths, maxCommitTime));
-              } else if (split instanceof BaseFileWithLogsSplit) {
-                BaseFileWithLogsSplit bs = (BaseFileWithLogsSplit)split;
-                HoodieRealtimeFileSplit hoodieRealtimeFileSplit = new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogPaths(), bs.getMaxCommitTime(), finalHoodieVirtualKeyInfo);
-                rtSplits.add(hoodieRealtimeFileSplit);
               } else {
                 rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime, finalHoodieVirtualKeyInfo));
               }
