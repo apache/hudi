@@ -206,7 +206,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.OPERATION().key(), "delete")
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "_row_key")
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
