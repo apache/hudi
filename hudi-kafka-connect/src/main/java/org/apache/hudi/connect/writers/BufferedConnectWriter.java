@@ -108,13 +108,6 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
 
       // Write out all records if non-empty
       if (!bufferedRecords.isEmpty()) {
-        // TMP: logging only
-        for (String key : bufferedRecords.keySet()) {
-          LOG.info("BufferedConnectWriter writes record: " + key + " "
-              + bufferedRecords.get(key).getRecordKey() + " "
-              + bufferedRecords.get(key).getPartitionPath());
-        }
-
         if (isMorTable) {
           writeStatuses = writeClient.upsertPreppedRecords(
               new LinkedList<>(bufferedRecords.values()),

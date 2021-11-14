@@ -86,13 +86,13 @@ public class TestHoodieWriteConfig {
     // Default (as Spark)
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
     assertEquals(
-        HoodieClusteringConfig.SPARK_RECENT_DAYS_CLUSTERING_PLAN_STRATEGY,
+        HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
         writeConfig.getClusteringPlanStrategyClass());
 
     // Spark
     writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.SPARK).withPath("/tmp").build();
     assertEquals(
-        HoodieClusteringConfig.SPARK_RECENT_DAYS_CLUSTERING_PLAN_STRATEGY,
+        HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
         writeConfig.getClusteringPlanStrategyClass());
 
     // Flink and Java
