@@ -117,7 +117,7 @@ The key for the bloom filter record would be an encoded string representing the 
 partition and the file names are converted to deterministic hash based IDs, and then they are base64 encoded. Hash
 based IDs are easy to generate for the incoming new inserts records and for the lookup for the update records. 
 It and doesn't need any dictionary to be added for the reverse lookups. Hash bits are chosen based on the
-cardinality and the collision probability desired for the support max scale deployment. Base64 enoding the hash IDs
+cardinality and the collision probability desired for the support max scale deployment. Base64 encoding the hash IDs
 further reduces the on-disk storage space for these keys.
 
 ```
@@ -181,6 +181,9 @@ bloom filter key.
 key = base64_encode(hash64(column name) + hash64(partition name) + hash128(file path))
 ```
 
+While Hash based IDs have quite a few desirable properties in the context of Hudi index lookups, there is an impact
+on the column level schema changes though. Refer to [Schema Evolution](#Schema-Evolution) section for more details.
+
 Below picture gives a pictorial representation of Column stats partition in metadata table.
 <img src="metadata_index_col_stats.png" alt="Column Stats Partition" width="480"/>
 
@@ -207,6 +210,25 @@ index lookup would be
       confirm the keys
    2. Return the location (file id) of the final matching keys
 
+### Schema Evolution:
+
+HashID based key are deterministically generated from the tuple input. Mean, for the tuple consisting of column name,
+partition name and file name, the key generated would always be the same. So, a table where the schema gets changed over
+time would have an impact on the keys already generated. The most common schema evolution use cases like change of
+column type, adding a new column are not affected though. Other relatively uncommon use cases like column name rename,
+dropping a column and adding a column with dropped name would have indices referring them more than needed. This would
+lead to the index lookup matching stale/new records across evolved schemas. 
+
+To avoid looking up stale/new index records, here are the design options we have:
+1. (Preferred) Query rewrite / Result recordset pruning
+   1. Schema evolution layer should introduce query rewrite stage to detect evolved schemas for the input query and
+      optionally include additional predicates to the query
+   2. The resultant recordset can also be pruned based on the commit time and the schema change time
+3. Making input tuple set schema aware 
+   1. Along with column name, partition name and file path, a version/tag can also be added to make the key
+      generated very schema specific. But, this choice has a performance impact as the lookup now has to be more of a
+      prefix based instead of pointed lookups. That is, index lookup have to return records for all the versions/tags
+      and pruning on top of this have to be done.
 
 ## Implementation 
 
