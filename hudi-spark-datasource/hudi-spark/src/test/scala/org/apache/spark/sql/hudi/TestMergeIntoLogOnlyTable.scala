@@ -34,7 +34,7 @@ class TestMergeIntoLogOnlyTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}'
-           | options (
+           | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
            |  preCombineField = 'ts',

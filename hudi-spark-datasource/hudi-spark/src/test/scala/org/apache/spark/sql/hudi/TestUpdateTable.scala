@@ -33,7 +33,7 @@ class TestUpdateTable extends TestHoodieSqlBase {
              |  ts long
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
-             | options (
+             | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'ts'

@@ -202,8 +202,9 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           val targetTableId = getMergeIntoTargetTableId(mergeInto)
           val targetTable =
             sparkSession.sessionState.catalog.getTableMetadata(targetTableId)
-          val targetTableType = HoodieOptionConfig.getTableType(targetTable.storage.properties)
-          val preCombineField = HoodieOptionConfig.getPreCombineField(targetTable.storage.properties)
+          val tblProperties = targetTable.storage.properties ++ targetTable.properties
+          val targetTableType = HoodieOptionConfig.getTableType(tblProperties)
+          val preCombineField = HoodieOptionConfig.getPreCombineField(tblProperties)
 
           // Get the map of target attribute to value of the update assignments.
           val target2Values = resolvedAssignments.map {

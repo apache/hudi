@@ -38,7 +38,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
          |  dt string
          | )
          | using hudi
-         | options (
+         | tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts'
          | )
@@ -77,7 +77,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             | options (
+             |tblproperties (
              | primaryKey = 'id',
              | preCombineField = 'ts'
              |)
@@ -105,7 +105,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
          |  dt string
          | )
          | using hudi
-         | options (
+         | tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts'
          | )
@@ -151,7 +151,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             | options (
+             |tblproperties (
              | primaryKey = 'id',
              | preCombineField = 'ts'
              |)
