@@ -47,6 +47,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -495,7 +496,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testUpserts(boolean populateMetaFields) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(true);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(true).withMarkersType(MarkerType.DIRECT.name());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testUpsertsInternal(cfgBuilder.build(), SparkRDDWriteClient::upsert, false);
   }
@@ -506,7 +507,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testUpsertsPrepped(boolean populateMetaFields) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(true);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(true).withMarkersType(MarkerType.DIRECT.name());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testUpsertsInternal(cfgBuilder.build(), SparkRDDWriteClient::upsertPreppedRecords, true);
   }
@@ -524,8 +525,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Force using older timeline layout
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withRollbackUsingMarkers(true)
+        .withMarkersType(MarkerType.DIRECT.name()) // in this test, we directly operate with HoodieMergeHandle and so timeline server is not available for such
+        // operations
         .withProps(config.getProps()).withTimelineLayoutVersion(
         VERSION_0).build();
+    LOG.warn("Enabled " + hoodieWriteConfig.isEmbeddedTimelineServerEnabled() + ", " + config.isEmbeddedTimelineServerEnabled());
 
     HoodieTableMetaClient.withPropertyBuilder()
       .fromMetaClient(metaClient)
@@ -561,8 +565,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         0, 150, config.populateMetaFields());
 
     // Now simulate an upgrade and perform a restore operation
-    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
-        TimelineLayoutVersion.CURR_VERSION).build();
+    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps())
+        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
+        .withMarkersType(MarkerType.DIRECT.name()).build();
+    LOG.warn("timeline server " + newConfig.isEmbeddedTimelineServerEnabled());
     client = getHoodieWriteClient(newConfig);
     client.restoreToInstant("004");
 
@@ -2014,7 +2020,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     String instantTime = "000";
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
-        .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
+        .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).withMarkersType(MarkerType.DIRECT.name()).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     Pair<Path, JavaRDD<WriteStatus>> result = testConsistencyCheck(metaClient, instantTime, enableOptimisticConsistencyGuard);
 
@@ -2045,10 +2051,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       properties = getPropertiesForKeyGen();
     }
 
-    HoodieWriteConfig cfg = !enableOptimisticConsistencyGuard ? getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false)
+    HoodieWriteConfig cfg = !enableOptimisticConsistencyGuard ? getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers)
+        .withAutoCommit(false).withMarkersType(MarkerType.DIRECT.name())
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
             .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build() :
         getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false)
+            .withMarkersType(MarkerType.DIRECT.name())
             .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
                 .withConsistencyCheckEnabled(true)
                 .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard)
@@ -2280,10 +2288,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig cfg = !enableOptimisticConsistencyGuard ? (getConfigBuilder().withAutoCommit(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
             .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build())
+        .withMarkersType(MarkerType.DIRECT.name())
         .build()) : (getConfigBuilder().withAutoCommit(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
             .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard)
             .withOptimisticConsistencyGuardSleepTimeMs(1).build())
+        .withMarkersType(MarkerType.DIRECT.name())
         .build());
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
@@ -2448,6 +2458,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .withTimelineLayoutVersion(1)
         .withHeartbeatIntervalInMs(3 * 1000)
         .withAutoCommit(false)
+        .withMarkersType(MarkerType.DIRECT.name())
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen()).build();
   }
 

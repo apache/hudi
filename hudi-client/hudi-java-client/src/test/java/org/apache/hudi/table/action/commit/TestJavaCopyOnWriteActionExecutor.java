@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -114,7 +115,8 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     return HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
-        .withSchema(SCHEMA.toString());
+        .withSchema(SCHEMA.toString())
+        .withMarkersType(MarkerType.DIRECT.name());
   }
 
   @Test
@@ -413,6 +415,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
         .withSchema(schema.toString())
+        .withMarkersType(MarkerType.DIRECT.name())
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build())
         .build();

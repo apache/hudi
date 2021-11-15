@@ -18,16 +18,17 @@ package org.apache.hudi
 
 import java.lang
 import java.util.function.Function
-
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieRecordPayload
+import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.CompactionUtils
 import org.apache.hudi.common.util.ClusteringUtils
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieCorruptedDataException
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
@@ -78,11 +79,14 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       log.error("Async clustering service shutdown unexpectedly")
       throw new IllegalStateException("Async clustering service shutdown unexpectedly")
     }
+    // override to use DIRECT style markers. In Structured streaming, timeline server is closed after first micro-batch
+    // and subsequent micro-batches does not have timeline server running. hence we can't use TIMELINE server based markers.
+    val updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
 
     retry(retryCnt, retryIntervalMs)(
       Try(
         HoodieSparkSqlWriter.write(
-          sqlContext, mode, options, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering))
+          sqlContext, mode, updatedOptions, data, hoodieTableConfig, writeClient, Some(triggerAsyncCompactor), Some(triggerAsyncClustering))
       ) match {
         case Success((true, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig)) =>
           log.info(s"Micro batch id=$batchId succeeded"
