@@ -49,10 +49,10 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
     super(props);
-    this.recordKeyFields = (recordKeyField == null
-        ? Collections.emptyList() : Collections.singletonList(recordKeyField));
-    this.partitionPathFields = (partitionPathField == null
-        ? Collections.emptyList() : Collections.singletonList(partitionPathField));
+    this.recordKeyFields = recordKeyField == null
+        ? Collections.emptyList() : Collections.singletonList(recordKeyField);
+    this.partitionPathFields = partitionPathField == null
+        ? Collections.emptyList() : Collections.singletonList(partitionPathField);
     simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField);
   }
 

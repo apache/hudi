@@ -132,6 +132,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
 
+  public static final ConfigProperty<String> POPULATE_META_FIELDS = ConfigProperty
+      .key(METADATA_PREFIX + ".populate.meta.fields")
+      .defaultValue("false")
+      .sinceVersion("0.10.0")
+      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -162,6 +168,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean enableFullScan() {
     return getBoolean(ENABLE_FULL_SCAN_LOG_FILES);
+  }
+
+  public boolean populateMetaFields() {
+    return getBooleanOrDefault(HoodieMetadataConfig.POPULATE_META_FIELDS);
   }
 
   public static class Builder {
@@ -203,6 +213,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
       metadataConfig.setValue(COMPACT_NUM_DELTA_COMMITS, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      return this;
+    }
+
+    public Builder withPopulateMetaFields(boolean populateMetaFields) {
+      metadataConfig.setValue(POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       return this;
     }
 

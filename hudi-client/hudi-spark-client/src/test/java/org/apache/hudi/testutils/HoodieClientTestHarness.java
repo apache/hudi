@@ -283,11 +283,24 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     return properties;
   }
 
-  protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
+  protected Properties getPropertiesForMetadataTable() {
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    properties.put("hoodie.datasource.write.recordkey.field", "key");
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "key");
+    return properties;
+  }
+
+  protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
+                                                 boolean isMetadataTable) {
     if (!populateMetaFields) {
-      configBuilder.withProperties(getPropertiesForKeyGen())
+      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen()))
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
     }
+  }
+
+  protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
+    addConfigsForPopulateMetaFields(configBuilder, populateMetaFields, false);
   }
 
   /**

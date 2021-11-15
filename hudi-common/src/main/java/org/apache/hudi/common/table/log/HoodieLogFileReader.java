@@ -261,7 +261,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, readerSchema,
-            header, footer, enableInlineReading, this.keyField);
+            header, footer, enableInlineReading, keyField);
       case DELETE_BLOCK:
         return HoodieDeleteBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, header, footer);

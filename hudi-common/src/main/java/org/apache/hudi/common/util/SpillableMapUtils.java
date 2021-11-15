@@ -120,17 +120,26 @@ public class SpillableMapUtils {
         withOperationField, Option.empty());
   }
 
+  public static <R> R convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
+                                                   String preCombineField,
+                                                   boolean withOperationField,
+                                                   Option<String> partitionName) {
+    return convertToHoodieRecordPayload(record, payloadClazz, preCombineField,
+        Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        withOperationField, partitionName);
+  }
+
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
                                                    String preCombineField,
-                                                   Pair<String, String> recordKeyPartitionPathPair,
+                                                   Pair<String, String> recordKeyPartitionPathFieldPair,
                                                    boolean withOperationField,
                                                    Option<String> partitionName) {
-    final String recKey = record.get(recordKeyPartitionPathPair.getKey()).toString();
+    final String recKey = record.get(recordKeyPartitionPathFieldPair.getKey()).toString();
     final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
-        record.get(recordKeyPartitionPathPair.getRight()).toString());
+        record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
 
     Object preCombineVal = getPreCombineVal(record, preCombineField);
     HoodieOperation operation = withOperationField

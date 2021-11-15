@@ -133,8 +133,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       // local map to assist in merging with base file records
       Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords = readLogRecords(logRecordScanner, keys, timings);
-      List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = readFromBaseAndMergeWithLogRecords(baseFileReader,
-          keys, logRecords, timings);
+      List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = readFromBaseAndMergeWithLogRecords(
+          baseFileReader, keys, logRecords, timings, partitionName);
       LOG.info(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms", keys.size(), timings));
       return result;
     } catch (IOException ioe) {
@@ -175,8 +175,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> readFromBaseAndMergeWithLogRecords(HoodieFileReader baseFileReader,
-                                                                                                             List<String> keys, Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords,
-                                                                                                             List<Long> timings) throws IOException {
+                                                                                                             List<String> keys, Map<String,
+      Option<HoodieRecord<HoodieMetadataPayload>>> logRecords, List<Long> timings, String partitionName) throws IOException {
     List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
     // merge with base records
     HoodieTimer timer = new HoodieTimer().startTimer();
@@ -195,7 +195,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               : SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
               metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
               Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
-              false, Option.empty());
+              false, Option.of(partitionName));
+
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
           // merge base file record w/ log record if present
           if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {

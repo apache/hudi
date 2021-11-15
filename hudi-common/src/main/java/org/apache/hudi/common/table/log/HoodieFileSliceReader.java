@@ -72,7 +72,7 @@ public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Ite
         ? SpillableMapUtils.convertToHoodieRecordPayload(record,
         payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), scanner.isWithOperationField(), Option.empty())
         : SpillableMapUtils.convertToHoodieRecordPayload(record,
-        payloadClass, preCombineField, scanner.isWithOperationField());
+        payloadClass, preCombineField, scanner.isWithOperationField(), scanner.getPartitionName());
   }
 
   private HoodieFileSliceReader(Iterator<HoodieRecord<T>> recordsItr) {

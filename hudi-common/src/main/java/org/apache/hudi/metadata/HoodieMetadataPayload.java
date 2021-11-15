@@ -61,6 +61,12 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_L
  * HoodieMetadataRecord for ease of operations.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
+
+  // HoodieMetadata schema field ids
+  public static final String SCHEMA_FIELD_ID_KEY = "key";
+  public static final String SCHEMA_FIELD_ID_TYPE = "type";
+  public static final String SCHEMA_FIELD_ID_METADATA = "filesystemMetadata";
+
   // Type of the record
   // This can be an enum in the schema but Avro 1.8 has a bug - https://issues.apache.org/jira/browse/AVRO-1810
   private static final int PARTITION_LIST = 1;
@@ -78,13 +84,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     if (record.isPresent()) {
       // This can be simplified using SpecificData.deepcopy once this bug is fixed
       // https://issues.apache.org/jira/browse/AVRO-1811
-      key = record.get().get("key").toString();
-      type = (int) record.get().get("type");
-      if (record.get().get("filesystemMetadata") != null) {
+      key = record.get().get(SCHEMA_FIELD_ID_KEY).toString();
+      type = (int) record.get().get(SCHEMA_FIELD_ID_TYPE);
+      if (record.get().get(SCHEMA_FIELD_ID_METADATA) != null) {
         filesystemMetadata = (Map<String, HoodieMetadataFileInfo>) record.get().get("filesystemMetadata");
         filesystemMetadata.keySet().forEach(k -> {
           GenericRecord v = filesystemMetadata.get(k);
-          filesystemMetadata.put(k.toString(), new HoodieMetadataFileInfo((Long)v.get("size"), (Boolean)v.get("isDeleted")));
+          filesystemMetadata.put(k.toString(), new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
         });
       }
     }
@@ -231,8 +237,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("HoodieMetadataPayload {");
-    sb.append("key=").append(key).append(", ");
-    sb.append("type=").append(type).append(", ");
+    sb.append(SCHEMA_FIELD_ID_KEY + "=").append(key).append(", ");
+    sb.append(SCHEMA_FIELD_ID_TYPE + "=").append(type).append(", ");
     sb.append("creations=").append(Arrays.toString(getFilenames().toArray())).append(", ");
     sb.append("deletions=").append(Arrays.toString(getDeletions().toArray())).append(", ");
     sb.append('}');

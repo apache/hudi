@@ -46,13 +46,14 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected List<IndexedRecord> records;
   protected Schema schema;
-  protected String keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
+  protected String keyField;
 
   public HoodieDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
       FSDataInputStream inputStream, boolean readBlockLazily) {
     super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
+    this.keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
   }
 
   public HoodieDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
@@ -72,6 +73,28 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.keyField = keyField;
   }
 
+  /**
+   * Util method to get a data block for the requested type.
+   *
+   * @param logDataBlockFormat - Data block type
+   * @param recordList         - List of records that goes in the data block
+   * @param header             - data block header
+   * @return Data block of the requested type.
+   */
+  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
+                                        Map<HeaderMetadataType, String> header) {
+    return getBlock(logDataBlockFormat, recordList, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  }
+
+  /**
+   * Util method to get a data block for the requested type.
+   *
+   * @param logDataBlockFormat - Data block type
+   * @param recordList         - List of records that goes in the data block
+   * @param header             - data block header
+   * @param keyField           - FieldId to get the key from the records
+   * @return Data block of the requested type.
+   */
   public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
                                         Map<HeaderMetadataType, String> header, String keyField) {
     switch (logDataBlockFormat) {

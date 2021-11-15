@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -122,8 +123,8 @@ public abstract class AbstractHoodieLogRecordReader {
   private float progress = 0.0f;
   // Partition name
   private Option<String> partitionName;
-  // Virtual keys
-  private boolean virtualKeysEnabled = false;
+  // Populate meta fields for the records
+  private boolean populateMetaFieldsEnabled = true;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema,
@@ -156,13 +157,19 @@ public abstract class AbstractHoodieLogRecordReader {
     this.withOperationField = withOperationField;
     this.enableFullScan = enableFullScan;
 
-    // virtual keys handling
+    // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
     if (!tableConfig.populateMetaFields()) {
-      this.virtualKeysEnabled = true;
+      this.populateMetaFieldsEnabled = false;
       this.simpleKeyGenFields = Option.of(
           Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
     }
+
     this.partitionName = partitionName;
+    if (this.partitionName.isPresent()) {
+      final boolean isPartitionNameAbsolutePath = new Path(this.partitionName.get()).isAbsolute();
+      ValidationUtils.checkArgument(!isPartitionNameAbsolutePath,
+          "Unexpected partition name: " + this.partitionName.get());
+    }
   }
 
   public void scan() {
@@ -183,11 +190,9 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
 
-      // If virtual keys are enabled, set the key field accordingly.
-      String keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
-      if (virtualKeysEnabled) {
-        keyField = this.simpleKeyGenFields.get().getKey();
-      }
+      // If populate meta fields are disabled, set the virtual key field.
+      final String keyField = (this.populateMetaFieldsEnabled
+          ? HoodieRecord.RECORD_KEY_METADATA_FIELD : this.simpleKeyGenFields.get().getKey());
 
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
@@ -358,17 +363,34 @@ public abstract class AbstractHoodieLogRecordReader {
     }
     totalLogRecords.addAndGet(recs.size());
     for (IndexedRecord rec : recs) {
-      processNextRecord(createHoodieRecord(rec));
+      processNextRecord(createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
+          this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
     }
   }
 
-  private HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
-    if (!virtualKeysEnabled) {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN,
-          this.preCombineField, this.withOperationField);
+  /**
+   * Create @{@link HoodieRecord} from the @{@link IndexedRecord}.
+   *
+   * @param rec                - IndexedRecord to create the HoodieRecord from
+   * @param hoodieTableConfig  - Table config
+   * @param payloadClassFQN    - Payload class fully qualified name
+   * @param preCombineField    - PreCombine field
+   * @param withOperationField - Whether operation field is enabled
+   * @param simpleKeyGenFields - Key generator fields when populate meta fields is tuened off
+   * @param partitionName      - Partition name
+   * @return HoodieRecord created from the IndexedRecord
+   */
+  protected HoodieRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
+                                               final String payloadClassFQN, final String preCombineField,
+                                               final boolean withOperationField,
+                                               final Option<Pair<String, String>> simpleKeyGenFields,
+                                               final Option<String> partitionName) {
+    if (this.populateMetaFieldsEnabled) {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, payloadClassFQN,
+          preCombineField, withOperationField);
     } else {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN,
-          this.preCombineField, simpleKeyGenFields.get(), this.withOperationField, this.partitionName);
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, payloadClassFQN,
+          preCombineField, simpleKeyGenFields.get(), withOperationField, partitionName);
     }
   }
 
@@ -437,6 +459,10 @@ public abstract class AbstractHoodieLogRecordReader {
 
   protected String getPayloadClassFQN() {
     return payloadClassFQN;
+  }
+
+  protected Option<String> getPartitionName() {
+    return partitionName;
   }
 
   public long getTotalRollbacks() {

@@ -25,7 +25,11 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -78,6 +82,23 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     if (mergeKeyFilter.isEmpty() || mergeKeyFilter.contains(hoodieKey.getRecordKey())) {
       super.processNextDeletedKey(hoodieKey);
     }
+  }
+
+  @Override
+  protected HoodieRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
+                                               final String payloadClassFQN, final String preCombineField,
+                                               final boolean withOperationField,
+                                               final Option<Pair<String, String>> simpleKeyGenFields,
+                                               final Option<String> partitionName) {
+    if (hoodieTableConfig.populateMetaFields()) {
+      return super.createHoodieRecord(rec, hoodieTableConfig, payloadClassFQN, preCombineField, withOperationField,
+          simpleKeyGenFields, partitionName);
+    }
+
+    // When meta fields are not available, create the record using the
+    // preset key field and the known partition name
+    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, payloadClassFQN,
+        preCombineField, simpleKeyGenFields.get(), withOperationField, partitionName);
   }
 
   /**
