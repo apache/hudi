@@ -357,8 +357,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT = ConfigProperty
       .key("hoodie.merge.small.file.group.candidates.limit")
       .defaultValue(1)
-      .withDocumentation("Limits number of file groups, whose base file satisfies small-file limit, to consider for appending records during upsert operation. " +
-          "Only applicable to MOR tables");
+      .withDocumentation("Limits number of file groups, whose base file satisfies small-file limit, to consider for appending records during upsert operation. "
+          + "Only applicable to MOR tables");
 
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")

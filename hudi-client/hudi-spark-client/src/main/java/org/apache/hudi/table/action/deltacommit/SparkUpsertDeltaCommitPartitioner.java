@@ -63,7 +63,7 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
 
     // Find out all eligible small file slices, looking for
     // smallest file in the partition to append to
-    List<FileSlice> smallFileSlicesCandidates = pickSmallFileCandidates(partitionPath, latestCommitTime);
+    List<FileSlice> smallFileSlicesCandidates = getSmallFileCandidates(partitionPath, latestCommitTime);
     List<SmallFile> smallFileLocations = new ArrayList<>();
 
     // Create SmallFiles from the eligible file slices
@@ -87,7 +87,7 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
   }
 
   @Nonnull
-  private List<FileSlice> pickSmallFileCandidates(String partitionPath, HoodieInstant latestCommitInstant) {
+  private List<FileSlice> getSmallFileCandidates(String partitionPath, HoodieInstant latestCommitInstant) {
     // If we can index log files, we can add more inserts to log files for fileIds NOT including those under
     // pending compaction
     if (table.getIndex().canIndexLogFiles()) {
@@ -99,8 +99,6 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
 
     // If we cannot index log files, then we choose the smallest parquet file in the partition and add inserts to
     // it. Doing this overtime for a partition, we ensure that we handle small file issues
-    // TODO : choose last N small files since there can be multiple small files written to a single partition
-    // by different spark partitions in a single batch
     return table.getSliceView()
           .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getTimestamp(), false)
           .filter(
