@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
@@ -163,6 +166,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static class Builder {
 
+    private EngineType engineType = EngineType.SPARK;
     private final HoodieMetadataConfig metadataConfig = new HoodieMetadataConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
@@ -233,9 +237,27 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
+      metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
+    }
+
+    private boolean getDefaultMetadataEnable(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return ENABLE.defaultValue();
+        case FLINK:
+        case JAVA:
+          return false;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
     }
   }
 
