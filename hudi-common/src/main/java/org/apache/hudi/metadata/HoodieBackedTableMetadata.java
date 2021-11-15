@@ -184,8 +184,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
     // Retrieve record from base file
     if (baseFileReader != null) {
-      HoodieTimer readTimer = new HoodieTimer().startTimer();
+      HoodieTimer readTimer = new HoodieTimer();
       for (String key : keys) {
+        readTimer.startTimer();
         Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
         if (baseRecord.isPresent()) {
           hoodieRecord = metadataTableConfig.populateMetaFields()

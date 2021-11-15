@@ -75,10 +75,10 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
   }
 
   public void init(HoodieTableType tableType, boolean enableMetadataTable) throws IOException {
-    init(tableType, enableMetadataTable, true);
+    init(tableType, enableMetadataTable, true, false);
   }
 
-  public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableFullScan) throws IOException {
+  public void init(HoodieTableType tableType, boolean enableMetadataTable, boolean enableFullScan, boolean enableMetrics) throws IOException {
     this.tableType = tableType;
     initPath();
     initSparkContexts("TestHoodieMetadata");
@@ -87,8 +87,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     initMetaClient(tableType);
     initTestDataGenerator();
     metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, enableMetadataTable, false,
-        enableFullScan).build();
+    writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, enableMetadataTable, enableMetrics, enableFullScan).build();
     initWriteConfigAndMetatableWriter(writeConfig, enableMetadataTable);
   }
 

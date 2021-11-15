@@ -223,7 +223,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @MethodSource("bootstrapAndTableOperationTestArgs")
   public void testTableOperations(HoodieTableType tableType, boolean enableFullScan) throws Exception {
-    init(tableType, true, enableFullScan);
+    init(tableType, true, enableFullScan, false);
     doWriteInsertAndUpsert(testTable);
 
     // trigger an upsert
@@ -462,27 +462,43 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, emptyList(), true);
   }
 
+  /**
+   * Fetches next commit time in seconds from current one.
+   *
+   * @param curCommitTime current commit time.
+   * @return the next valid commit time.
+   */
+  private Long getNextCommitTime(long curCommitTime) {
+    if ((curCommitTime + 1) % 1000000000000L >= 60) { // max seconds is 60 and hence
+      return Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
+    } else {
+      return curCommitTime + 1;
+    }
+  }
+
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType) throws Exception {
-    init(tableType);
+    init(tableType, true, true, true);
+    long baseCommitTime = Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
     for (int i = 1; i < 25; i += 7) {
-      String commitTime1 = ((i > 9) ? ("00000") : ("000000")) + i;
-      String commitTime2 = ((i > 9) ? ("00000") : ("000000")) + (i + 1);
-      String commitTime3 = ((i > 9) ? ("00000") : ("000000")) + (i + 2);
-      String commitTime4 = ((i > 9) ? ("00000") : ("000000")) + (i + 3);
-      String commitTime5 = ((i > 9) ? ("00000") : ("000000")) + (i + 4);
-      String commitTime6 = ((i > 9) ? ("00000") : ("000000")) + (i + 5);
-      String commitTime7 = ((i > 9) ? ("00000") : ("000000")) + (i + 6);
-      doWriteOperation(testTable, commitTime1, INSERT);
-      doWriteOperation(testTable, commitTime2);
-      doClean(testTable, commitTime3, Arrays.asList(commitTime1));
-      doWriteOperation(testTable, commitTime4);
+      long commitTime1 = getNextCommitTime(baseCommitTime);
+      long commitTime2 = getNextCommitTime(commitTime1);
+      long commitTime3 = getNextCommitTime(commitTime2);
+      long commitTime4 = getNextCommitTime(commitTime3);
+      long commitTime5 = getNextCommitTime(commitTime4);
+      long commitTime6 = getNextCommitTime(commitTime5);
+      long commitTime7 = getNextCommitTime(commitTime6);
+      baseCommitTime = commitTime7;
+      doWriteOperation(testTable, Long.toString(commitTime1), INSERT);
+      doWriteOperation(testTable, Long.toString(commitTime2));
+      doClean(testTable, Long.toString(commitTime3), Arrays.asList(Long.toString(commitTime1)));
+      doWriteOperation(testTable, Long.toString(commitTime4));
       if (tableType == MERGE_ON_READ) {
-        doCompaction(testTable, commitTime5);
+        doCompaction(testTable, Long.toString(commitTime5));
       }
-      doWriteOperation(testTable, commitTime6);
-      doRollback(testTable, commitTime6, commitTime7);
+      doWriteOperation(testTable, Long.toString(commitTime6));
+      doRollback(testTable, Long.toString(commitTime6), Long.toString(commitTime7));
     }
     validateMetadata(testTable, emptyList(), true);
   }

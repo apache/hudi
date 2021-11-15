@@ -31,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -470,6 +471,19 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     for (Future f : futures) {
       f.get();
     }
+  }
+
+  @Test
+  public void testMetadataCompactionInstantDateParsing() throws ParseException {
+    // default second granularity instant ID
+    String secondGranularityInstant = "20210101120101";
+    Date defaultSecsGranularityDate = HoodieActiveTimeline.parseInstantTime(secondGranularityInstant);
+    // metadata table compaction/cleaning : ms granularity instant ID
+    String compactionInstant = secondGranularityInstant + "001";
+    Date msGranularityDate = HoodieActiveTimeline.parseInstantTime(compactionInstant);
+    assertEquals(0, msGranularityDate.getTime() - defaultSecsGranularityDate.getTime(), "Expected the ms part to be 0");
+    assertTrue(HoodieTimeline.compareTimestamps(secondGranularityInstant, HoodieTimeline.LESSER_THAN, compactionInstant));
+    assertTrue(HoodieTimeline.compareTimestamps(compactionInstant, HoodieTimeline.GREATER_THAN, secondGranularityInstant));
   }
 
   /**
