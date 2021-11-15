@@ -44,13 +44,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
   public static final String SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
-          "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
+      "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
   public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
-          "org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy";
+      "org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy";
   public static final String SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY =
-          "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
+      "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
   public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
-          "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
+      "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
 
   // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
   public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
