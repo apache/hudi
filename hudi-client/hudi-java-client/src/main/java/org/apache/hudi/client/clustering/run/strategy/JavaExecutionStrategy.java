@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -44,6 +43,7 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
@@ -63,6 +63,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
+import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 
 /**
  * Clustering strategy for Java engine.
@@ -96,12 +98,31 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
    * The number of new file groups created is bounded by numOutputGroups.
    * Note that commit is not done as part of strategy. commit is callers responsibility.
+   *
+   * @param inputRecords           List of {@link HoodieRecord}.
+   * @param numOutputGroups        Number of output file groups.
+   * @param instantTime            Clustering (replace commit) instant time.
+   * @param strategyParams         Strategy parameters containing columns to sort the data by when clustering.
+   * @param schema                 Schema of the data including metadata fields.
+   * @param fileGroupIdList        File group id corresponding to each out group.
+   * @param preserveHoodieMetadata Whether to preserve commit metadata while clustering.
+   * @return List of {@link WriteStatus}.
    */
   public abstract List<WriteStatus> performClusteringWithRecordList(
       final List<HoodieRecord<T>> inputRecords, final int numOutputGroups, final String instantTime,
       final Map<String, String> strategyParams, final Schema schema,
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
 
+  /**
+   * Create {@link BulkInsertPartitioner} based on strategy params.
+   *
+   * @param strategyParams Strategy parameters containing columns to sort the data by when clustering.
+   * @param schema         Schema of the data including metadata fields.
+   * @return empty for now.
+   */
+  protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+    return Option.empty();
+  }
 
   /**
    * Executes clustering for the group.
@@ -123,7 +144,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
    */
   private List<HoodieRecord<T>> readRecordsForGroup(HoodieClusteringGroup clusteringGroup, String instantTime) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream().map(ClusteringOperation::create).collect(Collectors.toList());
-    boolean hasLogFiles = clusteringOps.stream().filter(op -> op.getDeltaFilePaths().size() > 0).findAny().isPresent();
+    boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
     if (hasLogFiles) {
       // if there are log files, we read all records into memory for a file group and apply updates.
       return readRecordsForGroupWithLogs(clusteringOps, instantTime);
@@ -162,7 +183,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         if (!StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())) {
           HoodieFileReader<? extends IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-          Iterator<HoodieRecord<T>> fileSliceReader = HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
+          Iterator<HoodieRecord<T>> fileSliceReader = getFileSliceReader(baseFileReader, scanner, readerSchema,
               tableConfig.getPayloadClass(),
               tableConfig.getPreCombineField(),
               tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),

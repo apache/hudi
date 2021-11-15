@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
@@ -39,9 +41,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -287,7 +286,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           LOG.info("Building file system view for partition (" + partitionPathStr + ")");
 
           Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
-          // FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
           long beginLsTs = System.currentTimeMillis();
           FileStatus[] statuses = listPartition(partitionPath);
           long endLsTs = System.currentTimeMillis();

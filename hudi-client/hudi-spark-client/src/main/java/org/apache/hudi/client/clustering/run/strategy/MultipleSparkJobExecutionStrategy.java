@@ -18,6 +18,10 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -54,11 +58,6 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -108,7 +107,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     return writeMetadata;
   }
 
-
   /**
    * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
    * The number of new file groups created is bounded by numOutputGroups.
@@ -146,7 +144,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       return Option.empty();
     }
   }
-
 
   /**
    * Submit job to execute clustering for the group.

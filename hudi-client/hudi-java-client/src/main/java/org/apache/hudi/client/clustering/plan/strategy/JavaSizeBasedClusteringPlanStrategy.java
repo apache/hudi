@@ -33,7 +33,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
 import org.apache.hudi.table.HoodieJavaMergeOnReadTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -71,42 +70,32 @@ public class JavaSizeBasedClusteringPlanStrategy<T extends HoodieRecordPayload<T
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
     long totalSizeSoFar = 0;
+    HoodieWriteConfig writeConfig = getWriteConfig();
     for (FileSlice currentSlice : fileSlices) {
       // assume each filegroup size is ~= parquet.max.file.size
-      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : getWriteConfig().getParquetMaxFileSize();
+      totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
       // check if max size is reached and create new group, if needed.
-      if (totalSizeSoFar >= getWriteConfig().getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
-        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, getWriteConfig().getClusteringTargetFileMaxBytes());
+      if (totalSizeSoFar >= writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
+        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
         LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-            + getWriteConfig().getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+                + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
       }
       currentGroup.add(currentSlice);
+      // totalSizeSoFar could be 0 when new group was created in the previous conditional block.
+      // reset to the size of current slice, otherwise the number of output file group will become 0 even though current slice is present.
+      if (totalSizeSoFar == 0) {
+        totalSizeSoFar += currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+      }
     }
     if (!currentGroup.isEmpty()) {
-      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, getWriteConfig().getClusteringTargetFileMaxBytes());
+      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
       LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-          + getWriteConfig().getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+              + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
       fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
-
-    /*
-    Stream<HoodieClusteringGroup> result = fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
-        .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
-        .setNumOutputFileGroups(fileSliceGroup.getRight())
-        .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
-        .build());
-
-    result.forEach(
-        clusteringGroup -> {
-          LOG.info("Build clustering group: ");
-          for (HoodieSliceInfo info : clusteringGroup.getSlices()) {
-            LOG.info("slice info: " + info.getDataFilePath());
-          }
-        }
-    );*/
     
     return fileSliceGroups.stream().map(fileSliceGroup -> HoodieClusteringGroup.newBuilder()
         .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))

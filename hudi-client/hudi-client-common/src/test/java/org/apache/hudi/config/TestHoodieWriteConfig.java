@@ -21,7 +21,6 @@ package org.apache.hudi.config;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.index.HoodieIndex;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -99,8 +98,8 @@ public class TestHoodieWriteConfig {
     for (EngineType engineType : new EngineType[] {EngineType.FLINK, EngineType.JAVA}) {
       writeConfig = HoodieWriteConfig.newBuilder().withEngineType(engineType).withPath("/tmp").build();
       assertEquals(
-          HoodieClusteringConfig.JAVA_RECENT_DAYS_CLUSTERING_PLAN_STRATEGY,
-          writeConfig.getClusteringPlanStrategyClass());
+              HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
+              writeConfig.getClusteringPlanStrategyClass());
     }
   }
 

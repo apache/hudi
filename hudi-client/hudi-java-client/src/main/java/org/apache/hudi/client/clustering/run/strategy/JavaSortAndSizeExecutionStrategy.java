@@ -19,20 +19,17 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
-import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
-
-import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -69,13 +66,5 @@ public class JavaSortAndSizeExecutionStrategy<T extends HoodieRecordPayload<T>>
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
     return (List<WriteStatus>) JavaBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
         false, getPartitioner(strategyParams, schema), true, numOutputGroups, new CreateHandleFactory(preserveHoodieMetadata));
-  }
-
-  /**
-   * swa
-   * Create BulkInsertPartitioner based on strategy params.
-   */
-  protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
-    return Option.empty();
   }
 }

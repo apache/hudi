@@ -40,26 +40,33 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieSortedMergeHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.JavaClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.JavaExecuteClusteringCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertOverwriteTableCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaMergeHelper;
 import org.apache.hudi.table.action.commit.JavaUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -69,6 +76,9 @@ import java.util.Map;
 
 public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
     extends HoodieJavaTable<T> implements HoodieCompactionHandler<T> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaCopyOnWriteTable.class);
+
   protected HoodieJavaCopyOnWriteTable(HoodieWriteConfig config,
                                        HoodieEngineContext context,
                                        HoodieTableMetaClient metaClient) {
@@ -245,13 +255,48 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId, Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile)
+  public Iterator<List<WriteStatus>> handleUpdate(
+      String instantTime, String partitionPath, String fileId,
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile)
       throws IOException {
-    throw new HoodieNotSupportedException("Update is not supported for compaction yet");
+    // these are updates
+    HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
+    return handleUpdateInternal(upsertHandle, instantTime, fileId);
+  }
+
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
+                                                             String fileId) throws IOException {
+    if (upsertHandle.getOldFilePath() == null) {
+      throw new HoodieUpsertException(
+          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
+    } else {
+      JavaMergeHelper.newInstance().runMerge(this, upsertHandle);
+    }
+
+    // TODO(yihua): This needs to be revisited
+    if (upsertHandle.getPartitionPath() == null) {
+      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", "
+          + upsertHandle.writeStatuses());
+    }
+
+    return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
+  }
+
+  protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
+                                              Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+    if (requireSortedRecords()) {
+      return new HoodieSortedMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
+          dataFileToBeMerged, taskContextSupplier, Option.empty());
+    } else {
+      return new HoodieMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
+          dataFileToBeMerged, taskContextSupplier, Option.empty());
+    }
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId, Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
+  public Iterator<List<WriteStatus>> handleInsert(
+      String instantTime, String partitionPath, String fileId,
+      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordMap) {
     HoodieCreateHandle<?, ?, ?, ?> createHandle =
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();

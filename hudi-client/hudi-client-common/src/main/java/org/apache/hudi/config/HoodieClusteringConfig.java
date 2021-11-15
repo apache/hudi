@@ -36,27 +36,27 @@ import java.util.Properties;
  * Clustering specific configs.
  */
 @ConfigClassProperty(name = "Clustering Configs",
-    groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control the clustering table service in hudi, "
-        + "which optimizes the storage layout for better query performance by sorting and sizing data files.")
+        groupName = ConfigGroups.Names.WRITE_CLIENT,
+        description = "Configurations that control the clustering table service in hudi, "
+                + "which optimizes the storage layout for better query performance by sorting and sizing data files.")
 public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
   public static final String SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
-      "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
-  public static final String JAVA_RECENT_DAYS_CLUSTERING_PLAN_STRATEGY =
-      "org.apache.hudi.client.clustering.plan.strategy.JavaRecentDaysClusteringPlanStrategy";
+          "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
+  public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
+          "org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy";
   public static final String SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY =
-      "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
+          "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
   public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
-      "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
+          "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
 
   // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
   public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
 
   public static final ConfigProperty<String> DAYBASED_LOOKBACK_PARTITIONS = ConfigProperty
-      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
+          .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
       .defaultValue("2")
       .sinceVersion("0.7.0")
       .withDocumentation("Number of partitions to list to create ClusteringPlan");
@@ -474,7 +474,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
           return SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         case FLINK:
         case JAVA:
-          return JAVA_RECENT_DAYS_CLUSTERING_PLAN_STRATEGY;
+          return JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }

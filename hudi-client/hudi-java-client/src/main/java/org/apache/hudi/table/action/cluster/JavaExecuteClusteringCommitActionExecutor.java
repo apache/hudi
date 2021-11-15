@@ -46,7 +46,6 @@ import org.apache.hudi.table.action.commit.BaseJavaCommitActionExecutor;
 
 import org.apache.avro.Schema;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -115,9 +114,8 @@ public class JavaExecuteClusteringCommitActionExecutor<T extends HoodieRecordPay
 
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    Set<HoodieFileGroupId> newFilesWritten = new HashSet(writeMetadata.getWriteStats().get().stream()
-        .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId()))
-        .collect(Collectors.toList()));
+    Set<HoodieFileGroupId> newFilesWritten = writeMetadata.getWriteStats().get().stream()
+        .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId())).collect(Collectors.toSet());
     return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
         .filter(fg -> !newFilesWritten.contains(fg))
         .collect(Collectors.groupingBy(fg -> fg.getPartitionPath(), Collectors.mapping(fg -> fg.getFileId(), Collectors.toList())));
