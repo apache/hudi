@@ -119,9 +119,9 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " keep the metadata overhead constant, even as the table size grows."
           + "This config controls the maximum number of instants to retain in the active timeline. ");
 
-  public static final ConfigProperty<String> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
+  public static final ConfigProperty<Integer> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.archive.delete.parallelism")
-      .defaultValue("100")
+      .defaultValue(100)
       .withDocumentation("Parallelism for deleting archived hoodie commits.");
 
   public static final ConfigProperty<String> MIN_COMMITS_TO_KEEP = ConfigProperty
