@@ -19,25 +19,28 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils, SparkAdapterSupport}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.hudi.{HoodieOptionConfig, SerDeUtils}
+import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.types.{BooleanType, StructType}
+
 import java.util.Base64
+
 
 /**
  * The Command for hoodie MergeIntoTable.
@@ -78,12 +81,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
   private lazy val targetTableSchemaWithoutMetaFields =
     removeMetaFields(mergeInto.targetTable.schema).fields
 
-  private lazy val targetTable =
-    sparkSession.sessionState.catalog.getTableMetadata(targetTableIdentify)
+  private lazy val hoodieCatalogTable = HoodieCatalogTable(sparkSession, targetTableIdentify)
 
-  private lazy val tblProperties = targetTable.storage.properties ++ targetTable.properties
-
-  private lazy val targetTableType = HoodieOptionConfig.getTableType(tblProperties)
+  private lazy val targetTableType = hoodieCatalogTable.tableTypeName
 
   /**
    *
@@ -126,7 +126,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     assert(updateActions.size <= 1, s"Only support one updateAction currently, current update action count is: ${updateActions.size}")
 
     val updateAction = updateActions.headOption
-    HoodieOptionConfig.getPreCombineField(tblProperties).map(preCombineField => {
+    hoodieCatalogTable.preCombineKey.map(preCombineField => {
       val sourcePreCombineField =
         updateAction.map(u => u.assignments.filter {
             case Assignment(key: AttributeReference, _) => key.name.equalsIgnoreCase(preCombineField)
@@ -149,9 +149,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     this.sparkSession = sparkSession
 
     // Create the write parameters
-    val parameters = buildMergeIntoConfig(mergeInto)
-
-    val sourceDF = buildSourceDF(sparkSession)
+    val parameters = buildMergeIntoConfig(hoodieCatalogTable)
 
     if (mergeInto.matchedActions.nonEmpty) { // Do the upsert
       executeUpsert(sourceDF, parameters)
@@ -180,7 +178,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
    * row key and pre-combine field.
    *
    */
-  private def buildSourceDF(sparkSession: SparkSession): DataFrame = {
+  private lazy val sourceDF: DataFrame = {
     var sourceDF = Dataset.ofRows(sparkSession, mergeInto.sourceTable)
     targetKey2SourceExpression.foreach {
       case (targetColumn, sourceExpression)
@@ -429,33 +427,24 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
 
   /**
    * Create the config for hoodie writer.
-   * @param mergeInto
-   * @return
    */
-  private def buildMergeIntoConfig(mergeInto: MergeIntoTable): Map[String, String] = {
+  private def buildMergeIntoConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
 
     val targetTableDb = targetTableIdentify.database.getOrElse("default")
     val targetTableName = targetTableIdentify.identifier
-    val path = getTableLocation(targetTable, sparkSession)
-    val conf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(path)
-      .setConf(conf)
-      .build()
-    val tableConfig = metaClient.getTableConfig
-    val tableSchema = getTableSqlSchema(metaClient).get
+    val path = hoodieCatalogTable.tableLocation
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
     val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
-    val options = tblProperties
-    val preCombineColumn = Option(tableConfig.getPreCombineField).getOrElse("")
 
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isEnableHive(sparkSession)
-    withSparkConf(sparkSession, options) {
+    withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
         RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
-        PRECOMBINE_FIELD.key -> preCombineColumn,
+        PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
         TBL_NAME.key -> targetTableName,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
         PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,

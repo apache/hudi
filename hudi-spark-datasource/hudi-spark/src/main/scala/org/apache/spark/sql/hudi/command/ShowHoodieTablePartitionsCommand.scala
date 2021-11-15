@@ -17,22 +17,22 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
+
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
-import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.types.StringType
 
 /**
  * Command for show hudi table's partitions.
  */
 case class ShowHoodieTablePartitionsCommand(
-    tableName: TableIdentifier,
+    tableIdentifier: TableIdentifier,
     specOpt: Option[TablePartitionSpec])
 extends RunnableCommand {
 
@@ -41,28 +41,17 @@ extends RunnableCommand {
   }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val catalog = sparkSession.sessionState.catalog
-    val resolver = sparkSession.sessionState.conf.resolver
-    val catalogTable = catalog.getTableMetadata(tableName)
-    val tablePath = getTableLocation(catalogTable, sparkSession)
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
 
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
-      .setConf(hadoopConf).build()
-    val schemaOpt = getTableSqlSchema(metaClient)
-    val partitionColumnNamesOpt = metaClient.getTableConfig.getPartitionFields
-    if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty
-        && schemaOpt.isDefined && schemaOpt.nonEmpty) {
+    val schemaOpt = hoodieCatalogTable.tableSchema
+    val partitionColumnNamesOpt = hoodieCatalogTable.tableConfig.getPartitionFields
 
-      val partitionColumnNames = partitionColumnNamesOpt.get
-      val schema = schemaOpt.get
-      val allPartitionPaths: Seq[String] = getAllPartitionPaths(sparkSession, catalogTable)
-
+    if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty && schemaOpt.nonEmpty) {
       if (specOpt.isEmpty) {
-        allPartitionPaths.map(Row(_))
+        hoodieCatalogTable.getAllPartitionPaths.map(Row(_))
       } else {
         val spec = specOpt.get
-        allPartitionPaths.filter { partitionPath =>
+        hoodieCatalogTable.getAllPartitionPaths.filter { partitionPath =>
           val part = PartitioningUtils.parsePathFragment(partitionPath)
           spec.forall { case (col, value) =>
             PartitionPathEncodeUtils.escapePartitionValue(value) == part.getOrElse(col, null)

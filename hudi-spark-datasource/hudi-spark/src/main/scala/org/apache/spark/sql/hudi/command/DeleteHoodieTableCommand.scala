@@ -17,14 +17,14 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.DataSourceWriteOptions.{OPERATION, _}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
@@ -57,26 +57,20 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
   }
 
   private def buildHoodieConfig(sparkSession: SparkSession): Map[String, String] = {
-    val targetTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
-    val tblProperties = targetTable.storage.properties ++ targetTable.properties
-    val path = getTableLocation(targetTable, sparkSession)
-    val conf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(path)
-      .setConf(conf)
-      .build()
-    val tableConfig = metaClient.getTableConfig
-    val tableSchema = getTableSqlSchema(metaClient).get
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableId)
+    val path = hoodieCatalogTable.tableLocation
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val tableSchema = hoodieCatalogTable.tableSchema
     val partitionColumns = tableConfig.getPartitionFieldProp.split(",").map(_.toLowerCase)
     val partitionSchema = StructType(tableSchema.filter(f => partitionColumns.contains(f.name)))
     val primaryColumns = tableConfig.getRecordKeyFields.get()
 
     assert(primaryColumns.nonEmpty,
       s"There are no primary key defined in table $tableId, cannot execute delete operator")
-    withSparkConf(sparkSession, tblProperties) {
+    withSparkConf(sparkSession, hoodieCatalogTable.catalogProperties) {
       Map(
         "path" -> path,
-        TBL_NAME.key -> tableId.table,
+        TBL_NAME.key -> tableConfig.getTableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
         URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitoning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
