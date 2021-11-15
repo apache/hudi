@@ -82,6 +82,14 @@ Data Summit Connect, May, 2021
 
 33. ["DataEngineering Podcast: Charting A Path For Streaming Data To Fill Your Data Lake With Hudi"](https://www.dataengineeringpodcast.com/hudi-streaming-data-lake-episode-209/) - By Vinoth Chandar. Aug, 2021
 
+34. ["Streaming Data Lakes using Kafka Connect + Apache Hudi"](https://www.slideshare.net/HostedbyConfluent/streaming-data-lakes-using-kafka-connect-apache-hudi-vinoth-chandar-apache-software-foundation) - Balaji Varadarajan and Vinoth Chandar. Sep 27, 2021.
+    
+35. ["Code/Design walk through"](https://www.youtube.com/watch?v=0ezDbR_4FqU) - By Vinoth Chandar. Oct 8, 2021
+
+36. ["Apache Hudi - The Data lake platform"](https://www.youtube.com/watch?v=nGcT6RPjez4) - By Vinoth Chandar. Oct 11, 2021
+
+37. ["Building Open Data Lakes on AWS with Debezium and Apache Hudi"](https://programmaticponderings.com/2021/10/31/demonstration-building-open-data-lakes-on-aws-with-debezium-and-apache-hudi/) - By Gary A. Stafford. Oct 31, 2021
+
 ## Articles
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
@@ -115,3 +123,5 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 27. ["Baixin bank’s real-time data lake evolution scheme based on Apache Hudi"](https://developpaper.com/baixin-banks-real-time-data-lake-evolution-scheme-based-on-apache-hudi/) July, 2021
 28. ["MLOps Wars: Versioned Feature Data with a Lakehouse"](https://www.logicalclocks.com/blog/mlops-wars-versioned-feature-data-with-a-lakehouse) - By David Bzhalava and Jim Dowling. Aug, 2021
 29. ["Cost-Efficient Open Source Big Data Platform at Uber"](https://eng.uber.com/cost-efficient-big-data-platform/) - By Zheng Shao and Mohammad Islam. Aug, 2021
+30. ["How Amazon Transportation Service enabled near-real-time event analytics at petabyte scale using AWS Glue with Apache Hudi"](
+    https://aws.amazon.com/blogs/big-data/how-amazon-transportation-service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-aws-glue-with-apache-hudi/) - Madhavan Sriram, Diego Menin, Gabriele Cacciola, and Kunal Gautam. Oct 14, 2021
