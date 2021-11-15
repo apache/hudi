@@ -36,9 +36,9 @@ import java.util.Properties;
  * Clustering specific configs.
  */
 @ConfigClassProperty(name = "Clustering Configs",
-        groupName = ConfigGroups.Names.WRITE_CLIENT,
-        description = "Configurations that control the clustering table service in hudi, "
-                + "which optimizes the storage layout for better query performance by sorting and sizing data files.")
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control the clustering table service in hudi, "
+        + "which optimizes the storage layout for better query performance by sorting and sizing data files.")
 public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix
@@ -56,7 +56,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
 
   public static final ConfigProperty<String> DAYBASED_LOOKBACK_PARTITIONS = ConfigProperty
-          .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
       .defaultValue("2")
       .sinceVersion("0.7.0")
       .withDocumentation("Number of partitions to list to create ClusteringPlan");
