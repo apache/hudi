@@ -61,14 +61,17 @@ object DataSkippingUtils {
     val num_nulls = (colName: Seq[String]) => buildExpressionInternal(colName, "_num_nulls")
 
     condition match {
+      // TODO should be OR
       // query filter "colA = b"  convert it to "colA_minValue <= b and colA_maxValue >= b" for index table
       case EqualTo(attribute: AttributeReference, value: Literal) =>
         val colName = getTargetColNameParts(attribute)
         reWriteCondition(colName, And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value)))
+      // TODO merge into above one
       // query filter "b = colA"  convert it to "colA_minValue <= b and colA_maxValue >= b" for index table
       case EqualTo(value: Literal, attribute: AttributeReference) =>
         val colName = getTargetColNameParts(attribute)
         reWriteCondition(colName, And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value)))
+      // TODO ???
       // query filter "colA = null"  convert it to "colA_num_nulls = null" for index table
       case equalNullSafe @ EqualNullSafe(_: AttributeReference, _ @ Literal(null, _)) =>
         val colName = getTargetColNameParts(equalNullSafe.left)
@@ -77,6 +80,7 @@ object DataSkippingUtils {
       case LessThan(attribute: AttributeReference, value: Literal) =>
         val colName = getTargetColNameParts(attribute)
         reWriteCondition(colName,LessThan(minValue(colName), value))
+      // TODO this should be an inverse to the one above (minValue > b)
       // query filter "b < colA"  convert it to "colA_maxValue > b" for index table
       case LessThan(value: Literal, attribute: AttributeReference) =>
         val colName = getTargetColNameParts(attribute)
@@ -85,6 +89,7 @@ object DataSkippingUtils {
       case GreaterThan(attribute: AttributeReference, value: Literal) =>
         val colName = getTargetColNameParts(attribute)
         reWriteCondition(colName, GreaterThan(maxValue(colName), value))
+      // TODO this should be an inverse to the one above (maxValue < b)
       // query filter "b > colA"  convert it to "colA_minValue < b" for index table
       case GreaterThan(value: Literal, attribute: AttributeReference) =>
         val colName = getTargetColNameParts(attribute)
@@ -93,6 +98,7 @@ object DataSkippingUtils {
       case LessThanOrEqual(attribute: AttributeReference, value: Literal) =>
         val colName = getTargetColNameParts(attribute)
         reWriteCondition(colName, LessThanOrEqual(minValue(colName), value))
+      // TODO this should be an inverse to the one above (minValue >= b)
       // query filter "b <= colA"  convert it to "colA_maxValue >= b" for index table
       case LessThanOrEqual(value: Literal, attribute: AttributeReference) =>
         val colName = getTargetColNameParts(attribute)
@@ -101,6 +107,7 @@ object DataSkippingUtils {
       case GreaterThanOrEqual(attribute: AttributeReference, right: Literal) =>
         val colName = getTargetColNameParts(attribute)
         reWriteCondition(colName, GreaterThanOrEqual(maxValue(colName), right))
+      // TODO this should be an inverse to the one above (maxValue <= b)
       // query filter "b >= colA"   convert it to "colA_minValue <= b" for index table
       case GreaterThanOrEqual(value: Literal, attribute: AttributeReference) =>
         val colName = getTargetColNameParts(attribute)
@@ -113,6 +120,7 @@ object DataSkippingUtils {
       case IsNotNull(attribute: AttributeReference) =>
         val colName = getTargetColNameParts(attribute)
         reWriteCondition(colName, EqualTo(num_nulls(colName), Literal(0)))
+      // TODO by exclusion: !(minValue > b && maxValue < a)
       // query filter "colA in (a,b)"   convert it to " (colA_minValue <= a and colA_maxValue >= a) or (colA_minValue <= b and colA_maxValue >= b) " for index table
       case In(attribute: AttributeReference, list: Seq[Literal]) =>
         val colName = getTargetColNameParts(attribute)

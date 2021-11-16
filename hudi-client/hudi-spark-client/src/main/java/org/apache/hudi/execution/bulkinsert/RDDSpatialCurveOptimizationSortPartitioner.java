@@ -39,7 +39,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 /**
- * A partitioner that does spartial curve optimization sorting based on specified column values for each RDD partition.
+ * A partitioner that does spatial curve optimization sorting based on specified column values for each RDD partition.
  * support z-curve optimization, hilbert will come soon.
  * @param <T> HoodieRecordPayload type
  */

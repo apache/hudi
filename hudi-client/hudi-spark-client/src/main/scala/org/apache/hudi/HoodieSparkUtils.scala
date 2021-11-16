@@ -298,8 +298,8 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     */
   def createMergeSql(leftTable: String, rightTable: String, cols: Seq[String]): String = {
     var selectsql = ""
-    for (i <- (0 to cols.size-1)) {
-      selectsql = selectsql + s" if (${leftTable}.${cols(0)} is null, ${rightTable}.${cols(i)}, ${leftTable}.${cols(i)}) as ${cols(i)} ,"
+    for (i <- cols.indices) {
+      selectsql = selectsql + s" if (${leftTable}.${cols(i)} is null, ${rightTable}.${cols(i)}, ${leftTable}.${cols(i)}) as ${cols(i)} ,"
     }
     "select " + selectsql.dropRight(1) + s" from ${leftTable} full join ${rightTable} on ${leftTable}.${cols(0)} = ${rightTable}.${cols(0)}"
   }

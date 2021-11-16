@@ -160,41 +160,47 @@ case class HoodieFileIndex(
       spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
   }
 
-  private def filterFilesByDataSkippingIndex(dataFilters: Seq[Expression]): Set[String] = {
+  private def filterFilesByDataSkippingIndex(dataFilters: Seq[Expression]): Option[Set[String]] = {
     var allFiles: Set[String] = Set.empty
     var candidateFiles: Set[String] = Set.empty
     val indexPath = metaClient.getZindexPath
     val fs = metaClient.getFs
-    if (fs.exists(new Path(indexPath)) && dataFilters.nonEmpty) {
-      // try to load latest index table from index path
-      val candidateIndexTables = fs.listStatus(new Path(indexPath)).filter(_.isDirectory)
-        .map(_.getPath.getName).filter(f => completedCommits.contains(f)).sortBy(x => x)
-      if (candidateIndexTables.nonEmpty) {
-        val dataFrameOpt = try {
-          Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
-        } catch {
-          case _: Throwable =>
-            logError("missing index skip data-skipping")
-            None
-        }
 
-        if (dataFrameOpt.isDefined) {
-          val indexSchema = dataFrameOpt.get.schema
-          val indexFiles = DataSkippingUtils.getIndexFiles(spark.sparkContext.hadoopConfiguration, new Path(indexPath, candidateIndexTables.last).toString)
-          val indexFilter = dataFilters.map(DataSkippingUtils.createZindexFilter(_, indexSchema)).reduce(And)
-          logInfo(s"index filter condition: $indexFilter")
-          dataFrameOpt.get.persist()
-          if (indexFiles.size <= 4) {
-            allFiles = DataSkippingUtils.readParquetFile(spark, indexFiles)
-          } else {
-            allFiles = dataFrameOpt.get.select("file").collect().map(_.getString(0)).toSet
-          }
-          candidateFiles = dataFrameOpt.get.filter(new Column(indexFilter)).select("file").collect().map(_.getString(0)).toSet
-          dataFrameOpt.get.unpersist()
+    if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || dataFilters.isEmpty) {
+      // scalastyle:off return
+      return Option.empty
+      // scalastyle:on return
+    }
+
+    // try to load latest index table from index path
+    val candidateIndexTables = fs.listStatus(new Path(indexPath)).filter(_.isDirectory)
+      .map(_.getPath.getName).filter(f => completedCommits.contains(f)).sortBy(x => x)
+    if (candidateIndexTables.nonEmpty) {
+      val dataFrameOpt = try {
+        Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
+      } catch {
+        case _: Throwable =>
+          logError("missing index skip data-skipping")
+          None
+      }
+
+      if (dataFrameOpt.isDefined) {
+        val indexSchema = dataFrameOpt.get.schema
+        val indexFiles = DataSkippingUtils.getIndexFiles(spark.sparkContext.hadoopConfiguration, new Path(indexPath, candidateIndexTables.last).toString)
+        val indexFilter = dataFilters.map(DataSkippingUtils.createZindexFilter(_, indexSchema)).reduce(And)
+        logInfo(s"index filter condition: $indexFilter")
+        dataFrameOpt.get.persist()
+        if (indexFiles.size <= 4) {
+          allFiles = DataSkippingUtils.readParquetFile(spark, indexFiles)
+        } else {
+          allFiles = dataFrameOpt.get.select("file").collect().map(_.getString(0)).toSet
         }
+        candidateFiles = dataFrameOpt.get.filter(new Column(indexFilter)).select("file").collect().map(_.getString(0)).toSet
+        dataFrameOpt.get.unpersist()
       }
     }
-    allFiles -- candidateFiles
+
+    Option.apply(candidateFiles)
   }
 
   /**
@@ -207,17 +213,12 @@ case class HoodieFileIndex(
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     // try to load filterFiles from index
-    val filterFiles: Set[String] = if (enableDataSkipping()) {
-      filterFilesByDataSkippingIndex(dataFilters)
-    } else {
-      Set.empty
-    }
+    val candidateFilesNamesOpt: Option[Set[String]] = filterFilesByDataSkippingIndex(dataFilters)
+
     if (queryAsNonePartitionedTable) { // Read as Non-Partitioned table.
-      val candidateFiles = if (!filterFiles.isEmpty) {
-        allFiles.filterNot(fileStatus => filterFiles.contains(fileStatus.getPath.getName))
-      } else {
-        allFiles
-      }
+      val candidateFiles =
+        allFiles.filter(fileStatus => candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName)))
+
       logInfo(s"Total files : ${allFiles.size}," +
         s" candidate files after data skipping: ${candidateFiles.size} " +
         s" skipping percent ${if (allFiles.length != 0) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
@@ -236,11 +237,9 @@ case class HoodieFileIndex(
             null
           }
         }).filterNot(_ == null)
-        val candidateFiles = if (!filterFiles.isEmpty) {
-          baseFileStatuses.filterNot(fileStatus => filterFiles.contains(fileStatus.getPath.getName))
-        } else {
-          baseFileStatuses
-        }
+        val candidateFiles =
+          baseFileStatuses.filter(fileStatus => candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName)))
+
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
         PartitionDirectory(partition.values, candidateFiles)
