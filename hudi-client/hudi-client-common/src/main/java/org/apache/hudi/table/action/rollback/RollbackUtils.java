@@ -18,10 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -42,6 +38,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,7 +56,8 @@ public class RollbackUtils {
 
   /**
    * Get Latest version of Rollback plan corresponding to a clean instant.
-   * @param metaClient  Hoodie Table Meta Client
+   *
+   * @param metaClient      Hoodie Table Meta Client
    * @param rollbackInstant Instant referring to rollback action
    * @return Rollback plan corresponding to rollback instant
    * @throws IOException
@@ -106,12 +107,10 @@ public class RollbackUtils {
    * Generate all rollback requests that needs rolling back this action without actually performing rollback for COW table type.
    * @param engineContext instance of {@link HoodieEngineContext} to use.
    * @param basePath base path of interest.
-   * @param config instance of {@link HoodieWriteConfig} to use.
    * @return {@link List} of {@link ListingBasedRollbackRequest}s thus collected.
    */
-  public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(HoodieEngineContext engineContext,
-                                                                                       String basePath, HoodieWriteConfig config) {
-    return FSUtils.getAllPartitionPaths(engineContext, config.getMetadataConfig(), basePath).stream()
+  public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(HoodieEngineContext engineContext, String basePath) {
+    return FSUtils.getAllPartitionPaths(engineContext, basePath, false, false).stream()
         .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
         .collect(Collectors.toList());
   }
@@ -127,7 +126,7 @@ public class RollbackUtils {
   public static List<ListingBasedRollbackRequest> generateRollbackRequestsUsingFileListingMOR(HoodieInstant instantToRollback, HoodieTable table, HoodieEngineContext context) throws IOException {
     String commit = instantToRollback.getTimestamp();
     HoodieWriteConfig config = table.getConfig();
-    List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(), false, false);
     if (partitions.isEmpty()) {
       return new ArrayList<>();
     }
