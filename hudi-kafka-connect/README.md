@@ -51,7 +51,7 @@ After building the package, we need to install the Apache Kafka
 ### 1 - Starting the environment
 
 For runtime dependencies, we encourage using the confluent HDFS connector jars. We have tested our setup with version `10.1.0`.
-After downloading the
+After downloading the connector, copy the jars from the lib folder to the Kafka Connect classpath.
 
 ```bash
 confluent-hub install confluentinc/kafka-connect-hdfs:10.1.0
