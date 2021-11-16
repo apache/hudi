@@ -19,6 +19,7 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
@@ -37,10 +38,8 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   public SimpleKeyGenerator(TypedProperties props) {
     this(props,
-        (props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
-            ? props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) : null),
-        (props.containsKey(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
-            ? props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) : null));
+        props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), HoodieRecord.RECORD_KEY_METADATA_FIELD),
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), HoodieRecord.PARTITION_PATH_METADATA_FIELD));
   }
 
   SimpleKeyGenerator(TypedProperties props, String partitionPathField) {

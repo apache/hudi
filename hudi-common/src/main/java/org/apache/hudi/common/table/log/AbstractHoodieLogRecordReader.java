@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -163,13 +162,7 @@ public abstract class AbstractHoodieLogRecordReader {
       this.simpleKeyGenFields = Option.of(
           Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
     }
-
     this.partitionName = partitionName;
-    if (this.partitionName.isPresent()) {
-      final boolean isPartitionNameAbsolutePath = new Path(this.partitionName.get()).isAbsolute();
-      ValidationUtils.checkArgument(!isPartitionNameAbsolutePath,
-          "Unexpected partition name: " + this.partitionName.get());
-    }
   }
 
   public void scan() {

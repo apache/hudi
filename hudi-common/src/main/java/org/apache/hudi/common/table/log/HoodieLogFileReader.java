@@ -256,7 +256,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
           return HoodieAvroDataBlock.getBlock(content, readerSchema);
         } else {
           return new HoodieAvroDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
-              contentPosition, contentLength, blockEndPos, readerSchema, header, footer, this.keyField);
+              contentPosition, contentLength, blockEndPos, readerSchema, header, footer, keyField);
         }
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
