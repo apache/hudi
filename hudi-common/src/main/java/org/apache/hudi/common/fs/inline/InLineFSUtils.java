@@ -19,6 +19,9 @@
 package org.apache.hudi.common.fs.inline;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.ValidationUtils;
+
+import java.io.File;
 
 /**
  * Utils to parse InLineFileSystem paths.
@@ -29,17 +32,17 @@ import org.apache.hadoop.fs.Path;
 public class InLineFSUtils {
   private static final String START_OFFSET_STR = "start_offset";
   private static final String LENGTH_STR = "length";
-  private static final String PATH_SEPERATOR = "/";
-  private static final String SCHEMA_SEPERATOR = ":///";
+  private static final String PATH_SEPARATOR = "/";
+  private static final String SCHEME_SEPARATOR = ":";
   private static final String EQUALS_STR = "=";
-  private static final String S3_PATH_PREFIX = "S3";
+  private static final String LOCAL_FILESYSTEM_SCHEME = "file";
 
   /**
    * Get the InlineFS Path for a given schema and its Path.
    * <p>
    * Examples:
    * Input Path: s3a://file1, origScheme: file, startOffset = 20, length = 40
-   * Output: "inlinefs:/file1/s3a/?start_offset=20&length=40"
+   * Output: "inlinefs://file1/s3a/?start_offset=20&length=40"
    *
    * @param outerPath         The outer file Path
    * @param origScheme        The file schema
@@ -48,10 +51,10 @@ public class InLineFSUtils {
    * @return InlineFS Path for the requested outer path and schema
    */
   public static Path getInlineFilePath(Path outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
-    String subPath = outerPath.toString().substring(outerPath.toString().indexOf(":") + 1);
+    final String subPath = new File(outerPath.toString().substring(outerPath.toString().indexOf(":") + 1)).getPath();
     return new Path(
-        InLineFileSystem.SCHEME + "://" + subPath + "/" + origScheme
-            + "/" + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset
+        InLineFileSystem.SCHEME + SCHEME_SEPARATOR + PATH_SEPARATOR + subPath + PATH_SEPARATOR + origScheme
+            + PATH_SEPARATOR + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset
             + "&" + LENGTH_STR + EQUALS_STR + inLineLength
     );
   }
@@ -71,11 +74,15 @@ public class InLineFSUtils {
    * @return Outer file Path from the InLineFS Path
    */
   public static Path getOuterFilePathFromInlinePath(Path inlineFSPath) {
-    String scheme = inlineFSPath.getParent().getName();
-    Path basePath = inlineFSPath.getParent().getParent();
-    String pathExceptScheme = basePath.toString().substring(basePath.toString().indexOf(":") + 1);
-    String schemaSeparator = (scheme.toUpperCase().startsWith(S3_PATH_PREFIX) ? ":/" : ":");
-    String fullPath = scheme + schemaSeparator + pathExceptScheme;
+    final String scheme = inlineFSPath.getParent().getName();
+    final Path basePath = inlineFSPath.getParent().getParent();
+    ValidationUtils.checkArgument(basePath.toString().contains(SCHEME_SEPARATOR),
+        "Invalid InLineFSPath: " + inlineFSPath);
+
+    final String pathExceptScheme = basePath.toString().substring(basePath.toString().indexOf(SCHEME_SEPARATOR) + 1);
+    final String fullPath = scheme + SCHEME_SEPARATOR
+        + (scheme.equals(LOCAL_FILESYSTEM_SCHEME) ? PATH_SEPARATOR : "")
+        + pathExceptScheme;
     return new Path(fullPath);
   }
 

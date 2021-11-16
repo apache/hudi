@@ -374,21 +374,23 @@ public abstract class AbstractHoodieLogRecordReader {
       LOG.info("Number of remaining logblocks to merge " + logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
       HoodieLogBlock lastBlock = logBlocks.pollLast();
-      switch (lastBlock.getBlockType()) {
-        case AVRO_DATA_BLOCK:
-          processDataBlock((HoodieAvroDataBlock) lastBlock, keys);
-          break;
-        case HFILE_DATA_BLOCK:
-          processDataBlock((HoodieHFileDataBlock) lastBlock, keys);
-          break;
-        case DELETE_BLOCK:
-          Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);
-          break;
-        case CORRUPT_BLOCK:
-          LOG.warn("Found a corrupt block which was not rolled back");
-          break;
-        default:
-          break;
+      if (lastBlock != null) {
+        switch (lastBlock.getBlockType()) {
+          case AVRO_DATA_BLOCK:
+            processDataBlock((HoodieAvroDataBlock) lastBlock, keys);
+            break;
+          case HFILE_DATA_BLOCK:
+            processDataBlock((HoodieHFileDataBlock) lastBlock, keys);
+            break;
+          case DELETE_BLOCK:
+            Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);
+            break;
+          case CORRUPT_BLOCK:
+            LOG.warn("Found a corrupt block which was not rolled back");
+            break;
+          default:
+            break;
+        }
       }
     }
     // At this step the lastBlocks are consumed. We track approximate progress by number of log-files seen
