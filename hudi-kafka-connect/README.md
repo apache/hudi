@@ -32,14 +32,6 @@ After installing these dependencies, execute the following commands. This will i
 including the fat packaged jar that contains all the dependencies required for a functional Hudi Kafka Connect Sink.
 
 ```bash
-cd $HUDI_DIR
-mvn clean -DskipTests install
-```
-
-Henceforth, incremental builds can be performed as follows. 
-
-```bash
-mvn clean -pl hudi-kafka-connect install -DskipTests
 mvn clean -pl packaging/hudi-kafka-connect-bundle install
 ```
 

@@ -50,6 +50,7 @@ fi
 
 ## defaults
 rawDataFile=${HUDI_DIR}/docker/demo/data/batch_1.json
+kafkaBrokerHostname=kafkabroker
 kafkaTopicName=hudi-test-topic
 numKafkaPartitions=4
 recordKey=volume
@@ -115,23 +116,23 @@ done
 if [ $recreateTopic = "Y" ]; then
   # First delete the existing topic
   echo "Delete Kafka topic $kafkaTopicName ..."
-  ${KAFKA_HOME}/bin/kafka-topics.sh --delete --topic ${kafkaTopicName} --bootstrap-server localhost:9092
+  ${KAFKA_HOME}/bin/kafka-topics.sh --delete --topic ${kafkaTopicName} --bootstrap-server ${kafkaBrokerHostname}:9092
 
   # Create the topic with 4 partitions
   echo "Create Kafka topic $kafkaTopicName ..."
-  ${KAFKA_HOME}/bin/kafka-topics.sh --create --topic ${kafkaTopicName} --partitions $numKafkaPartitions --replication-factor 1 --bootstrap-server localhost:9092
+  ${KAFKA_HOME}/bin/kafka-topics.sh --create --topic ${kafkaTopicName} --partitions $numKafkaPartitions --replication-factor 1 --bootstrap-server ${kafkaBrokerHostname}:9092
 fi
 
 # Setup the schema registry
 export SCHEMA=$(sed 's|/\*|\n&|g;s|*/|&\n|g' ${schemaFile} | sed '/\/\*/,/*\//d' | jq tostring)
-curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data "{\"schema\": $SCHEMA}" http://localhost:8081/subjects/${kafkaTopicName}/versions
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data "{\"schema\": $SCHEMA}" http://localhost:8082/subjects/${kafkaTopicName}/versions
 curl -X GET http://localhost:8081/subjects/${kafkaTopicName}/versions/latest
 
 # Generate kafka messages from raw records
 # Each records with unique keys and generate equal messages across each hudi partition
 partitions={}
 for ((i = 0; i < ${numHudiPartitions}; i++)); do
-  partitions[$i]="partition-"$i
+  partitions[$i]="partition_"$i
 done
 
 events_file=/tmp/kcat-input.events
@@ -170,5 +171,5 @@ for ((i = 1;i<=numBatch;i++)); do
   done
 
   echo "publish to Kafka ..."
-  grep -v '^$' ${events_file} | kcat -P -b localhost:9092 -t hudi-test-topic
+  grep -v '^$' ${events_file} | kcat -P -b ${kafkaBrokerHostname}:9092 -t ${kafkaTopicName}
 done

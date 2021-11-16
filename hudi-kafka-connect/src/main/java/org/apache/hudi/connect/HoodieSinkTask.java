@@ -74,7 +74,7 @@ public class HoodieSinkTask extends SinkTask {
   public void start(Map<String, String> props) {
     connectorName = props.get("name");
     taskId = props.get(TASK_ID_CONFIG_NAME);
-    LOG.info(String.format("Starting Hudi Sink Task for %s connector %s with id %s with assignments %s",
+    LOG.error(String.format("Starting Hudi Sink Task for %s connector %s with id %s with assignments %s",
         props, connectorName, taskId, context.assignment()));
     try {
       connectConfigs = KafkaConnectConfigs.newBuilder().withProperties(props).build();
@@ -147,13 +147,13 @@ public class HoodieSinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    LOG.info("New partitions added " + partitions.toString());
+    LOG.error("New partitions added " + partitions.toString());
     bootstrap(partitions);
   }
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    LOG.info("Existing partitions deleted " + partitions.toString());
+    LOG.error("Existing partitions deleted " + partitions.toString());
     // Close any writers we have. We may get assigned the same partitions and end up duplicating
     // some effort since we'll have to reprocess those messages. It may be possible to hold on to
     // the TopicPartitionWriter and continue to use the temp file, but this can get significantly
@@ -182,7 +182,7 @@ public class HoodieSinkTask extends SinkTask {
   }
 
   private void bootstrap(Collection<TopicPartition> partitions) {
-    LOG.info(String.format("Bootstrap task for connector %s with id %s with assignments %s part %s",
+    LOG.error(String.format("Bootstrap task for connector %s with id %s with assignments %s part %s",
         connectorName, taskId, context.assignment(), partitions));
     for (TopicPartition partition : partitions) {
       try {
