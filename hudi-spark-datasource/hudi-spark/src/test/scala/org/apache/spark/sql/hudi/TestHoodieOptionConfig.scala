@@ -78,7 +78,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
   }
 
   @Test
-  def testDeleteHooideOptions(): Unit = {
+  def testDeleteHoodieOptions(): Unit = {
     val sqlOptions = Map("primaryKey" -> "id,addr",
       "preCombineField" -> "timestamp",
       "type" -> "mor",
@@ -86,7 +86,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
       "hoodie.compact.inline" -> "true",
       "key123" -> "value456"
     )
-    val tableConfigs = HoodieOptionConfig.deleteHooideOptions(sqlOptions)
+    val tableConfigs = HoodieOptionConfig.deleteHoodieOptions(sqlOptions)
     assertTrue(tableConfigs.size == 1)
     assertTrue(tableConfigs("key123") == "value456")
   }
