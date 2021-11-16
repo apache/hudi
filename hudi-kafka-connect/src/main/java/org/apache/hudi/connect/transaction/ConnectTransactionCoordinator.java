@@ -119,7 +119,6 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     if (hasStarted.compareAndSet(false, true)) {
       executorService.submit(this);
     }
-
     kafkaControlClient.registerTransactionCoordinator(this);
     LOG.info(String.format("Start Transaction Coordinator for topic %s partition %s",
         partition.topic(), partition.partition()));

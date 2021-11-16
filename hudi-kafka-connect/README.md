@@ -165,8 +165,8 @@ Note: HUDI-2325 tracks Hive sync, which will unlock pretty much every other quer
 
 ```bash
 ls -a /tmp/hoodie/hudi-test-topic
-.		.hoodie		partition-1	partition-3
-..		partition-0	partition-2	partition-4
+.		.hoodie		partition_1	partition_3
+..		partition_0	partition_2	partition_4
 
 ls -lt /tmp/hoodie/hudi-test-topic/.hoodie
 total 72
@@ -181,7 +181,7 @@ total 72
 -rw-r--r--  1 user  wheel      0 Sep 13 21:41 20210913214114.commit.requested
 drwxr-xr-x  2 user  wheel     64 Sep 13 21:41 archived
 
-ls -l /tmp/hoodie/hudi-test-topic/partition-0
+ls -l /tmp/hoodie/hudi-test-topic/partition_0
 total 5168
 -rw-r--r--  1 user  wheel  439332 Sep 13 21:43 2E0E6DB44ACC8479059574A2C71C7A7E-0_0-0-0_20210913214114.parquet
 -rw-r--r--  1 user  wheel  440179 Sep 13 21:42 3B56FAAAE2BDD04E480C1CBACD463D3E-0_0-0-0_20210913214114.parquet
@@ -205,15 +205,15 @@ beeline -u jdbc:hive2://hiveserver:10000 \
 +---------------------+--+
 |      tab_name       |
 +---------------------+--+
-| hudi-test-topic_ro  |
-| hudi-test-topic_rt  |
+| huditesttopic_ro  |
+| huditesttopic_rt  |
 +---------------------+--+
 3 rows selected (1.199 seconds)
 0: jdbc:hive2://hiveserver:10000>
 
 
 # Look at partitions that were added
-0: jdbc:hive2://hiveserver:10000> show partitions hudi-test-topic_rt;
+0: jdbc:hive2://hiveserver:10000> show partitions huditesttopic_rt;
 +-------------------+--+
 |     partition     |
 +-------------------+--+
@@ -226,7 +226,7 @@ beeline -u jdbc:hive2://hiveserver:10000 \
 1 row selected (0.24 seconds)
 
 
-0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from topic_rt;
+0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from huditesttopic_rt;
 +----------------------+---------+----------------------+---------+------------+-----------+--+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
 +----------------------+---------+----------------------+---------+------------+-----------+--+

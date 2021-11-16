@@ -33,6 +33,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;

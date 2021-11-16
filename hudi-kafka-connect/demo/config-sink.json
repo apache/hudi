@@ -1,5 +1,5 @@
 {
-    "name": "hudi-sink-temp",
+    "name": "hudi-sink",
     "config": {
 		"bootstrap.servers": "kafkabroker:9092",
 		"connector.class": "org.apache.hudi.connect.HoodieSinkConnector",
@@ -19,7 +19,7 @@
 		"hoodie.kafka.commit.interval.secs": 60,
 		"hoodie.meta.sync.enable": "true",
 		"hoodie.meta.sync.classes": "org.apache.hudi.hive.HiveSyncTool",
-		"hoodie.datasource.hive_sync.table": "hudi-test-topic",
+		"hoodie.datasource.hive_sync.table": "huditesttopic",
 		"hoodie.datasource.hive_sync.partition_fields": "date",
 		"hoodie.datasource.hive_sync.partition_extractor_class": "org.apache.hudi.hive.MultiPartKeysValueExtractor",
 		"hoodie.datasource.hive_sync.use_jdbc": "false",

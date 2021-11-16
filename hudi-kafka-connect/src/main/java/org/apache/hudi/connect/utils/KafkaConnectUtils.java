@@ -94,8 +94,7 @@ public class KafkaConnectUtils {
       // configuration items before passing to hadoop/hive configs
       return !prop.toString().startsWith(HOODIE_CONF_PREFIX);
     }).forEach(prop -> {
-      hadoopConf.set(prop.toString().substring(HOODIE_CONF_PREFIX.length()),
-          connectConfigs.getProps().get(prop.toString()).toString());
+      hadoopConf.set(prop.toString(), connectConfigs.getProps().get(prop.toString()).toString());
     });
     return hadoopConf;
   }
