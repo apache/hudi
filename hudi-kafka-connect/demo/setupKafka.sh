@@ -23,6 +23,7 @@ usage() {
   echo "Usage: $0"
   echo "   -n |--num-kafka-records, (required) number of kafka records to generate in a batch"
   echo "   -b |--num-batch, (optional) number of batches of records to generate (default is 1)"
+  echo "   -t |--reuse-topic, (optional) reuses the Kafka topic (default deletes and recreate the topic)"
   echo "   -f |--raw-file, (optional) raw file for the kafka records"
   echo "   -k |--kafka-topic, (optional) Topic name for Kafka"
   echo "   -m |--num-kafka-partitions, (optional) number of kafka partitions"
@@ -57,8 +58,9 @@ partitionField=date
 schemaFile=${HUDI_DIR}/docker/demo/config/schema.avsc
 numBatch=1
 recordValue=0
+recreateTopic="Y"
 
-while getopts ":n:b:f:k:m:r:o:l:p:s:-:" opt; do
+while getopts ":n:b:tf:k:m:r:o:l:p:s:-:" opt; do
   case $opt in
   n)
     numRecords="$OPTARG"
@@ -67,6 +69,10 @@ while getopts ":n:b:f:k:m:r:o:l:p:s:-:" opt; do
   b)
     numBatch="$OPTARG"
     printf "Argument num-batch is %s\n" "$numBatch"
+    ;;
+  t)
+    recreateTopic="N"
+    printf "Argument recreate-topic is N (reuse Kafka topic) \n"
     ;;
   k)
     rawDataFile="$OPTARG"
@@ -106,11 +112,15 @@ while getopts ":n:b:f:k:m:r:o:l:p:s:-:" opt; do
   esac
 done
 
-# First delete the existing topic
-${KAFKA_HOME}/bin/kafka-topics.sh --delete --topic ${kafkaTopicName} --bootstrap-server localhost:9092
+if [ $recreateTopic = "Y" ]; then
+  # First delete the existing topic
+  echo "Delete Kafka topic $kafkaTopicName ..."
+  ${KAFKA_HOME}/bin/kafka-topics.sh --delete --topic ${kafkaTopicName} --bootstrap-server localhost:9092
 
-# Create the topic with 4 partitions
-${KAFKA_HOME}/bin/kafka-topics.sh --create --topic ${kafkaTopicName} --partitions $numKafkaPartitions --replication-factor 1 --bootstrap-server localhost:9092
+  # Create the topic with 4 partitions
+  echo "Create Kafka topic $kafkaTopicName ..."
+  ${KAFKA_HOME}/bin/kafka-topics.sh --create --topic ${kafkaTopicName} --partitions $numKafkaPartitions --replication-factor 1 --bootstrap-server localhost:9092
+fi
 
 # Setup the schema registry
 export SCHEMA=$(sed 's|/\*|\n&|g;s|*/|&\n|g' ${schemaFile} | sed '/\/\*/,/*\//d' | jq tostring)
