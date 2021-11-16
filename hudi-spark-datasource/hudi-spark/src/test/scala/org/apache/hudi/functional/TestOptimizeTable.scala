@@ -18,15 +18,15 @@
 
 package org.apache.hudi.functional
 
-import java.sql.{Date, Timestamp}
-
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.{BaseFileUtils, ParquetUtils}
+import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.ZCurveOptimizeHelper
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -35,6 +35,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.sql.{Date, Timestamp}
 import scala.collection.JavaConversions._
 import scala.util.Random
 
