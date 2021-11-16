@@ -45,8 +45,8 @@ import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -63,7 +63,7 @@ import java.util.Set;
  */
 public class KafkaConnectTransactionServices implements ConnectTransactionServices {
 
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectTransactionServices.class);
+  private static final Logger LOG = LogManager.getLogger(KafkaConnectTransactionServices.class);
 
   private final KafkaConnectConfigs connectConfigs;
   private final Option<HoodieTableMetaClient> tableMetaClient;
