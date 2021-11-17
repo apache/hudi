@@ -57,6 +57,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -463,6 +464,9 @@ public abstract class AbstractHoodieLogRecordReader {
           processDataBlock((HoodieAvroDataBlock) lastBlock, keySpecOpt);
           break;
         case HFILE_DATA_BLOCK:
+          if (!keySpecOpt.isPresent()) {
+            keySpecOpt = Option.of(Collections.emptyList());
+          }
           processDataBlock((HoodieHFileDataBlock) lastBlock, keySpecOpt);
           break;
         case PARQUET_DATA_BLOCK:

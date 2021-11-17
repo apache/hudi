@@ -79,6 +79,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
+
     this.hfileConfig = hfileConfig;
     this.schema = schema;
     this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
