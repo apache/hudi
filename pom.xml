@@ -231,6 +231,8 @@
           <sourceDirectories>
             <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
           </sourceDirectories>
+          <!-- NOTE: This property is only available in Maven >= 3.3.1 -->
+          <propertyExpansion>basedir=${maven.multiModuleProjectDirectory}</propertyExpansion>
           <excludes>**\/generated-sources\/</excludes>
         </configuration>
         <executions>
