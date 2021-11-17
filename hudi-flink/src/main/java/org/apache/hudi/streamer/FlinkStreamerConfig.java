@@ -365,7 +365,9 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setDouble(FlinkOptions.INDEX_STATE_TTL, config.indexStateTtl);
     conf.setBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED, config.indexGlobalEnabled);
     conf.setString(FlinkOptions.INDEX_PARTITION_REGEX, config.indexPartitionRegex);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH, config.sourceAvroSchemaPath);
+    if (!StringUtils.isNullOrEmpty(config.sourceAvroSchemaPath)) {
+      conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH, config.sourceAvroSchemaPath);
+    }
     conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, config.sourceAvroSchema);
     conf.setBoolean(FlinkOptions.UTC_TIMEZONE, config.utcTimezone);
     conf.setBoolean(FlinkOptions.URL_ENCODE_PARTITIONING, config.writePartitionUrlEncode);

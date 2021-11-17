@@ -86,6 +86,8 @@ public class TestStreamerUtil {
     assertThrows(IllegalArgumentException.class,
         () -> StreamerUtil.medianInstantTime(lower, higher),
         "The first argument should have newer instant time");
+    // test very near instant time
+    assertFalse(StreamerUtil.medianInstantTime("20211116115634", "20211116115633").isPresent());
   }
 
   @Test

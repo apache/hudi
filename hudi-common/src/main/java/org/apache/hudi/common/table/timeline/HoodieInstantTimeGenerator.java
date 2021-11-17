@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import java.text.ParseException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -33,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class HoodieInstantTimeGenerator {
   // Format of the timestamp used for an Instant
   private static final String INSTANT_TIMESTAMP_FORMAT = "yyyyMMddHHmmss";
+  private static final int INSTANT_TIMESTAMP_FORMAT_LENGTH = INSTANT_TIMESTAMP_FORMAT.length();
   // Formatter to generate Instant timestamps
   private static DateTimeFormatter INSTANT_TIME_FORMATTER = DateTimeFormatter.ofPattern(INSTANT_TIMESTAMP_FORMAT);
   // The last Instant timestamp generated
@@ -56,7 +58,7 @@ public class HoodieInstantTimeGenerator {
     });
   }
 
-  public static Date parseInstantTime(String timestamp) {
+  public static Date parseInstantTime(String timestamp) throws ParseException {
     try {
       LocalDateTime dt = LocalDateTime.parse(timestamp, INSTANT_TIME_FORMATTER);
       return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
@@ -65,7 +67,11 @@ public class HoodieInstantTimeGenerator {
       if (timestamp.equals(ALL_ZERO_TIMESTAMP)) {
         return new Date(0);
       }
-
+      // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with secs granularity
+      if (timestamp.length() > INSTANT_TIMESTAMP_FORMAT_LENGTH) {
+        LocalDateTime dt = LocalDateTime.parse(timestamp.substring(0, INSTANT_TIMESTAMP_FORMAT_LENGTH), INSTANT_TIME_FORMATTER);
+        return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
+      }
       throw e;
     }
   }

@@ -564,7 +564,7 @@ public class ParquetSchemaConverter {
         int scale = ((DecimalType) type).getScale();
         int numBytes = computeMinBytesForDecimalPrecision(precision);
         return Types.primitive(
-            PrimitiveType.PrimitiveTypeName.BINARY, repetition)
+            PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
             .precision(precision)
             .scale(scale)
             .length(numBytes)

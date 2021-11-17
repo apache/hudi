@@ -495,7 +495,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testUpserts(boolean populateMetaFields) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testUpsertsInternal(cfgBuilder.build(), SparkRDDWriteClient::upsert, false);
   }
@@ -506,7 +506,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testUpsertsPrepped(boolean populateMetaFields) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withRollbackUsingMarkers(true);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testUpsertsInternal(cfgBuilder.build(), SparkRDDWriteClient::upsertPreppedRecords, true);
   }
@@ -523,6 +523,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       throws Exception {
     // Force using older timeline layout
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
         .withProps(config.getProps()).withTimelineLayoutVersion(
         VERSION_0).build();
 

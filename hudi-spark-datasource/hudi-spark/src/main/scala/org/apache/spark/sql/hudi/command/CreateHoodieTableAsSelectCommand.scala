@@ -19,9 +19,11 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.sql.InsertMode
+
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
@@ -73,9 +75,10 @@ case class CreateHoodieTableAsSelectCommand(
 
     // Execute the insert query
     try {
+      val tblProperties = table.storage.properties ++ table.properties
       val options = Map(
         DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> (table.tableType == CatalogTableType.MANAGED).toString,
-        DataSourceWriteOptions.HIVE_TABLE_SERDE_PROPERTIES.key -> ConfigUtils.configToString(table.storage.properties.asJava),
+        DataSourceWriteOptions.HIVE_TABLE_SERDE_PROPERTIES.key -> ConfigUtils.configToString(tblProperties.asJava),
         DataSourceWriteOptions.HIVE_TABLE_PROPERTIES.key -> ConfigUtils.configToString(table.properties.asJava),
         DataSourceWriteOptions.SQL_INSERT_MODE.key -> InsertMode.NON_STRICT.value(),
         DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key -> "true"
@@ -88,7 +91,9 @@ case class CreateHoodieTableAsSelectCommand(
         if (!sparkSession.sessionState.catalog.tableExists(tableIdentWithDB)) {
           // Create the table
           val createTableCommand = CreateHoodieTableCommand(tableWithSchema, mode == SaveMode.Ignore)
-          createTableCommand.createTableInCatalog(sparkSession, checkPathForManagedTable = false)
+          val path = getTableLocation(table, sparkSession)
+          val (finalSchema, _, tableSqlOptions) = createTableCommand.parseSchemaAndConfigs(sparkSession, path, ctas = true)
+          createTableCommand.createTableInCatalog(sparkSession, finalSchema, tableSqlOptions)
         }
       } else { // failed to insert data, clear table path
         clearTablePath(tablePath, hadoopConf)

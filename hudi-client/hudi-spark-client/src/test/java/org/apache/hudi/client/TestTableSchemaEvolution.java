@@ -316,7 +316,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       .setTimelineLayoutVersion(VERSION_1)
       .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA).withRollbackUsingMarkers(false).build();
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
@@ -507,11 +507,14 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   private HoodieWriteConfig getWriteConfig(String schema) {
+    return getWriteConfigBuilder(schema).build();
+  }
+
+  private HoodieWriteConfig.Builder getWriteConfigBuilder(String schema) {
     return getConfigBuilder(schema)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withAvroSchemaValidate(true)
-        .build();
+        .withAvroSchemaValidate(true);
   }
 
   @Override

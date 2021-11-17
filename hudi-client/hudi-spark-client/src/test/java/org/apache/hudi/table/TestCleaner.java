@@ -1307,7 +1307,7 @@ public class TestCleaner extends HoodieClientTestBase {
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "000"), Option.empty());
     metaClient.reloadActiveTimeline();
     HoodieInstant rollbackInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000");
-    table.scheduleRollback(context, "001", rollbackInstant, false);
+    table.scheduleRollback(context, "001", rollbackInstant, false, config.shouldRollbackUsingMarkers());
     table.rollback(context, "001", rollbackInstant, true, false);
     final int numTempFilesAfter = testTable.listAllFilesInTempFolder().length;
     assertEquals(0, numTempFilesAfter, "All temp files are deleted.");

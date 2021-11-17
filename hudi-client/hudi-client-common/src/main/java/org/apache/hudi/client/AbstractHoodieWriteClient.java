@@ -599,7 +599,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       if (commitInstantOpt.isPresent()) {
         LOG.info("Scheduling Rollback at instant time :" + rollbackInstantTime);
         Option<HoodieRollbackPlan> rollbackPlanOption = table.scheduleRollback(context, rollbackInstantTime,
-            commitInstantOpt.get(), false);
+            commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers());
         if (rollbackPlanOption.isPresent()) {
           // execute rollback
           HoodieRollbackMetadata rollbackMetadata = table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true,
@@ -1024,7 +1024,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   protected void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
     String commitTime = HoodieActiveTimeline.createNewInstantTime();
-    table.scheduleRollback(context, commitTime, inflightInstant, false);
+    table.scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
     table.rollback(context, commitTime, inflightInstant, false, false);
     table.getActiveTimeline().revertReplaceCommitInflightToRequested(inflightInstant);
   }
