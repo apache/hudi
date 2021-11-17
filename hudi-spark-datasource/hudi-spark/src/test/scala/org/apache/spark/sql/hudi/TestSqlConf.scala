@@ -93,7 +93,7 @@ class TestSqlConf extends TestHoodieSqlBase with BeforeAndAfter {
   }
 
   before {
-    val testPropsFilePath = new File("src/test/resources").getAbsolutePath
+    val testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath
     setEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath)
     DFSPropertiesConfiguration.refreshGlobalProps()
   }

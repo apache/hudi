@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -30,6 +31,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -47,7 +49,7 @@ public class DFSPropertiesConfiguration {
 
   private static final Logger LOG = LogManager.getLogger(DFSPropertiesConfiguration.class);
 
-  private static final String DEFAULT_PROPERTIES_FILE = "hudi-defaults.conf";
+  public static final String DEFAULT_PROPERTIES_FILE = "hudi-defaults.conf";
 
   public static final String CONF_FILE_DIR_ENV_NAME = "HUDI_CONF_DIR";
 
@@ -179,7 +181,10 @@ public class DFSPropertiesConfiguration {
       LOG.warn("Cannot find " + CONF_FILE_DIR_ENV_NAME + ", please set it as the dir of " + DEFAULT_PROPERTIES_FILE);
       return Option.empty();
     }
-    return Option.of(new Path("file://" + confDir + File.separator + DEFAULT_PROPERTIES_FILE));
+    if (StringUtils.isNullOrEmpty(URI.create(confDir).getScheme())) {
+      confDir = "file://" + confDir;
+    }
+    return Option.of(new Path(confDir + File.separator + DEFAULT_PROPERTIES_FILE));
   }
 
   private String[] splitProperty(String line) {

@@ -28,6 +28,7 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -77,10 +78,6 @@ public class TestDFSPropertiesConfiguration {
 
     filePath = new Path(dfsBasePath + "/t4.props");
     writePropertiesFile(filePath, new String[] {"double.prop=838.3", "include = t4.props"});
-
-    // set HUDI_CONF_DIR
-    String testPropsFilePath = new File("src/test/resources").getAbsolutePath();
-    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
   }
 
   @AfterAll
@@ -88,6 +85,11 @@ public class TestDFSPropertiesConfiguration {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
     }
+  }
+
+  @AfterEach
+  public void cleanupGlobalConfig() {
+    DFSPropertiesConfiguration.clearGlobalProps();
   }
 
   private static void writePropertiesFile(Path path, String[] lines) throws IOException {
@@ -143,12 +145,25 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
+  public void testNoGlobalConfFileConfigured() {
+    ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
+    // Should not throw any exception when no external configuration file configured
+    DFSPropertiesConfiguration.refreshGlobalProps();
+    assertEquals(0, DFSPropertiesConfiguration.getGlobalProps().size());
+  }
+
+  @Test
   public void testLoadGlobalConfFile() {
-    assertEquals(5, DFSPropertiesConfiguration.loadGlobalProps().size());
-    assertEquals("jdbc:hive2://localhost:10000", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.datasource.hive_sync.jdbcurl"));
-    assertEquals("true", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.datasource.hive_sync.use_jdbc"));
-    assertEquals("false", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.datasource.hive_sync.support_timestamp"));
-    assertEquals("BLOOM", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.index.type"));
-    assertEquals("true", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.metadata.enable"));
+    // set HUDI_CONF_DIR
+    String testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath();
+    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
+
+    DFSPropertiesConfiguration.refreshGlobalProps();
+    assertEquals(5, DFSPropertiesConfiguration.getGlobalProps().size());
+    assertEquals("jdbc:hive2://localhost:10000", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.datasource.hive_sync.jdbcurl"));
+    assertEquals("true", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.datasource.hive_sync.use_jdbc"));
+    assertEquals("false", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.datasource.hive_sync.support_timestamp"));
+    assertEquals("BLOOM", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.index.type"));
+    assertEquals("true", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.metadata.enable"));
   }
 }

@@ -100,8 +100,10 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     // if CTAS, we treat the table we just created as nonexistent
     val isTableExists = if (ctas) false else tableExistsInPath(path, conf)
     var existingTableConfig = Map.empty[String, String]
-    val globalProps = HoodieOptionConfig.mappingTableConfigToSqlOption(HoodieWriterUtils.mappingSparkDatasourceConfigsToTableConfigs(DFSPropertiesConfiguration.getGlobalProps.asScala.toMap))
-    val sqlOptions = HoodieOptionConfig.withDefaultSqlOptions(globalProps ++ tblProperties)
+    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
+    val globalSqlProps = HoodieOptionConfig.mappingTableConfigToSqlOption(
+      HoodieWriterUtils.mappingSparkDatasourceConfigsToTableConfigs(globalProps))
+    val sqlOptions = HoodieOptionConfig.withDefaultSqlOptions(globalSqlProps ++ tblProperties)
     val catalogTableProps = HoodieOptionConfig.mappingSqlOptionToTableConfig(tblProperties)
 
     // get final schema and parameters
@@ -324,7 +326,6 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
   def extraTableConfig(sparkSession: SparkSession, isTableExists: Boolean,
       originTableConfig: Map[String, String] = Map.empty): Map[String, String] = {
     val extraConfig = mutable.Map.empty[String, String]
-    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
     if (isTableExists) {
       val allPartitionPaths = getAllPartitionPaths(sparkSession, table)
       if (originTableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)) {
@@ -342,22 +343,18 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
           String.valueOf(isUrlEncodeEnabled(allPartitionPaths, table))
       }
     } else {
-      extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = globalProps.getOrDefault(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true")
-      extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = globalProps.getOrDefault(HoodieTableConfig.URL_ENCODE_PARTITIONING.key, HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue)
+      extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
+      extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue
     }
 
     if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
         HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
           originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
-    } else if (globalProps.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
-      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
-        HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
-          globalProps(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
     } else {
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = classOf[ComplexKeyGenerator].getCanonicalName
     }
-    globalProps ++ extraConfig.toMap
+    extraConfig.toMap
   }
 
   /**
