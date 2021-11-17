@@ -424,6 +424,9 @@ public abstract class AbstractHoodieLogRecordReader {
           processDataBlock((HoodieAvroDataBlock) lastBlock, keys);
           break;
         case HFILE_DATA_BLOCK:
+          if (!keys.isPresent()) {
+            keys = Option.of(Collections.emptyList());
+          }
           processDataBlock((HoodieHFileDataBlock) lastBlock, keys);
           break;
         case PARQUET_DATA_BLOCK:
