@@ -95,6 +95,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     HFileContext context = new HFileContextBuilder()
         .withBlockSize(DEFAULT_BLOCK_SIZE)
         .withCompression(compressionAlgorithm.get())
+        .withCellComparator(new HoodieHBaseKVComparator())
         .build();
 
     Configuration conf = new Configuration();
