@@ -59,7 +59,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static AtomicLong recordIndex = new AtomicLong(1);
 
   private final Path file;
-  private HoodieHFileConfig hfileConfig;
+  private HoodieHFileConfig hFileConfig;
   private final HoodieWrapperFileSystem fs;
   private final long maxFileSize;
   private final String instantTime;
@@ -74,13 +74,13 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   // This is private in CacheConfig so have been copied here.
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
-  public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
+  public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hFileConfig, Schema schema,
                            TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
-    Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
+    Configuration conf = FSUtils.registerFileSystem(file, hFileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
-    this.hfileConfig = hfileConfig;
+    this.hFileConfig = hFileConfig;
     this.schema = schema;
     this.keyFieldSchema = Option.ofNullable(schema.getField(hfileConfig.getKeyFieldName()));
 
@@ -88,23 +88,23 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     // stream and the actual file size reported by HDFS
     // this.maxFileSize = hfileConfig.getMaxFileSize()
     //    + Math.round(hfileConfig.getMaxFileSize() * hfileConfig.getCompressionRatio());
-    this.maxFileSize = hfileConfig.getMaxFileSize();
+    this.maxFileSize = hFileConfig.getMaxFileSize();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
 
-    HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
-        .withCompression(hfileConfig.getCompressionAlgorithm())
+    HFileContext context = new HFileContextBuilder().withBlockSize(hFileConfig.getBlockSize())
+        .withCompression(hFileConfig.getCompressionAlgorithm())
+        .withCellComparator(hFileConfig.getHFileComparator())
         .build();
 
-    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
-    conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
-    conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
+    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY, String.valueOf(hFileConfig.shouldPrefetchBlocksOnOpen()));
+    conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hFileConfig.shouldCacheDataInL1()));
+    conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY, String.valueOf(hFileConfig.shouldDropBehindCacheCompaction()));
     CacheConfig cacheConfig = new CacheConfig(conf);
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
         .withPath(this.fs, this.file)
         .withFileContext(context)
-        .withComparator(hfileConfig.getHfileComparator())
         .create();
 
     writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
@@ -149,8 +149,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 
-    if (hfileConfig.useBloomFilter()) {
-      hfileConfig.getBloomFilter().add(recordKey);
+    if (hFileConfig.useBloomFilter()) {
+      hFileConfig.getBloomFilter().add(recordKey);
       if (minRecordKey == null) {
         minRecordKey = recordKey;
       }
@@ -160,8 +160,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
   @Override
   public void close() throws IOException {
-    if (hfileConfig.useBloomFilter()) {
-      final BloomFilter bloomFilter = hfileConfig.getBloomFilter();
+    if (hFileConfig.useBloomFilter()) {
+      final BloomFilter bloomFilter = hFileConfig.getBloomFilter();
       if (minRecordKey == null) {
         minRecordKey = "";
       }
