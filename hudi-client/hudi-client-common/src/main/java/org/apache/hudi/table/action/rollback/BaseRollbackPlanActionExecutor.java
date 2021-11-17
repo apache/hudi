@@ -50,6 +50,7 @@ public class BaseRollbackPlanActionExecutor<T extends HoodieRecordPayload, I, K,
 
   protected final HoodieInstant instantToRollback;
   private final boolean skipTimelinePublish;
+  private final boolean shouldRollbackUsingMarkers;
 
   public static final Integer ROLLBACK_PLAN_VERSION_1 = 1;
   public static final Integer LATEST_ROLLBACK_PLAN_VERSION = ROLLBACK_PLAN_VERSION_1;
@@ -59,10 +60,12 @@ public class BaseRollbackPlanActionExecutor<T extends HoodieRecordPayload, I, K,
                                         HoodieTable<T, I, K, O> table,
                                         String instantTime,
                                         HoodieInstant instantToRollback,
-                                        boolean skipTimelinePublish) {
+                                        boolean skipTimelinePublish,
+                                        boolean shouldRollbackUsingMarkers) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.skipTimelinePublish = skipTimelinePublish;
+    this.shouldRollbackUsingMarkers = shouldRollbackUsingMarkers;
   }
 
   /**
@@ -84,7 +87,7 @@ public class BaseRollbackPlanActionExecutor<T extends HoodieRecordPayload, I, K,
    * @return
    */
   private BaseRollbackPlanActionExecutor.RollbackStrategy getRollbackStrategy() {
-    if (config.shouldRollbackUsingMarkers()) {
+    if (shouldRollbackUsingMarkers) {
       return new MarkerBasedRollbackStrategy(table, context, config, instantTime);
     } else {
       return new ListingBasedRollbackStrategy(table, context, config, instantTime);

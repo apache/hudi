@@ -230,8 +230,9 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                      String instantTime,
-                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish) {
-    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish).execute();
+                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
+    return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
+        shouldRollbackUsingMarkers).execute();
   }
 
   @Override
