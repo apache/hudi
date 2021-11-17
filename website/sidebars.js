@@ -52,7 +52,8 @@ module.exports = {
                 'clustering',
                 'hoodie_cleaner',
                 'file_sizing',
-                'snapshot_exporter'
+                'snapshot_exporter',
+                'precommit_validator'
             ],
         },
         'configurations',
