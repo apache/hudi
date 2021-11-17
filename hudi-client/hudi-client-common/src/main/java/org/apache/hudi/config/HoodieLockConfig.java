@@ -53,7 +53,6 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_K
 import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
 
-
 /**
  * Hoodie Configs for Locks.
  */
