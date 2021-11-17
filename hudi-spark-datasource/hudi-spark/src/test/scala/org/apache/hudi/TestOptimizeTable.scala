@@ -88,8 +88,14 @@ class TestOptimizeTable extends HoodieClientTestBase {
       .save(basePath)
 
     assertEquals(1000, spark.read.format("hudi").load(basePath).count())
+    // use unsorted col as filter.
     assertEquals(1000,
-      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true").format("hudi").load(basePath).count())
+      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
+        .format("hudi").load(basePath).where("end_lat >= 0").count())
+    // use sorted col as filter.
+    assertEquals(1000,
+      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
+        .format("hudi").load(basePath).where("begin_lon >= 0").count())
   }
 
   @Test
@@ -97,10 +103,13 @@ class TestOptimizeTable extends HoodieClientTestBase {
     val testPath = new Path(System.getProperty("java.io.tmpdir"), "minMax")
     val statisticPath = new Path(System.getProperty("java.io.tmpdir"), "stat")
     val fs = testPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
+    val complexDataFrame = createComplexDataFrame(spark)
+    complexDataFrame.repartition(3).write.mode("overwrite").save(testPath.toString)
+    val df = spark.read.load(testPath.toString)
     try {
-      val complexDataFrame = createComplexDataFrame(spark)
-      complexDataFrame.repartition(3).write.mode("overwrite").save(testPath.toString)
-      val df = spark.read.load(testPath.toString)
+      // test z-order sort for all primitive type, should not throw exception.
+      ZCurveOptimizeHelper.createZIndexedDataFrameByMapValue(df, "c1,c2,c3,c4,c5,c6,c7,c8", 20).show(1)
+      ZCurveOptimizeHelper.createZIndexedDataFrameBySample(df, "c1,c2,c3,c4,c5,c6,c7,c8", 20).show(1)
       // do not support TimeStampType, so if we collect statistics for c4, should throw exception
       val colDf = ZCurveOptimizeHelper.getMinMaxValue(df, "c1,c2,c3,c5,c6,c7,c8")
       colDf.cache()
@@ -115,6 +124,9 @@ class TestOptimizeTable extends HoodieClientTestBase {
       ZCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "4", Seq("0", "1", "3"))
       assertEquals(!fs.exists(new Path(statisticPath, "2")), true)
       assertEquals(fs.exists(new Path(statisticPath, "3")), true)
+      // test to save different index, new index on ("c1,c6,c7,c8") should be successfully saved.
+      ZCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c6,c7,c8", statisticPath.toString, "5", Seq("0", "1", "3", "4"))
+      assertEquals(fs.exists(new Path(statisticPath, "5")), true)
     } finally {
       if (fs.exists(testPath)) fs.delete(testPath)
       if (fs.exists(statisticPath)) fs.delete(statisticPath)

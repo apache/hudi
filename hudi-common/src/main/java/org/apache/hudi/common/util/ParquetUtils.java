@@ -283,9 +283,28 @@ public class ParquetUtils extends BaseFileUtils {
 
   /**
    * Parse min/max statistics stored in parquet footers for all columns.
+   * ParquetRead.readFooter is not a thread safe method.
+   *
+   * @param conf hadoop conf.
+   * @param parquetFilePath file to be read.
+   * @param cols cols which need to collect statistics.
+   * @param useLock if use lock when read parquet footer.
+   * @return a HoodieColumnRangeMetadata instance.
    */
-  public Collection<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(Configuration conf, Path parquetFilePath, List<String> cols) {
-    ParquetMetadata metadata = readMetadata(conf, parquetFilePath);
+  public Collection<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(
+      Configuration conf,
+      Path parquetFilePath,
+      List<String> cols,
+      boolean useLock) {
+
+    ParquetMetadata metadata;
+    if (useLock) {
+      synchronized (ParquetUtils.class) {
+        metadata = readMetadata(conf, parquetFilePath);
+      }
+    } else {
+      metadata = readMetadata(conf, parquetFilePath);
+    }
     // collect stats from all parquet blocks
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap = metadata.getBlocks().stream().flatMap(blockMetaData -> {
       return blockMetaData.getColumns().stream().filter(f -> cols.contains(f.getPath().toDotString())).map(columnChunkMetaData ->
@@ -293,7 +312,8 @@ public class ParquetUtils extends BaseFileUtils {
               columnChunkMetaData.getStatistics().genericGetMin(),
               columnChunkMetaData.getStatistics().genericGetMax(),
               columnChunkMetaData.getStatistics().getNumNulls(),
-              columnChunkMetaData.getPrimitiveType().stringifier()));
+              columnChunkMetaData.getStatistics().minAsString(),
+              columnChunkMetaData.getStatistics().maxAsString()));
     }).collect(Collectors.groupingBy(e -> e.getColumnName()));
 
     // we only intend to keep file level statistics.
@@ -316,23 +336,41 @@ public class ParquetUtils extends BaseFileUtils {
                                                   HoodieColumnRangeMetadata<Comparable> range2) {
     final Comparable minValue;
     final Comparable maxValue;
+    final String minValueAsString;
+    final String maxValueAsString;
     if (range1.getMinValue() != null && range2.getMinValue() != null) {
-      minValue = range1.getMinValue().compareTo(range2.getMinValue()) < 0 ? range1.getMinValue() : range2.getMinValue();
+      if (range1.getMinValue().compareTo(range2.getMinValue()) < 0) {
+        minValue = range1.getMinValue();
+        minValueAsString = range1.getMinValueAsString();
+      } else {
+        minValue = range2.getMinValue();
+        minValueAsString = range2.getMinValueAsString();
+      }
     } else if (range1.getMinValue() == null) {
       minValue = range2.getMinValue();
+      minValueAsString = range2.getMinValueAsString();
     } else {
       minValue = range1.getMinValue();
+      minValueAsString = range1.getMinValueAsString();
     }
 
     if (range1.getMaxValue() != null && range2.getMaxValue() != null) {
-      maxValue = range1.getMaxValue().compareTo(range2.getMaxValue()) < 0 ? range2.getMaxValue() : range1.getMaxValue();
+      if (range1.getMaxValue().compareTo(range2.getMaxValue()) < 0) {
+        maxValue = range2.getMaxValue();
+        maxValueAsString = range2.getMaxValueAsString();
+      } else {
+        maxValue = range1.getMaxValue();
+        maxValueAsString = range1.getMaxValueAsString();
+      }
     } else if (range1.getMaxValue() == null) {
       maxValue = range2.getMaxValue();
+      maxValueAsString = range2.getMaxValueAsString();
     } else  {
       maxValue = range1.getMaxValue();
+      maxValueAsString = range1.getMaxValueAsString();
     }
 
     return new HoodieColumnRangeMetadata<>(range1.getFilePath(),
-        range1.getColumnName(), minValue, maxValue, range1.getNumNulls() + range2.getNumNulls(), range1.getStringifier());
+        range1.getColumnName(), minValue, maxValue, range1.getNumNulls() + range2.getNumNulls(), minValueAsString, maxValueAsString);
   }
 }

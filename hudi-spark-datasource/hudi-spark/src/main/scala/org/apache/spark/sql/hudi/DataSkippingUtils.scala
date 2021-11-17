@@ -100,7 +100,7 @@ object DataSkippingUtils {
       // query filter "colA >= b"   convert it to "colA_maxValue >= b" for index table
       case GreaterThanOrEqual(attribute: AttributeReference, right: Literal) =>
         val colName = getTargetColNameParts(attribute)
-        GreaterThanOrEqual(maxValue(colName), right)
+        reWriteCondition(colName, GreaterThanOrEqual(maxValue(colName), right))
       // query filter "b >= colA"   convert it to "colA_minValue <= b" for index table
       case GreaterThanOrEqual(value: Literal, attribute: AttributeReference) =>
         val colName = getTargetColNameParts(attribute)
@@ -179,7 +179,7 @@ object DataSkippingUtils {
   def getIndexFiles(conf: Configuration, indexPath: String): Seq[FileStatus] = {
     val basePath = new Path(indexPath)
     basePath.getFileSystem(conf)
-      .listStatus(basePath).filterNot(f => f.getPath.getName.endsWith(".parquet"))
+      .listStatus(basePath).filter(f => f.getPath.getName.endsWith(".parquet"))
   }
 
   /**
