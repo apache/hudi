@@ -183,7 +183,7 @@ object HoodieOptionConfig {
     params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key).filter(_.nonEmpty)
   }
 
-  def deleteHooideOptions(options: Map[String, String]): Map[String, String] = {
+  def deleteHoodieOptions(options: Map[String, String]): Map[String, String] = {
     options.filterNot(_._1.startsWith("hoodie.")).filterNot(kv => keyMapping.contains(kv._1))
   }
 

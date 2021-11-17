@@ -170,7 +170,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     val serdeFormat = HoodieInputFormatUtils.getSerDeClassName(HoodieFileFormat.PARQUET)
 
     // only parameters irrelevant to hudi can be set to storage.properties
-    val storageProperties = HoodieOptionConfig.deleteHooideOptions(options)
+    val storageProperties = HoodieOptionConfig.deleteHoodieOptions(options)
     val newStorage = new CatalogStorageFormat(
       Some(new Path(path).toUri),
       Some(inputFormat),
