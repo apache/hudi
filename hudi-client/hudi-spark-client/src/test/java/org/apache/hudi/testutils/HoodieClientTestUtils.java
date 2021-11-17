@@ -66,6 +66,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.io.storage.HoodieHFileReader.KEY_SCHEMA;
+
 /**
  * Utility methods to aid testing inside the HoodieClient module.
  */
@@ -241,9 +243,9 @@ public class HoodieClientTestUtils {
     Schema schema = null;
     for (String path : paths) {
       try {
-        HFile.Reader reader = HFile.createReader(fs, new Path(path), cacheConfig, fs.getConf());
+        HFile.Reader reader = HFile.createReader(fs, new Path(path), cacheConfig, true, fs.getConf());
         if (schema == null) {
-          schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get("schema".getBytes())));
+          schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(KEY_SCHEMA.getBytes())));
         }
         HFileScanner scanner = reader.getScanner(false, false);
         if (!scanner.seekTo()) {
@@ -252,7 +254,7 @@ public class HoodieClientTestUtils {
         }
 
         do {
-          Cell c = scanner.getKeyValue();
+          Cell c = scanner.getCell();
           byte[] value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
           valuesAsList.add(HoodieAvroUtils.bytesToAvro(value, schema));
         } while (scanner.next());

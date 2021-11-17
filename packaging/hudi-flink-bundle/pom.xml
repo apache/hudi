@@ -148,7 +148,11 @@
                   <include>org.apache.hbase:hbase-common</include>
                   <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-server</include>
-                  <include>org.apache.hbase:hbase-protocol</include>
+                  <include>org.apache.hbase:hbase-protocol-shaded</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
+                  <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+                  <include>org.apache.hbase:hbase-hadoop-compat</include>
                   <include>org.apache.htrace:htrace-core</include>
                   <include>commons-codec:commons-codec</include>
                 </includes>
@@ -597,8 +601,28 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-protocol</artifactId>
+      <artifactId>hbase-protocol-shaded</artifactId>
       <version>${hbase.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase.thirdparty</groupId>
+      <artifactId>hbase-shaded-miscellaneous</artifactId>
+      <version>${hbase-thirdparty.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase.thirdparty</groupId>
+      <artifactId>hbase-shaded-netty</artifactId>
+      <version>${hbase-thirdparty.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-hadoop-compat</artifactId>
+      <version>${hbase.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hbase.thirdparty</groupId>
+      <artifactId>hbase-shaded-protobuf</artifactId>
+      <version>${hbase-thirdparty.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.htrace</groupId>
