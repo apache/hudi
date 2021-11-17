@@ -44,7 +44,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final Schema readerSchema;
   private final boolean readBlocksLazily;
   private final boolean reverseLogReader;
-  private final boolean enableInLineReading;
+  private final String recordKeyField;
+  private final boolean enableInlineReading;
   private int bufferSize;
 
   private static final Logger LOG = LogManager.getLogger(HoodieLogFormatReader.class);
@@ -59,7 +60,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.reverseLogReader = reverseLogReader;
     this.bufferSize = bufferSize;
     this.prevReadersInOpenState = new ArrayList<>();
-    this.enableInLineReading = enableInlineReading;
+    this.recordKeyField = recordKeyField;
+    this.enableInlineReading = enableInlineReading;
     if (logFiles.size() > 0) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
       this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
@@ -104,7 +106,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
         }
         this.currentReader =
             new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
-                this.enableInLineReading);
+                enableInlineReading, recordKeyField);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }

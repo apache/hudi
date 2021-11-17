@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -165,6 +166,14 @@ public abstract class AbstractHoodieLogRecordReader {
     this.partitionName = partitionName;
   }
 
+  protected String getKeyField() {
+    if (this.populateMetaFieldsEnabled) {
+      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    }
+    ValidationUtils.checkState(this.simpleKeyGenFields.isPresent());
+    return this.simpleKeyGenFields.get().getKey();
+  }
+
   public void scan() {
     scan(Option.empty());
   }
@@ -183,9 +192,9 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
 
-      // If populate meta fields are disabled, set the virtual key field.
-      final String keyField = (this.populateMetaFieldsEnabled
-          ? HoodieRecord.RECORD_KEY_METADATA_FIELD : this.simpleKeyGenFields.get().getKey());
+      // Get the key field based on populate meta fields config
+      // and the table type
+      final String keyField = getKeyField();
 
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,

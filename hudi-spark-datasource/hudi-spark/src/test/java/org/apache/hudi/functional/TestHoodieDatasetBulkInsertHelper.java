@@ -57,6 +57,7 @@ import scala.Tuple2;
 import scala.collection.JavaConversions;
 import scala.collection.JavaConverters;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -277,27 +278,25 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
       // ignore
     }
 
-    config = getConfigBuilder(schemaStr).withProps(getProps(false, true, false, true)).build();
+    final HoodieWriteConfig config1 = getConfigBuilder(schemaStr).withProps(
+        getProps(false, true, false, true)).build();
     rows = DataSourceTestUtils.generateRandomRows(10);
-    dataset = sqlContext.createDataFrame(rows, structType);
-    try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), false, false);
-      fail("Should have thrown exception");
-    } catch (Exception e) {
-      // ignore
-    }
+    final Dataset<Row> dataset1 = sqlContext.createDataFrame(rows, structType);
+    assertDoesNotThrow(() -> {
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config1,
+          dataset1, "testStructName", "testNamespace",
+          new NonSortPartitionerWithRows(), false, false);
+    });
 
-    config = getConfigBuilder(schemaStr).withProps(getProps(false, true, true, false)).build();
+    final HoodieWriteConfig config2 = getConfigBuilder(schemaStr).withProps(
+        getProps(false, true, true, false)).build();
     rows = DataSourceTestUtils.generateRandomRows(10);
-    dataset = sqlContext.createDataFrame(rows, structType);
-    try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+    final Dataset<Row> dataset2 = sqlContext.createDataFrame(rows, structType);
+    assertDoesNotThrow(() -> {
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config2,
+          dataset2, "testStructName",
           "testNamespace", new NonSortPartitionerWithRows(), false, false);
-      fail("Should have thrown exception");
-    } catch (Exception e) {
-      // ignore
-    }
+    });
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {

@@ -132,6 +132,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     return metadataRecords;
   }
 
+  @Override
+  protected String getKeyField() {
+    return HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY;
+  }
+
   /**
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */

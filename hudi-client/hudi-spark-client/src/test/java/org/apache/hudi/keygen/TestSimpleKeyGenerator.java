@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
@@ -89,12 +90,22 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNullPartitionPathFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new SimpleKeyGenerator(getPropertiesWithoutPartitionPathProp()));
+    Assertions.assertDoesNotThrow(() -> {
+      new SimpleKeyGenerator(getPropertiesWithoutPartitionPathProp());
+    });
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropertiesWithoutPartitionPathProp());
+    Assertions.assertEquals(1, keyGenerator.getPartitionPathFields().size());
+    Assertions.assertEquals(HoodieRecord.PARTITION_PATH_METADATA_FIELD, keyGenerator.getPartitionPathFields().get(0));
   }
 
   @Test
   public void testNullRecordKeyFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp()));
+    Assertions.assertDoesNotThrow(() -> {
+      new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp());
+    });
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp());
+    Assertions.assertEquals(1, keyGenerator.getRecordKeyFields().size());
+    Assertions.assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, keyGenerator.getRecordKeyFields().get(0));
   }
 
   @Test
