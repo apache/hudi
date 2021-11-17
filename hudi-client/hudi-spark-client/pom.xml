@@ -110,6 +110,12 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <dependency>
+      <groupId>org.apache.zookeeper</groupId>
+      <artifactId>zookeeper</artifactId>
+      <version>${zookeeper.version}</version>
+      <scope>test</scope>
+    </dependency>
 
     <!-- Hive - Tests -->
     <dependency>
