@@ -90,6 +90,8 @@ public abstract class ITTestBase {
     List<String> cmd = new ArrayList<>();
     cmd.add("hive");
     cmd.add("--hiveconf");
+    cmd.add("hive.execution.engine=mr");
+    cmd.add("--hiveconf");
     cmd.add("hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
     cmd.add("--hiveconf");
     cmd.add("hive.stats.autogather=false");
@@ -100,6 +102,7 @@ public abstract class ITTestBase {
 
   private static String getHiveConsoleCommandFile(String commandFile, String additionalVar) {
     StringBuilder builder = new StringBuilder().append("beeline -u " + HIVE_SERVER_JDBC_URL)
+        .append(" --hiveconf hive.execution.engine=mr")
         .append(" --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat ")
         .append(" --hiveconf hive.stats.autogather=false ")
         .append(" --hivevar hudi.hadoop.bundle=" + HUDI_HADOOP_BUNDLE);
@@ -145,6 +148,11 @@ public abstract class ITTestBase {
     await().atMost(300, SECONDS).until(this::servicesUp);
     LOG.info(String.format("Waiting for all the containers and services finishes in %d ms",
         System.currentTimeMillis() - currTs));
+    try {
+      Thread.sleep(30000);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
   }
 
   private boolean servicesUp() {
@@ -221,6 +229,8 @@ public abstract class ITTestBase {
     // Each execution of command(s) in docker should not be more than 15 mins. Otherwise, it is deemed stuck. We will
     // try to capture stdout and stderr of the stuck process.
 
+    LOG.error("containerName: " + containerName);
+    LOG.error("Command: " + Arrays.asList(command));
     boolean completed =
         dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
             .awaitCompletion(540, SECONDS);
@@ -236,8 +246,11 @@ public abstract class ITTestBase {
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
     LOG.info("Exit code for command : " + exitCode);
     if (exitCode != 0) {
-      LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+      //LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
     }
+    callback.getStderr().flush();
+    callback.getStdout().flush();
+    LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
     if (checkIfSucceed) {
@@ -338,8 +351,8 @@ public abstract class ITTestBase {
           executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log |  grep -i exception -A 10 -B 5", false).getStdout().toString();
       String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
-      LOG.info("Hive log saved up at  : " + filePath);
-      LOG.info("<===========  Full hive log ===============>\n"
+      LOG.error("Hive log saved up at  : " + filePath);
+      LOG.error("<===========  Full hive log ===============>\n"
           + "\n" + hiveLogStr
           + "\n <==========================================>");
     } catch (Exception e) {
@@ -355,6 +368,11 @@ public abstract class ITTestBase {
     // this is so that changes in padding don't affect comparison
     String stdOutSingleSpaced = singleSpace(stdOutErr.getLeft()).replaceAll(" ", "");
     expectedOutput = singleSpace(expectedOutput).replaceAll(" ", "");
+
+    LOG.error("stdOutErr : " + stdOutErr.getLeft());
+    LOG.error("stdOutErr.getRight : " + stdOutErr.getRight());
+    LOG.error("stdOutSingleSpaced : " + stdOutSingleSpaced);
+    LOG.error("expectedOutput : " + expectedOutput);
 
     int lastIndex = 0;
     int count = 0;

@@ -117,7 +117,6 @@ public class HiveTestService {
     executorService = Executors.newSingleThreadExecutor();
     tServer = startMetaStore(bindIP, serverConf);
 
-    serverConf.set("hive.in.test", "true");
     hiveServer = startHiveServer(serverConf);
 
     String serverHostname;
@@ -172,7 +171,6 @@ public class HiveTestService {
   }
 
   public HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
-    conf.set("hive.metastore.local", "false");
     int port = metastorePort;
     if (conf.get(HiveConf.ConfVars.METASTORE_SERVER_PORT.varname, null) == null) {
       conf.setInt(ConfVars.METASTORE_SERVER_PORT.varname, metastorePort);
@@ -200,10 +198,11 @@ public class HiveTestService {
     setSystemProperty("derby.system.home", localHiveDir.getAbsolutePath());
     conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname,
         Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath());
-    conf.set("datanucleus.schema.autoCreateTables", "true");
-    conf.set("hive.metastore.schema.verification", "false");
-    conf.set("datanucleus.autoCreateSchema", "true");
-    conf.set("datanucleus.fixedDatastore", "false");
+
+    conf.set("hive.in.test", "true");
+    conf.set("hive.metastore.execute.setugi", "false");
+    conf.set("hive.metastore.schema.verification","false");
+    conf.set("datanucleus.schema.autoCreateAll","true");
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
 
     return new HiveConf(conf, this.getClass());
@@ -215,8 +214,9 @@ public class HiveTestService {
     while (true) {
       try {
         new HiveMetaStoreClient(serverConf);
+        Thread.sleep(30000);
         return true;
-      } catch (MetaException e) {
+      } catch (MetaException | InterruptedException e) {
         // ignore as this is expected
         LOG.info("server " + hostname + ":" + port + " not up " + e);
       }
@@ -225,7 +225,7 @@ public class HiveTestService {
         break;
       }
       try {
-        Thread.sleep(250);
+        Thread.sleep(1000);
       } catch (InterruptedException e) {
         // ignore
       }

@@ -78,11 +78,12 @@
 
   <properties>
     <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version>
+    <maven-dependency-plugin.version>3.3.0</maven-dependency-plugin.version>
     <maven-surefire-plugin.version>3.0.0-M4</maven-surefire-plugin.version>
     <maven-failsafe-plugin.version>3.0.0-M4</maven-failsafe-plugin.version>
     <maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
-    <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
+    <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
@@ -90,18 +91,19 @@
     <maven-docker-plugin.version>0.37.0</maven-docker-plugin.version>
 
     <java.version>1.8</java.version>
-    <fasterxml.version>2.6.7</fasterxml.version>
-    <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
-    <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
-    <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
+    <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+    <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+    <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+    <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
-    <kafka.version>2.0.0</kafka.version>
-    <kafka.spark3.version>2.4.1</kafka.spark3.version>
+    <kafka.version>${kafka.spark3.version}</kafka.version>
+    <kafka.spark2.version>2.0.0</kafka.spark2.version>
+    <kafka.spark3.version>2.8.0</kafka.spark3.version>
     <pulsar.version>2.8.1</pulsar.version>
     <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
+    <parquet.version>1.12.1</parquet.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
-    <parquet.version>1.10.1</parquet.version>
     <junit.jupiter.version>5.7.0-M1</junit.jupiter.version>
     <junit.vintage.version>5.7.0-M1</junit.vintage.version>
     <junit.platform.version>1.7.0-M1</junit.platform.version>
@@ -110,19 +112,21 @@
     <log4j.test.version>2.17.0</log4j.test.version>
     <slf4j.version>1.7.30</slf4j.version>
     <joda.version>2.9.9</joda.version>
-    <hadoop.version>2.10.1</hadoop.version>
+    <hadoop.version>3.1.0</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>2.3.1</hive.version>
+    <hive.version>3.1.2</hive.version>
+    <tez.version>0.9.1</tez.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
-    <orc.version>1.6.0</orc.version>
+    <orc.version>1.6.12</orc.version>
     <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
-    <spark.version>${spark2.version}</spark.version>
+    <spark.version>${spark3.version}</spark.version>
+    <flink.version>1.14.3</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.2.1</spark3.version>
-    <sparkbundle.version></sparkbundle.version>
+    <sparkbundle.version>3</sparkbundle.version>
     <flink1.14.version>1.14.4</flink1.14.version>
     <flink1.13.version>1.13.6</flink1.13.version>
     <flink.version>${flink1.14.version}</flink.version>
@@ -134,21 +138,27 @@
     <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
     <spark31.version>3.1.3</spark31.version>
     <spark32.version>3.2.1</spark32.version>
-    <hudi.spark.module>hudi-spark2</hudi.spark.module>
-    <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
-    <avro.version>1.8.2</avro.version>
+    <spark2.bundle.version>2.4</spark2.bundle.version>
+    <spark3.bundle.version>3.2</spark3.bundle.version>
+    <hudi.spark.module>hudi-spark3</hudi.spark.module>
+    <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
+    <avro.version>1.10.2</avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
-    <scala.version>${scala11.version}</scala.version>
-    <scala.binary.version>2.11</scala.binary.version>
+    <spark2.scala.binary.version>2.11</spark2.scala.binary.version>
+    <spark3.scala.binary.version>2.12</spark3.scala.binary.version>
+    <scala.binary.version>${spark3.scala.binary.version}</scala.binary.version>
+    <scala.version>${scala12.version}</scala.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
-    <scalatest.version>3.0.1</scalatest.version>
+    <scalatest.version>${scalatest.spark3.version}</scalatest.version>
+    <scalatest.spark2.version>3.0.1</scalatest.spark2.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
-    <jetty.version>9.4.15.v20190215</jetty.version>
+    <jetty.version>9.4.43.v20210629</jetty.version>
+    <javalin.version>3.13.12</javalin.version>
     <htrace.version>3.1.0-incubating</htrace.version>
     <hbase.version>2.4.9</hbase.version>
     <hbase-thirdparty.version>3.5.1</hbase-thirdparty.version>
@@ -379,16 +389,23 @@
           <version>${maven-jar-plugin.version}</version>
         </plugin>
         <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>${maven-dependency-plugin.version}</version>
+        </plugin>
+        <plugin>
           <groupId>net.alchim31.maven</groupId>
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
           <configuration>
+            <recompileMode>all</recompileMode>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven-compiler-plugin.version}</version>
         </plugin>
         <plugin>
           <!-- excludes are inherited -->
@@ -787,6 +804,10 @@
             <groupId>javax.xml.bind</groupId>
             <artifactId>jaxb-api</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -831,6 +852,12 @@
         <classifier>tests</classifier>
         <scope>test</scope>
         <version>${hadoop.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
@@ -845,6 +872,10 @@
           <exclusion>
             <groupId>javax.xml.bind</groupId>
             <artifactId>jaxb-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -866,6 +897,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.pentaho</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
@@ -920,6 +955,10 @@
             <groupId>org.eclipse.jetty.aggregate</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -970,6 +1009,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
@@ -1459,9 +1502,19 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
+            <version>${maven-compiler-plugin.version}</version>
             <configuration>
+
               <source>${java.version}</source>
               <target>${java.version}</target>
+              <compilerArgs>
+                <arg>-verbose</arg>
+                <arg>-Xlint:unchecked</arg>
+              </compilerArgs>
+              <testCompilerArguments>
+                <arg>-verbose</arg>
+                <arg>-Xlint:unchecked</arg>
+              </testCompilerArguments>
             </configuration>
           </plugin>
           <plugin>
@@ -1561,9 +1614,19 @@
         </plugins>
       </build>
     </profile>
-    <!-- Exists for backwards compatibility; profile doesn't do anything -->
     <profile>
       <id>scala-2.11</id>
+      <properties>
+        <scala.version>${scala11.version}</scala.version>
+        <scala.binary.version>2.11</scala.binary.version>
+        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <activation>
+        <property>
+          <name>scala-2.11</name>
+        </property>
+      </activation>
     </profile>
     <profile>
       <id>scala-2.12</id>
@@ -1607,19 +1670,33 @@
     <!-- Default is spark2 profile, and spark2 is an alias of spark2.4 -->
     <profile>
       <id>spark2</id>
+      <properties>
+        <spark.version>${spark2.version}</spark.version>
+        <sparkbundle.version>${spark2.bundle.version}</sparkbundle.version>
+        <scala.version>${scala11.version}</scala.version>
+        <scala.binary.version>${spark2.scala.binary.version}</scala.binary.version>
+        <hudi.spark.module>hudi-spark2</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
+        <scalatest.version>3.0.1</scalatest.version>
+        <kafka.version>2.0.0</kafka.version>
+        <parquet.version>1.10.1</parquet.version>
+        <orc.version>1.6.0</orc.version>
+        <avro.version>1.8.2</avro.version>
+        <fasterxml.version>2.6.7</fasterxml.version>
+        <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>false</skip.hudi-spark2.unit.tests>
+        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark2</module>
         <module>hudi-spark-datasource/hudi-spark2-common</module>
       </modules>
-      <properties>
-        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
-      </properties>
       <activation>
-        <activeByDefault>true</activeByDefault>
         <property>
           <name>spark2</name>
-          <!-- add spark2 moudule to all profile -->
-          <value>!disabled</value>
         </property>
       </activation>
     </profile>
@@ -1631,8 +1708,22 @@
         <module>hudi-spark-datasource/hudi-spark2-common</module>
       </modules>
       <properties>
-        <sparkbundle.version>2.4</sparkbundle.version>
+        <spark.version>${spark2.version}</spark.version>
+        <sparkbundle.version>${spark2.bundle.version}</sparkbundle.version>
+        <hudi.spark.module>hudi-spark2</hudi.spark.module>
+        <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
+        <scalatest.version>3.0.1</scalatest.version>
+        <kafka.version>2.0.0</kafka.version>
+        <parquet.version>1.10.1</parquet.version>
+        <orc.version>1.6.0</orc.version>
+        <avro.version>1.8.2</avro.version>
+        <fasterxml.version>2.6.7</fasterxml.version>
+        <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>false</skip.hudi-spark2.unit.tests>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+        <skipITs>true</skipITs>
       </properties>
       <activation>
         <property>
@@ -1654,6 +1745,7 @@
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>${kafka.spark3.version}</kafka.version>
+        <scalatest.version>3.1.0</scalatest.version>
         <parquet.version>1.12.2</parquet.version>
         <avro.version>1.10.2</avro.version>
         <orc.version>1.6.12</orc.version>
@@ -1671,6 +1763,7 @@
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
+        <activeByDefault>true</activeByDefault>
         <property>
           <name>spark3</name>
         </property>

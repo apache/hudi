@@ -23,9 +23,10 @@ pool:
 
 variables:
   MAVEN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -Djacoco.skip=true'
-  SPARK_VERSION: '2.4.4'
-  HADOOP_VERSION: '2.7'
+  SPARK_VERSION: '3.2.1'
+  HADOOP_VERSION: '3.2'
   SPARK_ARCHIVE: spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
+  SPARK_PROFILE: scala-2.12,spark3
   EXCLUDE_TESTED_MODULES: '!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-common,!hudi-flink-datasource/hudi-flink,!hudi-client/hudi-spark-client,!hudi-client/hudi-client-common,!hudi-client/hudi-flink-client,!hudi-client/hudi-java-client,!hudi-cli,!hudi-utilities,!hudi-sync/hudi-hive-sync'
 
 stages:
@@ -40,7 +41,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -DskipTests
+              options: -T 2.5C -DskipTests -P $(SPARK_PROFILE)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -49,7 +50,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-common,hudi-flink-datasource/hudi-flink,hudi-client/hudi-spark-client
+              options: -P $(SPARK_PROFILE),unit-tests -pl hudi-common,hudi-flink-datasource/hudi-flink,hudi-client/hudi-spark-client
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -58,7 +59,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-common,hudi-flink-datasource/hudi-flink
+              options: -P $(SPARK_PROFILE),functional-tests -pl hudi-common,hudi-flink-datasource/hudi-flink
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -71,7 +72,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -DskipTests
+              options: -T 2.5C -DskipTests -P $(SPARK_PROFILE)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -80,7 +81,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-client/hudi-spark-client
+              options: -P $(SPARK_PROFILE),functional-tests -pl hudi-client/hudi-spark-client
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -93,7 +94,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -DskipTests
+              options: -T 2.5C -P $(SPARK_PROFILE) -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -102,7 +103,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
+              options: -P $(SPARK_PROFILE),unit-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -111,7 +112,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
+              options: -P $(SPARK_PROFILE),functional-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -124,7 +125,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -DskipTests
+              options: -T 2.5C -DskipTests -P $(SPARK_PROFILE)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -133,7 +134,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl $(EXCLUDE_TESTED_MODULES)
+              options: -P $(SPARK_PROFILE),unit-tests -pl $(EXCLUDE_TESTED_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -142,29 +143,20 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl $(EXCLUDE_TESTED_MODULES)
+              options: -P $(SPARK_PROFILE),functional-tests -pl $(EXCLUDE_TESTED_MODULES)
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
       - job: IT
         displayName: IT modules
-        timeoutInMinutes: '120'
+        timeoutInMinutes: '180'
         steps:
           - task: Maven@3
             displayName: maven install
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: -T 2.5C -Pintegration-tests -DskipTests
-              publishJUnitResults: false
-              jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
-          - task: Maven@3
-            displayName: UT integ-test
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test test
+              options: -T 2.5C -P$(SPARK_PROFILE),integration-tests -DskipTests
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g $(MAVEN_OPTS)'
@@ -180,5 +172,5 @@ stages:
                 tar -xvf $(Pipeline.Workspace)/$(SPARK_ARCHIVE).tgz -C $(Pipeline.Workspace)/
                 mkdir /tmp/spark-events/
           - script: |
-              mvn $(MAVEN_OPTS) -Pintegration-tests verify
+              mvn $(MAVEN_OPTS) -P $(SPARK_PROFILE),integration-tests verify
             displayName: IT

@@ -18,15 +18,15 @@
 
 package org.apache.hudi.common.model.debezium;
 
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.util.Option;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 
 /**
@@ -72,11 +72,21 @@ public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvr
 
   protected abstract boolean shouldPickCurrentRecord(IndexedRecord currentRecord, IndexedRecord insertRecord, Schema schema) throws IOException;
 
+  @Nullable
+  private static Object getFieldVal(GenericRecord record, String fieldName) {
+    Schema.Field recordField = record.getSchema().getField(fieldName);
+    if (recordField == null) {
+      return null;
+    }
+
+    return record.get(recordField.pos());
+  }
+
   private Option<IndexedRecord> handleDeleteOperation(IndexedRecord insertRecord) {
     boolean delete = false;
     if (insertRecord instanceof GenericRecord) {
       GenericRecord record = (GenericRecord) insertRecord;
-      Object value = record.get(DebeziumConstants.FLATTENED_OP_COL_NAME);
+      Object value = getFieldVal(record, DebeziumConstants.FLATTENED_OP_COL_NAME);
       delete = value != null && value.toString().equalsIgnoreCase(DebeziumConstants.DELETE_OP);
     }
 
