@@ -77,6 +77,10 @@ class TestDataSourceDefaults {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
       new SimpleKeyGenerator(props).getKey(baseRecord)
+      fail("Should have errored out")
+    } catch {
+      case e: IllegalArgumentException =>
+      // do nothing
     }
 
     // partition path field not specified using Row
@@ -85,6 +89,10 @@ class TestDataSourceDefaults {
       props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD.key, "field1")
       val keyGen = new SimpleKeyGenerator(props)
       keyGen.getRecordKey(baseRow)
+      fail("Should have errored out")
+    } catch {
+      case e: IllegalArgumentException =>
+      // do nothing
     }
 
     // recordkey field not specified
@@ -94,7 +102,7 @@ class TestDataSourceDefaults {
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: HoodieKeyException =>
+      case e: IllegalArgumentException =>
       // do nothing
     }
 
@@ -106,7 +114,7 @@ class TestDataSourceDefaults {
       keyGen.getPartitionPath(baseRow)
       fail("Should have errored out")
     } catch {
-      case e: HoodieKeyException =>
+      case e: IllegalArgumentException =>
       // do nothing
     }
 

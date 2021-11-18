@@ -209,6 +209,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withRollbackParallelism(parallelism)
         .withFinalizeWriteParallelism(parallelism)
         .withAllowMultiWriteOnSameInstant(true)
+        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
         .withPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields());
 
     // RecordKey properties are needed for the metadata table records
@@ -412,6 +413,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
         .setRecordKeyFields(RECORD_KEY_FIELD)
         .setPopulateMetaFields(dataWriteConfig.getMetadataConfig().populateMetaFields())
+        .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
         .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
 
     initTableMetadata();
