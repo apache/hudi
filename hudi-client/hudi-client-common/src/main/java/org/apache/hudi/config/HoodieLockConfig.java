@@ -160,13 +160,7 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> ZK_LOCK_KEY = ConfigProperty
       .key(ZK_LOCK_KEY_PROP_KEY)
       .noDefaultValue()
-      .withInferFunction(p -> {
-        if (p.contains(HoodieWriteConfig.TBL_NAME)) {
-          return Option.of(p.getString(HoodieWriteConfig.TBL_NAME));
-        } else {
-          return Option.empty();
-        }
-      })
+      .withInferFunction(p -> Option.ofNullable(p.getStringOrDefault(HoodieWriteConfig.TBL_NAME, null)))
       .sinceVersion("0.8.0")
       .withDocumentation("Key name under base_path at which to create a ZNode and acquire lock. "
           + "Final path on zk will look like base_path/lock_key. If this parameter is not set, we would "
