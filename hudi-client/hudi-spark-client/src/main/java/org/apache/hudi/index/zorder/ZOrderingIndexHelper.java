@@ -177,6 +177,7 @@ public class ZOrderingIndexHelper {
   }
 
   /**
+   * @VisibleForTesting
    * Parse min/max statistics stored in parquet footers for z-sort cols.
    * no support collect statistics from timeStampType, since parquet file has not collect the statistics for timeStampType.
    * to do adapt for rfc-27
@@ -185,7 +186,6 @@ public class ZOrderingIndexHelper {
    * @param cols z-sort cols
    * @return a dataFrame holds all statistics info.
    */
-  @VisibleForTesting
   public static Dataset<Row> getMinMaxValue(Dataset<Row> df, List<String> cols) {
     Map<String, DataType> colsDataTypesMap =
         Arrays.stream(df.schema().fields())
@@ -392,12 +392,50 @@ public class ZOrderingIndexHelper {
         latestIndexData.get().registerTempTable(originalTable);
         statisticsDF.registerTempTable(updateTable);
         // update table by full out join
-        List columns = Arrays.asList(statisticsDF.schema().fieldNames());
-        spark.sql(HoodieSparkUtils$
-            .MODULE$.createMergeSql(originalTable, updateTable, JavaConversions.asScalaBuffer(columns))).repartition(1).write().save(savePath.toString());
+        List<String> columns = Arrays.asList(statisticsDF.schema().fieldNames());
+        spark.sql(createIndexMergeSql(originalTable, updateTable, columns)).repartition(1).write().save(savePath.toString());
       }
     } catch (IOException e) {
       throw new HoodieException(e);
     }
+  }
+
+  @Nonnull
+  private static String createIndexMergeSql(
+      @Nonnull String originalIndexTable,
+      @Nonnull String newIndexTable,
+      @Nonnull List<String> columns
+  ) {
+    StringBuilder selectBody = new StringBuilder();
+
+    for (int i = 0; i < columns.size(); ++i) {
+      String col = columns.get(i);
+      String originalTableColumn = String.format("%s.%s", originalIndexTable, col);
+      String newTableColumn = String.format("%s.%s", newIndexTable, col);
+
+      selectBody.append(
+          // NOTE: We prefer values from the new index table, and fallback to the original one only
+          //       in case it does not contain statistics for the given file path
+          String.format("if (%s is null, %s, %s) AS %s", newTableColumn, originalTableColumn, originalTableColumn, col)
+      );
+
+      if (i < columns.size() - 1) {
+        selectBody.append(",");
+      }
+    }
+
+    return String.format(
+        "SELECT %s FROM %s FULL JOIN %s ON %s = %s",
+        selectBody,
+        originalIndexTable,
+        newIndexTable,
+        String.format("%s.%s", originalIndexTable, columns.get(0)),
+        String.format("%s.%s", newIndexTable, columns.get(0))
+    );
+  }
+
+  public static void main(String[] args) {
+    String s = createIndexMergeSql("foo", "bar", Arrays.asList("a", "b", "c"));
+    System.out.println(s);
   }
 }
