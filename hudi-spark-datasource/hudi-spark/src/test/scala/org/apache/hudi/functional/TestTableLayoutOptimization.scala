@@ -25,9 +25,9 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.{BaseFileUtils, ParquetUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
+import org.apache.hudi.index.zorder.ZOrderingIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-import org.apache.spark.ZCurveOptimizeHelper
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -137,17 +137,17 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
       ZCurveOptimizeHelper.createZIndexedDataFrameByMapValue(df, "c1,c2,c3,c4,c5,c6,c7,c8", 20).show(1)
       ZCurveOptimizeHelper.createZIndexedDataFrameBySample(df, "c1,c2,c3,c4,c5,c6,c7,c8", 20).show(1)
       // do not support TimeStampType, so if we collect statistics for c4, should throw exception
-      val colDf = ZCurveOptimizeHelper.getMinMaxValue(df, "c1,c2,c3,c5,c6,c7,c8")
+      val colDf = ZOrderingIndexHelper.getMinMaxValue(df, Seq("c1","c2","c3","c5","c6","c7","c8"))
       colDf.cache()
       assertEquals(colDf.count(), 3)
       assertEquals(colDf.take(1)(0).length, 22)
       colDf.unpersist()
       // try to save statistics
-      ZCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "2", Seq("0", "1"))
+      ZOrderingIndexHelper.saveStatisticsInfo(df, Seq("c1","c2","c3","c5","c6","c7","c8"), statisticPath.toString, "2", Seq("0", "1"))
       // save again
-      ZCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "3", Seq("0", "1", "2"))
+      ZOrderingIndexHelper.saveStatisticsInfo(df, Seq("c1","c2","c3","c5","c6","c7","c8"), statisticPath.toString, "3", Seq("0", "1", "2"))
       // test old index table clean
-      ZCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "4", Seq("0", "1", "3"))
+      ZOrderingIndexHelper.saveStatisticsInfo(df, Seq("c1","c2","c3","c5","c6","c7","c8"), statisticPath.toString, "4", Seq("0", "1", "3"))
       assertEquals(!fs.exists(new Path(statisticPath, "2")), true)
       assertEquals(fs.exists(new Path(statisticPath, "3")), true)
       // test to save different index, new index on ("c1,c6,c7,c8") should be successfully saved.

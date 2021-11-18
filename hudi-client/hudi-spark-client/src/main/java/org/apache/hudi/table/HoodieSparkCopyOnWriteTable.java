@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import com.google.common.base.Strings;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -73,15 +74,12 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.ZCurveOptimizeHelper;
+import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
 import org.apache.spark.api.java.JavaRDD;
 import scala.collection.JavaConversions;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -171,21 +169,46 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   private void updateOptimizeOperationStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime) {
-    String cols = config.getClusteringSortColumns();
+    String sortColsList = config.getClusteringSortColumns();
     String basePath = metaClient.getBasePath();
     String indexPath = metaClient.getZindexPath();
-    List<String> validateCommits = metaClient.getCommitsTimeline()
-        .filterCompletedInstants().getInstants().map(f -> f.getTimestamp()).collect(Collectors.toList());
-    List<String> touchFiles = stats.stream().map(s -> new Path(basePath, s.getPath()).toString()).collect(Collectors.toList());
-    if (touchFiles.isEmpty() || cols.isEmpty() || indexPath.isEmpty()) {
-      LOG.warn("save nothing to index table");
+
+    List<String> validateCommits =
+        metaClient.getCommitsTimeline()
+            .filterCompletedInstants()
+            .getInstants()
+            .map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList());
+
+    List<String> touchFiles =
+        stats.stream()
+            .map(s -> new Path(basePath, s.getPath()).toString())
+            .collect(Collectors.toList());
+
+    if (touchFiles.isEmpty() || Strings.isNullOrEmpty(sortColsList) || Strings.isNullOrEmpty(indexPath)) {
       return;
     }
+
+    LOG.info(String.format("Updating Z-index table (%s)", indexPath));
+
+    List<String> sortCols = Arrays.stream(sortColsList.split(","))
+        .map(String::trim)
+        .collect(Collectors.toList());
+
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
-    ZCurveOptimizeHelper.saveStatisticsInfo(sparkEngineContext
-        .getSqlContext().sparkSession().read().load(JavaConversions.asScalaBuffer(touchFiles)),
-        cols, indexPath, instantTime, validateCommits);
-    LOG.info(String.format("save statistic info sucessfully at commitTime: %s", instantTime));
+
+    ZOrderingIndexHelper.saveStatisticsInfo(
+        sparkEngineContext.getSqlContext()
+            .sparkSession()
+            .read()
+            .load(JavaConversions.asScalaBuffer(touchFiles)),
+        sortCols,
+        indexPath,
+        instantTime,
+        validateCommits
+    );
+
+    LOG.info(String.format("Successfully updated Z-index at instant (%s)", instantTime));
   }
 
   @Override

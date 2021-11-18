@@ -16,8 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.spark;
+package org.apache.hudi.index.zorder;
 
+import com.google.common.annotations.VisibleForTesting;
+import org.apache.spark.SparkContext;
 import scala.collection.JavaConversions;
 
 import org.apache.hadoop.conf.Configuration;
@@ -71,7 +73,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class ZCurveOptimizeHelper {
+public class ZOrderingIndexHelper {
 
   private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
 
@@ -180,6 +182,7 @@ public class ZCurveOptimizeHelper {
    * @param cols z-sort cols
    * @return a dataFrame holds all statistics info.
    */
+  @VisibleForTesting
   public static Dataset<Row> getMinMaxValue(Dataset<Row> df, List<String> cols) {
     Map<String, DataType> columnsMap = Arrays.stream(df.schema().fields()).collect(Collectors.toMap(e -> e.name(), e -> e.dataType()));
 
@@ -273,11 +276,6 @@ public class ZCurveOptimizeHelper {
     return df.sparkSession().createDataFrame(allMetaDataRDD, StructType$.MODULE$.apply(allMetaDataSchema));
   }
 
-  public static Dataset<Row> getMinMaxValue(Dataset<Row> df, String cols) {
-    List<String> rawCols = Arrays.asList(cols.split(",")).stream().map(f -> f.trim()).collect(Collectors.toList());
-    return getMinMaxValue(df, rawCols);
-  }
-
   /**
    * Update statistics info.
    * this method will update old index table by full out join,
@@ -291,11 +289,11 @@ public class ZCurveOptimizeHelper {
    * @param validateCommits all validate commits for current table.
    * @return
    */
-  public static void saveStatisticsInfo(Dataset<Row> df, String cols, String indexPath, String commitTime, List<String> validateCommits) {
+  public static void saveStatisticsInfo(Dataset<Row> df, List<String> cols, String indexPath, String commitTime, List<String> validateCommits) {
     Path savePath = new Path(indexPath, commitTime);
     SparkSession spark = df.sparkSession();
     FileSystem fs = FSUtils.getFs(indexPath, spark.sparkContext().hadoopConfiguration());
-    Dataset<Row> statisticsDF = ZCurveOptimizeHelper.getMinMaxValue(df, cols);
+    Dataset<Row> statisticsDF = ZOrderingIndexHelper.getMinMaxValue(df, cols);
     // try to find last validate index table from index path
     try {
       // If there's currently no index, create one

@@ -30,20 +30,22 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieSqlUtils}
+import org.apache.spark.sql.hudi.DataSkippingUtils.createZIndexLookupFilter
+import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Properties
-
-import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
@@ -169,14 +171,14 @@ case class HoodieFileIndex(
    *       ultimately be scanned as part of query execution. Hence, this method has to maintain the
    *       invariant of conservatively including every base-file's name, that is NOT referenced in its index.
    *
-   * @param dataFilters list of original data filters passed down from querying engine
+   * @param queryFilters list of original data filters passed down from querying engine
    * @return list of pruned (data-skipped) candidate base-files' names
    */
-  private def lookupCandidateFilesNamesInZIndex(dataFilters: Seq[Expression]): Option[Set[String]] = {
+  private def lookupCandidateFilesNamesInZIndex(queryFilters: Seq[Expression]): Option[Set[String]] = {
     val indexPath = metaClient.getZindexPath
     val fs = metaClient.getFs
 
-    if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || dataFilters.isEmpty) {
+    if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || queryFilters.isEmpty) {
       // scalastyle:off return
       return Option.empty
       // scalastyle:on return
@@ -207,7 +209,7 @@ case class HoodieFileIndex(
     dataFrameOpt.map(df => {
       val indexSchema = df.schema
       val indexFilter =
-        dataFilters.map(DataSkippingUtils.createZIndexLookupFilter(_, indexSchema))
+        queryFilters.map(createZIndexLookupFilter(_, indexSchema))
           .reduce(And)
 
       logInfo(s"Index filter condition: $indexFilter")
@@ -221,7 +223,7 @@ case class HoodieFileIndex(
           .toSet
 
       val prunedCandidateFileNames =
-        df.filter(new Column(indexFilter))
+        df.where(new Column(indexFilter))
           .select("file")
           .collect()
           .map(_.getString(0))
