@@ -18,7 +18,9 @@
 
 package org.apache.hudi.client;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.Path;
@@ -134,6 +136,62 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @Test
   public void testMultiWriterWithAsyncTableServicesWithConflictMOR() throws Exception {
     testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType.MERGE_ON_READ);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
+  public void testMultiWriterWithInsertsToDistinctPartitions(HoodieTableType tableType) throws Exception {
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      setUpMORTestTable();
+    }
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "5000");
+
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(FileSystemBasedLockProviderTestClass.class)
+            .build())
+        .withAutoCommit(false)
+        .withProperties(properties)
+        .build();
+
+    // Create the first commit
+    SparkRDDWriteClient<?> client = getHoodieWriteClient(cfg);
+    createCommitWithInsertsForPartition(cfg, client, "000", "001", 100, "2016/03/01");
+
+    int numConcurrentWriters = 5;
+    ExecutorService executors = Executors.newFixedThreadPool(numConcurrentWriters);
+
+    List<Future<?>> futures = new ArrayList<>(numConcurrentWriters);
+    for (int loop = 0; loop < numConcurrentWriters; loop++) {
+      String newCommitTime = "00" + (loop + 2);
+      String partition = "2016/03/0" + (loop + 2);
+      futures.add(executors.submit(() -> {
+        try {
+          SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg);
+          createCommitWithInsertsForPartition(cfg, writeClient, "001", newCommitTime, 100, partition);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }));
+    }
+
+    futures.forEach(f -> {
+      try {
+        f.get();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    });
   }
 
   private void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType) throws Exception {
@@ -292,6 +350,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     } catch (Exception e) {
       // Expected
     }
+  }
+
+  private void createCommitWithInsertsForPartition(HoodieWriteConfig cfg, SparkRDDWriteClient client,
+                                                   String prevCommitTime, String newCommitTime, int numRecords,
+                                                   String partition) throws Exception {
+    JavaRDD<WriteStatus> result = insertBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::insert,
+        false, false, numRecords, numRecords, 1, Option.of(partition));
+    assertTrue(client.commit(newCommitTime, result), "Commit should succeed");
   }
 
   private void createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,
