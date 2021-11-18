@@ -103,7 +103,7 @@ public class StreamerUtil {
     }
     return readConfig(
         FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
-        new Path(cfg.propsFilePath), cfg.configs).getConfig();
+        new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
 
   public static Schema getSourceSchema(FlinkStreamerConfig cfg) {
@@ -128,18 +128,11 @@ public class StreamerUtil {
    * Read config from properties file (`--props` option) and cmd line (`--hoodie-conf` option).
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf;
-    try {
-      conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
-    } catch (Exception e) {
-      conf = new DFSPropertiesConfiguration();
-      LOG.warn("Unexpected error read props file at :" + cfgPath, e);
-    }
-
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(fs, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);

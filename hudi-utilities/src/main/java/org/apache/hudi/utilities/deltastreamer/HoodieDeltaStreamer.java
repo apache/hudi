@@ -29,6 +29,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -121,15 +122,18 @@ public class HoodieDeltaStreamer implements Serializable {
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                              Option<TypedProperties> props) throws IOException {
     // Resolving the properties first in a consistent way
+    HoodieConfig hoodieConfig = new HoodieConfig();
     if (props.isPresent()) {
-      this.properties = setDefaults(props.get());
+      hoodieConfig.setAll(props.get());
     } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
-      this.properties = setDefaults(UtilHelpers.getConfig(cfg.configs).getConfig());
+      hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
     } else {
-      this.properties = setDefaults(UtilHelpers.readConfig(
+      hoodieConfig.setAll(UtilHelpers.readConfig(
           FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
-          new Path(cfg.propsFilePath), cfg.configs).getConfig());
+          new Path(cfg.propsFilePath), cfg.configs).getProps());
     }
+    hoodieConfig.setDefaultValue(DataSourceWriteOptions.RECONCILE_SCHEMA());
+    this.properties = (TypedProperties) hoodieConfig.getProps(true);
 
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
@@ -146,13 +150,6 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public void shutdownGracefully() {
     deltaSyncService.ifPresent(ds -> ds.shutdown(false));
-  }
-
-  private TypedProperties setDefaults(TypedProperties props) {
-    if (!props.containsKey(DataSourceWriteOptions.RECONCILE_SCHEMA().key())) {
-      props.setProperty(DataSourceWriteOptions.RECONCILE_SCHEMA().key(), DataSourceWriteOptions.RECONCILE_SCHEMA().defaultValue().toString());
-    }
-    return props;
   }
 
   /**
@@ -370,12 +367,12 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     public boolean isAsyncClusteringEnabled() {
-      return Boolean.parseBoolean(String.valueOf(UtilHelpers.getConfig(this.configs).getConfig()
+      return Boolean.parseBoolean(String.valueOf(UtilHelpers.getConfig(this.configs).getProps()
           .getOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), false)));
     }
 
     public boolean isInlineClusteringEnabled() {
-      return Boolean.parseBoolean(String.valueOf(UtilHelpers.getConfig(this.configs).getConfig()
+      return Boolean.parseBoolean(String.valueOf(UtilHelpers.getConfig(this.configs).getProps()
           .getOrDefault(HoodieClusteringConfig.INLINE_CLUSTERING.key(), false)));
     }
 

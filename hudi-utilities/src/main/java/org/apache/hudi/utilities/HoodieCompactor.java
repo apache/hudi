@@ -59,7 +59,7 @@ public class HoodieCompactor {
 
     return UtilHelpers
         .readConfig(fs, new Path(cfg.propsFilePath), cfg.configs)
-        .getConfig();
+        .getProps(true);
   }
 
   public static class Config implements Serializable {

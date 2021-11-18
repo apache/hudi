@@ -45,7 +45,7 @@ class TruncateHoodieTableCommand(
       // Create MetaClient
       val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
         .setConf(hadoopConf).build()
-      Some(metaClient.getTableConfig.getProps)
+      Some(metaClient.getTableConfig.getProps(true))
     } else {
       None
     }
