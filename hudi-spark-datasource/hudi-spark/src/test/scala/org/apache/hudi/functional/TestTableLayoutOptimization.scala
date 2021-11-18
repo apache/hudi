@@ -72,9 +72,10 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
   def testOptimizeWithClustering(tableType: String): Unit = {
     val targetRecordsCount = 10000
     // Bulk Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
-    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
+    val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
+    val writeDf: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    writeDf.write.format("org.apache.hudi")
       .options(commonOpts)
       .option("hoodie.compact.inline", "false")
       .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
@@ -92,22 +93,22 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val df =
+    val readDf =
       spark.read
         .format("hudi")
         .load(basePath)
 
-    val dfSkip =
+    val readDfSkip =
       spark.read
         .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
         .format("hudi")
         .load(basePath)
 
-    assertEquals(targetRecordsCount, df.count())
-    assertEquals(targetRecordsCount, dfSkip.count())
+    assertEquals(targetRecordsCount, readDf.count())
+    assertEquals(targetRecordsCount, readDfSkip.count())
 
-    df.createOrReplaceTempView("hudi_snapshot_raw")
-    df.createOrReplaceTempView("hudi_snapshot_skipping")
+    readDf.createOrReplaceTempView("hudi_snapshot_raw")
+    readDfSkip.createOrReplaceTempView("hudi_snapshot_skipping")
 
     def select(tableName: String) =
       spark.sql(s"SELECT * FROM $tableName WHERE begin_lat >= 0.49 AND begin_lat < 0.51 AND begin_lon >= 0.49 AND begin_lon < 0.51")
