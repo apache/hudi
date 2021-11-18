@@ -20,6 +20,7 @@ package org.apache.hudi.configuration;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.Configuration;
 
@@ -91,5 +92,12 @@ public class OptionsResolver {
   public static boolean isDeltaTimeCompaction(Configuration conf) {
     final String strategy = conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toLowerCase(Locale.ROOT);
     return FlinkOptions.TIME_ELAPSED.equals(strategy) || FlinkOptions.NUM_OR_TIME.equals(strategy);
+  }
+
+  /**
+   * Returns whether the table is partitioned.
+   */
+  public static boolean isPartitionedTable(Configuration conf) {
+    return FilePathUtils.extractPartitionKeys(conf).length > 0;
   }
 }

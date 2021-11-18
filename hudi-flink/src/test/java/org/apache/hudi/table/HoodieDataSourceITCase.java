@@ -424,6 +424,8 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_NAME, tableType.name())
+        .option("hoodie.parquet.small.file.limit", "0") // invalidate the small file strategy
+        .option("hoodie.parquet.max.file.size", "0")
         .noPartition()
         .end();
     tableEnv.executeSql(hoodieTableDDL);
