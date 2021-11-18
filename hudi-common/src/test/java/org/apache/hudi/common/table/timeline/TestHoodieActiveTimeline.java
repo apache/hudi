@@ -455,9 +455,9 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     for (int idx = 0; idx < numThreads; ++idx) {
       futures.add(executorService.submit(() -> {
         Date date = new Date(System.currentTimeMillis() + (int)(Math.random() * numThreads) * milliSecondsInYear);
-        final String expectedFormat = HoodieActiveTimeline.getInstantForDate(date);
+        final String expectedFormat = HoodieActiveTimeline.formatDate(date);
         for (int tidx = 0; tidx < numChecks; ++tidx) {
-          final String curFormat = HoodieActiveTimeline.getInstantForDate(date);
+          final String curFormat = HoodieActiveTimeline.formatDate(date);
           if (!curFormat.equals(expectedFormat)) {
             throw new HoodieException("Format error: expected=" + expectedFormat + ", curFormat=" + curFormat);
           }

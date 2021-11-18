@@ -37,11 +37,11 @@ public class HoodieInstantTimeGenerator {
   // Format of the timestamp used for an Instant
   public static final String SECS_INSTANT_TIMESTAMP_FORMAT = "yyyyMMddHHmmss";
   public static final int SECS_INSTANT_ID_LENGTH = SECS_INSTANT_TIMESTAMP_FORMAT.length();
-  private static final String MILLIS_INSTANT_TIMESTAMP_FORMAT = "yyyyMMddHHmmssSSS";
+  public static final String MILLIS_INSTANT_TIMESTAMP_FORMAT = "yyyyMMddHHmmssSSS";
   public static final int MILLIS_INSTANT_ID_LENGTH = MILLIS_INSTANT_TIMESTAMP_FORMAT.length();
-  private static final int MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH = MILLIS_INSTANT_TIMESTAMP_FORMAT.length();
+  public static final int MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH = MILLIS_INSTANT_TIMESTAMP_FORMAT.length();
   // Formatter to generate Instant timestamps
-  // Unfortunately millisecond format is not parsaable as is https://bugs.openjdk.java.net/browse/JDK-8031085. hence have to do appendValue()
+  // Unfortunately millisecond format is not parsable as is https://bugs.openjdk.java.net/browse/JDK-8031085. hence have to do appendValue()
   private static DateTimeFormatter MILLIS_INSTANT_TIME_FORMATTER = new DateTimeFormatterBuilder().appendPattern(SECS_INSTANT_TIMESTAMP_FORMAT)
       .appendValue(ChronoField.MILLI_OF_SECOND, 3).toFormatter();
   private static final String MILLIS_GRANULARITY_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss:SSS";
@@ -100,11 +100,11 @@ public class HoodieInstantTimeGenerator {
     return instant.length() == SECS_INSTANT_ID_LENGTH;
   }
 
-  public static String getInstantForDate(Instant timestamp) {
+  public static String formatInstantTime(Instant timestamp) {
     return MILLIS_INSTANT_TIME_FORMATTER.format(timestamp);
   }
 
-  public static String getInstantForDate(Date timestamp) {
+  public static String formatDate(Date timestamp) {
     return getInstantFromTemporalAccessor(convertDateToTemporalAccessor(timestamp));
   }
 

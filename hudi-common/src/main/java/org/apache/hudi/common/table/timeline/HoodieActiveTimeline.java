@@ -81,15 +81,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   /**
    * Format the java.time.Instant to a String representing the timestamp of a Hoodie Instant.
    */
-  public static String getInstantForDate(Instant timestamp) {
-    return HoodieInstantTimeGenerator.getInstantForDate(timestamp);
+  public static String formatInstantTime(Instant timestamp) {
+    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
   }
 
   /**
    * Format the Date to a String representing the timestamp of a Hoodie Instant.
    */
-  public static String getInstantForDate(Date timestamp) {
-    return HoodieInstantTimeGenerator.getInstantForDate(timestamp);
+  public static String formatDate(Date timestamp) {
+    return HoodieInstantTimeGenerator.formatDate(timestamp);
   }
 
   /**
@@ -99,6 +99,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public static String createNewInstantTime() {
     return HoodieInstantTimeGenerator.createNewInstantTime(0);
   }
+
 
   /**
    * Returns next instant time that adds N milliseconds to current time.

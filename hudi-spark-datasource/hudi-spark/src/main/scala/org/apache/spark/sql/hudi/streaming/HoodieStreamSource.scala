@@ -182,7 +182,7 @@ class HoodieStreamSource(
         val time = HoodieActiveTimeline.parseDateFromInstantTime(commitTime).getTime
         // As we consume the data between (start, end], start is not included,
         // so we +1s to the start commit time here.
-        HoodieActiveTimeline.getInstantForDate(new Date(time + 1000))
+        HoodieActiveTimeline.formatDate(new Date(time + 1000))
       case _=> throw new IllegalStateException("UnKnow offset type.")
     }
   }

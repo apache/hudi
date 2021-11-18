@@ -51,7 +51,7 @@ public class CommitUtil {
 
   public static String getTimeDaysAgo(int numberOfDays) {
     Date date = Date.from(ZonedDateTime.now().minusDays(numberOfDays).toInstant());
-    return HoodieActiveTimeline.getInstantForDate(date);
+    return HoodieActiveTimeline.formatDate(date);
   }
 
   /**
@@ -63,6 +63,6 @@ public class CommitUtil {
   public static String addHours(String compactionCommitTime, int hours) throws ParseException {
     Instant instant = HoodieActiveTimeline.parseDateFromInstantTime(compactionCommitTime).toInstant();
     ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
-    return HoodieActiveTimeline.getInstantForDate(Date.from(commitDateTime.plusHours(hours).toInstant()));
+    return HoodieActiveTimeline.formatDate(Date.from(commitDateTime.plusHours(hours).toInstant()));
   }
 }

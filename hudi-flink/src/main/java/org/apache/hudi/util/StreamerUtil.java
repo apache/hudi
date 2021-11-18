@@ -408,7 +408,7 @@ public class StreamerUtil {
       ValidationUtils.checkArgument(high > low,
           "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
       long median = low + (high - low) / 2;
-      final String instantTime = HoodieActiveTimeline.getInstantForDate(new Date(median));
+      final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
       if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
           || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
         return Option.empty();
