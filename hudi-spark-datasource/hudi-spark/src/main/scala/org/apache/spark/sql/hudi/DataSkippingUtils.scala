@@ -36,12 +36,14 @@ import scala.collection.JavaConverters._
 object DataSkippingUtils {
 
   /**
-    * create z_index filter and push those filters to index table to filter all candidate scan files.
-    * @param condition  origin filter from query.
-    * @param indexSchema schema from index table.
-    * @return filters for index table.
-    */
-  def createZindexFilter(condition: Expression, indexSchema: StructType): Expression = {
+   * Translates provided {@link filterExpr} into corresponding filter-expression for Z-index index table
+   * to filter out candidate files that would hold records matching the original filter
+   *
+   * @param filterExpr  original filter from query
+   * @param indexSchema index table schema
+   * @return filter for Z-index table
+   */
+  def createZIndexLookupFilter(filterExpr: Expression, indexSchema: StructType): Expression = {
     def refColExpr(colName: Seq[String], statisticValue: String): Expression = {
       val appendColName = UnresolvedAttribute(colName).name + statisticValue
       col(appendColName).expr
@@ -73,7 +75,7 @@ object DataSkippingUtils {
       list.map { lit => colContainsValuesEqualToLiteral(colName, lit) }.reduce(Or)
     }
 
-    condition match {
+    filterExpr match {
       // Filter "colA = b"
       // Translates to "colA_minValue <= b AND colA_maxValue >= b" condition for index lookup
       case EqualTo(attribute: AttributeReference, value: Literal) =>
@@ -177,13 +179,13 @@ object DataSkippingUtils {
         rewriteCondition(colName, Not(colContainsValuesEqualToLiteral(colName, value)))
 
       case or: Or =>
-        val resLeft = createZindexFilter(or.left, indexSchema)
-        val resRight = createZindexFilter(or.right, indexSchema)
+        val resLeft = createZIndexLookupFilter(or.left, indexSchema)
+        val resRight = createZIndexLookupFilter(or.right, indexSchema)
         Or(resLeft, resRight)
 
       case and: And =>
-        val resLeft = createZindexFilter(and.left, indexSchema)
-        val resRight = createZindexFilter(and.right, indexSchema)
+        val resLeft = createZIndexLookupFilter(and.left, indexSchema)
+        val resRight = createZIndexLookupFilter(and.right, indexSchema)
         And(resLeft, resRight)
 
       case expr: Expression =>

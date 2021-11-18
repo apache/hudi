@@ -68,9 +68,10 @@ class TestOptimizeTable extends HoodieClientTestBase {
 
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testOptimizewithClustering(tableType: String): Unit = {
+  def testOptimizeWithClustering(tableType: String): Unit = {
+    val targetRecordsCount = 10000
     // Bulk Insert Operation
-    val records1 = recordsToStrings(dataGen.generateInserts("001", 1000)).toList
+    val records1 = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -90,19 +91,29 @@ class TestOptimizeTable extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    assertEquals(1000, spark.read.format("hudi").load(basePath).count())
-    // use unsorted col as filter.
+    // NOTE: All of the following tests are just a "smoke" tests,
+    //       generally executing control-flow paths, but not asserting any
+    //       particular behavior
+    assertEquals(targetRecordsCount, spark.read.format("hudi").load(basePath).count())
+    assertEquals(targetRecordsCount,
+      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
+        .format("hudi")
+        .load(basePath)
+        .count()
+    )
+
+    // Use unsorted col as filter
     assertEquals(spark.read
       .format("hudi").load(basePath).where("end_lat >= 0 and rider != '1' and weight > 0.0").count(),
       spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
         .format("hudi").load(basePath).where("end_lat >= 0 and rider != '1' and weight > 0.0").count())
-    // use sorted col as filter.
+    // Use sorted col as filter
     assertEquals(spark.read.format("hudi").load(basePath)
       .where("begin_lat >= 0.49 and begin_lat < 0.51 and begin_lon >= 0.49 and begin_lon < 0.51").count(),
       spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
         .format("hudi").load(basePath)
         .where("begin_lat >= 0.49 and begin_lat < 0.51 and begin_lon >= 0.49 and begin_lon < 0.51").count())
-    // use sorted cols and unsorted cols as filter
+    // Use sorted cols and unsorted cols as filter
     assertEquals(spark.read.format("hudi").load(basePath)
       .where("begin_lat >= 0.49 and begin_lat < 0.51 and end_lat > 0.56").count(),
       spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")

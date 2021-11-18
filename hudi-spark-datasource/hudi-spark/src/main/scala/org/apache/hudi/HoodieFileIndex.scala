@@ -195,7 +195,7 @@ case class HoodieFileIndex(
     dataFrameOpt.map(df => {
       val indexSchema = df.schema
       val indexFilter =
-        dataFilters.map(DataSkippingUtils.createZindexFilter(_, indexSchema))
+        dataFilters.map(DataSkippingUtils.createZIndexLookupFilter(_, indexSchema))
           .reduce(And)
 
       logInfo(s"Index filter condition: $indexFilter")
