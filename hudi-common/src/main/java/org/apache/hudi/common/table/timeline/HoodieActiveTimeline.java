@@ -72,24 +72,24 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   protected HoodieTableMetaClient metaClient;
 
   /**
-   * Parse the timestamp of an Instant and return a {@code SimpleDateFormat}.
+   * Parse the timestamp of an Instant and return a {@code Date}.
    */
-  public static Date parseInstantTime(String timestamp) throws ParseException {
-    return HoodieInstantTimeGenerator.parseInstantTime(timestamp);
+  public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
+    return HoodieInstantTimeGenerator.parseDateFromInstantTime(timestamp);
   }
 
   /**
    * Format the java.time.Instant to a String representing the timestamp of a Hoodie Instant.
    */
-  public static String formatInstantTime(Instant timestamp) {
-    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
+  public static String getInstantForDate(Instant timestamp) {
+    return HoodieInstantTimeGenerator.getInstantForDate(timestamp);
   }
 
   /**
    * Format the Date to a String representing the timestamp of a Hoodie Instant.
    */
-  public static String formatInstantTime(Date timestamp) {
-    return HoodieInstantTimeGenerator.formatInstantTime(timestamp);
+  public static String getInstantForDate(Date timestamp) {
+    return HoodieInstantTimeGenerator.getInstantForDate(timestamp);
   }
 
   /**
