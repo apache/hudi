@@ -46,7 +46,6 @@ import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
@@ -57,9 +56,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
-import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -163,7 +159,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     // insert 100 records
     HoodieWriteConfig config = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
@@ -176,19 +172,14 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       // Update all the 100 records
       HoodieTable table = HoodieSparkTable.create(config, context);
       newCommitTime = "101";
-      writeClient.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
       HoodieIndex index = new HoodieBloomIndex<>(config, SparkHoodieBloomIndexHelper.getInstance());
-      updatedRecords = tagLocation(index, updatedRecordsRDD, table).collect();
+      JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
 
-      // Write them to corresponding avro logfiles. Also, set the state transition properly.
-      HoodieSparkWriteableTestTable.of(table, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)
-          .withLogAppends(updatedRecords);
-      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
-          HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
-      writeClient.commit(newCommitTime, jsc.emptyRDD(), Option.empty());
+      writeClient.startCommitWithTime(newCommitTime);
+      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
       metaClient.reloadActiveTimeline();
 
       // Verify that all data file has one log file
@@ -200,9 +191,6 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
           assertEquals(1, fileSlice.getLogFiles().count(), "There should be 1 log file written for every data file");
         }
       }
-      createDeltaCommit(basePath, newCommitTime);
-      createRequestedDeltaCommit(basePath, newCommitTime);
-      createInflightDeltaCommit(basePath, newCommitTime);
 
       // Do a compaction
       table = HoodieSparkTable.create(config, context);

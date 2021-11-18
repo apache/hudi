@@ -131,6 +131,7 @@ public class HoodieTestTable {
     this.basePath = basePath;
     this.fs = fs;
     this.metaClient = metaClient;
+    testTableState = HoodieTestTableState.of();
   }
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
