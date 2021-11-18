@@ -127,21 +127,19 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
         return recordsAndPendingClusteringFileGroups.getLeft();
       }
       // there are filegroups pending clustering and receiving updates, so rollback the pending clustering instants
-      try {
-        this.txnManager.beginTransaction();
+      // there could be race condition, for example, if the clustering completes after instants are fetched but before rollback completed
+      if (config.isRollbackPendingClustering()) {
         Set<HoodieInstant> pendingClusteringInstantsToRollback = getAllFileGroupsInPendingClusteringPlans(table.getMetaClient()).entrySet().stream()
             .filter(e -> fileGroupsWithUpdatesAndPendingClustering.contains(e.getKey()))
             .map(Map.Entry::getValue)
             .collect(Collectors.toSet());
         pendingClusteringInstantsToRollback.forEach(instant -> {
           String commitTime = HoodieActiveTimeline.createNewInstantTime();
-          table.scheduleRollback(context, commitTime, instant, false);
-          table.rollback(context, commitTime, instant, true);
+          table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers());
+          table.rollback(context, commitTime, instant, true, true);
         });
-      } finally {
-        this.txnManager.endTransaction();
+        table.getMetaClient().reloadActiveTimeline();
       }
-      table.getMetaClient().reloadActiveTimeline();
       return recordsAndPendingClusteringFileGroups.getLeft();
     } else {
       return inputRecordsRDD;
