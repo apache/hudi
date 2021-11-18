@@ -102,8 +102,10 @@ public class HoodieTableMetadataUtil {
 
         int offset = partition.equals(NON_PARTITIONED_NAME) ? (pathWithPartition.startsWith("/") ? 1 : 0) : partition.length() + 1;
         String filename = pathWithPartition.substring(offset);
-        ValidationUtils.checkState(!newFiles.containsKey(filename), "Duplicate files in HoodieCommitMetadata");
-        newFiles.put(filename, hoodieWriteStat.getTotalWriteBytes());
+        long totalWriteBytes = newFiles.containsKey(filename)
+            ? newFiles.get(filename) + hoodieWriteStat.getTotalWriteBytes()
+            : hoodieWriteStat.getTotalWriteBytes();
+        newFiles.put(filename, totalWriteBytes);
       });
       // New files added to a partition
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(

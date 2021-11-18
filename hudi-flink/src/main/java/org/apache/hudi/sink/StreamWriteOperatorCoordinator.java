@@ -333,7 +333,6 @@ public class StreamWriteOperatorCoordinator
     this.instant = instant;
     this.writeClient.startCommitWithTime(instant, tableState.commitAction);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
-    this.writeClient.upgradeDowngrade(this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
   }
@@ -360,6 +359,8 @@ public class StreamWriteOperatorCoordinator
       }
       // starts a new instant
       startInstant();
+      // upgrade downgrade
+      this.writeClient.upgradeDowngrade(this.instant);
     }, "initialize instant %s", instant);
   }
 
