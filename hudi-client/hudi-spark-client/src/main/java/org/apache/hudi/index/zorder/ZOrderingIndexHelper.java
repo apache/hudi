@@ -400,8 +400,11 @@ public class ZOrderingIndexHelper {
     }
   }
 
+  /**
+   * @VisibleForTesting
+   */
   @Nonnull
-  private static String createIndexMergeSql(
+  static String createIndexMergeSql(
       @Nonnull String originalIndexTable,
       @Nonnull String newIndexTable,
       @Nonnull List<String> columns
@@ -416,11 +419,11 @@ public class ZOrderingIndexHelper {
       selectBody.append(
           // NOTE: We prefer values from the new index table, and fallback to the original one only
           //       in case it does not contain statistics for the given file path
-          String.format("if (%s is null, %s, %s) AS %s", newTableColumn, originalTableColumn, originalTableColumn, col)
+          String.format("if (%s is null, %s, %s) AS %s", newTableColumn, originalTableColumn, newTableColumn, col)
       );
 
       if (i < columns.size() - 1) {
-        selectBody.append(",");
+        selectBody.append(", ");
       }
     }
 
@@ -432,10 +435,5 @@ public class ZOrderingIndexHelper {
         String.format("%s.%s", originalIndexTable, columns.get(0)),
         String.format("%s.%s", newIndexTable, columns.get(0))
     );
-  }
-
-  public static void main(String[] args) {
-    String s = createIndexMergeSql("foo", "bar", Arrays.asList("a", "b", "c"));
-    System.out.println(s);
   }
 }
