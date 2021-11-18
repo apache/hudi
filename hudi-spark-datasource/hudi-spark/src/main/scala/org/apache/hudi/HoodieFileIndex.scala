@@ -201,16 +201,39 @@ case class HoodieFileIndex(
       logInfo(s"Index filter condition: $indexFilter")
 
       df.persist()
-      val candidateFiles =
+
+      val allIndexedFileNames =
+        df.select("file")
+          .collect()
+          .map(_.getString(0))
+          .toSet
+
+      val prunedCandidateFileNames =
         df.filter(new Column(indexFilter))
           .select("file")
           .collect()
           .map(_.getString(0))
           .toSet
+
       df.unpersist()
 
-      candidateFiles
+      // NOTE: Z-index isn't guaranteed to have complete set of statistics for every
+      //       base-file: since it's bound to clustering, which could occur asynchronously
+      //       at arbitrary point in time, and is not likely to touching all of the base files.
+      //
+      //       To close that gap, we manually compute the difference b/w all indexed (Z-index)
+      //       files and all outstanding base-files, and make sure that all base files not
+      //       represented w/in Z-index are included in the output of this method
+      val notIndexedFileNames =
+        lookupFileNamesMissingFromIndex(allIndexedFileNames)
+
+      prunedCandidateFileNames ++ notIndexedFileNames
     })
+  }
+
+  private def lookupFileNamesMissingFromIndex(allIndexedFileNames: Set[String]) = {
+    val allBaseFileNames = allFiles.map(f => f.getPath.getName).toSet
+    allBaseFileNames -- allIndexedFileNames
   }
 
   /**
