@@ -100,4 +100,14 @@ public class OptionsResolver {
   public static boolean isPartitionedTable(Configuration conf) {
     return FilePathUtils.extractPartitionKeys(conf).length > 0;
   }
+
+  /**
+   * Returns whether the source should emit changelog.
+   *
+   * @return true if the source is read as streaming with changelog mode enabled
+   */
+  public static boolean emitChangelog(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
+        && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+  }
 }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -179,8 +180,7 @@ public class MergeOnReadInputFormat
       }
     } else if (!split.getBasePath().isPresent()) {
       // log files only
-      if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
-          && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)) {
+      if (OptionsResolver.emitChangelog(conf)) {
         this.iterator = new LogFileOnlyIterator(getUnMergedLogFileIterator(split));
       } else {
         this.iterator = new LogFileOnlyIterator(getLogFileIterator(split));

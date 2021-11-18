@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieROTablePathFilter;
 import org.apache.hudi.source.FileIndex;
@@ -196,11 +197,9 @@ public class HoodieTableSource implements
 
   @Override
   public ChangelogMode getChangelogMode() {
-    return conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)
-        ? ChangelogModes.FULL
-        // when all the changes are persisted or read as batch,
-        // use INSERT mode.
-        : ChangelogMode.insertOnly();
+    // when read as streaming and changelog mode is enabled, emit as FULL mode;
+    // when all the changes are compacted or read as batch, emit as INSERT mode.
+    return OptionsResolver.emitChangelog(conf) ? ChangelogModes.FULL : ChangelogMode.insertOnly();
   }
 
   @Override
