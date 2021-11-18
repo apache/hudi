@@ -160,6 +160,18 @@ case class HoodieFileIndex(
       spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
   }
 
+  /**
+   * Computes pruned list of candidate base-files' names based on provided list of {@link dataFilters}
+   * conditions, by leveraging custom Z-order index (Z-index) bearing "min", "max", "num_nulls" statistic
+   * for all clustered columns
+   *
+   * NOTE: This method has to return complete set of candidate files, since only provided candidates will
+   *       ultimately be scanned as part of query execution. Hence, this method has to maintain the
+   *       invariant of conservatively including every base-file's name, that is NOT referenced in its index.
+   *
+   * @param dataFilters list of original data filters passed down from querying engine
+   * @return list of pruned (data-skipped) candidate base-files' names
+   */
   private def lookupCandidateFilesNamesInZIndex(dataFilters: Seq[Expression]): Option[Set[String]] = {
     val indexPath = metaClient.getZindexPath
     val fs = metaClient.getFs
