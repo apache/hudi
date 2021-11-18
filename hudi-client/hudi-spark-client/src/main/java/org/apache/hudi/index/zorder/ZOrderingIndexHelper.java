@@ -19,10 +19,10 @@
 package org.apache.hudi.index.zorder;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.spark.SparkContext;
 import scala.collection.JavaConversions;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieSparkUtils$;
@@ -64,18 +64,20 @@ import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 public class ZOrderingIndexHelper {
 
   private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
+
+  public static final String Z_INDEX_FILE_COLUMN_NAME = "file";
+  public static final String Z_INDEX_MIN_VALUE_STAT_NAME = "minValue";
+  public static final String Z_INDEX_MAX_VALUE_STAT_NAME = "maxValue";
+  public static final String Z_INDEX_NUM_NULLS_STAT_NAME = "num_nulls";
 
   /**
    * Create z-order DataFrame directly
@@ -184,7 +186,9 @@ public class ZOrderingIndexHelper {
    */
   @VisibleForTesting
   public static Dataset<Row> getMinMaxValue(Dataset<Row> df, List<String> cols) {
-    Map<String, DataType> columnsMap = Arrays.stream(df.schema().fields()).collect(Collectors.toMap(e -> e.name(), e -> e.dataType()));
+    Map<String, DataType> colsDataTypesMap =
+        Arrays.stream(df.schema().fields())
+            .collect(Collectors.toMap(StructField::name, StructField::dataType));
 
     List<String> scanFiles = Arrays.asList(df.inputFiles());
     SparkContext sc = df.sparkSession().sparkContext();
@@ -196,84 +200,131 @@ public class ZOrderingIndexHelper {
     String previousJobDescription = sc.getLocalProperty(SPARK_JOB_DESCRIPTION);
     try {
       jsc.setJobDescription("Listing parquet column statistics");
-      colMinMaxInfos = jsc.parallelize(scanFiles, numParallelism).mapPartitions(paths -> {
-        Configuration conf = serializableConfiguration.value();
-        ParquetUtils parquetUtils = (ParquetUtils) BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
-        List<Collection<HoodieColumnRangeMetadata<Comparable>>> results = new ArrayList<>();
-        while (paths.hasNext()) {
-          String path = paths.next();
-          results.add(parquetUtils.readRangeFromParquetMetadata(conf, new Path(path), cols));
-        }
-        return results.stream().flatMap(f -> f.stream()).iterator();
-      }).collect();
+      colMinMaxInfos =
+          jsc.parallelize(scanFiles, numParallelism)
+              .mapPartitions(paths -> {
+                ParquetUtils utils = (ParquetUtils) BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+                Iterable<String> iterable = () -> paths;
+                return StreamSupport.stream(iterable.spliterator(), false)
+                    .flatMap(path ->
+                        utils.readRangeFromParquetMetadata(serializableConfiguration.value(), new Path(path), cols).stream()
+                    )
+                    .iterator();
+              })
+              .collect();
     } finally {
       jsc.setJobDescription(previousJobDescription);
     }
 
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> fileToStatsListMap = colMinMaxInfos.stream().collect(Collectors.groupingBy(e -> e.getFilePath()));
-    JavaRDD<Row> allMetaDataRDD = jsc.parallelize(new ArrayList<>(fileToStatsListMap.values()), 1).map(f -> {
-      int colSize = f.size();
-      if (colSize == 0) {
-        return null;
-      } else {
-        List<Object> rows = new ArrayList<>();
-        rows.add(f.get(0).getFilePath());
-        cols.stream().forEach(col -> {
-          HoodieColumnRangeMetadata<Comparable> currentColRangeMetaData =
-              f.stream().filter(s -> s.getColumnName().trim().equalsIgnoreCase(col)).findFirst().orElse(null);
-          DataType colType = columnsMap.get(col);
-          if (currentColRangeMetaData == null || colType == null) {
-            throw new HoodieException(String.format("cannot collect min/max statistics for col: %s", col));
-          }
-          if (colType instanceof IntegerType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof DoubleType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof StringType) {
-            rows.add(currentColRangeMetaData.getMinValueAsString());
-            rows.add(currentColRangeMetaData.getMaxValueAsString());
-          } else if (colType instanceof DecimalType) {
-            rows.add(new BigDecimal(currentColRangeMetaData.getMinValueAsString()));
-            rows.add(new BigDecimal(currentColRangeMetaData.getMaxValueAsString()));
-          } else if (colType instanceof DateType) {
-            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMinValueAsString()));
-            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMaxValueAsString()));
-          } else if (colType instanceof LongType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof ShortType) {
-            rows.add(Short.parseShort(currentColRangeMetaData.getMinValue().toString()));
-            rows.add(Short.parseShort(currentColRangeMetaData.getMaxValue().toString()));
-          } else if (colType instanceof FloatType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof BinaryType) {
-            rows.add(((Binary)currentColRangeMetaData.getMinValue()).getBytes());
-            rows.add(((Binary)currentColRangeMetaData.getMaxValue()).getBytes());
-          } else if (colType instanceof BooleanType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof ByteType) {
-            rows.add(Byte.valueOf(currentColRangeMetaData.getMinValue().toString()));
-            rows.add(Byte.valueOf(currentColRangeMetaData.getMaxValue().toString()));
-          }  else {
-            throw new HoodieException(String.format("Not support type:  %s", colType));
-          }
-          rows.add(currentColRangeMetaData.getNumNulls());
-        });
-        return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(rows));
-      }
-    }).filter(f -> f != null);
-    List<StructField> allMetaDataSchema = new ArrayList<>();
-    allMetaDataSchema.add(new StructField("file", StringType$.MODULE$, true, Metadata.empty()));
+    // Group column's metadata by file-paths of the files it belongs to
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> filePathToColumnMetadataMap =
+        colMinMaxInfos.stream()
+            .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getFilePath));
+
+    JavaRDD<Row> allMetaDataRDD =
+        jsc.parallelize(new ArrayList<>(filePathToColumnMetadataMap.values()), 1)
+            .map(fileColumnsMetadata -> {
+              int colSize = fileColumnsMetadata.size();
+              if (colSize == 0) {
+                return null;
+              }
+
+              String filePath = fileColumnsMetadata.get(0).getFilePath();
+
+              List<Object> indexRow = new ArrayList<>();
+
+              // First columns of the Z-index's row is target file-path
+              indexRow.add(filePath);
+
+              // For each column
+              cols.forEach(col -> {
+                HoodieColumnRangeMetadata<Comparable> colMetadata =
+                    fileColumnsMetadata.stream()
+                        .filter(s -> s.getColumnName().trim().equalsIgnoreCase(col))
+                        .findFirst()
+                        .orElse(null);
+
+                DataType colType = colsDataTypesMap.get(col);
+                if (colMetadata == null || colType == null) {
+                  throw new HoodieException(String.format("Cannot collect min/max statistics for column (%s)", col));
+                }
+
+                Pair<Object, Object> minMaxValue = fetchColumnMinMaxValues(colType, colMetadata);
+
+                indexRow.add(minMaxValue.getLeft());      // min
+                indexRow.add(minMaxValue.getRight());     // max
+                indexRow.add(colMetadata.getNumNulls());
+              });
+
+              return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(indexRow));
+            })
+            .filter(Objects::nonNull);
+
+    List<StructField> indexSchema = composeIndexSchema(cols, colsDataTypesMap);
+
+    return df.sparkSession().createDataFrame(allMetaDataRDD, StructType$.MODULE$.apply(indexSchema));
+  }
+
+  @Nonnull
+  private static List<StructField> composeIndexSchema(List<String> cols, Map<String, DataType> colsDataTypesMap) {
+    List<StructField> schema = new ArrayList<>();
+    schema.add(new StructField(Z_INDEX_FILE_COLUMN_NAME, StringType$.MODULE$, true, Metadata.empty()));
     cols.forEach(col -> {
-      allMetaDataSchema.add(new StructField(col + "_minValue", columnsMap.get(col), true, Metadata.empty()));
-      allMetaDataSchema.add(new StructField(col + "_maxValue", columnsMap.get(col), true, Metadata.empty()));
-      allMetaDataSchema.add(new StructField(col + "_num_nulls", LongType$.MODULE$, true, Metadata.empty()));
+      schema.add(composeColumnStatStructType(col, Z_INDEX_MIN_VALUE_STAT_NAME, colsDataTypesMap.get(col)));
+      schema.add(composeColumnStatStructType(col, Z_INDEX_MAX_VALUE_STAT_NAME, colsDataTypesMap.get(col)));
+      schema.add(composeColumnStatStructType(col, Z_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
     });
-    return df.sparkSession().createDataFrame(allMetaDataRDD, StructType$.MODULE$.apply(allMetaDataSchema));
+    return schema;
+  }
+
+  private static StructField composeColumnStatStructType(String col, String statName, DataType dataType) {
+    return new StructField(String.format("%s_%s", col, statName), dataType, true, Metadata.empty());
+  }
+
+  private static Pair<Object, Object>
+    fetchColumnMinMaxValues(
+        @Nonnull DataType colType,
+        @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata
+    ) {
+    if (colType instanceof IntegerType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof DoubleType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof StringType) {
+      return Pair.of(
+          new String(((Binary) colMetadata.getMinValue()).getBytes()),
+          new String(((Binary) colMetadata.getMaxValue()).getBytes())
+      );
+    } else if (colType instanceof DecimalType) {
+      // TODO this will be losing precision
+      return Pair.of(
+          Double.parseDouble(colMetadata.getStringifier().stringify(Long.valueOf(colMetadata.getMinValue().toString()))),
+          Double.parseDouble(colMetadata.getStringifier().stringify(Long.valueOf(colMetadata.getMaxValue().toString()))));
+    } else if (colType instanceof DateType) {
+      return Pair.of(
+          java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMinValue())),
+          java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMaxValue())));
+    } else if (colType instanceof LongType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof ShortType) {
+      return Pair.of(
+          Short.parseShort(colMetadata.getMinValue().toString()),
+          Short.parseShort(colMetadata.getMaxValue().toString()));
+    } else if (colType instanceof FloatType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof BinaryType) {
+      return Pair.of(
+          ((Binary) colMetadata.getMinValue()).getBytes(),
+          ((Binary) colMetadata.getMaxValue()).getBytes());
+    } else if (colType instanceof BooleanType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof ByteType) {
+      return Pair.of(
+          Byte.valueOf(colMetadata.getMinValue().toString()),
+          Byte.valueOf(colMetadata.getMaxValue().toString()));
+    }  else {
+      throw new HoodieException(String.format("Not support type:  %s", colType));
+    }
   }
 
   /**
@@ -344,8 +395,6 @@ public class ZOrderingIndexHelper {
         List columns = Arrays.asList(statisticsDF.schema().fieldNames());
         spark.sql(HoodieSparkUtils$
             .MODULE$.createMergeSql(originalTable, updateTable, JavaConversions.asScalaBuffer(columns))).repartition(1).write().save(savePath.toString());
-      } else {
-        statisticsDF.repartition(1).write().mode("overwrite").save(savePath.toString());
       }
     } catch (IOException e) {
       throw new HoodieException(e);
