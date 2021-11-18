@@ -44,16 +44,12 @@ object DataSkippingUtils {
    * @return filter for Z-index table
    */
   def createZIndexLookupFilter(filterExpr: Expression, indexSchema: StructType): Expression = {
-    def refColExpr(colName: Seq[String], statisticValue: String): Expression = {
-      val appendColName = UnresolvedAttribute(colName).name + statisticValue
-      col(appendColName).expr
-    }
 
     def rewriteCondition(colName: Seq[String], conditionExpress: Expression): Expression = {
       val stats = Set.apply(
         UnresolvedAttribute(colName).name + "_minValue",
         UnresolvedAttribute(colName).name + "_maxValue",
-        UnresolvedAttribute(colName).name + "_num_nulls",
+        UnresolvedAttribute(colName).name + "_num_nulls"
       )
 
       if (stats.forall(stat => indexSchema.exists(_.name == stat))) {
@@ -63,15 +59,18 @@ object DataSkippingUtils {
       }
     }
 
+    def refColExpr(colName: Seq[String], statisticValue: String): Expression =
+      col(UnresolvedAttribute(colName).name + statisticValue).expr
+
+    def minValue(colName: Seq[String]) = refColExpr(colName, "_minValue")
+    def maxValue(colName: Seq[String]) = refColExpr(colName, "_maxValue")
+    def numNulls(colName: Seq[String]) = refColExpr(colName, "_num_nulls")
+
     def colContainsValuesEqualToLiteral(colName: Seq[String], value: Literal) =
       And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value))
 
     def colContainsValuesEqualToLiterals(colName: Seq[String], list: Seq[Literal]) =
       list.map { lit => colContainsValuesEqualToLiteral(colName, lit) }.reduce(Or)
-
-    def minValue(colName: Seq[String]) = refColExpr(colName, "_minValue")
-    def maxValue(colName: Seq[String]) = refColExpr(colName, "_maxValue")
-    def numNulls(colName: Seq[String]) = refColExpr(colName, "_num_nulls")
 
     filterExpr match {
       // Filter "colA = b"
