@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import com.google.common.base.Strings;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -41,6 +40,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -79,7 +79,11 @@ import org.apache.spark.api.java.JavaRDD;
 import scala.collection.JavaConversions;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -185,7 +189,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
             .map(s -> new Path(basePath, s.getPath()).toString())
             .collect(Collectors.toList());
 
-    if (touchFiles.isEmpty() || Strings.isNullOrEmpty(sortColsList) || Strings.isNullOrEmpty(indexPath)) {
+    if (touchFiles.isEmpty() || StringUtils.isNullOrEmpty(sortColsList) || StringUtils.isNullOrEmpty(indexPath)) {
       return;
     }
 

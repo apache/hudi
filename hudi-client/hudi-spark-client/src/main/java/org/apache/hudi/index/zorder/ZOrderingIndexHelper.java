@@ -18,23 +18,19 @@
 
 package org.apache.hudi.index.zorder;
 
-import com.google.common.annotations.VisibleForTesting;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.spark.SparkContext;
-import scala.collection.JavaConversions;
-
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.HoodieSparkUtils$;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.optimize.ZOrderingUtil;
 import org.apache.parquet.io.api.Binary;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -63,10 +59,15 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
+import scala.collection.JavaConversions;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -282,10 +283,9 @@ public class ZOrderingIndexHelper {
   }
 
   private static Pair<Object, Object>
-    fetchColumnMinMaxValues(
-        @Nonnull DataType colType,
-        @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata
-    ) {
+      fetchColumnMinMaxValues(
+          @Nonnull DataType colType,
+          @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
     if (colType instanceof IntegerType) {
       return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
     } else if (colType instanceof DoubleType) {
