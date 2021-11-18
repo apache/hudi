@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperator;
 import org.apache.hudi.sink.append.AppendWriteOperator;
@@ -129,10 +130,10 @@ public class Pipelines {
     final boolean globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
     if (overwrite) {
       return rowDataToHoodieRecord(conf, rowType, dataStream);
-    } else if (bounded && !globalIndex) {
+    } else if (bounded && !globalIndex && OptionsResolver.isPartitionedTable(conf)) {
       return boundedBootstrap(conf, rowType, defaultParallelism, dataStream);
     } else {
-      return streamBootstrap(conf, rowType, defaultParallelism, dataStream);
+      return streamBootstrap(conf, rowType, defaultParallelism, dataStream, bounded);
     }
   }
 
@@ -140,10 +141,11 @@ public class Pipelines {
       Configuration conf,
       RowType rowType,
       int defaultParallelism,
-      DataStream<RowData> dataStream) {
+      DataStream<RowData> dataStream,
+      boolean bounded) {
     DataStream<HoodieRecord> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
@@ -161,13 +163,10 @@ public class Pipelines {
       RowType rowType,
       int defaultParallelism,
       DataStream<RowData> dataStream) {
-    final String[] partitionFields = FilePathUtils.extractPartitionKeys(conf);
-    if (partitionFields.length > 0) {
-      RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
-      // shuffle by partition keys
-      dataStream = dataStream
-          .keyBy(rowDataKeyGen::getPartitionPath);
-    }
+    final RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+    // shuffle by partition keys
+    dataStream = dataStream
+        .keyBy(rowDataKeyGen::getPartitionPath);
 
     return rowDataToHoodieRecord(conf, rowType, dataStream)
         .transform(
