@@ -31,7 +31,7 @@ import org.apache.spark.ZCurveOptimizeHelper
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -39,8 +39,9 @@ import java.sql.{Date, Timestamp}
 import scala.collection.JavaConversions._
 import scala.util.Random
 
-class TestOptimizeTable extends HoodieClientTestBase {
-  var spark: SparkSession = null
+@Tag("functional")
+class TestTableLayoutOptimization extends HoodieClientTestBase {
+  var spark: SparkSession = _
 
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -85,40 +86,41 @@ class TestOptimizeTable extends HoodieClientTestBase {
       .option("hoodie.clustering.plan.strategy.target.file.max.bytes", "1073741824")
       .option("hoodie.clustering.plan.strategy.small.file.limit", "629145600")
       .option("hoodie.clustering.plan.strategy.max.bytes.per.group", Long.MaxValue.toString)
-      .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(64 *1024 * 1024L))
+      .option("hoodie.clustering.plan.strategy.target.file.max.bytes", String.valueOf(64 * 1024 * 1024L))
       .option(HoodieClusteringConfig.LAYOUT_OPTIMIZE_ENABLE.key, "true")
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "begin_lat, begin_lon")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // NOTE: All of the following tests are just a "smoke" tests,
-    //       generally executing control-flow paths, but not asserting any
-    //       particular behavior
-    assertEquals(targetRecordsCount, spark.read.format("hudi").load(basePath).count())
-    assertEquals(targetRecordsCount,
-      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
+    val df =
+      spark.read
         .format("hudi")
         .load(basePath)
-        .count()
-    )
 
-    // Use unsorted col as filter
-    assertEquals(spark.read
-      .format("hudi").load(basePath).where("end_lat >= 0 and rider != '1' and weight > 0.0").count(),
-      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
-        .format("hudi").load(basePath).where("end_lat >= 0 and rider != '1' and weight > 0.0").count())
-    // Use sorted col as filter
-    assertEquals(spark.read.format("hudi").load(basePath)
-      .where("begin_lat >= 0.49 and begin_lat < 0.51 and begin_lon >= 0.49 and begin_lon < 0.51").count(),
-      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
-        .format("hudi").load(basePath)
-        .where("begin_lat >= 0.49 and begin_lat < 0.51 and begin_lon >= 0.49 and begin_lon < 0.51").count())
-    // Use sorted cols and unsorted cols as filter
-    assertEquals(spark.read.format("hudi").load(basePath)
-      .where("begin_lat >= 0.49 and begin_lat < 0.51 and end_lat > 0.56").count(),
-      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
-        .format("hudi").load(basePath)
-        .where("begin_lat >= 0.49 and begin_lat < 0.51 and end_lat > 0.56").count())
+    val dfSkip =
+      spark.read
+        .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
+        .format("hudi")
+        .load(basePath)
+
+    assertEquals(targetRecordsCount, df.count())
+    assertEquals(targetRecordsCount, dfSkip.count())
+
+    df.createOrReplaceTempView("hudi_snapshot_raw")
+    df.createOrReplaceTempView("hudi_snapshot_skipping")
+
+    def select(tableName: String) =
+      spark.sql(s"SELECT * FROM $tableName WHERE begin_lat >= 0.49 AND begin_lat < 0.51 AND begin_lon >= 0.49 AND begin_lon < 0.51")
+
+    assertRowsMatch(
+      select("hudi_snapshot_raw"),
+      select("hudi_snapshot_skipping")
+    )
+  }
+
+  def assertRowsMatch(one: DataFrame, other: DataFrame) = {
+    val rows = one.count()
+    assert(rows == other.count() && one.intersect(other).count() == rows)
   }
 
   @Test
