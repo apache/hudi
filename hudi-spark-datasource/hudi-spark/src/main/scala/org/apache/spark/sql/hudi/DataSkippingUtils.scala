@@ -63,17 +63,15 @@ object DataSkippingUtils {
       }
     }
 
-    val minValue = (colName: Seq[String]) => refColExpr(colName, "_minValue")
-    val maxValue = (colName: Seq[String]) => refColExpr(colName, "_maxValue")
-    val numNulls = (colName: Seq[String]) => refColExpr(colName, "_num_nulls")
-
-    def colContainsValuesEqualToLiteral(colName: Seq[String], value: Literal) = {
+    def colContainsValuesEqualToLiteral(colName: Seq[String], value: Literal) =
       And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value))
-    }
 
-    def colContainsValuesEqualToLiterals(colName: Seq[String], list: Seq[Literal]) = {
+    def colContainsValuesEqualToLiterals(colName: Seq[String], list: Seq[Literal]) =
       list.map { lit => colContainsValuesEqualToLiteral(colName, lit) }.reduce(Or)
-    }
+
+    def minValue(colName: Seq[String]) = refColExpr(colName, "_minValue")
+    def maxValue(colName: Seq[String]) = refColExpr(colName, "_maxValue")
+    def numNulls(colName: Seq[String]) = refColExpr(colName, "_num_nulls")
 
     filterExpr match {
       // Filter "colA = b"
