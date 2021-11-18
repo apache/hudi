@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -294,7 +295,9 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   @Test
   void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
     boolean populateMetaFields = true;
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMarkersType(MarkerType.DIRECT.name());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -344,7 +347,9 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       newCommitTime = "002";
       // WriteClient with custom config (disable small file handling)
       HoodieWriteConfig smallFileWriteConfig = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(populateMetaFields)
-          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+          .withMarkersType(MarkerType.DIRECT.name())
+          .build();
       try (SparkRDDWriteClient nClient = getHoodieWriteClient(smallFileWriteConfig)) {
         nClient.startCommitWithTime(newCommitTime);
 
@@ -483,7 +488,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
-    HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.INMEMORY).build();
+    HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.INMEMORY)
+        .withMarkersType(MarkerType.DIRECT.name()).build();
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";

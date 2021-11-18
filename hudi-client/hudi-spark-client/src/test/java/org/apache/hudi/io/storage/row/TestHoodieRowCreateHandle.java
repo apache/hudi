@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -75,7 +76,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testRowCreateHandle() throws Exception {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
+    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).withMarkersType(MarkerType.DIRECT.name()).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     List<String> fileNames = new ArrayList<>();
     List<String> fileAbsPaths = new ArrayList<>();
@@ -116,7 +117,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testGlobalFailure() throws Exception {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
+    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).withMarkersType(MarkerType.DIRECT.name()).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
@@ -170,6 +171,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   public void testInstantiationFailure() throws IOException {
     // init config and table
     HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMarkersType(MarkerType.DIRECT.name())
         .withPath("/dummypath/abc/").build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
 
