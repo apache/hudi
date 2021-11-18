@@ -48,6 +48,10 @@ public class BucketInfo implements Serializable {
     return partitionPath;
   }
 
+  public void setBucketType(BucketType bucketType) {
+    this.bucketType = bucketType;
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("BucketInfo {");

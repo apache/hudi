@@ -77,6 +77,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
   private long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
+  private int emptyKeySuffix;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -158,7 +159,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       }
     } else {
       // Put the record as is
-      records.put(key, hoodieRecord);
+      records.put(key.equals(HoodieKey.EMPTY_RECORD_KEY) ? key + (emptyKeySuffix++) : key, hoodieRecord);
     }
   }
 
