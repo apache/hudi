@@ -45,6 +45,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -148,18 +149,9 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
     }
   }
 
-  private static Stream<Arguments> testClusteringWithNoBaseFiles() {
-    return Stream.of(
-        Arguments.of(true, true),
-        Arguments.of(true, false),
-        Arguments.of(false, true),
-        Arguments.of(false, false)
-    );
-  }
-
   @ParameterizedTest
-  @MethodSource
-  void testClusteringWithNoBaseFiles(boolean doUpdates, boolean preserveCommitMetadata) throws Exception {
+  @ValueSource(booleans = {true, false})
+  void testClusteringWithNoBaseFiles(boolean doUpdates) throws Exception {
     // set low compaction small File Size to generate more file groups.
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
@@ -184,8 +176,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
             .withClusteringMaxNumGroups(10)
             .withClusteringTargetPartitions(0)
             .withInlineClustering(true)
-            .withInlineClusteringNumCommits(1)
-            .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build())
+            .withInlineClusteringNumCommits(1).build())
         .withRollbackUsingMarkers(false);
     HoodieWriteConfig cfg = cfgBuilder.build();
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, cfg.getProps());
