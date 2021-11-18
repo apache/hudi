@@ -160,9 +160,7 @@ case class HoodieFileIndex(
       spark.sessionState.conf.getConfString(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "false")).toBoolean
   }
 
-  private def filterFilesByDataSkippingIndex(dataFilters: Seq[Expression]): Option[Set[String]] = {
-    var allFiles: Set[String] = Set.empty
-    var candidateFiles: Set[String] = Set.empty
+  private def lookupCandidateFilesNamesInZIndex(dataFilters: Seq[Expression]): Option[Set[String]] = {
     val indexPath = metaClient.getZindexPath
     val fs = metaClient.getFs
 
@@ -172,35 +170,47 @@ case class HoodieFileIndex(
       // scalastyle:on return
     }
 
-    // try to load latest index table from index path
-    val candidateIndexTables = fs.listStatus(new Path(indexPath)).filter(_.isDirectory)
-      .map(_.getPath.getName).filter(f => completedCommits.contains(f)).sortBy(x => x)
-    if (candidateIndexTables.nonEmpty) {
-      val dataFrameOpt = try {
-        Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
-      } catch {
-        case _: Throwable =>
-          logError("missing index skip data-skipping")
-          None
-      }
+    // Collect all index tables present in `.zindex` folder
+    val candidateIndexTables =
+      fs.listStatus(new Path(indexPath))
+        .filter(_.isDirectory)
+        .map(_.getPath.getName)
+        .filter(f => completedCommits.contains(f))
+        .sortBy(x => x)
 
-      if (dataFrameOpt.isDefined) {
-        val indexSchema = dataFrameOpt.get.schema
-        val indexFiles = DataSkippingUtils.getIndexFiles(spark.sparkContext.hadoopConfiguration, new Path(indexPath, candidateIndexTables.last).toString)
-        val indexFilter = dataFilters.map(DataSkippingUtils.createZindexFilter(_, indexSchema)).reduce(And)
-        logInfo(s"index filter condition: $indexFilter")
-        dataFrameOpt.get.persist()
-        if (indexFiles.size <= 4) {
-          allFiles = DataSkippingUtils.readParquetFile(spark, indexFiles)
-        } else {
-          allFiles = dataFrameOpt.get.select("file").collect().map(_.getString(0)).toSet
-        }
-        candidateFiles = dataFrameOpt.get.filter(new Column(indexFilter)).select("file").collect().map(_.getString(0)).toSet
-        dataFrameOpt.get.unpersist()
-      }
+    if (candidateIndexTables.isEmpty) {
+      // scalastyle:off return
+      return Option.empty
+      // scalastyle:on return
     }
 
-    Option.apply(candidateFiles)
+    val dataFrameOpt = try {
+      Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
+    } catch {
+      case t: Throwable =>
+        logError("Failed to read Z-index; skipping", t)
+        None
+    }
+
+    dataFrameOpt.map(df => {
+      val indexSchema = df.schema
+      val indexFilter =
+        dataFilters.map(DataSkippingUtils.createZindexFilter(_, indexSchema))
+          .reduce(And)
+
+      logInfo(s"Index filter condition: $indexFilter")
+
+      df.persist()
+      val candidateFiles =
+        df.filter(new Column(indexFilter))
+          .select("file")
+          .collect()
+          .map(_.getString(0))
+          .toSet
+      df.unpersist()
+
+      candidateFiles
+    })
   }
 
   /**
@@ -212,12 +222,21 @@ case class HoodieFileIndex(
    */
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    // try to load filterFiles from index
-    val candidateFilesNamesOpt: Option[Set[String]] = filterFilesByDataSkippingIndex(dataFilters)
+    // Look up candidate files names in the Z-index, if all of the following conditions are true
+    //    - Data-skipping is enabled
+    //    - Z-index is present
+    //    - List of predicates (filters) is present
+    val candidateFilesNamesOpt: Option[Set[String]] = lookupCandidateFilesNamesInZIndex(dataFilters)
+
+    logDebug(s"Overlapping candidate files (from Z-index): ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
     if (queryAsNonePartitionedTable) { // Read as Non-Partitioned table.
+      // Filter in candidate files based on the Z-index lookup
       val candidateFiles =
-        allFiles.filter(fileStatus => candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName)))
+        allFiles.filter(fileStatus =>
+          // NOTE: This predicate is true when {@code Option} is empty
+          candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName))
+        )
 
       logInfo(s"Total files : ${allFiles.size}," +
         s" candidate files after data skipping: ${candidateFiles.size} " +
@@ -237,8 +256,12 @@ case class HoodieFileIndex(
             null
           }
         }).filterNot(_ == null)
+
+        // Filter in candidate files based on the Z-index lookup
         val candidateFiles =
-          baseFileStatuses.filter(fileStatus => candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName)))
+          baseFileStatuses.filter(fileStatus =>
+            // NOTE: This predicate is true when {@code Option} is empty
+            candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName)))
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
