@@ -575,9 +575,15 @@ public class ZOrderingIndexHelper {
           @Nonnull DataType colType,
           @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
     if (colType instanceof IntegerType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+      return Pair.of(
+          new Integer(colMetadata.getMinValue().toString()),
+          new Integer(colMetadata.getMaxValue().toString())
+      );
     } else if (colType instanceof DoubleType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+      return Pair.of(
+          new Double(colMetadata.getMinValue().toString()),
+          new Double(colMetadata.getMaxValue().toString())
+      );
     } else if (colType instanceof StringType) {
       return Pair.of(
           new String(((Binary) colMetadata.getMinValue()).getBytes()),
@@ -590,22 +596,28 @@ public class ZOrderingIndexHelper {
           new BigDecimal(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof DateType) {
       return Pair.of(
-          java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMinValue())),
-          java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMaxValue())));
+          java.sql.Date.valueOf(new String(((Binary) colMetadata.getMinValue()).getBytes())),
+          java.sql.Date.valueOf(new String(((Binary) colMetadata.getMaxValue()).getBytes())));
     } else if (colType instanceof LongType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+      return Pair.of(
+          new Long(colMetadata.getMinValue().toString()),
+          new Long(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof ShortType) {
       return Pair.of(
-          Short.parseShort(colMetadata.getMinValue().toString()),
-          Short.parseShort(colMetadata.getMaxValue().toString()));
+          new Short(colMetadata.getMinValue().toString()),
+          new Short(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof FloatType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+      return Pair.of(
+          new Float(colMetadata.getMinValue().toString()),
+          new Float(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof BinaryType) {
       return Pair.of(
           ((Binary) colMetadata.getMinValue()).getBytes(),
           ((Binary) colMetadata.getMaxValue()).getBytes());
     } else if (colType instanceof BooleanType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+      return Pair.of(
+          Boolean.valueOf(colMetadata.getMinValue().toString()),
+          Boolean.valueOf(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof ByteType) {
       return Pair.of(
           Byte.valueOf(colMetadata.getMinValue().toString()),
