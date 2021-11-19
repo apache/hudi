@@ -53,6 +53,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTestHarness {
@@ -112,7 +113,8 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       client.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
-      insertRecords(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
+      Stream<HoodieBaseFile> dataFiles = insertRecords(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
+      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
        * Write 2 (more inserts to create new files)
@@ -120,7 +122,8 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       // we already set small file size to small number to force inserts to go into new file.
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
-      insertRecords(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
+      dataFiles = insertRecords(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
+      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       if (doUpdates) {
         /*
@@ -187,10 +190,12 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
-      insertRecords(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
+      Stream<HoodieBaseFile> dataFiles = insertRecords(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
+      assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
-      insertRecords(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
+      dataFiles = insertRecords(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
+      assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
       // run updates
       if (doUpdates) {
         newCommitTime = "003";

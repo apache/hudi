@@ -95,7 +95,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       client.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      insertRecords(metaClient, records, client, cfg, newCommitTime);
+      Stream<HoodieBaseFile> dataFiles = insertRecords(metaClient, records, client, cfg, newCommitTime);
+      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
        * Write 2 (updates)
