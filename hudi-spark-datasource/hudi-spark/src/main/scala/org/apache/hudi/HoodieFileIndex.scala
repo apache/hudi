@@ -299,11 +299,11 @@ case class HoodieFileIndex(
       var candidateFileSize = 0
 
       val result = prunedPartitions.map { partition =>
-        val baseFileStatuses =
+        val baseFileStatuses: Seq[FileStatus] =
           cachedAllInputFileSlices(partition)
-            .map(fs => fs.getBaseFile.map(_.getFileStatus))
-            .filter(_.isPresent)
-            .map(_.get)
+            .map(fs => fs.getBaseFile.orElse(null))
+            .filter(_ != null)
+            .map(_.getFileStatus)
 
         // Filter in candidate files based on the Z-index lookup
         val candidateFiles =
