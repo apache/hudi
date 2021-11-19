@@ -69,7 +69,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
-      .noDefaultValue()
+      .defaultValue(SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY)
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
           + "i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by "
@@ -77,7 +77,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> EXECUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.execution.strategy.class")
-      .noDefaultValue()
+      .defaultValue(SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY)
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the "
           + " clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while "
@@ -219,7 +219,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    * @deprecated Use {@link #PLAN_STRATEGY_CLASS_NAME} and its methods instead
    */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_PLAN_STRATEGY_CLASS = SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+  public static final String DEFAULT_CLUSTERING_PLAN_STRATEGY_CLASS = PLAN_STRATEGY_CLASS_NAME.defaultValue();
   /**
    * @deprecated Use {@link #EXECUTION_STRATEGY_CLASS_NAME} and its methods instead
    */
@@ -229,7 +229,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
    * @deprecated Use {@link #EXECUTION_STRATEGY_CLASS_NAME} and its methods instead
    */
   @Deprecated
-  public static final String DEFAULT_CLUSTERING_EXECUTION_STRATEGY_CLASS = SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
+  public static final String DEFAULT_CLUSTERING_EXECUTION_STRATEGY_CLASS = EXECUTION_STRATEGY_CLASS_NAME.defaultValue();
   /**
    * @deprecated Use {@link #INLINE_CLUSTERING} and its methods instead
    */
