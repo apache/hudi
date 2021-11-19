@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -68,6 +69,7 @@ public class HoodieTableConfig extends HoodieConfig {
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
+  public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
 
   public static final ConfigProperty<String> NAME = ConfigProperty
       .key("hoodie.table.name")
@@ -172,12 +174,11 @@ public class HoodieTableConfig extends HoodieConfig {
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
-      try (FSDataInputStream inputStream = fs.open(propertyPath)) {
-        props.load(inputStream);
-      }
+      fetchConfigs(fs, metaPath);
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
+        // FIXME(vc): wonder if this can be removed. Need to look into history.
         try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
           props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
         }
@@ -191,16 +192,74 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * For serializing and de-serializing.
-   *
    */
   public HoodieTableConfig() {
     super();
   }
 
+  private void fetchConfigs(FileSystem fs, String metaPath) throws IOException {
+    Path cfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
+    try (FSDataInputStream is = fs.open(cfgPath)) {
+      props.load(is);
+    } catch (IOException ioe) {
+      // try the backup. this way no query ever fails if update fails midway.
+      Path backupCfgPath = new Path(metaPath, HOODIE_PROPERTIES_FILE_BACKUP);
+      try (FSDataInputStream is = fs.open(backupCfgPath)) {
+        props.load(is);
+      }
+    }
+  }
+
+  static void recoverIfNeeded(FileSystem fs, Path cfgPath, Path backupCfgPath) throws IOException {
+    if (!fs.exists(cfgPath)) {
+      // copy over from backup
+      try (FSDataInputStream in = fs.open(backupCfgPath);
+           FSDataOutputStream out = fs.create(cfgPath, false)) {
+        FileIOUtils.copy(in, out);
+      }
+    }
+    // regardless, we don't need the backup anymore.
+    fs.delete(backupCfgPath, false);
+  }
+
+  /**
+   * Upserts the table config with the set of properties passed in. We implement a fail-safe backup protocol
+   * here for safely updating with recovery and also ensuring the table config continues to be readable.
+   */
+  public static void update(FileSystem fs, Path metadataFolder, Properties updatedProps) {
+    Path cfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
+    Path backupCfgPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
+    try {
+      // 0. do any recovery from prior attempts.
+      recoverIfNeeded(fs, cfgPath, backupCfgPath);
+
+      // 1. backup the existing properties.
+      try (FSDataInputStream in = fs.open(cfgPath);
+           FSDataOutputStream out = fs.create(backupCfgPath, false)) {
+        FileIOUtils.copy(in, out);
+      }
+      /// 2. delete the properties file, reads will go to the backup, until we are done.
+      fs.delete(cfgPath, false);
+      // 3. read current props, upsert and save back.
+      try (FSDataInputStream in = fs.open(backupCfgPath);
+           FSDataOutputStream out = fs.create(cfgPath, true)) {
+        Properties props = new Properties();
+        props.load(in);
+        updatedProps.forEach((k, v) -> props.setProperty(k.toString(), v.toString()));
+        // FIXME(vc): generate a hash for verification.
+        props.store(out, "Updated at " + System.currentTimeMillis());
+      }
+      // 4. verify and remove backup.
+      fs.delete(backupCfgPath, false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Error updating table configs.", e);
+    }
+  }
+
   /**
    * Initialize the hoodie meta directory and any necessary files inside the meta (including the hoodie.properties).
    */
-  public static void createHoodieProperties(FileSystem fs, Path metadataFolder, Properties properties)
+  public static void create(FileSystem fs, Path metadataFolder, Properties properties)
       throws IOException {
     if (!fs.exists(metadataFolder)) {
       fs.mkdirs(metadataFolder);
