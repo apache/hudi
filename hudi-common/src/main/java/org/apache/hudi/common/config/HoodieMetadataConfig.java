@@ -138,6 +138,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
 
+  public static final ConfigProperty<Boolean> VALIDATE_METADATA_PAYLOAD_STATE_CONSISTENCY = ConfigProperty
+      .key(METADATA_PREFIX + ".validate.metadata.payload.state.consistency")
+      .defaultValue(true)
+      .sinceVersion("0.10.10")
+      .withDocumentation("Whether to perform validations on metadata payload state consistency.");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -172,6 +178,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieMetadataConfig.POPULATE_META_FIELDS);
+  }
+
+  public boolean validateMetadataPayloadStateConsistency() {
+    return getBoolean(VALIDATE_METADATA_PAYLOAD_STATE_CONSISTENCY);
   }
 
   public static class Builder {
@@ -249,6 +259,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder enableFullScan(boolean enableFullScan) {
       metadataConfig.setValue(ENABLE_FULL_SCAN_LOG_FILES, String.valueOf(enableFullScan));
+      return this;
+    }
+
+    public Builder validateMetadataPayloadStateConsistency(boolean validateMetadataPayloadStateConsistency) {
+      metadataConfig.setValue(VALIDATE_METADATA_PAYLOAD_STATE_CONSISTENCY, String.valueOf(validateMetadataPayloadStateConsistency));
       return this;
     }
 

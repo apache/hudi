@@ -156,7 +156,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     List<String> partitions = Collections.emptyList();
     if (hoodieRecord.isPresent()) {
-      if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
+      if (metadataConfig.validateMetadataPayloadStateConsistency() && !hoodieRecord.get().getData().getDeletions().isEmpty()) {
         throw new HoodieMetadataException("Metadata partition list record is inconsistent: "
             + hoodieRecord.get().getData());
       }
@@ -190,7 +190,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     FileStatus[] statuses = {};
     if (hoodieRecord.isPresent()) {
-      if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
+      if (metadataConfig.validateMetadataPayloadStateConsistency() && !hoodieRecord.get().getData().getDeletions().isEmpty()) {
         throw new HoodieMetadataException("Metadata record for partition " + partitionName + " is inconsistent: "
             + hoodieRecord.get().getData());
       }
@@ -228,7 +228,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry: partitionsFileStatus) {
       if (entry.getValue().isPresent()) {
-        if (!entry.getValue().get().getData().getDeletions().isEmpty()) {
+        if (metadataConfig.validateMetadataPayloadStateConsistency() && !entry.getValue().get().getData().getDeletions().isEmpty()) {
           throw new HoodieMetadataException("Metadata record for partition " + entry.getKey() + " is inconsistent: "
               + entry.getValue().get().getData());
         }

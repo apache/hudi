@@ -704,6 +704,25 @@ public class HoodieTestTable {
     return addRollback(commitTime, rollbackMetadata);
   }
 
+  public HoodieTestTable doRollbackWithExtraFiles(String commitTimeToRollback, String commitTime, Map<String, List<String>> extraFiles) throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Option<HoodieCommitMetadata> commitMetadata = getMetadataForInstant(commitTimeToRollback);
+    if (!commitMetadata.isPresent()) {
+      throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitTimeToRollback);
+    }
+    Map<String, List<String>> partitionFiles = getPartitionFiles(commitMetadata.get());
+    for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
+      deleteFilesInPartition(entry.getKey(), entry.getValue());
+    }
+    for (Map.Entry<String, List<String>> entry: extraFiles.entrySet()) {
+      if (partitionFiles.containsKey(entry.getKey())) {
+        partitionFiles.get(entry.getKey()).addAll(entry.getValue());
+      }
+    }
+    HoodieRollbackMetadata rollbackMetadata = getRollbackMetadata(commitTimeToRollback, partitionFiles);
+    return addRollback(commitTime, rollbackMetadata);
+  }
+
   public HoodieTestTable doRestore(String commitToRestoreTo, String restoreTime) throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     List<HoodieInstant> commitsToRollback = metaClient.getActiveTimeline().getCommitsTimeline()
