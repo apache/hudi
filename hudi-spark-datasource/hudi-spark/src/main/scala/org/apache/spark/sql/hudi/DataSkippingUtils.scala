@@ -19,10 +19,8 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
-`import org.apache.hudi.index.zorder.ZOrderingIndexHelper
 import org.apache.hudi.index.zorder.ZOrderingIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
@@ -32,6 +30,7 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StringType, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._

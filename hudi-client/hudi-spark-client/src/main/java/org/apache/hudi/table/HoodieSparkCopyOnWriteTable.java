@@ -76,7 +76,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
 import org.apache.spark.api.java.JavaRDD;
-import scala.collection.JavaConversions;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -177,19 +176,19 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
     String basePath = metaClient.getBasePath();
     String indexPath = metaClient.getZindexPath();
 
-    List<String> validateCommits =
+    List<String> completedCommits =
         metaClient.getCommitsTimeline()
             .filterCompletedInstants()
             .getInstants()
             .map(HoodieInstant::getTimestamp)
             .collect(Collectors.toList());
 
-    List<String> touchFiles =
+    List<String> touchedFiles =
         stats.stream()
             .map(s -> new Path(basePath, s.getPath()).toString())
             .collect(Collectors.toList());
 
-    if (touchFiles.isEmpty() || StringUtils.isNullOrEmpty(sortColsList) || StringUtils.isNullOrEmpty(indexPath)) {
+    if (touchedFiles.isEmpty() || StringUtils.isNullOrEmpty(sortColsList) || StringUtils.isNullOrEmpty(indexPath)) {
       return;
     }
 
@@ -201,15 +200,13 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
 
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
 
-    ZOrderingIndexHelper.saveStatisticsInfo(
-        sparkEngineContext.getSqlContext()
-            .sparkSession()
-            .read()
-            .load(JavaConversions.asScalaBuffer(touchFiles)),
+    ZOrderingIndexHelper.updateZIndexFor(
+        sparkEngineContext.getSqlContext().sparkSession(),
+        touchedFiles,
         sortCols,
         indexPath,
         instantTime,
-        validateCommits
+        completedCommits
     );
 
     LOG.info(String.format("Successfully updated Z-index at instant (%s)", instantTime));
