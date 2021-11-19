@@ -46,7 +46,8 @@ public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Ite
       Iterator baseIterator = baseFileReader.get().getRecordIterator(schema);
       while (baseIterator.hasNext()) {
         GenericRecord record = (GenericRecord) baseIterator.next();
-        HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = transform(record, scanner, payloadClass, preCombineField, simpleKeyGenFieldsOpt);
+        HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = transform(
+            record, scanner, payloadClass, preCombineField, simpleKeyGenFieldsOpt);
         scanner.processNextRecord(hoodieRecord);
       }
       return new HoodieFileSliceReader(scanner.iterator());
@@ -68,8 +69,10 @@ public class HoodieFileSliceReader<T extends HoodieRecordPayload> implements Ite
       GenericRecord record, HoodieMergedLogRecordScanner scanner, String payloadClass,
       String preCombineField, Option<Pair<String, String>> simpleKeyGenFieldsOpt) {
     return simpleKeyGenFieldsOpt.isPresent()
-        ? SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), scanner.isWithOperationField())
-        : SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, preCombineField, scanner.isWithOperationField());
+        ? SpillableMapUtils.convertToHoodieRecordPayload(record,
+        payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), scanner.isWithOperationField(), Option.empty())
+        : SpillableMapUtils.convertToHoodieRecordPayload(record,
+        payloadClass, preCombineField, scanner.isWithOperationField(), scanner.getPartitionName());
   }
 
   private HoodieFileSliceReader(Iterator<HoodieRecord<T>> recordsItr) {

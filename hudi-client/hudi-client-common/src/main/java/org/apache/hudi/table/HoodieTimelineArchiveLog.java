@@ -346,7 +346,8 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     if (records.size() > 0) {
       Map<HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);
+      final String keyField = table.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header, keyField);
       writer.appendBlock(block);
       records.clear();
     }

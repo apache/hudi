@@ -68,24 +68,23 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static int blockSize = 1 * 1024 * 1024;
   private boolean enableInlineReading = false;
 
-  public HoodieHFileDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-       FSDataInputStream inputStream, boolean readBlockLazily) {
-    super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
-  }
-
   public HoodieHFileDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-       boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
-       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer, boolean enableInlineReading) {
+                              boolean readBlockLazily, long position, long blockSize, long blockEndpos,
+                              Schema readerSchema, Map<HeaderMetadataType, String> header,
+                              Map<HeaderMetadataType, String> footer, boolean enableInlineReading, String keyField) {
     super(content, inputStream, readBlockLazily,
-          Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
-          footer);
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)),
+        readerSchema, header, footer, keyField);
     this.enableInlineReading = enableInlineReading;
   }
 
+  public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
+                              String keyField) {
+    super(records, header, new HashMap<>(), keyField);
+  }
+
   public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header) {
-    super(records, header, new HashMap<>());
+    this(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   @Override
@@ -111,7 +110,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     boolean useIntegerKey = false;
     int key = 0;
     int keySize = 0;
-    Field keyField = records.get(0).getSchema().getField(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    Field keyField = records.get(0).getSchema().getField(this.keyField);
     if (keyField == null) {
       // Missing key metadata field so we should use an integer sequence key
       useIntegerKey = true;

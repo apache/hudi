@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -364,7 +365,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @returns the record key field prop.
    */
   public String getRecordKeyFieldProp() {
-    return getString(RECORDKEY_FIELDS);
+    return getStringOrDefault(RECORDKEY_FIELDS, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   public String getKeyGeneratorClassName() {
