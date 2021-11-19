@@ -75,10 +75,23 @@ public class ZOrderingIndexHelper {
 
   private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
 
-  public static final String Z_INDEX_FILE_COLUMN_NAME = "file";
-  public static final String Z_INDEX_MIN_VALUE_STAT_NAME = "minValue";
-  public static final String Z_INDEX_MAX_VALUE_STAT_NAME = "maxValue";
-  public static final String Z_INDEX_NUM_NULLS_STAT_NAME = "num_nulls";
+  private static final String Z_INDEX_FILE_COLUMN_NAME = "file";
+
+  private static final String Z_INDEX_MIN_VALUE_STAT_NAME = "minValue";
+  private static final String Z_INDEX_MAX_VALUE_STAT_NAME = "maxValue";
+  private static final String Z_INDEX_NUM_NULLS_STAT_NAME = "num_nulls";
+
+  public static String getMinColumnNameFor(@Nonnull String colName) {
+    return composeZIndexColName(colName, Z_INDEX_MIN_VALUE_STAT_NAME);
+  }
+
+  public static String getMaxColumnNameFor(@Nonnull String colName) {
+    return composeZIndexColName(colName, Z_INDEX_MAX_VALUE_STAT_NAME);
+  }
+
+  public static String getNumNullsColumnNameFor(@Nonnull String colName) {
+    return composeZIndexColName(colName, Z_INDEX_NUM_NULLS_STAT_NAME);
+  }
 
   /**
    * Create z-order DataFrame directly
@@ -266,67 +279,6 @@ public class ZOrderingIndexHelper {
     return df.sparkSession().createDataFrame(allMetaDataRDD, StructType$.MODULE$.apply(indexSchema));
   }
 
-  @Nonnull
-  private static List<StructField> composeIndexSchema(List<String> cols, Map<String, DataType> colsDataTypesMap) {
-    List<StructField> schema = new ArrayList<>();
-    schema.add(new StructField(Z_INDEX_FILE_COLUMN_NAME, StringType$.MODULE$, true, Metadata.empty()));
-    cols.forEach(col -> {
-      schema.add(composeColumnStatStructType(col, Z_INDEX_MIN_VALUE_STAT_NAME, colsDataTypesMap.get(col)));
-      schema.add(composeColumnStatStructType(col, Z_INDEX_MAX_VALUE_STAT_NAME, colsDataTypesMap.get(col)));
-      schema.add(composeColumnStatStructType(col, Z_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
-    });
-    return schema;
-  }
-
-  private static StructField composeColumnStatStructType(String col, String statName, DataType dataType) {
-    return new StructField(String.format("%s_%s", col, statName), dataType, true, Metadata.empty());
-  }
-
-  private static Pair<Object, Object>
-      fetchColumnMinMaxValues(
-          @Nonnull DataType colType,
-          @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
-    if (colType instanceof IntegerType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
-    } else if (colType instanceof DoubleType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
-    } else if (colType instanceof StringType) {
-      return Pair.of(
-          new String(((Binary) colMetadata.getMinValue()).getBytes()),
-          new String(((Binary) colMetadata.getMaxValue()).getBytes())
-      );
-    } else if (colType instanceof DecimalType) {
-      // TODO this will be losing precision
-      return Pair.of(
-          Double.parseDouble(colMetadata.getStringifier().stringify(Long.valueOf(colMetadata.getMinValue().toString()))),
-          Double.parseDouble(colMetadata.getStringifier().stringify(Long.valueOf(colMetadata.getMaxValue().toString()))));
-    } else if (colType instanceof DateType) {
-      return Pair.of(
-          java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMinValue())),
-          java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMaxValue())));
-    } else if (colType instanceof LongType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
-    } else if (colType instanceof ShortType) {
-      return Pair.of(
-          Short.parseShort(colMetadata.getMinValue().toString()),
-          Short.parseShort(colMetadata.getMaxValue().toString()));
-    } else if (colType instanceof FloatType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
-    } else if (colType instanceof BinaryType) {
-      return Pair.of(
-          ((Binary) colMetadata.getMinValue()).getBytes(),
-          ((Binary) colMetadata.getMaxValue()).getBytes());
-    } else if (colType instanceof BooleanType) {
-      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
-    } else if (colType instanceof ByteType) {
-      return Pair.of(
-          Byte.valueOf(colMetadata.getMinValue().toString()),
-          Byte.valueOf(colMetadata.getMaxValue().toString()));
-    }  else {
-      throw new HoodieException(String.format("Not support type:  %s", colType));
-    }
-  }
-
   /**
    * Update statistics info.
    * this method will update old index table by full out join,
@@ -397,6 +349,72 @@ public class ZOrderingIndexHelper {
       }
     } catch (IOException e) {
       throw new HoodieException(e);
+    }
+  }
+
+  @Nonnull
+  private static List<StructField> composeIndexSchema(List<String> cols, Map<String, DataType> colsDataTypesMap) {
+    List<StructField> schema = new ArrayList<>();
+    schema.add(new StructField(Z_INDEX_FILE_COLUMN_NAME, StringType$.MODULE$, true, Metadata.empty()));
+    cols.forEach(col -> {
+      schema.add(composeColumnStatStructType(col, Z_INDEX_MIN_VALUE_STAT_NAME, colsDataTypesMap.get(col)));
+      schema.add(composeColumnStatStructType(col, Z_INDEX_MAX_VALUE_STAT_NAME, colsDataTypesMap.get(col)));
+      schema.add(composeColumnStatStructType(col, Z_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
+    });
+    return schema;
+  }
+
+  private static StructField composeColumnStatStructType(String col, String statName, DataType dataType) {
+    return new StructField(composeZIndexColName(col, statName), dataType, true, Metadata.empty());
+  }
+
+  private static String composeZIndexColName(String col, String statName) {
+    // TODO add escaping for
+    return String.format("%s_%s", col, statName);
+  }
+
+  private static Pair<Object, Object>
+      fetchColumnMinMaxValues(
+          @Nonnull DataType colType,
+          @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
+    if (colType instanceof IntegerType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof DoubleType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof StringType) {
+      return Pair.of(
+          new String(((Binary) colMetadata.getMinValue()).getBytes()),
+          new String(((Binary) colMetadata.getMaxValue()).getBytes())
+      );
+    } else if (colType instanceof DecimalType) {
+      // TODO this will be losing precision
+      return Pair.of(
+          Double.parseDouble(colMetadata.getStringifier().stringify(Long.valueOf(colMetadata.getMinValue().toString()))),
+          Double.parseDouble(colMetadata.getStringifier().stringify(Long.valueOf(colMetadata.getMaxValue().toString()))));
+    } else if (colType instanceof DateType) {
+      return Pair.of(
+          java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMinValue())),
+          java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMaxValue())));
+    } else if (colType instanceof LongType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof ShortType) {
+      return Pair.of(
+          Short.parseShort(colMetadata.getMinValue().toString()),
+          Short.parseShort(colMetadata.getMaxValue().toString()));
+    } else if (colType instanceof FloatType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof BinaryType) {
+      return Pair.of(
+          ((Binary) colMetadata.getMinValue()).getBytes(),
+          ((Binary) colMetadata.getMaxValue()).getBytes());
+    } else if (colType instanceof BooleanType) {
+      return Pair.of(colMetadata.getMinValue(), colMetadata.getMaxValue());
+    } else if (colType instanceof ByteType) {
+      return Pair.of(
+          Byte.valueOf(colMetadata.getMinValue().toString()),
+          Byte.valueOf(colMetadata.getMaxValue().toString()));
+    }  else {
+      throw new HoodieException(String.format("Not support type:  %s", colType));
     }
   }
 
