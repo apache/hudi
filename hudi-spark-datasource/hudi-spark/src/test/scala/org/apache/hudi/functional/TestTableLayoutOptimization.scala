@@ -19,11 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.HoodieFileFormat
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util.{BaseFileUtils, ParquetUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.index.zorder.ZOrderingIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
@@ -53,7 +49,8 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
-  @BeforeEach override def setUp() {
+  @BeforeEach
+  override def setUp() {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -61,7 +58,8 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
     initFileSystem()
   }
 
-  @AfterEach override def tearDown() = {
+  @AfterEach
+  override def tearDown() = {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
@@ -69,7 +67,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
 
   @ParameterizedTest
   @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testOptimizeWithClustering(tableType: String): Unit = {
+  def testZOrderingLayoutClustering(tableType: String): Unit = {
     val targetRecordsCount = 10000
     // Bulk Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
@@ -119,88 +117,85 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
     )
   }
 
-  def assertRowsMatch(one: DataFrame, other: DataFrame) = {
+  @Test
+  def testZIndexTableComposition(): Unit = {
+    val inputDf =
+      spark.read.parquet(
+        getClass.getClassLoader.getResource("index/zorder/input-table").toString
+      )
+
+    val zorderedCols = Set("c1", "c2", "c3", "c5", "c6", "c7", "c8")
+    val zorderedColsSchemaFields = inputDf.schema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
+
+    // {@link TimestampType} is not supported, and will throw -- hence skipping "c4"
+    val newZIndexTableDf =
+      ZOrderingIndexHelper.buildZIndexTableFor(
+        inputDf.sparkSession,
+        inputDf.inputFiles.toSeq,
+        zorderedColsSchemaFields
+      )
+    newZIndexTableDf.cache()
+
+    val expectedZIndexTableDf =
+      spark.read
+        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
+
+    assertRowsMatch(expectedZIndexTableDf, newZIndexTableDf)
+  }
+
+  @Test
+  def testZIndexTableMerge(): Unit = {
+    // TODO
+  }
+
+  @Test
+  def testZIndexTablesGarbageCollection(): Unit = {
+    val testZIndexPath = new Path(System.getProperty("java.io.tmpdir"), "zindex")
+    val fs = testZIndexPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
+
+    val inputDf =
+      spark.read.parquet(
+        getClass.getClassLoader.getResource("index/zorder/input-table").toString
+      )
+
+    // Try to save statistics
+    ZOrderingIndexHelper.updateZIndexFor(
+      inputDf.sparkSession,
+      inputDf.inputFiles.toSeq,
+      Seq("c1","c2","c3","c5","c6","c7","c8"),
+      testZIndexPath.toString,
+      "2",
+      Seq("0", "1")
+    )
+
+    // Save again
+    ZOrderingIndexHelper.updateZIndexFor(
+      inputDf.sparkSession,
+      inputDf.inputFiles.toSeq,
+      Seq("c1","c2","c3","c5","c6","c7","c8"),
+      testZIndexPath.toString,
+      "3",
+      Seq("0", "1", "2")
+    )
+
+    // Test old index table being cleaned up
+    ZOrderingIndexHelper.updateZIndexFor(
+      inputDf.sparkSession,
+      inputDf.inputFiles.toSeq,
+      Seq("c1","c2","c3","c5","c6","c7","c8"),
+      testZIndexPath.toString,
+      "4",
+      Seq("0", "1", "3")
+    )
+
+    assertEquals(!fs.exists(new Path(testZIndexPath, "2")), true)
+    assertEquals(!fs.exists(new Path(testZIndexPath, "3")), true)
+    assertEquals(fs.exists(new Path(testZIndexPath, "4")), true)
+  }
+
+  private def assertRowsMatch(one: DataFrame, other: DataFrame) = {
     val rows = one.count()
     assert(rows == other.count() && one.intersect(other).count() == rows)
-  }
-
-  @Test
-  def testCollectMinMaxStatistics(): Unit = {
-    val testPath = new Path(System.getProperty("java.io.tmpdir"), "minMax")
-    val statisticPath = new Path(System.getProperty("java.io.tmpdir"), "stat")
-    val fs = testPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
-    val complexDataFrame = createComplexDataFrame(spark)
-    complexDataFrame.repartition(3).write.mode("overwrite").save(testPath.toString)
-    val df = spark.read.load(testPath.toString)
-    try {
-      // test z-order sort for all primitive type, should not throw exception.
-      ZCurveOptimizeHelper.createZIndexedDataFrameByMapValue(df, "c1,c2,c3,c4,c5,c6,c7,c8", 20).show(1)
-      ZCurveOptimizeHelper.createZIndexedDataFrameBySample(df, "c1,c2,c3,c4,c5,c6,c7,c8", 20).show(1)
-      // do not support TimeStampType, so if we collect statistics for c4, should throw exception
-      val colDf = ZOrderingIndexHelper.getMinMaxValue(df, Seq("c1","c2","c3","c5","c6","c7","c8"))
-      colDf.cache()
-      assertEquals(colDf.count(), 3)
-      assertEquals(colDf.take(1)(0).length, 22)
-      colDf.unpersist()
-      // try to save statistics
-      ZOrderingIndexHelper.saveStatisticsInfo(df, Seq("c1","c2","c3","c5","c6","c7","c8"), statisticPath.toString, "2", Seq("0", "1"))
-      // save again
-      ZOrderingIndexHelper.saveStatisticsInfo(df, Seq("c1","c2","c3","c5","c6","c7","c8"), statisticPath.toString, "3", Seq("0", "1", "2"))
-      // test old index table clean
-      ZOrderingIndexHelper.saveStatisticsInfo(df, Seq("c1","c2","c3","c5","c6","c7","c8"), statisticPath.toString, "4", Seq("0", "1", "3"))
-      assertEquals(!fs.exists(new Path(statisticPath, "2")), true)
-      assertEquals(fs.exists(new Path(statisticPath, "3")), true)
-      // test to save different index, new index on ("c1,c6,c7,c8") should be successfully saved.
-      ZCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c6,c7,c8", statisticPath.toString, "5", Seq("0", "1", "3", "4"))
-      assertEquals(fs.exists(new Path(statisticPath, "5")), true)
-    } finally {
-      if (fs.exists(testPath)) fs.delete(testPath)
-      if (fs.exists(statisticPath)) fs.delete(statisticPath)
-    }
-  }
-
-  // test collect min-max statistic info for DateType in the case of multithreading.
-  // parquet will give a wrong statistic result for DateType in the case of multithreading.
-  @Test
-  def testMultiThreadParquetFooterReadForDateType(): Unit = {
-    // create parquet file with DateType
-    val rdd = spark.sparkContext.parallelize(0 to 100, 1)
-      .map(item => RowFactory.create(Date.valueOf(s"${2020}-${item % 11 + 1}-${item % 28 + 1}")))
-    val df = spark.createDataFrame(rdd, new StructType().add("id", DateType))
-    val testPath = new Path(System.getProperty("java.io.tmpdir"), "testCollectDateType")
-    val conf = spark.sparkContext.hadoopConfiguration
-    val cols = new java.util.ArrayList[String]
-    cols.add("id")
-    try {
-      df.repartition(3).write.mode("overwrite").save(testPath.toString)
-      val inputFiles = spark.read.load(testPath.toString).inputFiles.sortBy(x => x)
-
-      val realResult = new Array[(String, String)](3)
-      inputFiles.zipWithIndex.foreach { case (f, index) =>
-        val fileUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).asInstanceOf[ParquetUtils]
-        val res = fileUtils.readRangeFromParquetMetadata(conf, new Path(f), cols).iterator().next()
-        realResult(index) = (res.getMinValueAsString, res.getMaxValueAsString)
-      }
-
-      // multi thread read with no lock
-      val resUseLock = new Array[(String, String)](3)
-      inputFiles.zipWithIndex.par.foreach { case (f, index) =>
-        val fileUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).asInstanceOf[ParquetUtils]
-        val res = fileUtils.readRangeFromParquetMetadata(conf, new Path(f), cols).iterator().next()
-        resUseLock(index) = (res.getMinValueAsString, res.getMaxValueAsString)
-      }
-
-      // check resUseNoLock,
-      // We can't guarantee that there must be problems in the case of multithreading.
-      // In order to make ut pass smoothly, we will not check resUseNoLock.
-      // check resUseLock
-      // should pass assert
-      realResult.zip(resUseLock).foreach { case (realValue, testValue) =>
-        assert(realValue == testValue, s" expect realValue: ${realValue} but find ${testValue}")
-      }
-    } finally {
-      if (fs.exists(testPath)) fs.delete(testPath)
-    }
   }
 
   def createComplexDataFrame(spark: SparkSession): DataFrame = {

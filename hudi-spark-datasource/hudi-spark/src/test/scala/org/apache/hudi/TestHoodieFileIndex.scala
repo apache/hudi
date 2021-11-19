@@ -59,7 +59,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
   )
 
-  @BeforeEach override def setUp() {
+  @BeforeEach
+  override def setUp() {
     setTableName("hoodie_test")
     initPath()
     initSparkContexts()
