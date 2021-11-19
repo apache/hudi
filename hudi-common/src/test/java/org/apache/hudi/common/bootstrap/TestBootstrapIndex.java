@@ -94,7 +94,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     props.put(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE.key(), "false");
     Properties properties = new Properties();
     properties.putAll(props);
-    HoodieTableConfig.createHoodieProperties(metaClient.getFs(), new Path(metaClient.getMetaPath()), properties);
+    HoodieTableConfig.create(metaClient.getFs(), new Path(metaClient.getMetaPath()), properties);
 
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
     BootstrapIndex bootstrapIndex = BootstrapIndex.getBootstrapIndex(metaClient);

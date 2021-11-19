@@ -114,6 +114,7 @@ public class UpgradeDowngrade {
         return;
       }
 
+      //TODO: migrate all this to the new way of updating table config?
       if (fs.exists(updatedPropsFilePath)) {
         // this can be left over .updated file from a failed attempt before. Many cases exist here.
         // a) We failed while writing the .updated file and it's content is partial (e.g hdfs)
