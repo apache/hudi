@@ -22,6 +22,7 @@ package org.apache.hudi.utils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -30,7 +31,9 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
@@ -49,8 +52,9 @@ public class TestTransactionUtils extends HoodieCommonTestHarness {
     metaClient.getFs().mkdirs(new Path(basePath));
   }
 
-  @Test
-  public void testCheckpointStateMerge() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCheckpointStateMerge(boolean testCompaction) throws IOException {
     HoodieActiveTimeline timeline = new HoodieActiveTimeline(metaClient);
 
     // Create completed commit with deltastreamer checkpoint state
@@ -62,12 +66,27 @@ public class TestTransactionUtils extends HoodieCommonTestHarness {
     timeline.createNewInstant(commitInstantWithCheckpointState);
 
     HoodieCommitMetadata metadataWithCheckpoint = new HoodieCommitMetadata();
+    metadataWithCheckpoint.setOperationType(WriteOperationType.INSERT);
     String checkpointVal = "00001";
     metadataWithCheckpoint.addMetadata(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, checkpointVal);
     timeline.saveAsComplete(
         commitInstantWithCheckpointState,
         Option.of(metadataWithCheckpoint.toJsonString().getBytes(StandardCharsets.UTF_8))
     );
+
+    if (testCompaction) {
+      HoodieInstant compactionInstant = new HoodieInstant(
+          true,
+          HoodieTimeline.COMPACTION_ACTION,
+          HoodieActiveTimeline.createNewInstantTime()
+      );
+      timeline.createNewInstant(compactionInstant);
+      HoodieCommitMetadata compactionMeta = new HoodieCommitMetadata(true);
+      compactionMeta.setOperationType(WriteOperationType.COMPACT);
+      timeline.saveAsComplete(
+          compactionInstant,
+          Option.of(compactionMeta.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    }
 
     // Inflight commit without checkpoint metadata
     HoodieInstant commitInstantWithoutCheckpointState = new HoodieInstant(

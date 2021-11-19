@@ -40,6 +40,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.sql.SaveMode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -155,7 +156,16 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE"})
-  void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType) throws Exception {
+  public void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType) throws Exception {
+    testCheckpointCarryOver(tableType, false);
+  }
+
+  @Test
+  public void testGapsInDeltaStreamerCheckpoints() throws Exception {
+    testCheckpointCarryOver(HoodieTableType.COPY_ON_WRITE, true);
+  }
+
+  private void testCheckpointCarryOver(HoodieTableType tableType, boolean addGaps) throws Exception {
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
@@ -198,8 +208,11 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
     // Save the checkpoint information from the deltastreamer run and perform next write
     String checkpointAfterDeltaSync = getLatestMetadata(meta).getMetadata(CHECKPOINT_KEY);
+    if (addGaps) {
+      doSparkWriteWithDeltastreamerStateMerge(false);
+    }
     // this writer will enable HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key() so that deltastreamer checkpoint will be carried over.
-    performWriteWithDeltastreamerStateMerge();
+    doSparkWriteWithDeltastreamerStateMerge(true);
 
     // Verify that the checkpoint is carried over
     HoodieCommitMetadata commitMetaAfterDatasourceWrite = getLatestMetadata(meta);
@@ -209,7 +222,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   /**
    * Performs a hudi datasource write with deltastreamer state merge enabled.
    */
-  private void performWriteWithDeltastreamerStateMerge() {
+  private void doSparkWriteWithDeltastreamerStateMerge(boolean mergeState) {
     spark().read()
             .format("hudi")
             .load(tableBasePath + "/*/*.parquet")
@@ -221,7 +234,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
             .option(DataSourceWriteOptions.INSERT_DROP_DUPS().key(), "true")
             .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
             .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-            .option(HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key(), "true")
+            .option(HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key(), Boolean.toString(mergeState))
             .mode(SaveMode.Append)
             .save(tableBasePath + "/*/*.parquet");
   }

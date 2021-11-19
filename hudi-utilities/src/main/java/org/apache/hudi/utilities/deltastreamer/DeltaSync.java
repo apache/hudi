@@ -339,11 +339,17 @@ public class DeltaSync implements Serializable {
           resumeCheckpointStr = Option.empty();
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
-          throw new HoodieDeltaStreamerException(
-              "Unable to find previous checkpoint. Please double check if this table "
-                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                  + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
-                  + commitMetadata.toJsonString());
+          // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
+          Option<String> prevCheckpoint = getPreviousCheckpoint(commitTimelineOpt.get());
+          if (prevCheckpoint.isPresent()) {
+            resumeCheckpointStr = prevCheckpoint;
+          } else {
+            throw new HoodieDeltaStreamerException(
+                "Unable to find previous checkpoint. Please double check if this table "
+                    + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
+                    + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
+                    + commitMetadata.toJsonString());
+          }
         }
         // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
@@ -449,6 +455,18 @@ public class DeltaSync implements Serializable {
     });
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
+  }
+
+  private Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
+    List<HoodieInstant> instants = timeline.getReverseOrderedInstants().collect(Collectors.toList());
+    for (HoodieInstant instant : instants) {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+          .fromBytes(commitTimelineOpt.get().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
+        return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+      }
+    }
+    return Option.empty();
   }
 
   /**

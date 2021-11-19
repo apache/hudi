@@ -18,13 +18,11 @@
 
 package org.apache.hudi.client.utils;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConcurrentOperation;
+import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -34,9 +32,15 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class TransactionUtils {
@@ -45,6 +49,7 @@ public class TransactionUtils {
 
   /**
    * Resolve any write conflicts when committing data.
+   *
    * @param table
    * @param currentTxnOwnerInstant
    * @param thisCommitMetadata
@@ -54,11 +59,11 @@ public class TransactionUtils {
    * @throws HoodieWriteConflictException
    */
   public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
-          final HoodieTable table,
-          final Option<HoodieInstant> currentTxnOwnerInstant,
-          final Option<HoodieCommitMetadata> thisCommitMetadata,
-          final HoodieWriteConfig config,
-          Option<HoodieInstant> lastCompletedTxnOwnerInstant) throws HoodieWriteConflictException {
+      final HoodieTable table,
+      final Option<HoodieInstant> currentTxnOwnerInstant,
+      final Option<HoodieCommitMetadata> thisCommitMetadata,
+      final HoodieWriteConfig config,
+      Option<HoodieInstant> lastCompletedTxnOwnerInstant) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant);
@@ -68,7 +73,7 @@ public class TransactionUtils {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
           if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
             LOG.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
-                    + otherOperation + ", attempting to resolve it...");
+                + otherOperation + ", attempting to resolve it...");
             resolutionStrategy.resolveConflict(table, thisOperation, otherOperation);
           }
         } catch (IOException io) {
@@ -88,33 +93,41 @@ public class TransactionUtils {
 
   /**
    * Get the last completed transaction hoodie instant and {@link HoodieCommitMetadata#getExtraMetadata()}.
+   *
    * @param metaClient
    * @return
    */
   public static Option<Pair<HoodieInstant, Map<String, String>>> getLastCompletedTxnInstantAndMetadata(
       HoodieTableMetaClient metaClient) {
-    Option<HoodieInstant> hoodieInstantOption = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().lastInstant();
-    try {
-      if (hoodieInstantOption.isPresent()) {
-        switch (hoodieInstantOption.get().getAction()) {
-          case HoodieTimeline.REPLACE_COMMIT_ACTION:
-            HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstantOption.get()).get(), HoodieReplaceCommitMetadata.class);
-            return Option.of(Pair.of(hoodieInstantOption.get(), replaceCommitMetadata.getExtraMetadata()));
-          case HoodieTimeline.DELTA_COMMIT_ACTION:
-          case HoodieTimeline.COMMIT_ACTION:
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstantOption.get()).get(), HoodieCommitMetadata.class);
-            return Option.of(Pair.of(hoodieInstantOption.get(), commitMetadata.getExtraMetadata()));
-          default:
-            throw new IllegalArgumentException("Unknown instant action" + hoodieInstantOption.get().getAction());
+    List<HoodieInstant> hoodieInstants = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getReverseOrderedInstants().collect(Collectors.toList());
+    if (!hoodieInstants.isEmpty()) {
+      for (HoodieInstant hoodieInstant : hoodieInstants) {
+        try {
+          switch (hoodieInstant.getAction()) {
+            case HoodieTimeline.REPLACE_COMMIT_ACTION:
+              HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
+                  .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
+              return Option.of(Pair.of(hoodieInstant, replaceCommitMetadata.getExtraMetadata()));
+            case HoodieTimeline.DELTA_COMMIT_ACTION:
+            case HoodieTimeline.COMMIT_ACTION:
+              HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                  .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+              if (!commitMetadata.getOperationType().equals(WriteOperationType.UNKNOWN)
+                  && !commitMetadata.getOperationType().equals(WriteOperationType.COMPACT)) { // skip compaction instants
+                return Option.of(Pair.of(hoodieInstant, commitMetadata.getExtraMetadata()));
+              }
+              break;
+            default:
+              throw new IllegalArgumentException("Unknown instant action" + hoodieInstant.getAction());
+          }
+        } catch (IOException io) {
+          throw new HoodieIOException("Unable to read metadata for instant " + hoodieInstant, io);
         }
-      } else {
-        return Option.empty();
       }
-    } catch (IOException io) {
-      throw new HoodieIOException("Unable to read metadata for instant " + hoodieInstantOption.get(), io);
+      return Option.empty();
+    } else {
+      return Option.empty();
     }
   }
 
@@ -125,9 +138,10 @@ public class TransactionUtils {
   /**
    * Generic method allowing us to override the current metadata with the metadata from
    * the latest instant for the specified key prefixes.
+   *
    * @param metaClient
    * @param thisMetadata
-   * @param keyPrefixes The key prefixes to merge from the previous commit
+   * @param keyPrefixes  The key prefixes to merge from the previous commit
    */
   private static void overrideWithLatestCommitMetadata(HoodieTableMetaClient metaClient,
                                                        Option<HoodieCommitMetadata> thisMetadata,
