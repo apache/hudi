@@ -31,6 +31,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.nio.file.Files
 import java.sql.{Date, Timestamp}
 import scala.collection.JavaConversions._
 import scala.util.Random
@@ -124,7 +125,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
         getClass.getClassLoader.getResource("index/zorder/input-table").toString
       )
 
-    val zorderedCols = Set("c1", "c2", "c3", "c5", "c6", "c7", "c8")
+    val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
     val zorderedColsSchemaFields = inputDf.schema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
 
     // {@link TimestampType} is not supported, and will throw -- hence skipping "c4"
@@ -134,20 +135,78 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
         inputDf.inputFiles.toSeq,
         zorderedColsSchemaFields
       )
-    newZIndexTableDf.cache()
 
     val expectedZIndexTableDf =
       spark.read
         .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
 
-    assertRowsMatch(reorderCols(expectedZIndexTableDf), reorderCols(newZIndexTableDf))
+    assertEquals(asJson(sort(expectedZIndexTableDf)), asJson(sort(newZIndexTableDf)))
   }
 
   @Test
   def testZIndexTableMerge(): Unit = {
-    // TODO
-  }
+    val testZIndexPath = new Path(basePath, "zindex")
 
+    val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
+
+    //
+    // Bootstrap Z-index table
+    //
+
+    val firstCommitInstance = "0"
+    val firstInputDf =
+      spark.read.parquet(
+        getClass.getClassLoader.getResource("index/zorder/input-table").toString
+      )
+
+    ZOrderingIndexHelper.updateZIndexFor(
+      firstInputDf.sparkSession,
+      firstInputDf.inputFiles.toSeq,
+      zorderedCols.toSeq,
+      testZIndexPath.toString,
+      firstCommitInstance,
+      Seq()
+    )
+
+    val initialZIndexTable =
+      spark.read
+        .parquet(new Path(testZIndexPath, firstCommitInstance).toString)
+
+    val expectedInitialZIndexTableDf =
+      spark.read
+        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
+
+    assertEquals(asJson(sort(expectedInitialZIndexTableDf)), asJson(sort(initialZIndexTable)))
+
+    val secondCommitInstance = "1"
+    val secondInputDf =
+      spark.read.parquet(
+        getClass.getClassLoader.getResource("index/zorder/another-input-table").toString
+      )
+
+    //
+    // Update Z-index table
+    //
+
+    ZOrderingIndexHelper.updateZIndexFor(
+      secondInputDf.sparkSession,
+      secondInputDf.inputFiles.toSeq,
+      zorderedCols.toSeq,
+      testZIndexPath.toString,
+      secondCommitInstance,
+      Seq(firstCommitInstance)
+    )
+
+    val mergedZIndexTable =
+      spark.read
+        .parquet(new Path(testZIndexPath, secondCommitInstance).toString)
+
+    val expectedMergedZIndexTableDf =
+      spark.read
+        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table-merged.json").toString)
+
+    assertEquals(asJson(sort(expectedMergedZIndexTableDf)), asJson(sort(mergedZIndexTable)))
+  }
 
   @Test
   def testZIndexTablesGarbageCollection(): Unit = {
@@ -194,16 +253,26 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
     assertEquals(fs.exists(new Path(testZIndexPath, "4")), true)
   }
 
+  private def asJson(df: DataFrame) =
+    df.toJSON
+      .select("value")
+      .collect()
+      .toSeq
+      .map(_.getString(0))
+      .mkString("\n")
+
   private def assertRowsMatch(one: DataFrame, other: DataFrame) = {
     val rows = one.count()
     assert(rows == other.count() && one.intersect(other).count() == rows)
   }
 
-  private def reorderCols(df: DataFrame): DataFrame = {
+  private def sort(df: DataFrame): DataFrame = {
     // Since upon parsing JSON, Spark re-order columns in lexicographical order
     // of their names, we have to shuffle new Z-index table columns order to match
+    // Rows are sorted by filename as well to avoid
     val sortedCols = df.columns.sorted
     df.select(sortedCols.head, sortedCols.tail: _*)
+      .sort("file")
   }
 
   def createComplexDataFrame(spark: SparkSession): DataFrame = {
