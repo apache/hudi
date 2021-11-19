@@ -361,7 +361,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testManualRollbacks() throws Exception {
     HoodieTableType tableType = COPY_ON_WRITE;
-    init(tableType, false);
+    init(tableType, true);
     // Setting to archive more aggressively on the Metadata Table than the Dataset
     final int maxDeltaCommitsBeforeCompaction = 4;
     final int minArchiveCommitsMetadata = 2;
@@ -871,7 +871,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   @Test
   public void testCleaningArchivingAndCompaction() throws Exception {
-    init(HoodieTableType.COPY_ON_WRITE, false);
+    init(HoodieTableType.COPY_ON_WRITE, true);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     final int maxDeltaCommitsBeforeCompaction = 3;

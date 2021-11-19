@@ -81,6 +81,6 @@ public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O,
    * @param metadata restore metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRestoreMetadata metadata) {
-    table.getMetadataWriter().ifPresent(w -> w.update(metadata, instantTime));
+    table.getMetadataWriter(Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
   }
 }
