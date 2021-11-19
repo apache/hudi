@@ -197,7 +197,7 @@ public class ZOrderingIndexHelper {
    * @return Spark's {@link Dataset} holding an index table
    */
   @Nonnull
-  public static Dataset<Row> composeZIndex(
+  public static Dataset<Row> buildZIndexTableFor(
       @Nonnull SparkSession sparkSession,
       @Nonnull List<String> baseFilesPaths,
       @Nonnull List<StructField> zorderedColumnSchemas
@@ -318,7 +318,7 @@ public class ZOrderingIndexHelper {
 
     // Compose new Z-index table for the given source base files
     Dataset<Row> newZIndexDf =
-        composeZIndex(
+        buildZIndexTableFor(
             sparkSession,
             sourceBaseFiles,
             zorderedCols.stream()
@@ -380,7 +380,7 @@ public class ZOrderingIndexHelper {
       } else {
         Path latestZIndexTable = new Path(zindexFolderPath, validIndexTables.get(validIndexTables.size() - 1));
         finalZIndexDf =
-            mergeMostRecentIndexTableInto(
+            tryMergeMostRecentIndexTableInto(
                 sparkSession,
                 newZIndexDf,
                 // Load current most recent Z-index table
@@ -418,11 +418,20 @@ public class ZOrderingIndexHelper {
   }
 
   @Nonnull
-  private static Dataset<Row> mergeMostRecentIndexTableInto(
+  private static Dataset<Row> tryMergeMostRecentIndexTableInto(
       @Nonnull SparkSession sparkSession,
       @Nonnull Dataset<Row> newIndexTableDf,
       @Nonnull Dataset<Row> existingIndexTableDf
   ) {
+    // NOTE: If new Z-index table schema is incompatible with that one of existing table
+    //       that is most likely due to changing settings of list of Z-ordered columns, that
+    //       occurred since last index table have been persisted.
+    //
+    //       In that case, we simply drop existing index table and just persist the new one
+    if (!Objects.equals(newIndexTableDf.schema(), existingIndexTableDf.schema())) {
+      return newIndexTableDf;
+    }
+
     String randomSuffix = UUID.randomUUID().toString().replace("-", "");
 
     String existingIndexTempTableName = "existingIndexTable_" + randomSuffix;
