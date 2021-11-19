@@ -40,7 +40,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.createZIndexLookupFilter
 import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Column, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Properties
@@ -268,7 +268,11 @@ case class HoodieFileIndex(
       lookupCandidateFilesInZIndex(dataFilters) match {
         case Success(opt) => opt
         case Failure(e) =>
-          logError("Failed to lookup candidate files in Z-index", e)
+          if (e.isInstanceOf[AnalysisException]) {
+            logDebug("Failed to relay provided data filters to Z-index lookup", e)
+          } else {
+            logError("Failed to lookup candidate files in Z-index", e)
+          }
           Option.empty
       }
 
