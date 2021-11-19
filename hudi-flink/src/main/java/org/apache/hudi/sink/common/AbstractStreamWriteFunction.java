@@ -125,6 +125,8 @@ public abstract class AbstractStreamWriteFunction<I>
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
+    // always use the user classloader
+    Thread.currentThread().setContextClassLoader(getRuntimeContext().getUserCodeClassLoader());
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.metaClient = StreamerUtil.createMetaClient(this.config);
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
