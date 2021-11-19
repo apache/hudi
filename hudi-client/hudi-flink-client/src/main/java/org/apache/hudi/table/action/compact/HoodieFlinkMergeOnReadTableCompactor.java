@@ -131,6 +131,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
         .withSpillableMapBasePath(config.getSpillableMapBasePath())
         .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+        .withOperationField(config.allowOperationMetadataField())
         .build();
     if (!scanner.iterator().hasNext()) {
       scanner.close();
