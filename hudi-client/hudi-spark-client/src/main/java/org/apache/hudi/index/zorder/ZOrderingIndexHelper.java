@@ -65,6 +65,7 @@ import scala.collection.JavaConversions;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -506,8 +507,8 @@ public class ZOrderingIndexHelper {
     } else if (colType instanceof DecimalType) {
       // TODO this will be losing precision
       return Pair.of(
-          Double.parseDouble(colMetadata.getStringifier().stringify(Long.valueOf(colMetadata.getMinValue().toString()))),
-          Double.parseDouble(colMetadata.getStringifier().stringify(Long.valueOf(colMetadata.getMaxValue().toString()))));
+          new BigDecimal(colMetadata.getMinValue().toString()),
+          new BigDecimal(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof DateType) {
       return Pair.of(
           java.sql.Date.valueOf(colMetadata.getStringifier().stringify((int) colMetadata.getMinValue())),
