@@ -396,15 +396,16 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
       finalizeWrite(table, clusteringCommitTime, writeStats);
       writeTableMetadataForTableServices(table, metadata,clusteringInstant);
-      // try to save statistics info to hudi
-      if (config.isDataSkippingEnabled() && config.isLayoutOptimizationEnabled() && !config.getClusteringSortColumns().isEmpty()) {
-        table.updateStatistics(context, writeStats, clusteringCommitTime, true);
+      // Update outstanding metadata indexes
+      if (config.isLayoutOptimizationEnabled()
+          && !config.getClusteringSortColumns().isEmpty()) {
+        table.updateMetadataIndexes(context, writeStats, clusteringCommitTime);
       }
       LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {
       this.txnManager.endTransaction();

@@ -18,7 +18,10 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -37,6 +40,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -77,6 +81,7 @@ import org.apache.log4j.Logger;
 import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
 import org.apache.spark.api.java.JavaRDD;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -164,14 +169,16 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void updateStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime, Boolean isOptimizeOperation) {
-    // deal with z-order/hilbert statistic info
-    if (isOptimizeOperation) {
-      updateOptimizeOperationStatistics(context, stats, instantTime);
-    }
+  public void updateMetadataIndexes(@Nonnull HoodieEngineContext context, @Nonnull List<HoodieWriteStat> stats, @Nonnull String instantTime) throws Exception {
+    // Updates Z-ordering Index
+    updateZIndex(context, stats, instantTime);
   }
 
-  private void updateOptimizeOperationStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime) {
+  private void updateZIndex(
+      @Nonnull HoodieEngineContext context,
+      @Nonnull List<HoodieWriteStat> updatedFilesStats,
+      @Nonnull String instantTime
+  ) throws Exception {
     String sortColsList = config.getClusteringSortColumns();
     String basePath = metaClient.getBasePath();
     String indexPath = metaClient.getZindexPath();
@@ -184,7 +191,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
             .collect(Collectors.toList());
 
     List<String> touchedFiles =
-        stats.stream()
+        updatedFilesStats.stream()
             .map(s -> new Path(basePath, s.getPath()).toString())
             .collect(Collectors.toList());
 
@@ -200,8 +207,15 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
 
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
 
+    // Fetch table schema to appropriately construct Z-index schema
+    Schema tableWriteSchema =
+        HoodieAvroUtils.createHoodieWriteSchema(
+            new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
+        );
+
     ZOrderingIndexHelper.updateZIndexFor(
         sparkEngineContext.getSqlContext().sparkSession(),
+        AvroConversionUtils.convertAvroSchemaToStructType(tableWriteSchema),
         touchedFiles,
         sortCols,
         indexPath,

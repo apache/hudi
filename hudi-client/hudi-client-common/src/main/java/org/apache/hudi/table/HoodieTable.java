@@ -77,6 +77,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -245,14 +246,17 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
 
   /**
-   * update statistics info for current table.
-   * to do adaptation, once RFC-27 is finished.
+   * Updates Metadata Indexes (like Z-Index)
+   * TODO rebase onto metadata table (post RFC-27)
    *
-   * @param context HoodieEngineContext
-   * @param instantTime Instant time for the replace action
-   * @param isOptimizeOperation whether current operation is OPTIMIZE type
+   * @param context instance of {@link HoodieEngineContext}
+   * @param instantTime instant of the carried operation triggering the update
    */
-  public abstract void updateStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime, Boolean isOptimizeOperation);
+  public abstract void updateMetadataIndexes(
+      @Nonnull HoodieEngineContext context,
+      @Nonnull List<HoodieWriteStat> stats,
+      @Nonnull String instantTime
+  ) throws Exception;
 
   public HoodieWriteConfig getConfig() {
     return config;
