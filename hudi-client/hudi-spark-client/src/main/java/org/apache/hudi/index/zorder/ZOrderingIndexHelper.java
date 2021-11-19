@@ -41,13 +41,36 @@ import org.apache.spark.sql.Row$;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.hudi.execution.RangeSampleSort$;
 import org.apache.spark.sql.hudi.execution.ZorderingBinarySort;
-import org.apache.spark.sql.types.*;
+import org.apache.spark.sql.types.BinaryType;
+import org.apache.spark.sql.types.BinaryType$;
+import org.apache.spark.sql.types.BooleanType;
+import org.apache.spark.sql.types.ByteType;
+import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.DateType;
+import org.apache.spark.sql.types.DecimalType;
+import org.apache.spark.sql.types.DoubleType;
+import org.apache.spark.sql.types.FloatType;
+import org.apache.spark.sql.types.IntegerType;
+import org.apache.spark.sql.types.LongType;
+import org.apache.spark.sql.types.LongType$;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.ShortType;
+import org.apache.spark.sql.types.StringType;
+import org.apache.spark.sql.types.StringType$;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType$;
+import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
 import scala.collection.JavaConversions;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -63,15 +86,15 @@ public class ZOrderingIndexHelper {
   private static final String Z_INDEX_MAX_VALUE_STAT_NAME = "maxValue";
   private static final String Z_INDEX_NUM_NULLS_STAT_NAME = "num_nulls";
 
-  public static String getMinColumnNameFor(@Nonnull String colName) {
+  public static String getMinColumnNameFor(String colName) {
     return composeZIndexColName(colName, Z_INDEX_MIN_VALUE_STAT_NAME);
   }
 
-  public static String getMaxColumnNameFor(@Nonnull String colName) {
+  public static String getMaxColumnNameFor(String colName) {
     return composeZIndexColName(colName, Z_INDEX_MAX_VALUE_STAT_NAME);
   }
 
-  public static String getNumNullsColumnNameFor(@Nonnull String colName) {
+  public static String getNumNullsColumnNameFor(String colName) {
     return composeZIndexColName(colName, Z_INDEX_NUM_NULLS_STAT_NAME);
   }
 
@@ -286,10 +309,10 @@ public class ZOrderingIndexHelper {
   }
 
   /**
+   * <p/>
    * Updates state of the Z-index by:
-   *
    * <ol>
-   *   <li>Updates Z-index with statistics for {@code sourceBaseFiles}, collecting corresponding
+   *   <li>Updating Z-index with statistics for {@code sourceBaseFiles}, collecting corresponding
    *   column statistics from Parquet footers</li>
    *   <li>Merging newly built Z-index table with the most recent one (if present and not preempted)</li>
    *   <li>Cleans up any residual index tables, that weren't cleaned up before</li>
