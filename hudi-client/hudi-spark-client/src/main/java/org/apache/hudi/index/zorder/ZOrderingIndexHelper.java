@@ -18,17 +18,19 @@
 
 package org.apache.hudi.index.zorder;
 
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.optimize.ZOrderingUtil;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.io.api.Binary;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
@@ -39,39 +41,19 @@ import org.apache.spark.sql.Row$;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.hudi.execution.RangeSampleSort$;
 import org.apache.spark.sql.hudi.execution.ZorderingBinarySort;
-import org.apache.spark.sql.types.BinaryType;
-import org.apache.spark.sql.types.BinaryType$;
-import org.apache.spark.sql.types.BooleanType;
-import org.apache.spark.sql.types.ByteType;
-import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.types.DateType;
-import org.apache.spark.sql.types.DecimalType;
-import org.apache.spark.sql.types.DoubleType;
-import org.apache.spark.sql.types.FloatType;
-import org.apache.spark.sql.types.IntegerType;
-import org.apache.spark.sql.types.LongType;
-import org.apache.spark.sql.types.LongType$;
-import org.apache.spark.sql.types.Metadata;
-import org.apache.spark.sql.types.ShortType;
-import org.apache.spark.sql.types.StringType;
-import org.apache.spark.sql.types.StringType$;
-import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType$;
-import org.apache.spark.sql.types.TimestampType;
+import org.apache.spark.sql.types.*;
 import org.apache.spark.util.SerializableConfiguration;
 import scala.collection.JavaConversions;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public class ZOrderingIndexHelper {
+
+  private static final Logger LOG = LogManager.getLogger(ZOrderingIndexHelper.class);
 
   private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
 
@@ -190,38 +172,60 @@ public class ZOrderingIndexHelper {
   }
 
   /**
-   * @VisibleForTesting
-   * Parse min/max statistics stored in parquet footers for z-sort cols.
-   * no support collect statistics from timeStampType, since parquet file has not collect the statistics for timeStampType.
-   * to do adapt for rfc-27
+   * Parse min/max statistics from Parquet footers for provided columns and composes Z-index
+   * table in the following format with 3 statistics denominated for each Z-ordered column.
+   * For ex, if original table contained Z-ordered column {@code A}:
    *
-   * @param df a spark DataFrame holds parquet files to be read.
-   * @param cols z-sort cols
-   * @return a dataFrame holds all statistics info.
+   * <pre>
+   * +---------------------------+------------+------------+-------------+
+   * |          file             | A_minValue | A_maxValue | A_num_nulls |
+   * +---------------------------+------------+------------+-------------+
+   * | one_base_file.parquet     |          1 |         10 |           0 |
+   * | another_base_file.parquet |        -10 |          0 |           5 |
+   * +---------------------------+------------+------------+-------------+
+   * </pre>
+   *
+   * NOTE: Currently {@link TimestampType} is not supported, since Parquet writer
+   * does not support statistics for it.
+   *
+   * TODO leverage metadata table after RFC-27 lands
+   * @VisibleForTesting
+   *
+   * @param sparkSession encompassing Spark session
+   * @param baseFilesPaths list of base-files paths to be sourced for Z-index
+   * @param zorderedColumnSchemas target Z-ordered columns
+   * @return Spark's {@link Dataset} holding an index table
    */
-  public static Dataset<Row> getMinMaxValue(Dataset<Row> df, List<String> cols) {
-    Map<String, DataType> colsDataTypesMap =
-        Arrays.stream(df.schema().fields())
-            .collect(Collectors.toMap(StructField::name, StructField::dataType));
-
-    List<String> scanFiles = Arrays.asList(df.inputFiles());
-    SparkContext sc = df.sparkSession().sparkContext();
+  @Nonnull
+  public static Dataset<Row> composeZIndex(
+      @Nonnull SparkSession sparkSession,
+      @Nonnull List<String> baseFilesPaths,
+      @Nonnull List<StructField> zorderedColumnSchemas
+  ) {
+    SparkContext sc = sparkSession.sparkContext();
     JavaSparkContext jsc = new JavaSparkContext(sc);
 
     SerializableConfiguration serializableConfiguration = new SerializableConfiguration(sc.hadoopConfiguration());
-    int numParallelism = (scanFiles.size() / 3 + 1);
+    int numParallelism = (baseFilesPaths.size() / 3 + 1);
     List<HoodieColumnRangeMetadata<Comparable>> colMinMaxInfos;
     String previousJobDescription = sc.getLocalProperty(SPARK_JOB_DESCRIPTION);
     try {
       jsc.setJobDescription("Listing parquet column statistics");
       colMinMaxInfos =
-          jsc.parallelize(scanFiles, numParallelism)
+          jsc.parallelize(baseFilesPaths, numParallelism)
               .mapPartitions(paths -> {
                 ParquetUtils utils = (ParquetUtils) BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
                 Iterable<String> iterable = () -> paths;
                 return StreamSupport.stream(iterable.spliterator(), false)
                     .flatMap(path ->
-                        utils.readRangeFromParquetMetadata(serializableConfiguration.value(), new Path(path), cols).stream()
+                        utils.readRangeFromParquetMetadata(
+                            serializableConfiguration.value(),
+                            new Path(path),
+                            zorderedColumnSchemas.stream()
+                                .map(StructField::name)
+                                .collect(Collectors.toList())
+                        )
+                            .stream()
                     )
                     .iterator();
               })
@@ -251,19 +255,21 @@ public class ZOrderingIndexHelper {
               indexRow.add(filePath);
 
               // For each column
-              cols.forEach(col -> {
+              zorderedColumnSchemas.forEach(colSchema -> {
+                String colName = colSchema.name();
+
                 HoodieColumnRangeMetadata<Comparable> colMetadata =
                     fileColumnsMetadata.stream()
-                        .filter(s -> s.getColumnName().trim().equalsIgnoreCase(col))
+                        .filter(s -> s.getColumnName().trim().equalsIgnoreCase(colName))
                         .findFirst()
                         .orElse(null);
 
-                DataType colType = colsDataTypesMap.get(col);
+                DataType colType = colSchema.dataType();
                 if (colMetadata == null || colType == null) {
-                  throw new HoodieException(String.format("Cannot collect min/max statistics for column (%s)", col));
+                  throw new HoodieException(String.format("Cannot collect min/max statistics for column (%s)", colSchema));
                 }
 
-                Pair<Object, Object> minMaxValue = fetchColumnMinMaxValues(colType, colMetadata);
+                Pair<Object, Object> minMaxValue = fetchMinMaxValues(colType, colMetadata);
 
                 indexRow.add(minMaxValue.getLeft());      // min
                 indexRow.add(minMaxValue.getRight());     // max
@@ -274,92 +280,171 @@ public class ZOrderingIndexHelper {
             })
             .filter(Objects::nonNull);
 
-    List<StructField> indexSchema = composeIndexSchema(cols, colsDataTypesMap);
+    List<StructField> indexSchema = composeIndexSchema(zorderedColumnSchemas);
 
-    return df.sparkSession().createDataFrame(allMetaDataRDD, StructType$.MODULE$.apply(indexSchema));
+    return sparkSession.createDataFrame(allMetaDataRDD, StructType$.MODULE$.apply(indexSchema));
   }
 
   /**
-   * Update statistics info.
-   * this method will update old index table by full out join,
-   * and save the updated table into a new index table based on commitTime.
-   * old index table will be cleaned also.
+   * Updates state of the Z-index by:
    *
-   * @param df a spark DataFrame holds parquet files to be read.
-   * @param cols z-sort cols.
-   * @param indexPath index store path.
-   * @param commitTime current operation commitTime.
-   * @param validateCommits all validate commits for current table.
-   * @return
+   * <ol>
+   *   <li>Updates Z-index with statistics for {@code sourceBaseFiles}, collecting corresponding
+   *   column statistics from Parquet footers</li>
+   *   <li>Merging newly built Z-index table with the most recent one (if present and not preempted)</li>
+   *   <li>Cleans up any residual index tables, that weren't cleaned up before</li>
+   * </ol>
+   *
+   * @param sparkSession encompassing Spark session
+   * @param sourceBaseFiles list of base-files to be indexed
+   * @param zorderedCols target Z-ordered columns
+   * @param zindexFolderPath Z-index folder path
+   * @param commitTime current operation commit instant
+   * @param completedCommits all previously completed commit instants
    */
-  public static void saveStatisticsInfo(Dataset<Row> df, List<String> cols, String indexPath, String commitTime, List<String> validateCommits) {
-    Path savePath = new Path(indexPath, commitTime);
-    SparkSession spark = df.sparkSession();
-    FileSystem fs = FSUtils.getFs(indexPath, spark.sparkContext().hadoopConfiguration());
-    Dataset<Row> statisticsDF = ZOrderingIndexHelper.getMinMaxValue(df, cols);
-    // try to find last validate index table from index path
+  public static void updateZIndexFor(
+      @Nonnull SparkSession sparkSession,
+      @Nonnull List<String> sourceBaseFiles,
+      @Nonnull List<String> zorderedCols,
+      @Nonnull String zindexFolderPath,
+      @Nonnull String commitTime,
+      @Nonnull List<String> completedCommits
+  ) {
+    FileSystem fs = FSUtils.getFs(zindexFolderPath, sparkSession.sparkContext().hadoopConfiguration());
+
+    // Load source base-files (primarily to fetch corresponding schema)
+    Dataset<Row> sourceDf =
+        sparkSession.read().load(JavaConversions.asScalaBuffer(sourceBaseFiles));
+
+    // Compose new Z-index table for the given source base files
+    Dataset<Row> newZIndexDf =
+        composeZIndex(
+            sparkSession,
+            sourceBaseFiles,
+            zorderedCols.stream()
+                .map(col -> sourceDf.schema().fields()[sourceDf.schema().fieldIndex(col)])
+                .collect(Collectors.toList())
+        );
+
     try {
-      // If there's currently no index, create one
-      if (!fs.exists(new Path(indexPath))) {
-        statisticsDF.repartition(1).write().mode("overwrite").save(savePath.toString());
+      //
+      // Z-Index has the following folder structure:
+      //
+      // .hoodie/
+      // ├── .zindex/
+      // │   ├── <instant>/
+      // │   │   ├── <part-...>.parquet
+      // │   │   └── ...
+      //
+      // If index is currently empty (no persisted tables), we simply create one
+      // using clustering operation's commit instance as it's name
+      Path newIndexTablePath = new Path(zindexFolderPath, commitTime);
+
+      if (!fs.exists(new Path(zindexFolderPath))) {
+        newZIndexDf.repartition(1)
+            .write()
+            .format("parquet")
+            .mode("overwrite")
+            .save(newIndexTablePath.toString());
         return;
       }
 
-      // Otherwise, clean up all indexes but the most recent one
+      // Filter in all index tables (w/in {@code .zindex} folder)
+      List<String> allIndexTables =
+          Arrays.stream(
+              fs.listStatus(new Path(zindexFolderPath))
+          )
+              .filter(FileStatus::isDirectory)
+              .map(f -> f.getPath().getName())
+              .collect(Collectors.toList());
 
-      List<String> allIndexTables = Arrays
-          .stream(fs.listStatus(new Path(indexPath))).filter(f -> f.isDirectory()).map(f -> f.getPath().getName()).collect(Collectors.toList());
-      List<String> candidateIndexTables = allIndexTables.stream().filter(f -> validateCommits.contains(f)).sorted().collect(Collectors.toList());
-      List<String> residualTables = allIndexTables.stream().filter(f -> !validateCommits.contains(f)).collect(Collectors.toList());
-      Option<Dataset> latestIndexData = Option.empty();
-      if (!candidateIndexTables.isEmpty()) {
-        latestIndexData = Option.of(spark.read().load(new Path(indexPath, candidateIndexTables.get(candidateIndexTables.size() - 1)).toString()));
-        // clean old index table, keep at most 1 index table.
-        candidateIndexTables.remove(candidateIndexTables.size() - 1);
-        candidateIndexTables.forEach(f -> {
-          try {
-            fs.delete(new Path(indexPath, f));
-          } catch (IOException ie) {
-            throw new HoodieException(ie);
-          }
-        });
+      // Compile list of valid index tables that were produced as part
+      // of previously successfully committed iterations
+      List<String> validIndexTables =
+          allIndexTables.stream()
+              .filter(completedCommits::contains)
+              .sorted()
+              .collect(Collectors.toList());
+
+      List<String> tablesToCleanup =
+          allIndexTables.stream()
+              .filter(f -> !completedCommits.contains(f))
+              .collect(Collectors.toList());
+
+      Dataset<Row> finalZIndexDf;
+      
+      // Before writing out new version of the Z-index table we need to merge it
+      // with the most recent one that were successfully persisted previously
+      if (validIndexTables.isEmpty()) {
+        finalZIndexDf = newZIndexDf;
+      } else {
+        Path latestZIndexTable = new Path(zindexFolderPath, validIndexTables.get(validIndexTables.size() - 1));
+        finalZIndexDf =
+            mergeMostRecentIndexTableInto(
+                sparkSession,
+                newZIndexDf,
+                // Load current most recent Z-index table
+                sparkSession.read()
+                    .load(latestZIndexTable.toString())
+            );
+
+        // Clean up all index tables (after creation of the new index)
+        tablesToCleanup.addAll(validIndexTables);
       }
 
-      // clean residualTables
-      // retried cluster operations at the same instant time is also considered,
-      // the residual files produced by retried are cleaned up before save statistics
-      // save statistics info to index table which named commitTime
-      residualTables.forEach(f -> {
+      // Persist new Z-index table
+      finalZIndexDf
+        .repartition(1)
+        .write()
+        .format("parquet")
+        .save(newIndexTablePath.toString());
+
+      // Clean up residual Z-index tables that have might have been dangling since
+      // previous iterations (due to intermittent failures during previous clean up)
+      tablesToCleanup.forEach(f -> {
         try {
-          fs.delete(new Path(indexPath, f));
+          fs.delete(new Path(zindexFolderPath, f), true);
         } catch (IOException ie) {
-          throw new HoodieException(ie);
+          // NOTE: Exception is deliberately swallowed to not affect overall clustering operation,
+          //       since failing Z-index table will be attempted to be cleaned up upon subsequent
+          //       clustering iteration
+          LOG.warn(String.format("Failed to cleanup residual Z-index table: %s", f), ie);
         }
       });
-
-      if (latestIndexData.isPresent() && latestIndexData.get().schema().equals(statisticsDF.schema())) {
-        // update the statistics info
-        String originalTable = "indexTable_" + java.util.UUID.randomUUID().toString().replace("-", "");
-        String updateTable = "updateTable_" + java.util.UUID.randomUUID().toString().replace("-", "");
-        latestIndexData.get().registerTempTable(originalTable);
-        statisticsDF.registerTempTable(updateTable);
-        // update table by full out join
-        List<String> columns = Arrays.asList(statisticsDF.schema().fieldNames());
-        spark.sql(createIndexMergeSql(originalTable, updateTable, columns)).repartition(1).write().save(savePath.toString());
-      }
     } catch (IOException e) {
+      LOG.error("Failed to build new Z-index table", e);
       throw new HoodieException(e);
     }
   }
 
   @Nonnull
-  private static List<StructField> composeIndexSchema(List<String> cols, Map<String, DataType> colsDataTypesMap) {
+  private static Dataset<Row> mergeMostRecentIndexTableInto(
+      @Nonnull SparkSession sparkSession,
+      @Nonnull Dataset<Row> newIndexTableDf,
+      @Nonnull Dataset<Row> existingIndexTableDf
+  ) {
+    String randomSuffix = UUID.randomUUID().toString().replace("-", "");
+
+    String existingIndexTempTableName = "existingIndexTable_" + randomSuffix;
+    String newIndexTempTableName = "newIndexTable_" + randomSuffix;
+
+    existingIndexTableDf.registerTempTable(existingIndexTempTableName);
+    newIndexTableDf.registerTempTable(newIndexTempTableName);
+
+    List<String> newTableColumns = Arrays.asList(newIndexTableDf.schema().fieldNames());
+
+    // Create merged table by doing full-out join
+    return sparkSession.sql(createIndexMergeSql(existingIndexTempTableName, newIndexTempTableName, newTableColumns));
+  }
+
+  @Nonnull
+  private static List<StructField> composeIndexSchema(@Nonnull List<StructField> zorderedColumnsSchemas) {
     List<StructField> schema = new ArrayList<>();
     schema.add(new StructField(Z_INDEX_FILE_COLUMN_NAME, StringType$.MODULE$, true, Metadata.empty()));
-    cols.forEach(col -> {
-      schema.add(composeColumnStatStructType(col, Z_INDEX_MIN_VALUE_STAT_NAME, colsDataTypesMap.get(col)));
-      schema.add(composeColumnStatStructType(col, Z_INDEX_MAX_VALUE_STAT_NAME, colsDataTypesMap.get(col)));
-      schema.add(composeColumnStatStructType(col, Z_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
+    zorderedColumnsSchemas.forEach(colSchema -> {
+      schema.add(composeColumnStatStructType(colSchema.name(), Z_INDEX_MIN_VALUE_STAT_NAME, colSchema.dataType()));
+      schema.add(composeColumnStatStructType(colSchema.name(), Z_INDEX_MAX_VALUE_STAT_NAME, colSchema.dataType()));
+      schema.add(composeColumnStatStructType(colSchema.name(), Z_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
     });
     return schema;
   }
@@ -374,7 +459,7 @@ public class ZOrderingIndexHelper {
   }
 
   private static Pair<Object, Object>
-      fetchColumnMinMaxValues(
+      fetchMinMaxValues(
           @Nonnull DataType colType,
           @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
     if (colType instanceof IntegerType) {
