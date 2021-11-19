@@ -44,6 +44,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -156,28 +157,52 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     String tableName = conf.getString(FlinkOptions.TABLE_NAME);
-    List<HoodieCommitMetadata> activeMetadataList = instants.stream()
-        .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
-    List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
-    if (archivedMetadataList.size() > 0) {
-      LOG.warn("\n"
-          + "--------------------------------------------------------------------------------\n"
-          + "---------- caution: the reader has fall behind too much from the writer,\n"
-          + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
-          + "--------------------------------------------------------------------------------");
-    }
-    List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
-        // IMPORTANT: the merged metadata list must be in ascending order by instant time
-        ? mergeList(archivedMetadataList, activeMetadataList)
-        : activeMetadataList;
 
-    Set<String> writePartitions = HoodieInputFormatUtils.getWritePartitionPaths(metadataList);
-    // apply partition push down
-    if (this.requiredPartitions != null) {
-      writePartitions = writePartitions.stream()
-          .filter(this.requiredPartitions::contains).collect(Collectors.toSet());
+    Set<String> writePartitions;
+    final FileStatus[] fileStatuses;
+
+    if (instantRange == null) {
+      // reading from the earliest, scans the partitions and files directly.
+      FileIndex fileIndex = FileIndex.instance(new org.apache.hadoop.fs.Path(path.toUri()), conf);
+      if (this.requiredPartitions != null) {
+        // apply partition push down
+        fileIndex.setPartitionPaths(this.requiredPartitions);
+      }
+      writePartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
+      if (writePartitions.size() == 0) {
+        LOG.warn("No partitions found for reading in user provided path.");
+        return Result.EMPTY;
+      }
+      fileStatuses = fileIndex.getFilesInPartitions();
+    } else {
+      List<HoodieCommitMetadata> activeMetadataList = instants.stream()
+          .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
+      List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
+      if (archivedMetadataList.size() > 0) {
+        LOG.warn("\n"
+            + "--------------------------------------------------------------------------------\n"
+            + "---------- caution: the reader has fall behind too much from the writer,\n"
+            + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
+            + "--------------------------------------------------------------------------------");
+      }
+      List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
+          // IMPORTANT: the merged metadata list must be in ascending order by instant time
+          ? mergeList(archivedMetadataList, activeMetadataList)
+          : activeMetadataList;
+
+      writePartitions = HoodieInputFormatUtils.getWritePartitionPaths(metadataList);
+      // apply partition push down
+      if (this.requiredPartitions != null) {
+        writePartitions = writePartitions.stream()
+            .filter(this.requiredPartitions::contains).collect(Collectors.toSet());
+      }
+      if (writePartitions.size() == 0) {
+        LOG.warn("No partitions found for reading in user provided path.");
+        return Result.EMPTY;
+      }
+      fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
     }
-    FileStatus[] fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
+
     if (fileStatuses.length == 0) {
       LOG.warn("No files found for reading in user provided path.");
       return Result.EMPTY;

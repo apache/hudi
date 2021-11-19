@@ -683,13 +683,18 @@ public class MergeOnReadInputFormat
             // deleted
             continue;
           } else {
+            final RowKind rowKind = FormatUtils.getRowKindSafely(mergedAvroRecord.get(), this.operationPos);
+            if (!emitDelete && rowKind == RowKind.DELETE) {
+              // deleted
+              continue;
+            }
             GenericRecord avroRecord = buildAvroRecordBySchema(
                 mergedAvroRecord.get(),
                 requiredSchema,
                 requiredPos,
                 recordBuilder);
             this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
-            FormatUtils.setRowKind(this.currentRecord, mergedAvroRecord.get(), this.operationPos);
+            this.currentRecord.setRowKind(rowKind);
             return false;
           }
         }
@@ -746,9 +751,6 @@ public class MergeOnReadInputFormat
         RowData curRow,
         String curKey) throws IOException {
       final HoodieRecord<?> record = scanner.getRecords().get(curKey);
-      if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
-        return Option.empty();
-      }
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
     }

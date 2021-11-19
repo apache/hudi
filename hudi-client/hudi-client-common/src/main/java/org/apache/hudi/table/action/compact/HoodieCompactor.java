@@ -179,6 +179,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withSpillableMapBasePath(config.getSpillableMapBasePath())
         .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+        .withOperationField(config.allowOperationMetadataField())
         .build();
     if (!scanner.iterator().hasNext()) {
       scanner.close();
