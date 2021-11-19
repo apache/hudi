@@ -362,7 +362,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private <T extends SpecificRecordBase> boolean isCommitRevertedByInFlightAction(Option<T> actionMetadata,
                                                                                   final String latestMetadataInstantTimestamp) {
-
     if (!actionMetadata.isPresent()) {
       return false;
     }
@@ -384,7 +383,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           return true;
         }
         break;
-
       case HoodieTimeline.RESTORE_ACTION:
         List<HoodieInstantInfo> restoredInstants =
             ((HoodieRestoreMetadata) actionMetadata.get()).getRestoreInstantInfo();
@@ -396,7 +394,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           return true;
         }
         break;
-
       default:
         return false;
     }
