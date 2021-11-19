@@ -31,14 +31,24 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.nio.file.Files
 import java.sql.{Date, Timestamp}
 import scala.collection.JavaConversions._
 import scala.util.Random
 
 @Tag("functional")
-class TestTableLayoutOptimization extends HoodieClientTestBase {
+class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   var spark: SparkSession = _
+
+  val sourceTableSchema =
+    new StructType()
+      .add("c1", IntegerType)
+      .add("c2", StringType)
+      .add("c3", DecimalType(9,3))
+      .add("c4", TimestampType)
+      .add("c5", ShortType)
+      .add("c6", DateType)
+      .add("c7", BinaryType)
+      .add("c8", ByteType)
 
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -161,6 +171,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
 
     ZOrderingIndexHelper.updateZIndexFor(
       firstInputDf.sparkSession,
+      sourceTableSchema,
       firstInputDf.inputFiles.toSeq,
       zorderedCols.toSeq,
       testZIndexPath.toString,
@@ -190,6 +201,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
 
     ZOrderingIndexHelper.updateZIndexFor(
       secondInputDf.sparkSession,
+      sourceTableSchema,
       secondInputDf.inputFiles.toSeq,
       zorderedCols.toSeq,
       testZIndexPath.toString,
@@ -221,6 +233,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
     // Try to save statistics
     ZOrderingIndexHelper.updateZIndexFor(
       inputDf.sparkSession,
+      sourceTableSchema,
       inputDf.inputFiles.toSeq,
       Seq("c1","c2","c3","c5","c6","c7","c8"),
       testZIndexPath.toString,
@@ -231,6 +244,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
     // Save again
     ZOrderingIndexHelper.updateZIndexFor(
       inputDf.sparkSession,
+      sourceTableSchema,
       inputDf.inputFiles.toSeq,
       Seq("c1","c2","c3","c5","c6","c7","c8"),
       testZIndexPath.toString,
@@ -241,6 +255,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
     // Test old index table being cleaned up
     ZOrderingIndexHelper.updateZIndexFor(
       inputDf.sparkSession,
+      sourceTableSchema,
       inputDf.inputFiles.toSeq,
       Seq("c1","c2","c3","c5","c6","c7","c8"),
       testZIndexPath.toString,
@@ -276,16 +291,6 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
   }
 
   def createComplexDataFrame(spark: SparkSession): DataFrame = {
-    val schema = new StructType()
-      .add("c1", IntegerType)
-      .add("c2", StringType)
-      .add("c3", DecimalType(9,3))
-      .add("c4", TimestampType)
-      .add("c5", ShortType)
-      .add("c6", DateType)
-      .add("c7", BinaryType)
-      .add("c8", ByteType)
-
     val rdd = spark.sparkContext.parallelize(0 to 1000, 1).map { item =>
       val c1 = Integer.valueOf(item)
       val c2 = s" ${item}sdc"
@@ -298,6 +303,6 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
 
       RowFactory.create(c1, c2, c3, c4, c5, c6, c7, c8)
     }
-    spark.createDataFrame(rdd, schema)
+    spark.createDataFrame(rdd, sourceTableSchema)
   }
 }
