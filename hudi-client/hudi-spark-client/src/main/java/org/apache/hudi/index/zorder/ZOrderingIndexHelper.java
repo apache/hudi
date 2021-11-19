@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.optimize.ZOrderingUtil;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.io.api.Binary;
@@ -58,6 +59,7 @@ import org.apache.spark.sql.types.ShortType;
 import org.apache.spark.sql.types.StringType;
 import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
@@ -74,6 +76,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
+import static org.apache.hudi.util.DataTypeUtils.areCompatible;
 
 public class ZOrderingIndexHelper {
 
@@ -451,8 +455,12 @@ public class ZOrderingIndexHelper {
     //       that is most likely due to changing settings of list of Z-ordered columns, that
     //       occurred since last index table have been persisted.
     //
-    //       In that case, we simply drop existing index table and just persist the new one
-    if (!Objects.equals(newIndexTableDf.schema(), existingIndexTableDf.schema())) {
+    //       In that case, we simply drop existing index table and just persist the new one;
+    //
+    //       Also note that we're checking compatibility of _old_ index-table with new one and that
+    //       COMPATIBILITY OPERATION DOES NOT COMMUTE (ie if A is compatible w/ B,
+    //       B might not necessarily be compatible w/ A)
+    if (!areCompatible(existingIndexTableDf.schema(), newIndexTableDf.schema())) {
       return newIndexTableDf;
     }
 
