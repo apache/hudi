@@ -189,14 +189,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         readTimer.startTimer();
         Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
         if (baseRecord.isPresent()) {
-          hoodieRecord = metadataTableConfig.populateMetaFields()
-              ? SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
-              metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(), false)
-              : SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
-              metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
-              Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
-              false, Option.of(partitionName));
-
+          hoodieRecord = getRecord(baseRecord, partitionName);
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
           // merge base file record w/ log record if present
           if (logRecords.containsKey(key) && logRecords.get(key).isPresent()) {
@@ -220,6 +213,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     }
     return result;
+  }
+
+  private HoodieRecord<HoodieMetadataPayload> getRecord(Option<GenericRecord> baseRecord, String partitionName) {
+    ValidationUtils.checkState(baseRecord.isPresent());
+    if (metadataTableConfig.populateMetaFields()) {
+      return SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
+          metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(), false);
+    }
+    return SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
+        metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
+        Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
+        false, Option.of(partitionName));
   }
 
   /**

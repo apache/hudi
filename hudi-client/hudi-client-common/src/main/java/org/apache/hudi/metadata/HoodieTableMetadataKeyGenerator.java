@@ -22,6 +22,7 @@ package org.apache.hudi.metadata;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
 
 /**
  * Custom key generator for the Hoodie table metadata. The metadata table record payload
@@ -41,7 +42,7 @@ public class HoodieTableMetadataKeyGenerator extends BaseKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY;
+    return KeyGenUtils.getRecordKey(record, HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
   }
 
   @Override

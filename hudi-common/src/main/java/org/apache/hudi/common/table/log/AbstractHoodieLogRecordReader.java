@@ -124,7 +124,7 @@ public abstract class AbstractHoodieLogRecordReader {
   // Partition name
   private Option<String> partitionName;
   // Populate meta fields for the records
-  private boolean populateMetaFieldsEnabled = true;
+  private boolean populateMetaFields = true;
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema,
@@ -159,7 +159,7 @@ public abstract class AbstractHoodieLogRecordReader {
 
     // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
     if (!tableConfig.populateMetaFields()) {
-      this.populateMetaFieldsEnabled = false;
+      this.populateMetaFields = false;
       this.simpleKeyGenFields = Option.of(
           Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
     }
@@ -167,7 +167,7 @@ public abstract class AbstractHoodieLogRecordReader {
   }
 
   protected String getKeyField() {
-    if (this.populateMetaFieldsEnabled) {
+    if (this.populateMetaFields) {
       return HoodieRecord.RECORD_KEY_METADATA_FIELD;
     }
     ValidationUtils.checkState(this.simpleKeyGenFields.isPresent());
@@ -387,7 +387,7 @@ public abstract class AbstractHoodieLogRecordReader {
                                                final boolean withOperationField,
                                                final Option<Pair<String, String>> simpleKeyGenFields,
                                                final Option<String> partitionName) {
-    if (this.populateMetaFieldsEnabled) {
+    if (this.populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, payloadClassFQN,
           preCombineField, withOperationField);
     } else {
