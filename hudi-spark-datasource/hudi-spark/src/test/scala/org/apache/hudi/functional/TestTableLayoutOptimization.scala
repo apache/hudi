@@ -140,13 +140,14 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
       spark.read
         .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
 
-    assertRowsMatch(expectedZIndexTableDf, newZIndexTableDf)
+    assertRowsMatch(reorderCols(expectedZIndexTableDf), reorderCols(newZIndexTableDf))
   }
 
   @Test
   def testZIndexTableMerge(): Unit = {
     // TODO
   }
+
 
   @Test
   def testZIndexTablesGarbageCollection(): Unit = {
@@ -196,6 +197,13 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
   private def assertRowsMatch(one: DataFrame, other: DataFrame) = {
     val rows = one.count()
     assert(rows == other.count() && one.intersect(other).count() == rows)
+  }
+
+  private def reorderCols(df: DataFrame): DataFrame = {
+    // Since upon parsing JSON, Spark re-order columns in lexicographical order
+    // of their names, we have to shuffle new Z-index table columns order to match
+    val sortedCols = df.columns.sorted
+    df.select(sortedCols.head, sortedCols.tail: _*)
   }
 
   def createComplexDataFrame(spark: SparkSession): DataFrame = {
