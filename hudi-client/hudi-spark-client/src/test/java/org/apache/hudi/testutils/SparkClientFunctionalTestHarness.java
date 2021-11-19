@@ -203,7 +203,8 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         index.updateLocation(HoodieJavaRDD.of(writeStatus), context, table));
   }
 
-  protected void insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+  protected Stream<HoodieBaseFile> insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
+                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -228,8 +229,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
     roView = getHoodieTableFileSystemView(reloadedMetaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
     dataFilesToRead = roView.getLatestBaseFiles();
-    assertTrue(dataFilesToRead.findAny().isPresent(),
-        "should list the base files we wrote in the delta commit");
+    return dataFilesToRead;
   }
 
   protected void updateRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
