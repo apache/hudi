@@ -58,12 +58,14 @@ import org.apache.spark.sql.types.ShortType;
 import org.apache.spark.sql.types.StringType;
 import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
 import scala.collection.JavaConversions;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -322,6 +324,7 @@ public class ZOrderingIndexHelper {
    * </ol>
    *
    * @param sparkSession encompassing Spark session
+   * @param sourceTableSchema instance of {@link StructType} bearing source table's writer's schema
    * @param sourceBaseFiles list of base-files to be indexed
    * @param zorderedCols target Z-ordered columns
    * @param zindexFolderPath Z-index folder path
@@ -330,6 +333,7 @@ public class ZOrderingIndexHelper {
    */
   public static void updateZIndexFor(
       @Nonnull SparkSession sparkSession,
+      @Nonnull StructType sourceTableSchema,
       @Nonnull List<String> sourceBaseFiles,
       @Nonnull List<String> zorderedCols,
       @Nonnull String zindexFolderPath,
@@ -338,17 +342,13 @@ public class ZOrderingIndexHelper {
   ) {
     FileSystem fs = FSUtils.getFs(zindexFolderPath, sparkSession.sparkContext().hadoopConfiguration());
 
-    // Load source base-files (primarily to fetch corresponding schema)
-    Dataset<Row> sourceDf =
-        sparkSession.read().load(JavaConversions.asScalaBuffer(sourceBaseFiles));
-
     // Compose new Z-index table for the given source base files
     Dataset<Row> newZIndexDf =
         buildZIndexTableFor(
             sparkSession,
             sourceBaseFiles,
             zorderedCols.stream()
-                .map(col -> sourceDf.schema().fields()[sourceDf.schema().fieldIndex(col)])
+                .map(col -> sourceTableSchema.fields()[sourceTableSchema.fieldIndex(col)])
                 .collect(Collectors.toList())
         );
 
@@ -404,14 +404,17 @@ public class ZOrderingIndexHelper {
       if (validIndexTables.isEmpty()) {
         finalZIndexDf = newZIndexDf;
       } else {
-        Path latestZIndexTable = new Path(zindexFolderPath, validIndexTables.get(validIndexTables.size() - 1));
+
         finalZIndexDf =
             tryMergeMostRecentIndexTableInto(
                 sparkSession,
                 newZIndexDf,
                 // Load current most recent Z-index table
-                sparkSession.read()
-                    .load(latestZIndexTable.toString())
+                loadZIndexTable(
+                    sparkSession,
+                    new Path(zindexFolderPath, validIndexTables.get(validIndexTables.size() - 1)),
+                    sourceTableSchema
+                )
             );
 
         // Clean up all index tables (after creation of the new index)
@@ -441,6 +444,55 @@ public class ZOrderingIndexHelper {
       LOG.error("Failed to build new Z-index table", e);
       throw new HoodieException(e);
     }
+  }
+
+  private static Dataset<Row> loadZIndexTable(
+      @Nonnull SparkSession sparkSession,
+      @Nonnull Path indexTablePath,
+      @Nonnull StructType sourceTableSchema
+  ) {
+    // NOTE: That Parquet schema might deviate from the original table schema (for ex,
+    //       by upcasting "short" to "integer" types, etc), and hence we need to re-adjust it
+    //       prior to merging, since merging might fail otherwise due to schemas incompatibility
+    Dataset<Row> df = sparkSession.read().load(indexTablePath.toString());
+
+    StructType zindexTableSchema =
+        syncZIndexSchemaToSource(
+            df.schema(),
+            sourceTableSchema
+        );
+
+    return sparkSession.createDataFrame(df.rdd(), zindexTableSchema);
+  }
+
+  private static StructType syncZIndexSchemaToSource(
+      @Nonnull StructType existingIndexTableSchema,
+      @Nonnull StructType sourceTableSchema
+  ) {
+    Map<String, DataType> sourceTableColumnTypesMap =
+        Arrays.stream(sourceTableSchema.fields())
+            .collect(Collectors.toMap(StructField::name, StructField::dataType));
+
+    return new StructType(
+      Arrays.stream(existingIndexTableSchema.fields())
+          .map(field -> {
+            String sourceTableColName = mapToSourceTableColumnName(field);
+            // Columns not tied to source-table don't need to be remapped
+            if (sourceTableColName == null) {
+              return field;
+            }
+
+            // In case field is not present in schema anymore, fallback to existing Z-index
+            // column type
+            return new StructField(
+                field.name(),
+                sourceTableColumnTypesMap.getOrDefault(sourceTableColName, field.dataType()),
+                field.nullable(),
+                field.metadata()
+            );
+          })
+          .toArray(StructField[]::new)
+    );
   }
 
   @Nonnull
@@ -490,6 +542,27 @@ public class ZOrderingIndexHelper {
 
   private static StructField composeColumnStatStructType(String col, String statName, DataType dataType) {
     return new StructField(composeZIndexColName(col, statName), dataType, true, Metadata.empty());
+  }
+
+  @Nullable
+  private static String mapToSourceTableColumnName(StructField fieldStruct) {
+    String name = fieldStruct.name();
+    int maxStatSuffixIdx = name.lastIndexOf(String.format("_%s", Z_INDEX_MAX_VALUE_STAT_NAME));
+    if (maxStatSuffixIdx != -1) {
+      return name.substring(0, maxStatSuffixIdx);
+    }
+
+    int minStatSuffixIdx = name.lastIndexOf(String.format("_%s", Z_INDEX_MIN_VALUE_STAT_NAME));
+    if (minStatSuffixIdx != -1) {
+      return name.substring(0, minStatSuffixIdx);
+    }
+
+    int numNullsSuffixIdx = name.lastIndexOf(String.format("_%s", Z_INDEX_NUM_NULLS_STAT_NAME));
+    if (numNullsSuffixIdx != -1) {
+      return name.substring(0, numNullsSuffixIdx);
+    }
+
+    return null;
   }
 
   private static String composeZIndexColName(String col, String statName) {
