@@ -80,16 +80,20 @@ public class IncrementalInputSplits implements Serializable {
   private final long maxCompactionMemoryInBytes;
   // for partition pruning
   private final Set<String> requiredPartitions;
+  // skip compaction
+  private final boolean skipCompaction;
 
   private IncrementalInputSplits(
       Configuration conf,
       Path path,
       long maxCompactionMemoryInBytes,
-      @Nullable Set<String> requiredPartitions) {
+      @Nullable Set<String> requiredPartitions,
+      boolean skipCompaction) {
     this.conf = conf;
     this.path = path;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.requiredPartitions = requiredPartitions;
+    this.skipCompaction = skipCompaction;
   }
 
   /**
@@ -262,7 +266,7 @@ public class IncrementalInputSplits implements Serializable {
           final String startTs = archivedCompleteTimeline.firstInstant().get().getTimestamp();
           archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
         }
-        return instantStream
+        return maySkipCompaction(instantStream)
             .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, archivedTimeline)).collect(Collectors.toList());
       }
     }
@@ -299,7 +303,13 @@ public class IncrementalInputSplits implements Serializable {
       final String endCommit = this.conf.get(FlinkOptions.READ_END_COMMIT);
       instantStream = instantStream.filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN_OR_EQUALS, endCommit));
     }
-    return instantStream.collect(Collectors.toList());
+    return maySkipCompaction(instantStream).collect(Collectors.toList());
+  }
+
+  private Stream<HoodieInstant> maySkipCompaction(Stream<HoodieInstant> instants) {
+    return this.skipCompaction
+        ? instants.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
+        : instants;
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
@@ -352,6 +362,8 @@ public class IncrementalInputSplits implements Serializable {
     private long maxCompactionMemoryInBytes;
     // for partition pruning
     private Set<String> requiredPartitions;
+    // skip compaction
+    private boolean skipCompaction = false;
 
     public Builder() {
     }
@@ -376,9 +388,14 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
+    public Builder skipCompaction(boolean skipCompaction) {
+      this.skipCompaction = skipCompaction;
+      return this;
+    }
+
     public IncrementalInputSplits build() {
       return new IncrementalInputSplits(Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path),
-          this.maxCompactionMemoryInBytes, this.requiredPartitions);
+          this.maxCompactionMemoryInBytes, this.requiredPartitions, this.skipCompaction);
     }
   }
 }
