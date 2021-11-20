@@ -48,7 +48,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -290,7 +289,7 @@ public class ParquetUtils extends BaseFileUtils {
   /**
    * Parse min/max statistics stored in parquet footers for all columns.
    */
-  public Collection<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(
+  public List<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(
       @Nonnull Configuration conf,
       @Nonnull Path parquetFilePath,
       @Nonnull List<String> cols
@@ -308,8 +307,14 @@ public class ParquetUtils extends BaseFileUtils {
                         new HoodieColumnRangeMetadata<>(
                             parquetFilePath.getName(),
                             columnChunkMetaData.getPath().toDotString(),
-                            (Comparable) handleValue(columnChunkMetaData.getPrimitiveType(), columnChunkMetaData.getStatistics().genericGetMin()),
-                            (Comparable) handleValue(columnChunkMetaData.getPrimitiveType(), columnChunkMetaData.getStatistics().genericGetMax()),
+                            (Comparable) convertToNativeJavaType(
+                                columnChunkMetaData.getPrimitiveType(),
+                                columnChunkMetaData.getStatistics().genericGetMin()
+                            ),
+                            (Comparable) convertToNativeJavaType(
+                                columnChunkMetaData.getPrimitiveType(),
+                                columnChunkMetaData.getStatistics().genericGetMax()
+                            ),
                             columnChunkMetaData.getStatistics().getNumNulls(),
                             columnChunkMetaData.getPrimitiveType().stringifier())
                     )
@@ -317,10 +322,12 @@ public class ParquetUtils extends BaseFileUtils {
             .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
-    return columnToStatsListMap.values()
-        .stream()
-        .map(this::getColumnRangeInFile)
-        .collect(Collectors.toList());
+    ArrayList<HoodieColumnRangeMetadata<Comparable>> targetList = new ArrayList<>();
+    for (List<HoodieColumnRangeMetadata<Comparable>> list : columnToStatsListMap.values()) {
+      targetList.add(getColumnRangeInFile(list));
+    }
+
+    return targetList;
   }
 
   private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInFile(
@@ -362,11 +369,11 @@ public class ParquetUtils extends BaseFileUtils {
         one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls(), one.getStringifier());
   }
 
-  private static Comparable<?> handleValue(PrimitiveType primitiveType, Comparable<?> val) {
+  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val) {
     if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
       DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
       // NOTE: We upcast conservatively upcast to long to make sure there's no truncation
-      return new BigDecimal((long) val, new MathContext(decimalMetadata.getPrecision()));
+      return new BigDecimal((Long) val, new MathContext(decimalMetadata.getPrecision()));
     }
 
     return val;
