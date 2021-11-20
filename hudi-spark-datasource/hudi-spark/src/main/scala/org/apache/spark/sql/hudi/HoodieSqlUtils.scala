@@ -17,16 +17,15 @@
 
 package org.apache.spark.sql.hudi
 
-import scala.collection.JavaConverters._
 import java.net.URI
-import java.util.{Date, Locale, Properties}
+import java.text.SimpleDateFormat
+import java.util.{Locale, Properties}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.DFSPropertiesConfiguration
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -42,10 +41,9 @@ import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expressi
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 
-import java.text.SimpleDateFormat
+import scala.collection.JavaConverters._
 import scala.collection.immutable.Map
 
 object HoodieSqlUtils extends SparkAdapterSupport {

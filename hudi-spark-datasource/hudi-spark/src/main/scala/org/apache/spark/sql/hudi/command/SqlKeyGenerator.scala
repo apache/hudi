@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import java.sql.Timestamp
-import java.util.concurrent.TimeUnit.{MICROSECONDS, MILLISECONDS}
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
@@ -28,7 +27,7 @@ import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{StructType, TimestampType}
-import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
+import org.joda.time.format.DateTimeFormat
 
 /**
  * A complex key generator for sql command which do some process for the

@@ -47,7 +47,6 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 
 import java.util.{Locale, Properties}
-import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.control.NonFatal
