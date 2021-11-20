@@ -118,6 +118,10 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     return operation;
   }
 
+  public void setOperation(HoodieOperation operation) {
+    this.operation = operation;
+  }
+
   public T getData() {
     if (data == null) {
       throw new IllegalStateException("Payload already deflated for record.");

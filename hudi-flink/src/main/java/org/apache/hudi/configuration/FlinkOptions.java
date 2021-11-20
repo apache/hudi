@@ -227,6 +227,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
+  public static final ConfigOption<Boolean> CHANGELOG_NORMALIZE = ConfigOptions
+      .key("write.changelog.normalize")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to normalize written CDC data of changelog, default false. Must with changelog.enabled to enabled together,\n"
+          + "This feature is like flink-sql-cli parameter table.exec.source.cdc-events-duplicate = ture, but it doesn't cause state to increase");
+
   public static final ConfigOption<Boolean> INSERT_CLUSTER = ConfigOptions
       .key("write.insert.cluster")
       .booleanType()

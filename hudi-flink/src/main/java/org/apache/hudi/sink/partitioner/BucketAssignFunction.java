@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.BaseAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -92,6 +93,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   private final boolean isChangingRecords;
 
   /**
+   * Record the pre location by lookup indexState.
+   */
+  private HoodieRecordGlobalLocation oldLoc;
+
+  /**
    * Used to create DELETE payload.
    */
   private PayloadCreation payloadCreation;
@@ -102,12 +108,19 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    */
   private final boolean globalIndex;
 
+  /**
+   * If the isChangelogNormalize is ture，will deduplicate for cdc data.
+   */
+  private final boolean isChangelogNormalize;
+
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
     this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED)
         && !conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+    this.isChangelogNormalize = conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)
+        && conf.getBoolean(FlinkOptions.CHANGELOG_NORMALIZE);
   }
 
   @Override
@@ -157,8 +170,43 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
       IndexRecord<?> indexRecord = (IndexRecord<?>) value;
       this.indexState.update((HoodieRecordGlobalLocation) indexRecord.getCurrentLocation());
     } else {
-      processRecord((HoodieRecord<?>) value, out);
+      HoodieRecord<?> record = (HoodieRecord<?>) value;
+      // get the current recordKey previous location by lookup index state
+      oldLoc = indexState.value();
+      if (isChangelogNormalize) {
+        processRecordWithChangelogNormalize(record, out);
+      } else {
+        processRecord(record, out);
+      }
     }
+  }
+
+  /**
+   * Process to deduplicate for record, send current record as last row,
+   * need retract previous record if record of operation is insert.
+   * @param record
+   * @param out
+   * @throws Exception
+   */
+  private void processRecordWithChangelogNormalize(HoodieRecord<?> record, Collector<O> out) throws Exception {
+    HoodieOperation currentKind = record.getOperation();
+    if (currentKind == HoodieOperation.INSERT  || currentKind == HoodieOperation.UPDATE_AFTER) {
+      // check whether for duplicate insert
+      if (oldLoc == null) {
+        // if the first time is INSERT operation, send +I event
+        record.setOperation(HoodieOperation.INSERT);
+      } else {
+        // If it wasn't an insert the first time, need first send -U event
+        // then send +U event
+        if (currentKind == HoodieOperation.INSERT) {
+          HoodieRecord<?> preRecord = new HoodieRecord<>(new HoodieKey(record.getRecordKey(), record.getPartitionPath()),
+              record.getData(), HoodieOperation.UPDATE_BEFORE);
+          processRecord(preRecord, out);
+        }
+        record.setOperation(HoodieOperation.UPDATE_AFTER);
+      }
+    }
+    processRecord(record, out);
   }
 
   @SuppressWarnings("unchecked")
@@ -173,7 +221,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
     // Only changing records need looking up the index for the location,
     // append only records are always recognized as INSERT.
-    HoodieRecordGlobalLocation oldLoc = indexState.value();
     if (isChangingRecords && oldLoc != null) {
       // Set up the instant time as "U" to mark the bucket as an update bucket.
       if (!Objects.equals(oldLoc.getPartitionPath(), partitionPath)) {
