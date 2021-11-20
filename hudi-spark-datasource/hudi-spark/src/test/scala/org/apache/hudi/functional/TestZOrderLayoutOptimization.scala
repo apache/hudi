@@ -133,9 +133,11 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   @Test
   def testZIndexTableComposition(): Unit = {
     val inputDf =
-      spark.read.parquet(
-        getClass.getClassLoader.getResource("index/zorder/input-table").toString
-      )
+      spark.read
+        .schema(sourceTableSchema)
+        .parquet(
+          getClass.getClassLoader.getResource("index/zorder/input-table").toString
+        )
 
     val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
     val zorderedColsSchemaFields = inputDf.schema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
@@ -157,7 +159,9 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
     val manualZIndexTableDf =
       buildZIndexTableManually(
         getClass.getClassLoader.getResource("index/zorder/input-table").toString,
-        indexSchema)
+        zorderedCols,
+        indexSchema
+      )
 
     // NOTE: Z-index is built against stats collected w/in Parquet footers, which will be
     //       represented w/ corresponding Parquet schema (INT, INT64, INT96, etc).
@@ -179,7 +183,12 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   @Test
   def testZIndexTableMerge(): Unit = {
     val testZIndexPath = new Path(basePath, "zindex")
+
     val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
+    val indexSchema =
+      ZOrderingIndexHelper.composeIndexSchema(
+        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
+      )
 
     //
     // Bootstrap Z-index table
@@ -206,16 +215,21 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
         .parquet(new Path(testZIndexPath, firstCommitInstance).toString)
 
     val expectedInitialZIndexTableDf =
-      spark.read
-        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
+      coerceTableToSchema(
+        spark.read
+          .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString),
+        indexSchema
+      )
 
     assertEquals(asJson(sort(expectedInitialZIndexTableDf)), asJson(sort(initialZIndexTable)))
 
     val secondCommitInstance = "1"
     val secondInputDf =
-      spark.read.parquet(
-        getClass.getClassLoader.getResource("index/zorder/another-input-table").toString
-      )
+      spark.read
+        .schema(sourceTableSchema)
+        .parquet(
+          getClass.getClassLoader.getResource("index/zorder/another-input-table").toString
+        )
 
     //
     // Update Z-index table
@@ -290,7 +304,7 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
     assertEquals(fs.exists(new Path(testZIndexPath, "4")), true)
   }
 
-  private def buildZIndexTableManually(tablePath: String, indexSchema: StructType) = {
+  private def buildZIndexTableManually(tablePath: String, zorderedCols: Seq[String], indexSchema: StructType) = {
     val files = {
       val it = fs.listFiles(new Path(tablePath), true)
       var seq = Seq[LocatedFileStatus]()
@@ -302,11 +316,11 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
 
     spark.createDataFrame(
       files.flatMap(file => {
-        val df = spark.read.parquet(file.getPath.toString)
+        val df = spark.read.schema(sourceTableSchema).parquet(file.getPath.toString)
         val exprs: Seq[String] =
           s"'${typedLit(file.getPath.getName)}' AS file" +:
           df.columns
-            .filterNot(_ == "c4")
+            .filter(col => zorderedCols.contains(col))
             .flatMap(col => {
               val minColName = s"${col}_minValue"
               val maxColName = s"${col}_maxValue"
@@ -328,14 +342,15 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   }
 
   def coerceTableToSchema(df: Dataset[Row], schema: StructType): Dataset[Row] = {
-    val colTypeMap = schema.map(f => (f.name, f.dataType)).toMap
-
-    df.select(
-      schema.fields.map(f => {
-        val col = f.name
-        new Column($"$col".cast(colTypeMap(col)))
-      }):_*
-    )
+    df
+//    val colTypeMap = schema.map(f => (f.name, f.dataType)).toMap
+//
+//    df.select(
+//      schema.fields.map(f => {
+//        val col = f.name
+//        new Column($"$col".cast(colTypeMap(col)))
+//      }):_*
+//    )
   }
 
   private def asJson(df: DataFrame) =
