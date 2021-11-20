@@ -1022,6 +1022,7 @@ public class TestHiveSyncTool {
   @MethodSource("syncMode")
   public void testSyncWithoutDiffs(String syncMode) throws Exception {
     hiveSyncConfig.syncMode = syncMode;
+    hiveSyncConfig.isConditionalSync = true;
     HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String tableName = HiveTestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
 
