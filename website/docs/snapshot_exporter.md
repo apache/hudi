@@ -5,9 +5,9 @@ toc: true
 ---
 
 ## Introduction
-HoodieSnapshotExporter allows you to copy data from one location to another for backups or other purposes.
-In addition to copying data, with the SnapshotExporter utility can also repartition data with a provided field
-or you can implement custom repartitioning by extending a class.
+HoodieSnapshotExporter allows you to copy data from one location to another for backups or other purposes. 
+You can write data as Hudi, Json, or Parquet file formats. In addition to copying data, you can also repartition data 
+with a provided field or implement custom repartitioning by extending a class shown in detail below.
 
 ## Arguments
 HoodieSnapshotExporter accepts a reference to a source path and a destination path. The utility will issue a 
