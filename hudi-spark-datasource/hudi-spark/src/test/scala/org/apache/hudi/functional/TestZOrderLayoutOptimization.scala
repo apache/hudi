@@ -18,13 +18,15 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{LocatedFileStatus, Path}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.index.zorder.ZOrderingIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.dsl.expressions.{DslExpression, StringToAttributeConversionHelper}
+import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
@@ -146,6 +148,27 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
         zorderedColsSchemaFields
       )
 
+    val indexSchema =
+      ZOrderingIndexHelper.composeIndexSchema(
+        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
+      )
+
+    // Collect Z-index stats manually (reading individual Parquet files)
+    val manualZIndexTableDf =
+      buildZIndexTableManually(
+        getClass.getClassLoader.getResource("index/zorder/input-table").toString,
+        indexSchema)
+
+    // NOTE: Z-index is built against stats collected w/in Parquet footers, which will be
+    //       represented w/ corresponding Parquet schema (INT, INT64, INT96, etc).
+    //
+    //       When stats are collected manually, produced Z-index table is inherently coerced into the
+    //       schema of the original source Parquet base-file and therefore we have to similarly coerce newly
+    //       built Z-index table (built off Parquet footers) into the canonical index schema (built off the
+    //       original source file schema)
+    assertEquals(asJson(sort(manualZIndexTableDf)), asJson(sort(coerceTableToSchema(newZIndexTableDf, indexSchema))))
+
+    // Match against expected Z-index table
     val expectedZIndexTableDf =
       spark.read
         .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
@@ -156,7 +179,6 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   @Test
   def testZIndexTableMerge(): Unit = {
     val testZIndexPath = new Path(basePath, "zindex")
-
     val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
 
     //
@@ -266,6 +288,54 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
     assertEquals(!fs.exists(new Path(testZIndexPath, "2")), true)
     assertEquals(!fs.exists(new Path(testZIndexPath, "3")), true)
     assertEquals(fs.exists(new Path(testZIndexPath, "4")), true)
+  }
+
+  private def buildZIndexTableManually(tablePath: String, indexSchema: StructType) = {
+    val files = {
+      val it = fs.listFiles(new Path(tablePath), true)
+      var seq = Seq[LocatedFileStatus]()
+      while (it.hasNext) {
+        seq = seq :+ it.next()
+      }
+      seq
+    }
+
+    spark.createDataFrame(
+      files.flatMap(file => {
+        val df = spark.read.parquet(file.getPath.toString)
+        val exprs: Seq[String] =
+          s"'${typedLit(file.getPath.getName)}' AS file" +:
+          df.columns
+            .filterNot(_ == "c4")
+            .flatMap(col => {
+              val minColName = s"${col}_minValue"
+              val maxColName = s"${col}_maxValue"
+              Seq(
+                s"min($col) AS $minColName",
+                s"max($col) AS $maxColName",
+                s"sum(cast(isnull($col) AS long)) AS ${col}_num_nulls"
+              )
+            })
+
+        coerceTableToSchema(
+          df.selectExpr(exprs:_*),
+          indexSchema
+        )
+          .collect()
+      }),
+      indexSchema
+    )
+  }
+
+  def coerceTableToSchema(df: Dataset[Row], schema: StructType): Dataset[Row] = {
+    val colTypeMap = schema.map(f => (f.name, f.dataType)).toMap
+
+    df.select(
+      schema.fields.map(f => {
+        val col = f.name
+        new Column($"$col".cast(colTypeMap(col)))
+      }):_*
+    )
   }
 
   private def asJson(df: DataFrame) =
