@@ -38,10 +38,15 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.PrimitiveType;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -303,8 +308,8 @@ public class ParquetUtils extends BaseFileUtils {
                         new HoodieColumnRangeMetadata<>(
                             parquetFilePath.getName(),
                             columnChunkMetaData.getPath().toDotString(),
-                            (Comparable) columnChunkMetaData.getStatistics().genericGetMin(),
-                            (Comparable) columnChunkMetaData.getStatistics().genericGetMax(),
+                            (Comparable) handleValue(columnChunkMetaData.getPrimitiveType(), columnChunkMetaData.getStatistics().genericGetMin()),
+                            (Comparable) handleValue(columnChunkMetaData.getPrimitiveType(), columnChunkMetaData.getStatistics().genericGetMax()),
                             columnChunkMetaData.getStatistics().getNumNulls(),
                             columnChunkMetaData.getPrimitiveType().stringifier())
                     )
@@ -355,5 +360,15 @@ public class ParquetUtils extends BaseFileUtils {
     return new HoodieColumnRangeMetadata<T>(
         one.getFilePath(),
         one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls(), one.getStringifier());
+  }
+
+  private static Comparable<?> handleValue(PrimitiveType primitiveType, Comparable<?> val) {
+    if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
+      DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
+      // NOTE: We upcast conservatively upcast to long to make sure there's no truncation
+      return new BigDecimal((long) val, new MathContext(decimalMetadata.getPrecision()));
+    }
+
+    return val;
   }
 }
