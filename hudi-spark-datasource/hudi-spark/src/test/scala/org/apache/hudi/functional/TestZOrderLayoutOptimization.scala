@@ -175,6 +175,7 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
     // Match against expected Z-index table
     val expectedZIndexTableDf =
       spark.read
+        .schema(indexSchema)
         .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
 
     assertEquals(asJson(sort(expectedZIndexTableDf)), asJson(sort(newZIndexTableDf)))
