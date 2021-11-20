@@ -68,7 +68,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -405,16 +404,16 @@ public class ZOrderingIndexHelper {
       if (validIndexTables.isEmpty()) {
         finalZIndexDf = newZIndexDf;
       } else {
-
+        // NOTE: That Parquet schema might deviate from the original table schema (for ex,
+        //       by upcasting "short" to "integer" types, etc), and hence we need to re-adjust it
+        //       prior to merging, since merging might fail otherwise due to schemas incompatibility
         finalZIndexDf =
             tryMergeMostRecentIndexTableInto(
                 sparkSession,
                 newZIndexDf,
                 // Load current most recent Z-index table
-                loadZIndexTable(
-                    sparkSession,
-                    new Path(zindexFolderPath, validIndexTables.get(validIndexTables.size() - 1)),
-                    sourceTableSchema
+                sparkSession.read().load(
+                    new Path(zindexFolderPath, validIndexTables.get(validIndexTables.size() - 1)).toString()
                 )
             );
 
@@ -445,55 +444,6 @@ public class ZOrderingIndexHelper {
       LOG.error("Failed to build new Z-index table", e);
       throw new HoodieException(e);
     }
-  }
-
-  private static Dataset<Row> loadZIndexTable(
-      @Nonnull SparkSession sparkSession,
-      @Nonnull Path indexTablePath,
-      @Nonnull StructType sourceTableSchema
-  ) {
-    // NOTE: That Parquet schema might deviate from the original table schema (for ex,
-    //       by upcasting "short" to "integer" types, etc), and hence we need to re-adjust it
-    //       prior to merging, since merging might fail otherwise due to schemas incompatibility
-    Dataset<Row> df = sparkSession.read().load(indexTablePath.toString());
-
-    StructType zindexTableSchema =
-        syncZIndexSchemaToSource(
-            df.schema(),
-            sourceTableSchema
-        );
-
-    return sparkSession.createDataFrame(df.rdd(), zindexTableSchema);
-  }
-
-  private static StructType syncZIndexSchemaToSource(
-      @Nonnull StructType existingIndexTableSchema,
-      @Nonnull StructType sourceTableSchema
-  ) {
-    Map<String, DataType> sourceTableColumnTypesMap =
-        Arrays.stream(sourceTableSchema.fields())
-            .collect(Collectors.toMap(StructField::name, StructField::dataType));
-
-    return new StructType(
-      Arrays.stream(existingIndexTableSchema.fields())
-          .map(field -> {
-            String sourceTableColName = mapToSourceTableColumnName(field);
-            // Columns not tied to source-table don't need to be remapped
-            if (sourceTableColName == null) {
-              return field;
-            }
-
-            // In case field is not present in schema anymore, fallback to existing Z-index
-            // column type
-            return new StructField(
-                field.name(),
-                sourceTableColumnTypesMap.getOrDefault(sourceTableColName, field.dataType()),
-                field.nullable(),
-                field.metadata()
-            );
-          })
-          .toArray(StructField[]::new)
-    );
   }
 
   @Nonnull
@@ -599,8 +549,8 @@ public class ZOrderingIndexHelper {
           new BigDecimal(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof DateType) {
       return Pair.of(
-          java.sql.Date.valueOf(LocalDate.parse(colMetadata.getMinValue().toString())),
-          java.sql.Date.valueOf(LocalDate.parse(colMetadata.getMaxValue().toString())));
+          java.sql.Date.valueOf(colMetadata.getMinValue().toString()),
+          java.sql.Date.valueOf(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof LongType) {
       return Pair.of(
           new Long(colMetadata.getMinValue().toString()),

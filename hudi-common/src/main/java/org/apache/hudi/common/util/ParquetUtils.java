@@ -298,6 +298,7 @@ public class ParquetUtils extends BaseFileUtils {
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
         metadata.getBlocks()
             .stream()
+            .sequential()
             .flatMap(blockMetaData ->
                 blockMetaData.getColumns()
                     .stream()
@@ -338,7 +339,9 @@ public class ParquetUtils extends BaseFileUtils {
     }
 
     // there are multiple blocks. Compute min(block_mins) and max(block_maxs)
-    return blockRanges.stream().reduce(this::combineRanges).get();
+    return blockRanges.stream()
+        .sequential()
+        .reduce(this::combineRanges).get();
   }
 
   private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> combineRanges(
