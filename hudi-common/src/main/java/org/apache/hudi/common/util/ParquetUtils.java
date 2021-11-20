@@ -374,6 +374,8 @@ public class ParquetUtils extends BaseFileUtils {
       DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
       // NOTE: We upcast conservatively upcast to long to make sure there's no truncation
       return new BigDecimal((Long) val, new MathContext(decimalMetadata.getPrecision()));
+    } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
+      return java.sql.Date.valueOf(primitiveType.stringifier().stringify((Integer) val));
     }
 
     return val;

@@ -599,8 +599,8 @@ public class ZOrderingIndexHelper {
           new BigDecimal(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof DateType) {
       return Pair.of(
-          java.sql.Date.valueOf(new String(((Binary) colMetadata.getMinValue()).getBytes())),
-          java.sql.Date.valueOf(new String(((Binary) colMetadata.getMaxValue()).getBytes())));
+          java.sql.Date.valueOf(colMetadata.getMinValue().toString()),
+          java.sql.Date.valueOf(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof LongType) {
       return Pair.of(
           new Long(colMetadata.getMinValue().toString()),
