@@ -25,6 +25,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -45,6 +47,7 @@ import java.util.List;
  */
 public class PostgresDebeziumAvroPayload extends OverwriteWithLatestAvroPayload {
 
+  private static final Logger LOG = LogManager.getLogger(PostgresDebeziumAvroPayload.class);
   public static final String DEBEZIUM_TOASTED_VALUE = "__debezium_unavailable_value";
 
   public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {

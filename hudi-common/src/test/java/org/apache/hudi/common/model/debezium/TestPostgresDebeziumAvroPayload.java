@@ -1,6 +1,6 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
+ * or mo contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -38,88 +39,57 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestPostgresDebeziumAvroPayload {
 
+  private static final String KEY_FIELD_NAME = "Key";
   private static final String AVRO_SCHEMA_STRING = "{\"type\": \"record\","
       + "\"name\": \"events\"," + "\"fields\": [ "
-      + "{\"name\": \"Key\", \"type\" : \"int\"},"
+      + "{\"name\": \"" + KEY_FIELD_NAME + "\", \"type\" : \"int\"},"
       + "{\"name\": \"_change_operation_type\", \"type\": \"string\"},"
       + "{\"name\": \"_event_lsn\", \"type\" : \"long\"}"
       + "]}";
 
+  private Schema avroSchema;
+
+  @BeforeEach
+  void setUp() {
+    this.avroSchema = new Schema.Parser().parse(AVRO_SCHEMA_STRING);
+  }
+
   @Test
   public void testInsert() throws IOException {
-    Schema avroSchema = new Schema.Parser().parse(AVRO_SCHEMA_STRING);
-    GenericRecord record = new GenericData.Record(avroSchema);
-    record.put("Key", 0);
-    record.put(DebeziumConstants.MODIFIED_OP_COL_NAME, "c");
-    record.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 100L);
-
-    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(record, 100L);
-
-    Option<IndexedRecord> outputPayload = payload.getInsertValue(avroSchema);
-    assertTrue((int) outputPayload.get().get(0) == 0);
-    assertTrue(outputPayload.get().get(1).toString().equals("c"));
-    assertTrue((long) outputPayload.get().get(2) == 100L);
+    GenericRecord insertRecord = createRecord(0, Operation.INSERT, 100L);
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(insertRecord, 100L);
+    validateRecord(payload.getInsertValue(avroSchema), 0, Operation.INSERT, 100L);
   }
 
   @Test
   public void testUpdate() throws Exception {
-    Schema avroSchema = new Schema.Parser().parse(AVRO_SCHEMA_STRING);
-    GenericRecord newRecord = new GenericData.Record(avroSchema);
-    newRecord.put("Key", 1);
-    newRecord.put(DebeziumConstants.MODIFIED_OP_COL_NAME, "u");
-    newRecord.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 100L);
+    GenericRecord updateRecord = createRecord(1, Operation.UPDATE, 100L);
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(updateRecord, 100L);
 
-    GenericRecord oldRecord = new GenericData.Record(avroSchema);
-    oldRecord.put("Key", 0);
-    oldRecord.put(DebeziumConstants.MODIFIED_OP_COL_NAME, "c");
-    oldRecord.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 99L);
+    GenericRecord existingRecord = createRecord(1, Operation.INSERT, 99L);
+    Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
+    validateRecord(mergedRecord, 1, Operation.UPDATE, 100L);
 
-    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(newRecord, 100L);
-
-    Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema);
-    assertTrue((int) outputPayload.get().get(0) == 1);
-    assertTrue(outputPayload.get().get(1).toString().equals("u"));
-    assertTrue((long) outputPayload.get().get(2) == 100L);
-
-    GenericRecord lateRecord = new GenericData.Record(avroSchema);
-    lateRecord.put("Key", 1);
-    lateRecord.put(DebeziumConstants.MODIFIED_OP_COL_NAME, "u");
-    lateRecord.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 98L);
+    GenericRecord lateRecord = createRecord(1, Operation.UPDATE, 98L);
     payload = new PostgresDebeziumAvroPayload(lateRecord, 98L);
-    outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema);
-    assertTrue((int) outputPayload.get().get(0) == 0);
-    assertTrue(outputPayload.get().get(1).toString().equals("c"));
-    assertTrue((long) outputPayload.get().get(2) == 99L);
+    mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
+    validateRecord(mergedRecord, 1, Operation.INSERT, 99L);
   }
 
   @Test
   public void testDelete() throws Exception {
-    Schema avroSchema = new Schema.Parser().parse(AVRO_SCHEMA_STRING);
-    GenericRecord deleteRecord = new GenericData.Record(avroSchema);
-    deleteRecord.put("Key", 2);
-    deleteRecord.put(DebeziumConstants.MODIFIED_OP_COL_NAME, "d");
-    deleteRecord.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 100L);
-
-    GenericRecord oldRecord = new GenericData.Record(avroSchema);
-    oldRecord.put("Key", 3);
-    oldRecord.put(DebeziumConstants.MODIFIED_OP_COL_NAME, "u");
-    oldRecord.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 99L);
-
+    GenericRecord deleteRecord = createRecord(2, Operation.DELETE, 100L);
     PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(deleteRecord, 100L);
 
-    Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema);
+    GenericRecord existingRecord = createRecord(2, Operation.UPDATE, 99L);
+    Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
     // expect nothing to be committed to table
-    assertFalse(outputPayload.isPresent());
+    assertFalse(mergedRecord.isPresent());
 
-    GenericRecord lateRecord = new GenericData.Record(avroSchema);
-    lateRecord.put("Key", 1);
-    lateRecord.put(DebeziumConstants.MODIFIED_OP_COL_NAME, "d");
-    lateRecord.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 98L);
+    GenericRecord lateRecord = createRecord(2, Operation.DELETE, 98L);
     payload = new PostgresDebeziumAvroPayload(lateRecord, 98L);
-    outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema);
-    assertTrue((int) outputPayload.get().get(0) == 3);
-    assertTrue(outputPayload.get().get(1).toString().equals("u"));
-    assertTrue((long) outputPayload.get().get(2) == 99L);
+    mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema);
+    validateRecord(mergedRecord, 2, Operation.UPDATE, 99L);
   }
 
   @Test
@@ -166,5 +136,32 @@ public class TestPostgresDebeziumAvroPayload {
     assertEquals(null, outputRecord.get("byte_null_col_1"));
     assertEquals("valid string value", ((Utf8) outputRecord.get("string_null_col_2")).toString());
     assertEquals("valid byte value", new String(((ByteBuffer) outputRecord.get("byte_null_col_2")).array(), StandardCharsets.UTF_8));
+  }
+
+  private GenericRecord createRecord(int primaryKeyValue, Operation op, long lsnValue) {
+    GenericRecord record = new GenericData.Record(avroSchema);
+    record.put(KEY_FIELD_NAME, primaryKeyValue);
+    record.put(DebeziumConstants.MODIFIED_OP_COL_NAME, op.op);
+    record.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, lsnValue);
+    return record;
+  }
+
+  private void validateRecord(Option<IndexedRecord> iRecord, int primaryKeyValue, Operation op, long lsnValue) {
+    IndexedRecord record = iRecord.get();
+    assertTrue((int) record.get(0) == primaryKeyValue);
+    assertTrue(record.get(1).toString().equals(op.op));
+    assertTrue((long) record.get(2) == lsnValue);
+  }
+
+  private enum Operation {
+    INSERT("c"),
+    UPDATE("u"),
+    DELETE("d");
+
+    public final String op;
+
+    Operation(String op) {
+      this.op = op;
+    }
   }
 }
