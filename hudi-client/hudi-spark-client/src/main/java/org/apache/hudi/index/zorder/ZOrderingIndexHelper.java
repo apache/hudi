@@ -68,6 +68,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -593,14 +594,13 @@ public class ZOrderingIndexHelper {
           new String(((Binary) colMetadata.getMaxValue()).getBytes())
       );
     } else if (colType instanceof DecimalType) {
-      // TODO this will be losing precision
       return Pair.of(
           new BigDecimal(colMetadata.getMinValue().toString()),
           new BigDecimal(colMetadata.getMaxValue().toString()));
     } else if (colType instanceof DateType) {
       return Pair.of(
-          java.sql.Date.valueOf(colMetadata.getMinValue().toString()),
-          java.sql.Date.valueOf(colMetadata.getMaxValue().toString()));
+          java.sql.Date.valueOf(LocalDate.parse(colMetadata.getMinValue().toString())),
+          java.sql.Date.valueOf(LocalDate.parse(colMetadata.getMaxValue().toString())));
     } else if (colType instanceof LongType) {
       return Pair.of(
           new Long(colMetadata.getMinValue().toString()),

@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -26,11 +30,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -46,7 +45,7 @@ import org.apache.parquet.schema.PrimitiveType;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.math.MathContext;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -369,13 +368,15 @@ public class ParquetUtils extends BaseFileUtils {
         one.getColumnName(), minValue, maxValue, one.getNumNulls() + another.getNumNulls(), one.getStringifier());
   }
 
-  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val) {
+  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
     if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
       DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
       // NOTE: We upcast conservatively upcast to long to make sure there's no truncation
-      return new BigDecimal((Long) val, new MathContext(decimalMetadata.getPrecision()));
+      return BigDecimal.valueOf((int) val, decimalMetadata.getScale());
     } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
-      return java.sql.Date.valueOf(primitiveType.stringifier().stringify((Integer) val));
+      return java.sql.Date.valueOf(
+          LocalDate.parse(primitiveType.stringifier().stringify((int) val))
+      );
     }
 
     return val;
