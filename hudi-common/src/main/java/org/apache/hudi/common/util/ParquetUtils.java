@@ -374,12 +374,16 @@ public class ParquetUtils extends BaseFileUtils {
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable val) {
     if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
       DecimalMetadata decimalMetadata = primitiveType.getDecimalMetadata();
-      // NOTE: We upcast conservatively upcast to long to make sure there's no truncation
-      return BigDecimal.valueOf((int) val, decimalMetadata.getScale());
+      return BigDecimal.valueOf((Integer) val, decimalMetadata.getScale());
     } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
-      return java.sql.Date.valueOf(
-          LocalDate.parse(primitiveType.stringifier().stringify((int) val))
-      );
+      // NOTE: This is a workaround to address race-condition in using
+      //       {@code SimpleDataFormat} concurrently (w/in {@code DateStringifier})
+      // TODO cleanup after Parquet upgrade to 1.12
+      synchronized (primitiveType.stringifier()) {
+        return java.sql.Date.valueOf(
+            primitiveType.stringifier().stringify((Integer) val)
+        );
+      }
     }
 
     return val;
