@@ -139,7 +139,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -294,7 +295,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   @Test
   void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
     boolean populateMetaFields = true;
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -344,7 +346,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       newCommitTime = "002";
       // WriteClient with custom config (disable small file handling)
       HoodieWriteConfig smallFileWriteConfig = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(populateMetaFields)
-          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
       try (SparkRDDWriteClient nClient = getHoodieWriteClient(smallFileWriteConfig)) {
         nClient.startCommitWithTime(newCommitTime);
 
