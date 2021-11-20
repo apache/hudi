@@ -193,7 +193,8 @@ public class HiveSyncTool extends AbstractSyncTool {
 
     // Sync the partitions if needed
     boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince);
-    if (schemaChanged || partitionsChanged) {
+    boolean meetSyncConditions = schemaChanged || partitionsChanged;
+    if (!cfg.isConditionalSync || meetSyncConditions) {
       hoodieHiveClient.updateLastCommitTimeSynced(tableName);
     }
     LOG.info("Sync complete for " + tableName);
