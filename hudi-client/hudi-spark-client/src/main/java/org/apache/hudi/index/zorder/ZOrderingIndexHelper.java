@@ -308,9 +308,9 @@ public class ZOrderingIndexHelper {
             })
             .filter(Objects::nonNull);
 
-    List<StructField> indexSchema = composeIndexSchema(zorderedColumnSchemas);
+    StructType indexSchema = composeIndexSchema(zorderedColumnSchemas);
 
-    return sparkSession.createDataFrame(allMetaDataRDD, StructType$.MODULE$.apply(indexSchema));
+    return sparkSession.createDataFrame(allMetaDataRDD, indexSchema);
   }
 
   /**
@@ -528,8 +528,11 @@ public class ZOrderingIndexHelper {
     return sparkSession.sql(createIndexMergeSql(existingIndexTempTableName, newIndexTempTableName, newTableColumns));
   }
 
+  /**
+   * @VisibleForTesting
+   */
   @Nonnull
-  private static List<StructField> composeIndexSchema(@Nonnull List<StructField> zorderedColumnsSchemas) {
+  public static StructType composeIndexSchema(@Nonnull List<StructField> zorderedColumnsSchemas) {
     List<StructField> schema = new ArrayList<>();
     schema.add(new StructField(Z_INDEX_FILE_COLUMN_NAME, StringType$.MODULE$, true, Metadata.empty()));
     zorderedColumnsSchemas.forEach(colSchema -> {
@@ -537,7 +540,7 @@ public class ZOrderingIndexHelper {
       schema.add(composeColumnStatStructType(colSchema.name(), Z_INDEX_MAX_VALUE_STAT_NAME, colSchema.dataType()));
       schema.add(composeColumnStatStructType(colSchema.name(), Z_INDEX_NUM_NULLS_STAT_NAME, LongType$.MODULE$));
     });
-    return schema;
+    return StructType$.MODULE$.apply(schema);
   }
 
   private static StructField composeColumnStatStructType(String col, String statName, DataType dataType) {
