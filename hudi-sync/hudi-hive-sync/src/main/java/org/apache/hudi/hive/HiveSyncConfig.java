@@ -146,6 +146,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
     newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
     newConfig.withOperationField = cfg.withOperationField;
+    newConfig.isConditionalSync = cfg.isConditionalSync;
     return newConfig;
   }
 
@@ -177,6 +178,7 @@ public class HiveSyncConfig implements Serializable {
       + ", syncAsSparkDataSourceTable=" + syncAsSparkDataSourceTable
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
+      + ", isConditionalSync=" + isConditionalSync
       + '}';
   }
 }
