@@ -304,30 +304,25 @@ public class ParquetUtils extends BaseFileUtils {
                     .stream()
                     .filter(f -> cols.contains(f.getPath().toDotString()))
                     .map(columnChunkMetaData ->
-                        new HoodieColumnRangeMetadata<>(
+                        new HoodieColumnRangeMetadata<Comparable>(
                             parquetFilePath.getName(),
                             columnChunkMetaData.getPath().toDotString(),
-                            (Comparable) convertToNativeJavaType(
+                            convertToNativeJavaType(
                                 columnChunkMetaData.getPrimitiveType(),
-                                columnChunkMetaData.getStatistics().genericGetMin()
-                            ),
-                            (Comparable) convertToNativeJavaType(
+                                columnChunkMetaData.getStatistics().genericGetMin()),
+                            convertToNativeJavaType(
                                 columnChunkMetaData.getPrimitiveType(),
-                                columnChunkMetaData.getStatistics().genericGetMax()
-                            ),
+                                columnChunkMetaData.getStatistics().genericGetMax()),
                             columnChunkMetaData.getStatistics().getNumNulls(),
-                            columnChunkMetaData.getPrimitiveType().stringifier())
-                    )
+                            columnChunkMetaData.getPrimitiveType().stringifier()))
             )
             .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
-    ArrayList<HoodieColumnRangeMetadata<Comparable>> targetList = new ArrayList<>();
-    for (List<HoodieColumnRangeMetadata<Comparable>> list : columnToStatsListMap.values()) {
-      targetList.add(getColumnRangeInFile(list));
-    }
 
-    return targetList;
+    return columnToStatsListMap.values()
+        .stream()
+        .map(this::getColumnRangeInFile).collect(Collectors.toCollection(ArrayList::new));
   }
 
   private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInFile(
