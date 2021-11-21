@@ -985,8 +985,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
-  @Test
-  void testWriteReadDecimals() {
+  @ParameterizedTest
+  @ValueSource(strings = {"bulk_insert", "upsert"})
+  void testWriteReadDecimals(String operation) {
     TableEnvironment tableEnv = batchTableEnv;
     String createTable = sql("decimals")
         .field("f0 decimal(3, 2)")
@@ -994,7 +995,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         .field("f2 decimal(20, 2)")
         .field("f3 decimal(38, 18)")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.OPERATION, "bulk_insert")
+        .option(FlinkOptions.OPERATION, operation)
         .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
         .pkField("f0")
         .noPartition()

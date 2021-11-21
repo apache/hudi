@@ -365,7 +365,9 @@ public class ParquetSplitReaderUtil {
             "TIME_MICROS original type is not ");
         return new HeapTimestampVector(batchSize);
       case DECIMAL:
-        checkArgument(typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+        checkArgument(
+            (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+                || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
                 && primitiveType.getOriginalType() == OriginalType.DECIMAL,
             "Unexpected type: %s", typeName);
         return new HeapBytesVector(batchSize);
