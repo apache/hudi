@@ -865,9 +865,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         .field("name STRING")
         .field("weight DOUBLE")
         .pkField("id")
+        .option(FlinkOptions.TABLE_TYPE,  HoodieTableType.MERGE_ON_READ)
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.READ_AS_STREAMING, execMode == ExecMode.STREAM)
-        .option(FlinkOptions.PRE_COMBINE, true)
         .option(FlinkOptions.CHANGELOG_ENABLED, true)
         .option(FlinkOptions.CHANGELOG_NORMALIZE, true)
         .noPartition()
@@ -876,13 +876,29 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String insertInto = "insert into hoodie_sink select id, ts, name, weight from debezium_source";
     execInsertSql(streamTableEnv, insertInto);
 
-    final String expected = "["
-        + "+I[101, 1001, scooter, 3.140000104904175], "
-        + "+I[106, 10002, hammer, 1.0]]";
+    if (execMode == ExecMode.BATCH) {
 
-    List<Row> result = execSelectSql(streamTableEnv, "select * from hoodie_sink", execMode);
+      final String batchReadExpected = "["
+          + "+U[101, 1001, scooter, 3.140000104904175], "
+          + "+U[106, 10002, hammer, 1.0]]";
+      List<Row> batchResult = execSelectSql(streamTableEnv, "select * from hoodie_sink", ExecMode.BATCH);
+      assertRowsEquals(batchResult, batchReadExpected);
+    } else {
 
-    assertRowsEquals(result, expected);
+      final String streamingReadExpected = "["
+          + "+I[101, 1000, scooter, 3.140000104904175], "
+          + "+U[101, 1001, scooter, 3.140000104904175], "
+          + "+I[106, 6000, hammer, 1.0], "
+          + "+U[106, 10000, hammer, 1.0], "
+          + "+U[106, 10002, hammer, 1.0], "
+          + "+I[111, 13000, scooter, 5.179999828338623], "
+          + "+U[111, 15000, scooter, 5.170000076293945], "
+          + "-D[111, 15000, scooter, 5.170000076293945], "
+          + "-D[111, 16000, scooter, 5.170000076293945]]";
+
+      List<Row> streamingResult = execSelectSql(streamTableEnv, "select * from hoodie_sink", ExecMode.STREAM);
+      assertRowsEquals(streamingResult, streamingReadExpected);
+    }
   }
 
   @ParameterizedTest
