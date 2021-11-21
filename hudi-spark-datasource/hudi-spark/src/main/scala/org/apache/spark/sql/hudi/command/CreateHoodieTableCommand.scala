@@ -64,7 +64,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     // check if there are conflict between table configs defined in hoodie table and properties defined in catalog.
     CreateHoodieTableCommand.validateTblProperties(hoodieCatalogTable)
     // init hoodie table
-    hoodieCatalogTable.initHoodieTableIfNeeded()
+    hoodieCatalogTable.initHoodieTable()
 
     try {
       // create catalog table for this hoodie table

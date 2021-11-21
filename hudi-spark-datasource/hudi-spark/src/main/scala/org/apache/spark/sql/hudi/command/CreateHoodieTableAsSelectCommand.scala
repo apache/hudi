@@ -78,7 +78,7 @@ case class CreateHoodieTableAsSelectCommand(
     // Execute the insert query
     try {
       // init hoodie table
-      hoodieCatalogTable.initHoodieTableIfNeeded()
+      hoodieCatalogTable.initHoodieTable()
 
       val tblProperties = hoodieCatalogTable.catalogProperties
       val options = Map(
