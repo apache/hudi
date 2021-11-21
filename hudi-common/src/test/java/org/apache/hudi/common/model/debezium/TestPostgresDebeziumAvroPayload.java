@@ -62,7 +62,23 @@ public class TestPostgresDebeziumAvroPayload {
   }
 
   @Test
-  public void testUpdate() throws Exception {
+  public void testPreCombine() {
+    GenericRecord insertRecord = createRecord(0, Operation.INSERT, 120L);
+    PostgresDebeziumAvroPayload insertPayload = new PostgresDebeziumAvroPayload(insertRecord, 120L);
+
+    GenericRecord updateRecord = createRecord(0, Operation.UPDATE, 99L);
+    PostgresDebeziumAvroPayload updatePayload = new PostgresDebeziumAvroPayload(updateRecord, 99L);
+
+    GenericRecord deleteRecord = createRecord(0, Operation.DELETE, 111L);
+    PostgresDebeziumAvroPayload deletePayload = new PostgresDebeziumAvroPayload(deleteRecord, 111L);
+
+    assertEquals(insertPayload, insertPayload.preCombine(updatePayload));
+    assertEquals(deletePayload, deletePayload.preCombine(updatePayload));
+    assertEquals(insertPayload, deletePayload.preCombine(insertPayload));
+  }
+
+  @Test
+  public void testMergeWithUpdate() throws IOException {
     GenericRecord updateRecord = createRecord(1, Operation.UPDATE, 100L);
     PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(updateRecord, 100L);
 
@@ -77,7 +93,7 @@ public class TestPostgresDebeziumAvroPayload {
   }
 
   @Test
-  public void testDelete() throws Exception {
+  public void testMergeWithDelete() throws IOException {
     GenericRecord deleteRecord = createRecord(2, Operation.DELETE, 100L);
     PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(deleteRecord, 100L);
 

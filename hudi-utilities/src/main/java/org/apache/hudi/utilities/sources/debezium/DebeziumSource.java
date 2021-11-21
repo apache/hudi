@@ -1,22 +1,29 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.utilities.sources.debezium;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -30,7 +37,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.RowSource;
+import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
@@ -63,6 +72,7 @@ public abstract class DebeziumSource extends RowSource {
 
   private final KafkaOffsetGen offsetGen;
   private final HoodieDeltaStreamerMetrics metrics;
+  private final SchemaRegistryProvider schemaRegistryProvider;
 
   public DebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
                         SparkSession sparkSession,
@@ -70,10 +80,18 @@ public abstract class DebeziumSource extends RowSource {
                         HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
     props.put("key.deserializer", StringDeserializer.class);
-    props.put("value.deserializer", KafkaAvroDeserializer.class);
+    props.put("value.deserializer", StringDeserializer.class);//KafkaAvroDeserializer.class);
+
 
     offsetGen = new KafkaOffsetGen(props);
     this.metrics = metrics;
+
+    // Currently, debezium source requires Confluent/Kafka schema-registry to fetch the latest schema.
+    if (schemaProvider == null || !(schemaProvider instanceof SchemaRegistryProvider)) {
+      schemaRegistryProvider = new SchemaRegistryProvider(props, sparkContext);
+    } else {
+      schemaRegistryProvider = (SchemaRegistryProvider) schemaProvider;
+    }
   }
 
   @Override
@@ -86,11 +104,11 @@ public abstract class DebeziumSource extends RowSource {
 
     if (totalNewMsgs == 0) {
       // If there are no new messages, use empty dataframe with no schema. This is because the schema from schema registry can only be considered
-      // up to date if a change event has occured.
+      // up to date if a change event has occurred.
       return Pair.of(Option.of(sparkSession.emptyDataFrame()), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
     } else {
       try {
-        String schemaStr = fetchSchemaFromRegistry(props.getString(SCHEMA_REGISTRY_URL_PROP));
+        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(SCHEMA_REGISTRY_URL_PROP);
         Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
         LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
         LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
@@ -109,7 +127,6 @@ public abstract class DebeziumSource extends RowSource {
    */
   protected abstract Dataset<Row> processDataset(Dataset<Row> rawKafkaData);
 
-
   /**
    * Converts a Kafka Topic offset into a Spark dataset.
    *
@@ -118,9 +135,15 @@ public abstract class DebeziumSource extends RowSource {
    * @return Spark dataset
    */
   private Dataset<Row> toDataset(OffsetRange[] offsetRanges, KafkaOffsetGen offsetGen, String schemaStr) {
-    Dataset<Row> kafkaData = AvroConversionUtils.createDataFrame(
+    AvroConvertor convertor = new AvroConvertor(schemaStr);
+
+    /*Dataset<Row> kafkaData = AvroConversionUtils.createDataFrame(
         KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
             .map(obj -> (GenericRecord) obj.value())
+            .rdd(), schemaStr, sparkSession);*/
+    Dataset<Row> kafkaData = AvroConversionUtils.createDataFrame(
+        KafkaUtils.<String, String>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
+            .map(obj -> convertor.fromJson(obj.value()))
             .rdd(), schemaStr, sparkSession);
 
     // Flatten debezium payload, specific to each DB type (postgres/ mysql/ etc..)
@@ -129,45 +152,6 @@ public abstract class DebeziumSource extends RowSource {
     // Some required transformations to ensure debezium data types are converted to spark supported types.
     return convertArrayColumnsToString(convertColumnToNullable(sparkSession,
         convertDateColumns(debeziumDataset, new Schema.Parser().parse(schemaStr))));
-  }
-
-  /**
-   * The method takes the provided url {@code registryUrl} and gets the schema from the schema registry using that url.
-   * If the caller provides userInfo credentials in the url (e.g "https://foo:bar@schemaregistry.org") then the credentials
-   * are extracted the url using the Matcher and the extracted credentials are set on the request as an Authorization
-   * header.
-   * @param registryUrl
-   * @return the Schema in String form.
-   * @throws IOException
-   */
-  private String fetchSchemaFromRegistry(String registryUrl) throws IOException {
-    URL registry;
-    HttpURLConnection connection;
-    Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
-    if (matcher.find()) {
-      String creds = matcher.group(1);
-      String urlWithoutCreds = registryUrl.replace(creds + "@", "");
-      registry = new URL(urlWithoutCreds);
-      connection = (HttpURLConnection) registry.openConnection();
-      setAuthorizationHeader(matcher.group(1), connection);
-    } else {
-      registry = new URL(registryUrl);
-      connection = (HttpURLConnection) registry.openConnection();
-    }
-    ObjectMapper mapper = new ObjectMapper();
-    JsonNode node = mapper.readTree(getStream(connection));
-    String schema = node.get("schema").asText();
-    LOG.info(String.format("Reading schema from %s: %s", registryUrl, schema));
-    return schema;
-  }
-
-  private void setAuthorizationHeader(String creds, HttpURLConnection connection) {
-    String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
-    connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
-  }
-
-  private InputStream getStream(HttpURLConnection connection) throws IOException {
-    return connection.getInputStream();
   }
 
   /**
