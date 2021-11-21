@@ -45,7 +45,6 @@ import org.apache.parquet.schema.PrimitiveType;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -54,6 +53,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Utility functions involving with parquet.
@@ -319,10 +319,13 @@ public class ParquetUtils extends BaseFileUtils {
             .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
-
-    return columnToStatsListMap.values()
+    // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
+    // expression type correctly)
+    Stream<HoodieColumnRangeMetadata<Comparable>> stream = columnToStatsListMap.values()
         .stream()
-        .map(this::getColumnRangeInFile).collect(Collectors.toCollection(ArrayList::new));
+        .map(this::getColumnRangeInFile);
+
+    return stream.collect(Collectors.toList());
   }
 
   private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInFile(
