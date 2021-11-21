@@ -133,6 +133,7 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   @Test
   def testZIndexTableComposition(): Unit = {
     val inputDf =
+      // NOTE: Schema here is provided for validation that the input date is in the appropriate format
       spark.read
         .schema(sourceTableSchema)
         .parquet(
@@ -170,7 +171,7 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
     //       schema of the original source Parquet base-file and therefore we have to similarly coerce newly
     //       built Z-index table (built off Parquet footers) into the canonical index schema (built off the
     //       original source file schema)
-    assertEquals(asJson(sort(manualZIndexTableDf)), asJson(sort(coerceTableToSchema(newZIndexTableDf, indexSchema))))
+    assertEquals(asJson(sort(manualZIndexTableDf)), asJson(sort(newZIndexTableDf)))
 
     // Match against expected Z-index table
     val expectedZIndexTableDf =
@@ -211,16 +212,16 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
       Seq()
     )
 
+    // NOTE: We don't need to provide schema upon reading from Parquet, since Spark will be able
+    //       to reliably retrieve it
     val initialZIndexTable =
       spark.read
         .parquet(new Path(testZIndexPath, firstCommitInstance).toString)
 
     val expectedInitialZIndexTableDf =
-      coerceTableToSchema(
         spark.read
-          .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString),
-        indexSchema
-      )
+          .schema(indexSchema)
+          .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
 
     assertEquals(asJson(sort(expectedInitialZIndexTableDf)), asJson(sort(initialZIndexTable)))
 
@@ -246,12 +247,15 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
       Seq(firstCommitInstance)
     )
 
+    // NOTE: We don't need to provide schema upon reading from Parquet, since Spark will be able
+    //       to reliably retrieve it
     val mergedZIndexTable =
       spark.read
         .parquet(new Path(testZIndexPath, secondCommitInstance).toString)
 
     val expectedMergedZIndexTableDf =
       spark.read
+        .schema(indexSchema)
         .json(getClass.getClassLoader.getResource("index/zorder/z-index-table-merged.json").toString)
 
     assertEquals(asJson(sort(expectedMergedZIndexTableDf)), asJson(sort(mergedZIndexTable)))
@@ -332,26 +336,11 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
               )
             })
 
-        coerceTableToSchema(
-          df.selectExpr(exprs:_*),
-          indexSchema
-        )
+        df.selectExpr(exprs: _*)
           .collect()
       }),
       indexSchema
     )
-  }
-
-  def coerceTableToSchema(df: Dataset[Row], schema: StructType): Dataset[Row] = {
-    df
-//    val colTypeMap = schema.map(f => (f.name, f.dataType)).toMap
-//
-//    df.select(
-//      schema.fields.map(f => {
-//        val col = f.name
-//        new Column($"$col".cast(colTypeMap(col)))
-//      }):_*
-//    )
   }
 
   private def asJson(df: DataFrame) =
