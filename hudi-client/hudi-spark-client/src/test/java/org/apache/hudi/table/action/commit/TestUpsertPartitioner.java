@@ -336,7 +336,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieCompactionPlan plan = CompactionTestUtils.createCompactionPlan(metaClient, "001", "002", 1, true, false);
     FileCreateUtils.createRequestedCompactionCommit(basePath, "002", plan);
     // Simulate one more commit so that inflight compaction is considered when building file groups in file system view
-    //
     FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "2", 1);
     FileCreateUtils.createCommit(basePath, "003");
 
@@ -432,6 +431,34 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             "Bucket 0 should be UPDATE");
     assertEquals("fg1", partitioner.getBucketInfo(0).fileIdPrefix,
             "Insert should be assigned to fg1");
+  }
+
+  @Test
+  public void testUpsertPartitionerWithSmallFileHandlingPickingMultipleCandidates() throws Exception {
+    final String testPartitionPath = DEFAULT_PARTITION_PATHS[0];
+
+    HoodieWriteConfig config =
+        makeHoodieClientConfigBuilder()
+            .withMergeSmallFileGroupCandidatesLimit(3)
+            .build();
+
+    // Bootstrap base files ("small-file targets")
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "file_group_1", 1024);
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "file_group_2", 1024);
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "002", "file_group_4", 1024);
+
+    FileCreateUtils.createCommit(basePath, "002");
+
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+    // Default estimated record size will be 1024 based on last file group created.
+    // Only 1 record can be added to small file
+    WorkloadProfile profile =
+        new WorkloadProfile(buildProfile(jsc.parallelize(dataGenerator.generateInserts("003", 3))));
+
+    HoodieSparkTable<?> table = HoodieSparkTable.create(config, context, metaClient);
+
+    SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config);
+
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {

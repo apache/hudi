@@ -2126,6 +2126,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMergeSmallFileGroupCandidatesLimit(int limit) {
+      writeConfig.setValue(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT, String.valueOf(limit));
+    }
+
     public Builder withHeartbeatIntervalInMs(Integer heartbeatIntervalInMs) {
       writeConfig.setValue(CLIENT_HEARTBEAT_INTERVAL_IN_MS, String.valueOf(heartbeatIntervalInMs));
       return this;
