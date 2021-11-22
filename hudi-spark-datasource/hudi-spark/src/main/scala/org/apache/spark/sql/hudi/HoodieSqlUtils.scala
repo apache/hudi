@@ -48,7 +48,8 @@ import java.text.SimpleDateFormat
 import scala.collection.immutable.Map
 
 object HoodieSqlUtils extends SparkAdapterSupport {
-  private val defaultDateFormat = new SimpleDateFormat("yyyy-MM-dd")
+  // NOTE: {@code SimpleDataFormat} is NOT thread-safe
+  private val defaultDateFormat = ThreadLocal.withInitial(() => new SimpleDateFormat("yyyy-MM-dd"))
 
   def isHoodieTable(table: CatalogTable): Boolean = {
     table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
@@ -298,7 +299,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       HoodieActiveTimeline.parseDateFromInstantTime(queryInstant) // validate the format
       queryInstant
     } else if (instantLength == 10) { // for yyyy-MM-dd
-      HoodieActiveTimeline.formatDate(defaultDateFormat.parse(queryInstant))
+      HoodieActiveTimeline.formatDate(defaultDateFormat.get().parse(queryInstant))
     } else {
       throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
         + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss' or 'yyyy-MM-dd' or 'yyyyMMddHHmmss'")
