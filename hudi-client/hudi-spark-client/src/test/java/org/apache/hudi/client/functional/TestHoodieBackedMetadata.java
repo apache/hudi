@@ -544,16 +544,16 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   /**
-   * Tests the metadata payload consistency.
+   * Tests the metadata payload spurious deletes.
    * Lets say a commit was applied to metadata table, and later was explicitly got rolledback. Due to spark task failures, there could be more files in rollback
    * metadata when compared to the original commit metadata. When payload consistency check is enabled, it will throw exception. If not, it will succeed.
    * @throws Exception
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testMetadataPayloadConsistency(boolean validateMetadataPayloadConsistency) throws Exception {
+  public void testMetadataPayloadSpuriousDeletes(boolean ignoreSpuriousDeletes) throws Exception {
     tableType = COPY_ON_WRITE;
-    init(tableType, true, true, false, validateMetadataPayloadConsistency);
+    init(tableType, true, true, false, ignoreSpuriousDeletes);
     doWriteInsertAndUpsert(testTable);
     // trigger an upsert
     doWriteOperationAndValidate(testTable, "0000003");
@@ -565,7 +565,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     extraFiles.put("p1", Collections.singletonList("f10"));
     extraFiles.put("p2", Collections.singletonList("f12"));
     testTable.doRollbackWithExtraFiles("0000004", "0000005", extraFiles);
-    if (validateMetadataPayloadConsistency) {
+    if (!ignoreSpuriousDeletes) {
       assertThrows(HoodieMetadataException.class, () -> validateMetadata(testTable));
     } else {
       validateMetadata(testTable);

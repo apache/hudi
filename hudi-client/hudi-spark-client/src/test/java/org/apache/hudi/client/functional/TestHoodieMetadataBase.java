@@ -292,7 +292,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
             .enableFullScan(enableFullScan)
             .enableMetrics(enableMetrics)
             .withPopulateMetaFields(false)
-        .validateMetadataPayloadStateConsistency(validateMetadataPayloadConsistency)
+            .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(true).build())

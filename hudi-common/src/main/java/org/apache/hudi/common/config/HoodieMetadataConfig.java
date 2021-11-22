@@ -138,11 +138,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
 
-  public static final ConfigProperty<Boolean> VALIDATE_METADATA_PAYLOAD_STATE_CONSISTENCY = ConfigProperty
-      .key(METADATA_PREFIX + ".validate.metadata.payload.state.consistency")
+  public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
+      .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")
       .defaultValue(true)
       .sinceVersion("0.10.10")
-      .withDocumentation("Whether to perform validations on metadata payload state consistency.");
+      .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
+          + "determines how to handle such spurious deletes");
 
   private HoodieMetadataConfig() {
     super();
@@ -180,8 +181,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieMetadataConfig.POPULATE_META_FIELDS);
   }
 
-  public boolean validateMetadataPayloadStateConsistency() {
-    return getBoolean(VALIDATE_METADATA_PAYLOAD_STATE_CONSISTENCY);
+  public boolean ignoreSpuriousDeletes() {
+    return getBoolean(IGNORE_SPURIOUS_DELETES);
   }
 
   public static class Builder {
@@ -262,8 +263,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder validateMetadataPayloadStateConsistency(boolean validateMetadataPayloadStateConsistency) {
-      metadataConfig.setValue(VALIDATE_METADATA_PAYLOAD_STATE_CONSISTENCY, String.valueOf(validateMetadataPayloadStateConsistency));
+    public Builder ignoreSpuriousDeletes(boolean validateMetadataPayloadConsistency) {
+      metadataConfig.setValue(IGNORE_SPURIOUS_DELETES, String.valueOf(validateMetadataPayloadConsistency));
       return this;
     }
 

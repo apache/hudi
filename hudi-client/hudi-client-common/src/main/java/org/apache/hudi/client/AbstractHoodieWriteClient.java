@@ -218,6 +218,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
     finalizeWrite(table, instantTime, stats);
+    // update Metadata table
+    writeTableMetadata(table, instantTime, commitActionType, metadata);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
@@ -244,16 +246,24 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   /**
-   * Any pre-commit actions like conflict resolution or updating metadata table goes here.
+   * Any pre-commit actions like conflict resolution goes here.
    * @param inflightInstant instant of inflight operation.
    * @param metadata commit metadata for which pre commit is being invoked.
    */
   protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after starting the transaction which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
-    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, inflightInstant.getTimestamp(),
-        table.isTableServiceAction(inflightInstant.getAction())));
+    // To be overridden by specific engines to perform conflict resolution if any.
+  }
+
+  /**
+   * Write the HoodieCommitMetadata to metadata table if available.
+   * @param table {@link HoodieTable} of interest.
+   * @param instantTime instant time of the commit.
+   * @param actionType action type of the commit.
+   * @param metadata instance of {@link HoodieCommitMetadata}.
+   */
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime,
+        table.isTableServiceAction(actionType)));
   }
 
   /**
