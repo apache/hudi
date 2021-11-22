@@ -22,6 +22,8 @@ module.exports = {
             type: 'category',
             label: 'Concepts',
             items: [
+                'timeline',
+                'table_types',
                 'write_operations',
                 'schema_evolution',
                 'key_generation',
