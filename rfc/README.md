@@ -64,3 +64,4 @@ The list of all RFCs can be found here.
 | 38 | [Spark Datasource V2 Integration] | `UNDER REVIEW` |
 | 39 | [Incremental source for Debezium](./rfc-39/rfc-39.md) | `IN PROGRESS` |
 | 40 | [Hudi Connector for Trino] | `UNDER REVIEW` |
+| 41 | [Hudi Snowflake Integration] | `UNDER REVIEW` |
