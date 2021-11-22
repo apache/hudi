@@ -480,8 +480,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     Date defaultSecsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
     // metadata table compaction/cleaning : ms granularity instant ID
     String compactionInstant = secondGranularityInstant + "001";
-    Date msGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(compactionInstant);
-    assertEquals(0, msGranularityDate.getTime() - defaultSecsGranularityDate.getTime(), "Expected the ms part to be 0");
+    Date defaultMsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(compactionInstant);
+    assertEquals(0, defaultMsGranularityDate.getTime() - defaultSecsGranularityDate.getTime(), "Expected the ms part to be 0");
     assertTrue(HoodieTimeline.compareTimestamps(secondGranularityInstant, HoodieTimeline.LESSER_THAN, compactionInstant));
     assertTrue(HoodieTimeline.compareTimestamps(compactionInstant, HoodieTimeline.GREATER_THAN, secondGranularityInstant));
   }

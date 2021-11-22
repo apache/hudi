@@ -44,7 +44,7 @@ public class HoodieInstantTimeGenerator {
   // Unfortunately millisecond format is not parsable as is https://bugs.openjdk.java.net/browse/JDK-8031085. hence have to do appendValue()
   private static DateTimeFormatter MILLIS_INSTANT_TIME_FORMATTER = new DateTimeFormatterBuilder().appendPattern(SECS_INSTANT_TIMESTAMP_FORMAT)
       .appendValue(ChronoField.MILLI_OF_SECOND, 3).toFormatter();
-  private static final String MILLIS_GRANULARITY_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss:SSS";
+  private static final String MILLIS_GRANULARITY_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
   private static DateTimeFormatter MILLIS_GRANULARITY_DATE_FORMATTER = DateTimeFormatter.ofPattern(MILLIS_GRANULARITY_DATE_FORMAT);
 
   // The last Instant timestamp generated
@@ -81,7 +81,7 @@ public class HoodieInstantTimeGenerator {
         // Add milliseconds to the instant in order to parse successfully
         timestampInMillis = timestamp + DEFAULT_MILLIS_EXT;
       } else if (timestamp.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
-        // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with secs granularity
+        // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with ms granularity
         timestampInMillis = timestamp.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
       }
 

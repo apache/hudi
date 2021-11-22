@@ -431,12 +431,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("File Id Prefix provider class, that implements `org.apache.hudi.fileid.FileIdPrefixProvider`");
 
-  public static final ConfigProperty<Boolean> ENABLE_MILLIS_COMMIT_TIMESTAMP_FORMAT = ConfigProperty
-      .key("hoodie.enable.millisecs.commit.timestamp.format")
-      .defaultValue(true)
-      .sinceVersion("0.10.0")
-      .withDocumentation("Enables millisecs granularity for commit times. Falls back to secs level granularity if disabled.");
-
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -869,10 +863,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return getString(WRITE_SCHEMA);
     }
     return getSchema();
-  }
-
-  public boolean isMillisecCommitTimestampFormatEnabled() {
-    return getBoolean(ENABLE_MILLIS_COMMIT_TIMESTAMP_FORMAT);
   }
 
   public boolean getAvroSchemaValidate() {
