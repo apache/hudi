@@ -21,26 +21,19 @@ package org.apache.hudi.utilities.sources.debezium;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.payload.AWSDmsAvroPayload;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -52,11 +45,18 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.mock;
 
 public class TestPostgresDebeziumSource extends UtilitiesTestBase {
@@ -292,15 +292,15 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
     props.setProperty("auto.offset.reset", "earliest");
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
     props.setProperty("hoodie.deltastreamer.schemaprovider.registry.url", "localhost");
-    props.setProperty("schema.registry.url", "localhost");
     props.setProperty("hoodie.deltastreamer.source.kafka.value.deserializer.class", StringDeserializer.class.getName());
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
 
     return props;
   }
 
-  @Test
-  public void testJsonKafkaSource() {
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testInsertDebeziumEvent(Operation operation) {
     // topic setup.
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     TypedProperties props = createPropsForJsonSource();
@@ -308,10 +308,26 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
     PostgresDebeziumSource postgresDebeziumSource = new PostgresDebeziumSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter debeziumSource = new SourceFormatAdapter(postgresDebeziumSource);
 
-    testUtils.sendMessages(TEST_TOPIC_NAME, new String[] { generateDebeziumEvent(Operation.INSERT).toString() });
+    testUtils.sendMessages(TEST_TOPIC_NAME, new String[] { generateDebeziumEvent(operation).toString() });
 
-    InputBatch<Dataset<Row>> fetch1 = debeziumSource.fetchNewDataInRowFormat(Option.empty(), 900);
-    assertEquals(1, fetch1.getBatch().get().count());
+    InputBatch<Dataset<Row>> fetch = debeziumSource.fetchNewDataInRowFormat(Option.empty(), 10);
+    assertEquals(1, fetch.getBatch().get().count());
+
+    // Ensure the before fields are picked for DELETE CDC Events,
+    // and after fields are picked for INSERT and UPDATE CDC Events.
+    final String fieldPrefix = (operation.equals(Operation.DELETE)) ? "before_" : "after_";
+    
+    assertTrue(fetch.getBatch().get().select("type").collectAsList().stream()
+        .allMatch(r -> r.getString(0).startsWith(fieldPrefix)));
+    assertTrue(fetch.getBatch().get().select("type").collectAsList().stream()
+        .allMatch(r -> r.getString(0).startsWith(fieldPrefix)));
+
+    assertTrue(fetch.getBatch().get().select(DebeziumConstants.MODIFIED_TX_ID_COL_NAME).collectAsList().stream()
+      .allMatch(r -> r.getLong(0) > 0));
+    assertTrue(fetch.getBatch().get().select(DebeziumConstants.MODIFIED_LSN_COL_NAME).collectAsList().stream()
+        .allMatch(r -> r.getLong(0) > 0));
+    assertTrue(fetch.getBatch().get().select(DebeziumConstants.MODIFIED_TS_COL_NAME).collectAsList().stream()
+        .allMatch(r -> r.getLong(0) > 0));
   }
 
   private static GenericRecord generateDebeziumEvent(Operation op) {
@@ -326,6 +342,8 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
 
     beforeRecord.put("id", 1);
     beforeRecord.put("date", "1/1/2020");
+    beforeRecord.put("type", "before_type");
+    beforeRecord.put("payload", "before_payload");
     beforeRecord.put("timestamp", 1000L);
     rec.put(DebeziumConstants.INCOMING_BEFORE_FIELD, beforeRecord);
 
@@ -336,6 +354,8 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
 
     afterRecord.put("id", 1);
     afterRecord.put("date", "1/1/2021");
+    afterRecord.put("type", "after_type");
+    afterRecord.put("payload", "after_payload");
     afterRecord.put("timestamp", 3000L);
     rec.put(DebeziumConstants.INCOMING_AFTER_FIELD, afterRecord);
 
@@ -377,5 +397,13 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
     public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
       return POSTGRES_GITHUB_SCHEMA;
     }
+  }
+
+  private static Stream<Arguments> testArguments() {
+    return Stream.of(
+        arguments(Operation.INSERT),
+        arguments(Operation.UPDATE),
+        arguments(Operation.DELETE)
+    );
   }
 }

@@ -89,7 +89,6 @@ public abstract class DebeziumSource extends RowSource {
 
     try {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
-      LOG.error("WNI native kafka " + deserializerClassName);
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
       LOG.error(error);
@@ -151,13 +150,11 @@ public abstract class DebeziumSource extends RowSource {
     AvroConvertor convertor = new AvroConvertor(schemaStr);
     Dataset<Row> kafkaData;
     if (deserializerClassName.equals(StringDeserializer.class.getName())) {
-      LOG.error("WNI native kafka11 " + deserializerClassName);
       kafkaData = AvroConversionUtils.createDataFrame(
           KafkaUtils.<String, String>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
               .map(obj -> convertor.fromJson(obj.value()))
               .rdd(), schemaStr, sparkSession);
     } else {
-      LOG.error("WNI native kafka22 " + deserializerClassName);
       kafkaData = AvroConversionUtils.createDataFrame(
           KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
               .map(obj -> (GenericRecord) obj.value())
