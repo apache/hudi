@@ -85,6 +85,7 @@ import java.util.List;
 
 /**
  * Abstract test that provides a dfs & spark contexts.
+ *
  */
 public class UtilitiesTestBase {
 
@@ -161,10 +162,6 @@ public class UtilitiesTestBase {
       jsc.stop();
       jsc = null;
     }
-    if (null != sqlContext) {
-      sqlContext.clearCache();
-      sqlContext = null;
-    }
     if (sparkSession != null) {
       sparkSession.close();
       sparkSession = null;
@@ -176,7 +173,7 @@ public class UtilitiesTestBase {
 
   /**
    * Helper to get hive sync config.
-   *
+   * 
    * @param basePath
    * @param tableName
    * @return
@@ -197,7 +194,7 @@ public class UtilitiesTestBase {
 
   /**
    * Initialize Hive DB.
-   *
+   * 
    * @throws IOException
    */
   private static void clearHiveDb() throws IOException {
@@ -206,9 +203,9 @@ public class UtilitiesTestBase {
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig("/dummy", "dummy");
     hiveConf.addResource(hiveServer.getHiveConf());
     HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(hiveSyncConfig.tableName)
-        .initTable(dfs.getConf(), hiveSyncConfig.basePath);
+      .setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(hiveSyncConfig.tableName)
+      .initTable(dfs.getConf(), hiveSyncConfig.basePath);
 
     QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig, dfs);
     ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.databaseName);
@@ -276,10 +273,10 @@ public class UtilitiesTestBase {
      * Converts the json records into CSV format and writes to a file.
      *
      * @param hasHeader  whether the CSV file should have a header line.
-     * @param sep        the column separator to use.
-     * @param lines      the records in JSON format.
-     * @param fs         {@link FileSystem} instance.
-     * @param targetPath File path.
+     * @param sep  the column separator to use.
+     * @param lines  the records in JSON format.
+     * @param fs  {@link FileSystem} instance.
+     * @param targetPath  File path.
      * @throws IOException
      */
     public static void saveCsvToDFS(
@@ -396,9 +393,9 @@ public class UtilitiesTestBase {
     }
 
     private static void addAvroRecord(
-        VectorizedRowBatch batch,
-        GenericRecord record,
-        TypeDescription orcSchema
+            VectorizedRowBatch batch,
+            GenericRecord record,
+            TypeDescription orcSchema
     ) {
       for (int c = 0; c < batch.numCols; c++) {
         ColumnVector colVector = batch.cols[c];
