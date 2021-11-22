@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.execution.bulkinsert.JavaCustomColumnsSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -65,6 +66,7 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
 /**
  * Clustering strategy for Java engine.
@@ -121,7 +123,13 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
    * @return empty for now.
    */
   protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
-    return Option.empty();
+    if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
+      return Option.of(new JavaCustomColumnsSortPartitioner(
+          strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
+          HoodieAvroUtils.addMetadataFields(schema)));
+    } else {
+      return Option.empty();
+    }
   }
 
   /**

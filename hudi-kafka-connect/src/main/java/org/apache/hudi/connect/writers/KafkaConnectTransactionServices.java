@@ -101,6 +101,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     }
   }
 
+  @Override
   public String startCommit() {
     String newCommitTime = javaClient.startCommit();
     javaClient.transitionInflight(newCommitTime);
@@ -108,6 +109,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     return newCommitTime;
   }
 
+  @Override
   public void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
     javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
     LOG.info("Ending Hudi commit " + commitTime);
@@ -117,12 +119,13 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       javaClient.scheduleClustering(Option.empty()).ifPresent(
           instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
     }
-    if (writeConfig.isAsyncCompactionEnabled()) {
+    if (isAsyncCompactionEnabled()) {
       javaClient.scheduleCompaction(Option.empty()).ifPresent(
           instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
     }
   }
 
+  @Override
   public Map<String, String> fetchLatestExtraCommitMetadata() {
     if (tableMetaClient.isPresent()) {
       Option<HoodieCommitMetadata> metadata = KafkaConnectUtils.getCommitMetadataForLatestInstant(tableMetaClient.get());
@@ -134,5 +137,11 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       }
     }
     throw new HoodieException("Fatal error retrieving Hoodie Extra Metadata since Table Meta Client is absent");
+  }
+
+  private boolean isAsyncCompactionEnabled() {
+    return tableMetaClient.isPresent()
+        && HoodieTableType.MERGE_ON_READ.equals(tableMetaClient.get().getTableType())
+        && connectConfigs.isAsyncCompactEnabled();
   }
 }

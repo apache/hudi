@@ -99,12 +99,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
           + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
 
-  public static final ConfigProperty<String> ASYNC_COMPACT_ENABLE = ConfigProperty
-      .key("hoodie.compact.async.enabled")
-      .defaultValue("false")
-      .sinceVersion("0.10.0")
-      .withDocumentation("Enable the compaction to run asynchronously as inserts happen on the table.");
-
   public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
       .key("hoodie.cleaner.fileversions.retained")
       .defaultValue("3")
