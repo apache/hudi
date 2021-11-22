@@ -31,9 +31,14 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hudi.table.HoodieSparkTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -42,6 +47,7 @@ import org.jetbrains.annotations.TestOnly;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -92,6 +98,10 @@ public class HoodieClusteringJob {
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
     public Boolean runSchedule = false;
 
+    @Parameter(names = {"--retry-last-failed-clustering-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
+            + "check, rollback and execute last failed clustering plan instead of planing a new clustering job directly.", required = false)
+    public Boolean retryLastFailedClusteringJob = false;
+
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a cluster plan; "
             + "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; "
             + "Set \"scheduleAndExecute\" means make a cluster plan first and execute that plan immediately", required = false)
@@ -99,6 +109,10 @@ public class HoodieClusteringJob {
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
+
+    @Parameter(names = {"--job-max-processing-time-ms", "-jt"}, description = "Take effect when using --mode/-m scheduleAndExecute and --retry-last-failed-clustering-job/-rc true. "
+        + "If maxProcessingTimeMs passed but clustering job is still unfinished, hoodie would consider this job as failed and relaunch.", required = false)
+    public long maxProcessingTimeMs = 0;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client for clustering")
@@ -216,17 +230,32 @@ public class HoodieClusteringJob {
     return client.scheduleClustering(Option.empty());
   }
 
-  public int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
+  private int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
     LOG.info("Step 1: Do schedule");
     String schemaStr = getSchemaFromLatestInstant();
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      Option<String> instantTime = Option.empty();
 
-      Option<String> instantTime = doSchedule(client);
-      int result = instantTime.isPresent() ? 0 : -1;
+      if (cfg.retryLastFailedClusteringJob) {
+        HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
+        HoodieTimeline inflightHoodieTimeline = table.getActiveTimeline().filterPendingReplaceTimeline().filterInflights();
+        if (!inflightHoodieTimeline.empty()) {
+          HoodieInstant inflightClusteringInstant = inflightHoodieTimeline.lastInstant().get();
+          Date clusteringStartTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse(inflightClusteringInstant.getTimestamp());
+          if (clusteringStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
+            // if there has failed clustering, then we will use the failed clustering instant-time to trigger next clustering action which will rollback and clustering.
+            LOG.info("Found failed clustering instant at : " + inflightClusteringInstant + "; Will rollback the failed clustering and re-trigger again.");
+            instantTime = Option.of(inflightHoodieTimeline.lastInstant().get().getTimestamp());
+          } else {
+            LOG.info(inflightClusteringInstant + " might still be in progress, will trigger a new clustering job.");
+          }
+        }
+      }
 
-      if (result == -1) {
+      instantTime = instantTime.isPresent() ? instantTime : doSchedule(client);
+      if (!instantTime.isPresent()) {
         LOG.info("Couldn't generate cluster plan");
-        return result;
+        return -1;
       }
 
       LOG.info("The schedule instant time is " + instantTime.get());
