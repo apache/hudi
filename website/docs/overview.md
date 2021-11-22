@@ -51,7 +51,7 @@ resources to learn more, engage, and get help as you get started.
 ### Join in on discussions
 See all the ways to [engage with the community here](/community/get-involved). Two most popular methods include:
 - [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE)
-- [Hudi mailing list](users-subscribe@hudi.apache.org) - (send any msg to subscribe)
+- [Hudi mailing list](mailto:users-subscribe@hudi.apache.org) - (send any msg to subscribe)
 
 ### Come to Office Hours for help
 Weekly office hours are [posted here](/community/syncs#weekly-office-hours)
