@@ -241,7 +241,7 @@ public class HoodieClusteringJob {
         HoodieTimeline inflightHoodieTimeline = table.getActiveTimeline().filterPendingReplaceTimeline().filterInflights();
         if (!inflightHoodieTimeline.empty()) {
           HoodieInstant inflightClusteringInstant = inflightHoodieTimeline.lastInstant().get();
-          Date clusteringStartTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse(inflightClusteringInstant.getTimestamp());
+          Date clusteringStartTime = HoodieActiveTimeline.parseInstantTime(inflightClusteringInstant.getTimestamp());
           if (clusteringStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
             // if there has failed clustering, then we will use the failed clustering instant-time to trigger next clustering action which will rollback and clustering.
             LOG.info("Found failed clustering instant at : " + inflightClusteringInstant + "; Will rollback the failed clustering and re-trigger again.");
