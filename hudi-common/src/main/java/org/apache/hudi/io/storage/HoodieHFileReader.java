@@ -62,6 +62,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   // Scanner used to read individual keys. This is cached to prevent the overhead of opening the scanner for each
   // key retrieval.
   private HFileScanner keyScanner;
+  private Option<String> keyField;
 
   public static final String KEY_SCHEMA = "schema";
   public static final String KEY_BLOOM_FILTER_META_BLOCK = "bloomFilter";
@@ -73,22 +74,25 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.conf = configuration;
     this.path = path;
     this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
+    this.keyField = Option.empty();
   }
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs) throws IOException {
+  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs, String keyField) throws IOException {
     this.conf = configuration;
     this.path = path;
     this.fsDataInputStream = inlineFs.open(path);
     this.reader = HFile.createReader(inlineFs, path, cacheConfig, configuration);
+    this.keyField = Option.of(keyField);
   }
 
-  public HoodieHFileReader(byte[] content) throws IOException {
+  public HoodieHFileReader(final byte[] content, final String keyField) throws IOException {
     Configuration conf = new Configuration();
     Path path = new Path("hoodie");
     SeekableByteArrayInputStream bis = new SeekableByteArrayInputStream(content);
     FSDataInputStream fsdis = new FSDataInputStream(bis);
     this.reader = HFile.createReader(FSUtils.getFs("hoodie", conf), path, new FSDataInputStreamWrapper(fsdis),
         content.length, new CacheConfig(conf), conf);
+    this.keyField = Option.of(keyField);
   }
 
   @Override
@@ -157,9 +161,8 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
       if (scanner.seekTo()) {
         do {
           Cell c = scanner.getKeyValue();
-          byte[] keyBytes = Arrays.copyOfRange(c.getRowArray(), c.getRowOffset(), c.getRowOffset() + c.getRowLength());
-          R record = getRecordFromCell(c, writerSchema, readerSchema);
-          recordList.add(new Pair<>(new String(keyBytes), record));
+          final Pair<String, R> keyAndRecordPair = getRecordFromCell(c, writerSchema, readerSchema);
+          recordList.add(new Pair<>(keyAndRecordPair.getFirst(), keyAndRecordPair.getSecond()));
         } while (scanner.next());
       }
 
@@ -167,6 +170,17 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     } catch (IOException e) {
       throw new HoodieException("Error reading hfile " + path + " as a dataframe", e);
     }
+  }
+
+  /**
+   * Materialize the record for any missing fields, if needed.
+   *
+   * @param keyField - The key field in the record schema
+   * @param keyBytes - Key byte array
+   * @param record   - Record to materialize
+   */
+  protected void materializeRecordIfNeeded(final Option<String> keyField, final ByteBuffer keyBytes, R record) {
+    // no-op
   }
 
   public List<Pair<String, R>> readAllRecords() throws IOException {
@@ -206,7 +220,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           // To handle when hasNext() is called multiple times for idempotency and/or the first time
           if (this.next == null && !this.eof) {
             if (!scanner.isSeeked() && scanner.seekTo()) {
-                this.next = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema);
+              final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(),
+                  getSchema(), readerSchema);
+              this.next = keyAndRecordPair.getSecond();
             }
           }
           return this.next != null;
@@ -226,7 +242,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
           }
           R retVal = this.next;
           if (scanner.next()) {
-            this.next = getRecordFromCell(scanner.getKeyValue(), getSchema(), readerSchema);
+            final Pair<String, R> keyAndRecordPair = getRecordFromCell(scanner.getKeyValue(),
+                getSchema(), readerSchema);
+            this.next = keyAndRecordPair.getSecond();
           } else {
             this.next = null;
             this.eof = true;
@@ -257,16 +275,20 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
 
     if (value != null) {
-      R record = (R)HoodieAvroUtils.bytesToAvro(value, getSchema(), readerSchema);
+      R record = (R) HoodieAvroUtils.bytesToAvro(value, getSchema(), readerSchema);
+      materializeRecordIfNeeded(this.keyField, ByteBuffer.wrap(key.getBytes()), record);
       return Option.of(record);
     }
 
     return Option.empty();
   }
 
-  private R getRecordFromCell(Cell c, Schema writerSchema, Schema readerSchema) throws IOException {
-    byte[] value = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
-    return (R)HoodieAvroUtils.bytesToAvro(value, writerSchema, readerSchema);
+  private Pair<String, R> getRecordFromCell(Cell c, Schema writerSchema, Schema readerSchema) throws IOException {
+    final byte[] keyBytes = Arrays.copyOfRange(c.getRowArray(), c.getRowOffset(), c.getRowOffset() + c.getRowLength());
+    final byte[] valueBytes = Arrays.copyOfRange(c.getValueArray(), c.getValueOffset(), c.getValueOffset() + c.getValueLength());
+    R record = (R) HoodieAvroUtils.bytesToAvro(valueBytes, writerSchema, readerSchema);
+    materializeRecordIfNeeded(this.keyField, ByteBuffer.wrap(keyBytes), record);
+    return new Pair<>(new String(keyBytes), record);
   }
 
   @Override

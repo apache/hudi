@@ -26,6 +26,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hudi.metadata.HoodieMetadataHFileDataBlock;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import javax.annotation.Nonnull;
 
@@ -79,11 +81,14 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @param logDataBlockFormat - Data block type
    * @param recordList         - List of records that goes in the data block
    * @param header             - data block header
+   * @param isMetadataTable    - Is this data block needed for a metadata table
    * @return Data block of the requested type.
    */
   public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header) {
-    return getBlock(logDataBlockFormat, recordList, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+                                        Map<HeaderMetadataType, String> header, boolean isMetadataTable) {
+    return getBlock(logDataBlockFormat, recordList, header,
+        (isMetadataTable ? HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY : HoodieRecord.RECORD_KEY_METADATA_FIELD),
+        isMetadataTable);
   }
 
   /**
@@ -93,14 +98,19 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @param recordList         - List of records that goes in the data block
    * @param header             - data block header
    * @param keyField           - FieldId to get the key from the records
+   * @param isMetadataTable    - Is this data block needed for a metadata table
    * @return Data block of the requested type.
    */
   public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header, String keyField) {
+                                        Map<HeaderMetadataType, String> header, String keyField,
+                                        boolean isMetadataTable) {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(recordList, header, keyField);
       case HFILE_DATA_BLOCK:
+        if (isMetadataTable) {
+          return new HoodieMetadataHFileDataBlock(recordList, header, keyField);
+        }
         return new HoodieHFileDataBlock(recordList, header, keyField);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");

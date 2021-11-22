@@ -254,6 +254,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, latestFileSlices.size()));
 
         // Open base file reader
+        // TODO: need to fix the base file reader -- pass in the key field
         Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
         baseFileReader = baseFileReaderOpenTimePair.getKey();
         baseFileOpenMs = baseFileReaderOpenTimePair.getValue();

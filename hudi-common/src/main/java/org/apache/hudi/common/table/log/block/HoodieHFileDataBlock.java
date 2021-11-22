@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
@@ -50,6 +51,7 @@ import javax.annotation.Nonnull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -104,27 +106,30 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
         .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieHBaseKVComparator()).create();
 
-    // Serialize records into bytes
+    // Serialize records into bytes, sort them and write to HFile
     Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
     Iterator<IndexedRecord> itr = records.iterator();
     boolean useIntegerKey = false;
     int key = 0;
     int keySize = 0;
-    Field keyField = records.get(0).getSchema().getField(this.keyField);
-    if (keyField == null) {
-      // Missing key metadata field so we should use an integer sequence key
+
+    // Build the record key
+    final Field schemaKeyField = records.get(0).getSchema().getField(this.keyField);
+    if (schemaKeyField == null) {
+      // Missing key metadata field. Use an integer sequence key instead.
       useIntegerKey = true;
       keySize = (int) Math.ceil(Math.log(records.size())) + 1;
     }
+
     while (itr.hasNext()) {
       IndexedRecord record = itr.next();
       String recordKey;
       if (useIntegerKey) {
         recordKey = String.format("%" + keySize + "s", key++);
       } else {
-        recordKey = record.get(keyField.pos()).toString();
+        recordKey = record.get(schemaKeyField.pos()).toString();
       }
-      byte[] recordBytes = HoodieAvroUtils.indexedRecordToBytes(record);
+      final byte[] recordBytes = serializeRecord(record, Option.ofNullable(schemaKeyField)).array();
       ValidationUtils.checkState(!sortedRecordsMap.containsKey(recordKey),
           "Writing multiple records with same key not supported for " + this.getClass().getName());
       sortedRecordsMap.put(recordKey, recordBytes);
@@ -162,6 +167,18 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     return records;
   }
 
+  /**
+   * Serialize the record to byte buffer.
+   *
+   * @param record         - Record to serialize
+   * @param schemaKeyField - Key field in the schema
+   * @return Serialized byte buffer for the record
+   */
+  protected ByteBuffer serializeRecord(final IndexedRecord record, final Option<Field> schemaKeyField) {
+    ValidationUtils.checkArgument(record.getSchema() != null, "Unknown schema for the record!");
+    return ByteBuffer.wrap(HoodieAvroUtils.indexedRecordToBytes(record));
+  }
+
   private void readWithInlineFS(List<String> keys) throws IOException {
     boolean enableFullScan = keys.isEmpty();
     // Get schema from the header
@@ -184,9 +201,12 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       // HFile read will be efficient if keys are sorted, since on storage, records are sorted by key. This will avoid unnecessary seeks.
       Collections.sort(keys);
     }
-    HoodieHFileReader reader = new HoodieHFileReader(inlineConf, inlinePath, cacheConf, inlinePath.getFileSystem(inlineConf));
-    List<org.apache.hadoop.hbase.util.Pair<String, IndexedRecord>> logRecords = enableFullScan ? reader.readAllRecords(writerSchema, schema) :
-        reader.readRecords(keys, schema);
+
+    HoodieHFileReader reader = createHFileReader(inlineConf,
+        inlinePath, cacheConf, inlinePath.getFileSystem(inlineConf), keyField);
+    List<org.apache.hadoop.hbase.util.Pair<String, IndexedRecord>> logRecords = enableFullScan
+        ? reader.readAllRecords(writerSchema, schema)
+        : reader.readRecords(keys, schema);
     reader.close();
     this.records = logRecords.stream().map(t -> t.getSecond()).collect(Collectors.toList());
   }
@@ -202,11 +222,42 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     }
 
     // Read the content
-    HoodieHFileReader reader = new HoodieHFileReader<>(getContent().get());
+    HoodieHFileReader<IndexedRecord> reader = createHFileReader(getContent().get(), this.keyField);
     List<Pair<String, IndexedRecord>> records = reader.readAllRecords(writerSchema, schema);
     this.records = records.stream().map(t -> t.getSecond()).collect(Collectors.toList());
 
     // Free up content to be GC'd, deflate
     deflate();
   }
+
+  /**
+   * Create a new HFile reader for the serialized log block content byte array.
+   *
+   * @param content  - Log block serialized content byte array
+   * @param keyField - Key field in the schema
+   * @return New HFile reader for the serialized log block content
+   * @throws IOException
+   */
+  protected HoodieHFileReader<IndexedRecord> createHFileReader(final byte[] content,
+                                                               final String keyField) throws IOException {
+    return new HoodieHFileReader<>(content, keyField);
+  }
+
+  /**
+   * Create a new HFile reader for the log file.
+   *
+   * @param inlineConf - Common configuration
+   * @param inlinePath - Log file path
+   * @param cacheConf  - Cache configuration
+   * @param fileSystem - Filesystem for the log file
+   * @param keyField   - Key field in the schema
+   * @return New HFile reader instance for the log file
+   * @throws IOException
+   */
+  protected HoodieHFileReader<IndexedRecord> createHFileReader(Configuration inlineConf, Path inlinePath,
+                                                               CacheConfig cacheConf, FileSystem fileSystem,
+                                                               String keyField) throws IOException {
+    return new HoodieHFileReader<>(inlineConf, inlinePath, cacheConf, fileSystem, keyField);
+  }
+
 }

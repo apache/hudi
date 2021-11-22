@@ -23,7 +23,10 @@
     "fields": [
         {
             "name": "key",
-            "type": "string"
+            "type": [
+                "null",
+                "string"
+            ]
         },
         {
             "name": "type",

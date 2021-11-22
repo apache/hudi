@@ -43,6 +43,8 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.hudi.metadata.HoodieMetadataHFileDataBlock;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -102,10 +104,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = logFile.getFileSize();
     }
     addShutDownHook();
-  }
-
-  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema) throws IOException {
-    this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE, false, false);
   }
 
   /**
@@ -259,6 +257,11 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
               contentPosition, contentLength, blockEndPos, readerSchema, header, footer, keyField);
         }
       case HFILE_DATA_BLOCK:
+        if (HoodieTableMetadata.isMetadataTable(logFile)) {
+          return new HoodieMetadataHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+              contentPosition, contentLength, blockEndPos, readerSchema,
+              header, footer, enableInlineReading, keyField);
+        }
         return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, readerSchema,
             header, footer, enableInlineReading, keyField);

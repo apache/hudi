@@ -134,7 +134,8 @@ public class TestHoodieHFileReaderWriter {
 
     Configuration conf = new Configuration();
     CacheConfig cacheConfig = new CacheConfig(conf);
-    HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf));
+    HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig,
+        filePath.getFileSystem(conf), null);
     List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
     records.forEach(entry -> assertEquals(entry.getSecond(), recordMap.get(entry.getFirst())));
     hoodieHFileReader.close();
@@ -144,7 +145,7 @@ public class TestHoodieHFileReaderWriter {
       Set<String> rowsToFetch = getRandomKeys(randomRowstoFetch, keys);
       List<String> rowsList = new ArrayList<>(rowsToFetch);
       Collections.sort(rowsList);
-      hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf));
+      hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf), null);
       List<Pair<String, GenericRecord>> result = hoodieHFileReader.readRecords(rowsList);
       assertEquals(result.size(), randomRowstoFetch);
       result.forEach(entry -> {

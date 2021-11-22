@@ -33,6 +33,8 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -284,6 +286,23 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
 
     @Override
     public HoodieMergedLogRecordScanner build() {
+      if (HoodieTableMetadata.isMetadataTable(basePath)) {
+        return HoodieMetadataMergedLogRecordReader.newBuilder()
+            .withFileSystem(fs)
+            .withBasePath(basePath)
+            .withLogFilePaths(logFilePaths)
+            .withReaderSchema(readerSchema)
+            .withLatestInstantTime(latestInstantTime)
+            .withMaxMemorySizeInBytes(maxMemorySizeInBytes)
+            .withBufferSize(bufferSize)
+            .withSpillableMapBasePath(spillableMapBasePath)
+            .withDiskMapType(diskMapType)
+            .withBitCaskDiskMapCompressionEnabled(isBitCaskDiskMapCompressionEnabled)
+            .withOperationField(withOperationField)
+            .withPartition(partitionName)
+            .withInstantRange(instantRange)
+            .build();
+      }
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,

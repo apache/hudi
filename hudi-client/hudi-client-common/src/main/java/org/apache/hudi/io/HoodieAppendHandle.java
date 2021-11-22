@@ -50,6 +50,7 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
@@ -361,10 +362,12 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
         if (config.populateMetaFields()) {
-          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header));
+          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header,
+              HoodieTableMetadata.isMetadataTable(hoodieTable.getMetaClient().getBasePath())));
         } else {
           final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header, keyField));
+          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header, keyField,
+              HoodieTableMetadata.isMetadataTable(hoodieTable.getMetaClient().getBasePath())));
         }
       }
       if (keysToDelete.size() > 0) {
