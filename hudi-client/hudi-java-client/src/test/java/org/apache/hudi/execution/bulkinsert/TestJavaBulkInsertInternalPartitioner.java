@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestJavaBulkInsertPartitioner extends HoodieJavaClientTestBase {
+public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestBase {
   private static final Comparator<HoodieRecord> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
 
@@ -59,10 +59,12 @@ public class TestJavaBulkInsertPartitioner extends HoodieJavaClientTestBase {
   @ValueSource(strings = {"rider", "rider,driver"})
   public void testCustomColumnSortPartitioner(String sortColumnString) throws Exception {
     String[] sortColumns = sortColumnString.split(",");
-    Comparator<HoodieRecord> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
+    Comparator<HoodieRecord> columnComparator =
+        getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
 
     List<HoodieRecord> records = generateTestRecordsForBulkInsert(1000);
-    testBulkInsertInternalPartitioner(new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA),
+    testBulkInsertInternalPartitioner(
+        new JavaCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA),
         records, true, generatePartitionNumRecords(records), Option.of(columnComparator));
   }
 

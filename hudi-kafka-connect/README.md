@@ -207,7 +207,7 @@ drwxr-xr-x  2 user  wheel     64 Nov 11 11:08 archived
 Then you can run async compaction job with `HoodieCompactor` and `spark-submit` by:
 
 ```
-spark-submit  \
+spark-submit \
   --class org.apache.hudi.utilities.HoodieCompactor \
   hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.10.0-SNAPSHOT.jar \
   --base-path /tmp/hoodie/hudi-test-topic \
@@ -271,7 +271,7 @@ spark-submit \
   hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.10.0-SNAPSHOT.jar \
   --props clusteringjob.properties \
   --mode execute \
-  --base-path /tmp/hoodie/hudi-test-topic  \
+  --base-path /tmp/hoodie/hudi-test-topic \
   --table-name sample_table \
   --instant-time 20211111111813 \
   --spark-memory 1g
