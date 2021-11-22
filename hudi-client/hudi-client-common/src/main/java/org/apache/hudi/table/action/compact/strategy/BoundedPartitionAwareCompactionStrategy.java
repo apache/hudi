@@ -40,6 +40,7 @@ import java.util.stream.Collectors;
 public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionStrategy {
 
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
+  // TODO replace w/ DateTimeFormatter
   private final ThreadLocal<SimpleDateFormat> dateFormat =
       ThreadLocal.withInitial(() -> new SimpleDateFormat(DayBasedCompactionStrategy.DATE_PARTITION_FORMAT));
 

@@ -43,6 +43,7 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
   // Sorts compaction in LastInFirstCompacted order
 
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
+  // TODO replace w/ DateTimeFormatter
   private static final ThreadLocal<SimpleDateFormat> DATE_FORMAT =
       ThreadLocal.withInitial(() -> new SimpleDateFormat(DATE_PARTITION_FORMAT, Locale.ENGLISH));
 
