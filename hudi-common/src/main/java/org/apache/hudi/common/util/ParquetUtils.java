@@ -39,6 +39,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,6 +56,8 @@ import java.util.stream.Collectors;
  * Utility functions involving with parquet.
  */
 public class ParquetUtils extends BaseFileUtils {
+
+  private static Object lock = new Object();
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
@@ -288,32 +291,33 @@ public class ParquetUtils extends BaseFileUtils {
    * @param conf hadoop conf.
    * @param parquetFilePath file to be read.
    * @param cols cols which need to collect statistics.
-   * @param useLock if use lock when read parquet footer.
    * @return a HoodieColumnRangeMetadata instance.
    */
   public Collection<HoodieColumnRangeMetadata<Comparable>> readRangeFromParquetMetadata(
       Configuration conf,
       Path parquetFilePath,
-      List<String> cols,
-      boolean useLock) {
-
-    ParquetMetadata metadata;
-    if (useLock) {
-      synchronized (ParquetUtils.class) {
-        metadata = readMetadata(conf, parquetFilePath);
-      }
-    } else {
-      metadata = readMetadata(conf, parquetFilePath);
-    }
+      List<String> cols) {
+    ParquetMetadata metadata = readMetadata(conf, parquetFilePath);
     // collect stats from all parquet blocks
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap = metadata.getBlocks().stream().flatMap(blockMetaData -> {
-      return blockMetaData.getColumns().stream().filter(f -> cols.contains(f.getPath().toDotString())).map(columnChunkMetaData ->
-          new HoodieColumnRangeMetadata<>(parquetFilePath.getName(), columnChunkMetaData.getPath().toDotString(),
-              columnChunkMetaData.getStatistics().genericGetMin(),
-              columnChunkMetaData.getStatistics().genericGetMax(),
-              columnChunkMetaData.getStatistics().getNumNulls(),
-              columnChunkMetaData.getStatistics().minAsString(),
-              columnChunkMetaData.getStatistics().maxAsString()));
+      return blockMetaData.getColumns().stream().filter(f -> cols.contains(f.getPath().toDotString())).map(columnChunkMetaData -> {
+        String minAsString;
+        String maxAsString;
+        if (columnChunkMetaData.getPrimitiveType().getOriginalType() == OriginalType.DATE) {
+          synchronized (lock) {
+            minAsString = columnChunkMetaData.getStatistics().minAsString();
+            maxAsString = columnChunkMetaData.getStatistics().maxAsString();
+          }
+        } else {
+          minAsString = columnChunkMetaData.getStatistics().minAsString();
+          maxAsString = columnChunkMetaData.getStatistics().maxAsString();
+        }
+        return new HoodieColumnRangeMetadata<>(parquetFilePath.getName(), columnChunkMetaData.getPath().toDotString(),
+            columnChunkMetaData.getStatistics().genericGetMin(),
+            columnChunkMetaData.getStatistics().genericGetMax(),
+            columnChunkMetaData.getStatistics().getNumNulls(),
+            minAsString, maxAsString);
+      });
     }).collect(Collectors.groupingBy(e -> e.getColumnName()));
 
     // we only intend to keep file level statistics.

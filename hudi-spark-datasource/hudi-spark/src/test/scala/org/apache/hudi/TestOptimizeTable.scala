@@ -21,9 +21,11 @@ package org.apache.hudi.functional
 import java.sql.{Date, Timestamp}
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.{BaseFileUtils, ParquetUtils}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.ZCurveOptimizeHelper
 import org.apache.spark.sql._
@@ -89,13 +91,22 @@ class TestOptimizeTable extends HoodieClientTestBase {
 
     assertEquals(1000, spark.read.format("hudi").load(basePath).count())
     // use unsorted col as filter.
-    assertEquals(1000,
+    assertEquals(spark.read
+      .format("hudi").load(basePath).where("end_lat >= 0 and rider != '1' and weight > 0.0").count(),
       spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
-        .format("hudi").load(basePath).where("end_lat >= 0").count())
+        .format("hudi").load(basePath).where("end_lat >= 0 and rider != '1' and weight > 0.0").count())
     // use sorted col as filter.
-    assertEquals(1000,
+    assertEquals(spark.read.format("hudi").load(basePath)
+      .where("begin_lat >= 0.49 and begin_lat < 0.51 and begin_lon >= 0.49 and begin_lon < 0.51").count(),
       spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
-        .format("hudi").load(basePath).where("begin_lon >= 0").count())
+        .format("hudi").load(basePath)
+        .where("begin_lat >= 0.49 and begin_lat < 0.51 and begin_lon >= 0.49 and begin_lon < 0.51").count())
+    // use sorted cols and unsorted cols as filter
+    assertEquals(spark.read.format("hudi").load(basePath)
+      .where("begin_lat >= 0.49 and begin_lat < 0.51 and end_lat > 0.56").count(),
+      spark.read.option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key(), "true")
+        .format("hudi").load(basePath)
+        .where("begin_lat >= 0.49 and begin_lat < 0.51 and end_lat > 0.56").count())
   }
 
   @Test
@@ -130,6 +141,50 @@ class TestOptimizeTable extends HoodieClientTestBase {
     } finally {
       if (fs.exists(testPath)) fs.delete(testPath)
       if (fs.exists(statisticPath)) fs.delete(statisticPath)
+    }
+  }
+
+  // test collect min-max statistic info for DateType in the case of multithreading.
+  // parquet will give a wrong statistic result for DateType in the case of multithreading.
+  @Test
+  def testMultiThreadParquetFooterReadForDateType(): Unit = {
+    // create parquet file with DateType
+    val rdd = spark.sparkContext.parallelize(0 to 100, 1)
+      .map(item => RowFactory.create(Date.valueOf(s"${2020}-${item % 11 + 1}-${item % 28 + 1}")))
+    val df = spark.createDataFrame(rdd, new StructType().add("id", DateType))
+    val testPath = new Path(System.getProperty("java.io.tmpdir"), "testCollectDateType")
+    val conf = spark.sparkContext.hadoopConfiguration
+    val cols = new java.util.ArrayList[String]
+    cols.add("id")
+    try {
+      df.repartition(3).write.mode("overwrite").save(testPath.toString)
+      val inputFiles = spark.read.load(testPath.toString).inputFiles.sortBy(x => x)
+
+      val realResult = new Array[(String, String)](3)
+      inputFiles.zipWithIndex.foreach { case (f, index) =>
+        val fileUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).asInstanceOf[ParquetUtils]
+        val res = fileUtils.readRangeFromParquetMetadata(conf, new Path(f), cols).iterator().next()
+        realResult(index) = (res.getMinValueAsString, res.getMaxValueAsString)
+      }
+
+      // multi thread read with no lock
+      val resUseLock = new Array[(String, String)](3)
+      inputFiles.zipWithIndex.par.foreach { case (f, index) =>
+        val fileUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).asInstanceOf[ParquetUtils]
+        val res = fileUtils.readRangeFromParquetMetadata(conf, new Path(f), cols).iterator().next()
+        resUseLock(index) = (res.getMinValueAsString, res.getMaxValueAsString)
+      }
+
+      // check resUseNoLock,
+      // We can't guarantee that there must be problems in the case of multithreading.
+      // In order to make ut pass smoothly, we will not check resUseNoLock.
+      // check resUseLock
+      // should pass assert
+      realResult.zip(resUseLock).foreach { case (realValue, testValue) =>
+        assert(realValue == testValue, s" expect realValue: ${realValue} but find ${testValue}")
+      }
+    } finally {
+      if (fs.exists(testPath)) fs.delete(testPath)
     }
   }
 

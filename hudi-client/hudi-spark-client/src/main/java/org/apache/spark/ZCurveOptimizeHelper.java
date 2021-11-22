@@ -183,7 +183,6 @@ public class ZCurveOptimizeHelper {
   public static Dataset<Row> getMinMaxValue(Dataset<Row> df, List<String> cols) {
     Map<String, DataType> columnsMap = Arrays.stream(df.schema().fields()).collect(Collectors.toMap(e -> e.name(), e -> e.dataType()));
 
-    boolean readParquetFooterUseLock = columnsMap.values().stream().anyMatch(f -> f instanceof DataType);
     List<String> scanFiles = Arrays.asList(df.inputFiles());
     SparkContext sc = df.sparkSession().sparkContext();
     JavaSparkContext jsc = new JavaSparkContext(sc);
@@ -201,7 +200,7 @@ public class ZCurveOptimizeHelper {
         List<Collection<HoodieColumnRangeMetadata<Comparable>>> results = new ArrayList<>();
         while (paths.hasNext()) {
           String path = paths.next();
-          results.add(parquetUtils.readRangeFromParquetMetadata(conf, new Path(path), cols, readParquetFooterUseLock));
+          results.add(parquetUtils.readRangeFromParquetMetadata(conf, new Path(path), cols));
         }
         return results.stream().flatMap(f -> f.stream()).iterator();
       }).collect();

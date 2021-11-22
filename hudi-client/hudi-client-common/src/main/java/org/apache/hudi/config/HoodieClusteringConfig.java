@@ -144,7 +144,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   /**
    * Using space-filling curves to optimize the layout of table to boost query performance.
-   * The table data which sorted by space-filling curve has better aggregation; combine with min-max filtering, it can achieve good performance improvement.
+   * The table data which sorted by space-filling curve has better aggregation;
+   * combine with min-max filtering, it can achieve good performance improvement.
    *
    * Notice:
    * when we use this feature, we need specify the sort columns.
