@@ -293,6 +293,7 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
     props.setProperty("hoodie.deltastreamer.schemaprovider.registry.url", "localhost");
     props.setProperty("schema.registry.url", "localhost");
+    props.setProperty("hoodie.deltastreamer.source.kafka.value.deserializer.class", StringDeserializer.class.getName());
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
 
     return props;
@@ -306,21 +307,7 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
 
     PostgresDebeziumSource postgresDebeziumSource = new PostgresDebeziumSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter debeziumSource = new SourceFormatAdapter(postgresDebeziumSource);
-    TypedProperties prop1 = new TypedProperties();
-    prop1.put("key.serializer", StringSerializer.class);
-    prop1.put("value.serializer", StringSerializer.class);
-    prop1.put("bootstrap.servers", testUtils.brokerAddress());
-    //prop1.setProperty("schema.registry.url", "localhost");
 
-    //Producer<String, String> mockProducer = new KafkaProducer<>(prop1);
-    //ProducerRecord<String, String> kafkaRecord = new ProducerRecord<>(TEST_TOPIC_NAME, "key", "vale");// generateDebeziumEvent(Operation.INSERT));
-    //mockProducer.send(kafkaRecord);
-    LOG.error("WNI " + testUtils.brokerAddress());
-    // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
-    //assertEquals(Option.empty(), debeziumSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch());
-
-    //Map<String, GenericRecord> testMap = new HashMap<>();
-    //testMap.put("key", generateDebeziumEvent(Operation.INSERT));
     testUtils.sendMessages(TEST_TOPIC_NAME, new String[] { generateDebeziumEvent(Operation.INSERT).toString() });
 
     InputBatch<Dataset<Row>> fetch1 = debeziumSource.fetchNewDataInRowFormat(Option.empty(), 900);

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utilities.sources.debezium;
 
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -31,6 +29,7 @@ import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericRecord;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -65,6 +64,9 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 public abstract class DebeziumSource extends RowSource {
 
   private static final Logger LOG = LogManager.getLogger(DebeziumSource.class);
+  // these are native kafka's config. do not change the config names.
+  private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
+  private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
   private static final String SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
   private static final String OVERRIDE_CHECKPOINT_STRING = "hoodie.debezium.override.initial.checkpoint.key";
   private static final String CONNECT_NAME_KEY = "connect.name";
@@ -73,18 +75,26 @@ public abstract class DebeziumSource extends RowSource {
   private final KafkaOffsetGen offsetGen;
   private final HoodieDeltaStreamerMetrics metrics;
   private final SchemaRegistryProvider schemaRegistryProvider;
+  private final String deserializerClassName;
 
   public DebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
                         SparkSession sparkSession,
                         SchemaProvider schemaProvider,
                         HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    props.put("key.deserializer", StringDeserializer.class);
-    props.put("value.deserializer", StringDeserializer.class);//KafkaAvroDeserializer.class);
 
+    props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class);
+    deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().key(),
+        DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().defaultValue());
 
-    offsetGen = new KafkaOffsetGen(props);
-    this.metrics = metrics;
+    try {
+      props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
+      LOG.error("WNI native kafka " + deserializerClassName);
+    } catch (ClassNotFoundException e) {
+      String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
+      LOG.error(error);
+      throw new HoodieException(error, e);
+    }
 
     // Currently, debezium source requires Confluent/Kafka schema-registry to fetch the latest schema.
     if (schemaProvider == null || !(schemaProvider instanceof SchemaRegistryProvider)) {
@@ -92,6 +102,9 @@ public abstract class DebeziumSource extends RowSource {
     } else {
       schemaRegistryProvider = (SchemaRegistryProvider) schemaProvider;
     }
+
+    offsetGen = new KafkaOffsetGen(props);
+    this.metrics = metrics;
   }
 
   @Override
@@ -136,15 +149,20 @@ public abstract class DebeziumSource extends RowSource {
    */
   private Dataset<Row> toDataset(OffsetRange[] offsetRanges, KafkaOffsetGen offsetGen, String schemaStr) {
     AvroConvertor convertor = new AvroConvertor(schemaStr);
-
-    /*Dataset<Row> kafkaData = AvroConversionUtils.createDataFrame(
-        KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
-            .map(obj -> (GenericRecord) obj.value())
-            .rdd(), schemaStr, sparkSession);*/
-    Dataset<Row> kafkaData = AvroConversionUtils.createDataFrame(
-        KafkaUtils.<String, String>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
-            .map(obj -> convertor.fromJson(obj.value()))
-            .rdd(), schemaStr, sparkSession);
+    Dataset<Row> kafkaData;
+    if (deserializerClassName.equals(StringDeserializer.class.getName())) {
+      LOG.error("WNI native kafka11 " + deserializerClassName);
+      kafkaData = AvroConversionUtils.createDataFrame(
+          KafkaUtils.<String, String>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
+              .map(obj -> convertor.fromJson(obj.value()))
+              .rdd(), schemaStr, sparkSession);
+    } else {
+      LOG.error("WNI native kafka22 " + deserializerClassName);
+      kafkaData = AvroConversionUtils.createDataFrame(
+          KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
+              .map(obj -> (GenericRecord) obj.value())
+              .rdd(), schemaStr, sparkSession);
+    }
 
     // Flatten debezium payload, specific to each DB type (postgres/ mysql/ etc..)
     Dataset<Row> debeziumDataset = processDataset(kafkaData);
