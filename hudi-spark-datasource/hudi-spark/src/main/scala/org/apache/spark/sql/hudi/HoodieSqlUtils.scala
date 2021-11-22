@@ -50,7 +50,10 @@ import scala.collection.immutable.Map
 object HoodieSqlUtils extends SparkAdapterSupport {
   // NOTE: {@code SimpleDataFormat} is NOT thread-safe
   // TODO replace w/ DateTimeFormatter
-  private val defaultDateFormat = ThreadLocal.withInitial[SimpleDateFormat](() => new SimpleDateFormat("yyyy-MM-dd"))
+  private val defaultDateFormat =
+    ThreadLocal.withInitial(new java.util.function.Supplier[SimpleDateFormat] {
+      override def get() = new SimpleDateFormat("yyyy-MM-dd")
+    })
 
   def isHoodieTable(table: CatalogTable): Boolean = {
     table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
