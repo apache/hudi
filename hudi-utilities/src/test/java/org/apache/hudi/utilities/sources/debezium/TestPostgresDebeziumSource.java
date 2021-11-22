@@ -21,8 +21,6 @@ package org.apache.hudi.utilities.sources.debezium;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.payload.AWSDmsAvroPayload;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -44,13 +42,11 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -61,199 +57,22 @@ import static org.mockito.Mockito.mock;
 
 public class TestPostgresDebeziumSource extends UtilitiesTestBase {
 
-  private static final Logger LOG = LogManager.getLogger(TestPostgresDebeziumSource.class);
   private static String TEST_TOPIC_NAME = "hoodie_test";
-  private static final String POSTGRES_GITHUB_SCHEMA = "{\n" +
-      "  \"connect.name\": \"postgres.ghschema.gharchive.Envelope\",\n" +
-      "  \"fields\": [\n" +
-      "    {\n" +
-      "      \"default\": null,\n" +
-      "      \"name\": \"before\",\n" +
-      "      \"type\": [\n" +
-      "        \"null\",\n" +
-      "        {\n" +
-      "          \"connect.name\": \"postgres.ghschema.gharchive.Value\",\n" +
-      "          \"fields\": [\n" +
-      "            {\n" +
-      "              \"name\": \"id\",\n" +
-      "              \"type\": \"string\"\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"name\": \"date\",\n" +
-      "              \"type\": \"string\"\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"default\": null,\n" +
-      "              \"name\": \"timestamp\",\n" +
-      "              \"type\": [\n" +
-      "                \"null\",\n" +
-      "                \"long\"\n" +
-      "              ]\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"default\": null,\n" +
-      "              \"name\": \"type\",\n" +
-      "              \"type\": [\n" +
-      "                \"null\",\n" +
-      "                \"string\"\n" +
-      "              ]\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"default\": null,\n" +
-      "              \"name\": \"payload\",\n" +
-      "              \"type\": [\n" +
-      "                \"null\",\n" +
-      "                \"string\"\n" +
-      "              ]\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"default\": null,\n" +
-      "              \"name\": \"org\",\n" +
-      "              \"type\": [\n" +
-      "                \"null\",\n" +
-      "                \"string\"\n" +
-      "              ]\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"default\": null,\n" +
-      "              \"name\": \"created_at\",\n" +
-      "              \"type\": [\n" +
-      "                \"null\",\n" +
-      "                \"long\"\n" +
-      "              ]\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"default\": null,\n" +
-      "              \"name\": \"public\",\n" +
-      "              \"type\": [\n" +
-      "                \"null\",\n" +
-      "                \"boolean\"\n" +
-      "              ]\n" +
-      "            }\n" +
-      "          ],\n" +
-      "          \"name\": \"Value\",\n" +
-      "          \"type\": \"record\"\n" +
-      "        }\n" +
-      "      ]\n" +
-      "    },\n" +
-      "    {\n" +
-      "      \"default\": null,\n" +
-      "      \"name\": \"after\",\n" +
-      "      \"type\": [\n" +
-      "        \"null\",\n" +
-      "        \"Value\"\n" +
-      "      ]\n" +
-      "    },\n" +
-      "    {\n" +
-      "      \"name\": \"source\",\n" +
-      "      \"type\": {\n" +
-      "        \"connect.name\": \"io.debezium.connector.postgresql.Source\",\n" +
-      "        \"fields\": [\n" +
-      "          {\n" +
-      "            \"name\": \"connector\",\n" +
-      "            \"type\": \"string\"\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"name\": \"name\",\n" +
-      "            \"type\": \"string\"\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"name\": \"ts_ms\",\n" +
-      "            \"type\": \"long\"\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"name\": \"db\",\n" +
-      "            \"type\": \"string\"\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"default\": null,\n" +
-      "            \"name\": \"sequence\",\n" +
-      "            \"type\": [\n" +
-      "              \"null\",\n" +
-      "              \"string\"\n" +
-      "            ]\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"name\": \"schema\",\n" +
-      "            \"type\": \"string\"\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"name\": \"table\",\n" +
-      "            \"type\": \"string\"\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"default\": null,\n" +
-      "            \"name\": \"txId\",\n" +
-      "            \"type\": [\n" +
-      "              \"null\",\n" +
-      "              \"long\"\n" +
-      "            ]\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"default\": null,\n" +
-      "            \"name\": \"lsn\",\n" +
-      "            \"type\": [\n" +
-      "              \"null\",\n" +
-      "              \"long\"\n" +
-      "            ]\n" +
-      "          },\n" +
-      "          {\n" +
-      "            \"default\": null,\n" +
-      "            \"name\": \"xmin\",\n" +
-      "            \"type\": [\n" +
-      "              \"null\",\n" +
-      "              \"long\"\n" +
-      "            ]\n" +
-      "          }\n" +
-      "        ],\n" +
-      "        \"name\": \"Source\",\n" +
-      "        \"namespace\": \"io.debezium.connector.postgresql\",\n" +
-      "        \"type\": \"record\"\n" +
-      "      }\n" +
-      "    },\n" +
-      "    {\n" +
-      "      \"name\": \"op\",\n" +
-      "      \"type\": \"string\"\n" +
-      "    },\n" +
-      "    {\n" +
-      "      \"default\": null,\n" +
-      "      \"name\": \"ts_ms\",\n" +
-      "      \"type\": [\n" +
-      "        \"null\",\n" +
-      "        \"long\"\n" +
-      "      ]\n" +
-      "    },\n" +
-      "    {\n" +
-      "      \"default\": null,\n" +
-      "      \"name\": \"transaction\",\n" +
-      "      \"type\": [\n" +
-      "        \"null\",\n" +
-      "        {\n" +
-      "          \"fields\": [\n" +
-      "            {\n" +
-      "              \"name\": \"id\",\n" +
-      "              \"type\": \"string\"\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"name\": \"total_order\",\n" +
-      "              \"type\": \"long\"\n" +
-      "            },\n" +
-      "            {\n" +
-      "              \"name\": \"data_collection_order\",\n" +
-      "              \"type\": \"long\"\n" +
-      "            }\n" +
-      "          ],\n" +
-      "          \"name\": \"ConnectDefault\",\n" +
-      "          \"namespace\": \"io.confluent.connect.avro\",\n" +
-      "          \"type\": \"record\"\n" +
-      "        }\n" +
-      "      ]\n" +
-      "    }\n" +
-      "  ],\n" +
-      "  \"name\": \"Envelope\",\n" +
-      "  \"namespace\": \"postgres.ghschema.gharchive\",\n" +
-      "  \"type\": \"record\"\n" +
-      "}";
+  private static final String POSTGRES_GITHUB_SCHEMA = "{\"connect.name\": \"postgres.ghschema.gharchive.Envelope\",\n" +
+      "  \"fields\": [{\"default\": null,\"name\": \"before\",\"type\": [\"null\",{\"connect.name\": \"postgres.ghschema.gharchive.Value\",\n" +
+      "  \"fields\": [{\"name\": \"id\",\"type\": \"string\"},{\"name\": \"date\",\"type\": \"string\"},{\"default\": null,\"name\": \"timestamp\",\n" +
+      "  \"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"type\",\"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"payload\",\n" +
+      "  \"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"org\",\"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"created_at\",\n" +
+      "  \"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"public\",\"type\": [\"null\",\"boolean\"]}],\"name\": \"Value\",\"type\": \"record\"\n" +
+      "  }]},{\"default\": null,\"name\": \"after\",\"type\": [\"null\",\"Value\"]},{\"name\": \"source\",\"type\": {\"connect.name\": \"io.debezium.connector.postgresql.Source\",\n" +
+      "  \"fields\": [{\"name\": \"connector\",\"type\": \"string\"},{\"name\": \"name\",\"type\": \"string\"},{\"name\": \"ts_ms\",\"type\": \"long\"},\n" +
+      "  {\"name\": \"db\",\"type\": \"string\"},{\"name\": \"schema\",\"type\": \"string\"},{\"name\": \"table\",\"type\": \"string\"},{\"default\": null,\n" +
+      "  \"name\": \"txId\",\"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"lsn\",\"type\": [\"null\",\"long\"]},{\"default\": null,\n" +
+      "  \"name\": \"xmin\",\"type\": [\"null\",\"long\"]}],\"name\": \"Source\",\"namespace\": \"io.debezium.connector.postgresql\",\"type\": \"record\"\n" +
+      "  }},{\"name\": \"op\",\"type\": \"string\"},{\"default\": null,\"name\": \"ts_ms\",\"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"transaction\",\n" +
+      "  \"type\": [\"null\",{\"fields\": [{\"name\": \"id\",\"type\": \"string\"},{\"name\": \"total_order\",\"type\": \"long\"},{\"name\": \"data_collection_order\",\n" +
+      "  \"type\": \"long\"}],\"name\": \"ConnectDefault\",\"namespace\": \"io.confluent.connect.avro\",\"type\": \"record\"}]}],\"name\": \"Envelope\",\n" +
+      "  \"namespace\": \"postgres.ghschema.gharchive\",\"type\": \"record\"}";
   private static final Schema POSTGRES_GITHUB_AVRO_SCHEMA = new Schema.Parser().parse(POSTGRES_GITHUB_SCHEMA);
 
   private MockSchemaRegistryProvider schemaProvider;
@@ -316,7 +135,7 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
     // Ensure the before fields are picked for DELETE CDC Events,
     // and after fields are picked for INSERT and UPDATE CDC Events.
     final String fieldPrefix = (operation.equals(Operation.DELETE)) ? "before_" : "after_";
-    
+
     assertTrue(fetch.getBatch().get().select("type").collectAsList().stream()
         .allMatch(r -> r.getString(0).startsWith(fieldPrefix)));
     assertTrue(fetch.getBatch().get().select("type").collectAsList().stream()
