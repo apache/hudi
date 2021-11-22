@@ -25,6 +25,7 @@ module.exports = {
                 'timeline',
                 'table_types',
                 'write_operations',
+                'indexing',
                 'schema_evolution',
                 'key_generation',
                 'concurrency_control',
