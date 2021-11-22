@@ -191,11 +191,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Enable data skipping by collecting statistics once layout optimization is complete.");
 
-  public static final ConfigProperty<Boolean> ROLLBACK_PENDING_CLUSTERING = ConfigProperty
-      .key("hoodie.clustering.rollback.pending.replacecommit")
+  public static final ConfigProperty<Boolean> ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT = ConfigProperty
+      .key("hoodie.clustering.rollback.pending.replacecommit.on.conflict")
       .defaultValue(false)
       .sinceVersion("0.10.0")
       .withDocumentation("If updates are allowed to file groups pending clustering, then set this config to rollback failed or pending clustering instants. "
+          + "Pending clustering will be rolled back ONLY IF there is conflict between incoming upsert and filegroup to be clustered. "
           + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
 
@@ -413,7 +414,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder withRollbackPendingClustering(Boolean rollbackPendingClustering) {
-      clusteringConfig.setValue(ROLLBACK_PENDING_CLUSTERING, String.valueOf(rollbackPendingClustering));
+      clusteringConfig.setValue(ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT, String.valueOf(rollbackPendingClustering));
       return this;
     }
 
