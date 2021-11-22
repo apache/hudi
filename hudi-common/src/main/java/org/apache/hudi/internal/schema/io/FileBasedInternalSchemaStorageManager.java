@@ -89,7 +89,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
         // clean residual files
         residualSchemaFiles.forEach(f -> {
           try {
-            fs.delete(new Path(f));
+            fs.delete(new Path(metaClient.getSchemaFolderName(), f));
           } catch (IOException o) {
             throw new HoodieException(o);
           }
