@@ -233,7 +233,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
       if (writeTimer != null) {
         long durationInMs = metrics.getDurationInMs(writeTimer.stop());
-        metrics.updateCommitMetrics(HoodieActiveTimeline.parseInstantTime(instantTime).getTime(), durationInMs,
+        metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime(), durationInMs,
             metadata, actionType);
         writeTimer = null;
       }

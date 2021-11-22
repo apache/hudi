@@ -23,7 +23,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoField;
 import java.time.temporal.TemporalAccessor;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,13 +35,26 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class HoodieInstantTimeGenerator {
   // Format of the timestamp used for an Instant
-  private static final String INSTANT_TIMESTAMP_FORMAT = "yyyyMMddHHmmss";
-  private static final int INSTANT_TIMESTAMP_FORMAT_LENGTH = INSTANT_TIMESTAMP_FORMAT.length();
+  public static final String SECS_INSTANT_TIMESTAMP_FORMAT = "yyyyMMddHHmmss";
+  public static final int SECS_INSTANT_ID_LENGTH = SECS_INSTANT_TIMESTAMP_FORMAT.length();
+  public static final String MILLIS_INSTANT_TIMESTAMP_FORMAT = "yyyyMMddHHmmssSSS";
+  public static final int MILLIS_INSTANT_ID_LENGTH = MILLIS_INSTANT_TIMESTAMP_FORMAT.length();
+  public static final int MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH = MILLIS_INSTANT_TIMESTAMP_FORMAT.length();
   // Formatter to generate Instant timestamps
-  private static DateTimeFormatter INSTANT_TIME_FORMATTER = DateTimeFormatter.ofPattern(INSTANT_TIMESTAMP_FORMAT);
+  // Unfortunately millisecond format is not parsable as is https://bugs.openjdk.java.net/browse/JDK-8031085. hence have to do appendValue()
+  private static DateTimeFormatter MILLIS_INSTANT_TIME_FORMATTER = new DateTimeFormatterBuilder().appendPattern(SECS_INSTANT_TIMESTAMP_FORMAT)
+      .appendValue(ChronoField.MILLI_OF_SECOND, 3).toFormatter();
+  private static final String MILLIS_GRANULARITY_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
+  private static DateTimeFormatter MILLIS_GRANULARITY_DATE_FORMATTER = DateTimeFormatter.ofPattern(MILLIS_GRANULARITY_DATE_FORMAT);
+
   // The last Instant timestamp generated
   private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
   private static final String ALL_ZERO_TIMESTAMP = "00000000000000";
+
+  // The default number of milliseconds that we add if they are not present
+  // We prefer the max timestamp as it mimics the current behavior with second granularity
+  // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
+  private static final String DEFAULT_MILLIS_EXT = "999";
 
   /**
    * Returns next instant time that adds N milliseconds to the current time.
@@ -52,36 +67,65 @@ public class HoodieInstantTimeGenerator {
       String newCommitTime;
       do {
         Date d = new Date(System.currentTimeMillis() + milliseconds);
-        newCommitTime = INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
+        newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
       } while (HoodieTimeline.compareTimestamps(newCommitTime, HoodieActiveTimeline.LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
     });
   }
 
-  public static Date parseInstantTime(String timestamp) throws ParseException {
+  public static Date parseDateFromInstantTime(String timestamp) throws ParseException {
     try {
-      LocalDateTime dt = LocalDateTime.parse(timestamp, INSTANT_TIME_FORMATTER);
+      // Enables backwards compatibility with non-millisecond granularity instants
+      String timestampInMillis = timestamp;
+      if (isSecondGranularity(timestamp)) {
+        // Add milliseconds to the instant in order to parse successfully
+        timestampInMillis = timestamp + DEFAULT_MILLIS_EXT;
+      } else if (timestamp.length() > MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH) {
+        // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with ms granularity
+        timestampInMillis = timestamp.substring(0, MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH);
+      }
+
+      LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
       return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
     } catch (DateTimeParseException e) {
       // Special handling for all zero timestamp which is not parsable by DateTimeFormatter
       if (timestamp.equals(ALL_ZERO_TIMESTAMP)) {
         return new Date(0);
       }
-      // compaction and cleaning in metadata has special format. handling it by trimming extra chars and treating it with secs granularity
-      if (timestamp.length() > INSTANT_TIMESTAMP_FORMAT_LENGTH) {
-        LocalDateTime dt = LocalDateTime.parse(timestamp.substring(0, INSTANT_TIMESTAMP_FORMAT_LENGTH), INSTANT_TIME_FORMATTER);
-        return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
-      }
       throw e;
     }
   }
 
-  public static String formatInstantTime(Instant timestamp) {
-    return INSTANT_TIME_FORMATTER.format(timestamp);
+  private static boolean isSecondGranularity(String instant) {
+    return instant.length() == SECS_INSTANT_ID_LENGTH;
   }
 
-  public static String formatInstantTime(Date timestamp) {
-    return INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(timestamp));
+  public static String formatInstantTime(Instant timestamp) {
+    return MILLIS_INSTANT_TIME_FORMATTER.format(timestamp);
+  }
+
+  public static String formatDate(Date timestamp) {
+    return getInstantFromTemporalAccessor(convertDateToTemporalAccessor(timestamp));
+  }
+
+  public static String getInstantFromTemporalAccessor(TemporalAccessor temporalAccessor) {
+    return MILLIS_INSTANT_TIME_FORMATTER.format(temporalAccessor);
+  }
+
+  /**
+   * Creates an instant string given a valid date-time string.
+   * @param dateString A date-time string in the format yyyy-MM-dd HH:mm:ss[:SSS]
+   * @return A timeline instant
+   * @throws ParseException If we cannot parse the date string
+   */
+  public static String getInstantForDateString(String dateString) {
+    try {
+      return getInstantFromTemporalAccessor(LocalDateTime.parse(dateString, MILLIS_GRANULARITY_DATE_FORMATTER));
+    } catch (Exception e) {
+      // Attempt to add the milliseconds in order to complete parsing
+      return getInstantFromTemporalAccessor(LocalDateTime.parse(
+          String.format("%s:%s", dateString, DEFAULT_MILLIS_EXT), MILLIS_GRANULARITY_DATE_FORMATTER));
+    }
   }
 
   private static TemporalAccessor convertDateToTemporalAccessor(Date d) {

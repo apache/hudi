@@ -444,7 +444,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     }
 
     // All zero timestamp can be parsed
-    HoodieActiveTimeline.parseInstantTime("00000000000000");
+    HoodieActiveTimeline.parseDateFromInstantTime("00000000000000");
 
     // Multiple thread test
     final int numChecks = 100000;
@@ -455,9 +455,9 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     for (int idx = 0; idx < numThreads; ++idx) {
       futures.add(executorService.submit(() -> {
         Date date = new Date(System.currentTimeMillis() + (int)(Math.random() * numThreads) * milliSecondsInYear);
-        final String expectedFormat = HoodieActiveTimeline.formatInstantTime(date);
+        final String expectedFormat = HoodieActiveTimeline.formatDate(date);
         for (int tidx = 0; tidx < numChecks; ++tidx) {
-          final String curFormat = HoodieActiveTimeline.formatInstantTime(date);
+          final String curFormat = HoodieActiveTimeline.formatDate(date);
           if (!curFormat.equals(expectedFormat)) {
             throw new HoodieException("Format error: expected=" + expectedFormat + ", curFormat=" + curFormat);
           }
@@ -476,14 +476,35 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   @Test
   public void testMetadataCompactionInstantDateParsing() throws ParseException {
     // default second granularity instant ID
-    String secondGranularityInstant = "20210101120101";
-    Date defaultSecsGranularityDate = HoodieActiveTimeline.parseInstantTime(secondGranularityInstant);
+    String secondGranularityInstant = "20210101120101123";
+    Date defaultSecsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
     // metadata table compaction/cleaning : ms granularity instant ID
     String compactionInstant = secondGranularityInstant + "001";
-    Date msGranularityDate = HoodieActiveTimeline.parseInstantTime(compactionInstant);
-    assertEquals(0, msGranularityDate.getTime() - defaultSecsGranularityDate.getTime(), "Expected the ms part to be 0");
+    Date defaultMsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(compactionInstant);
+    assertEquals(0, defaultMsGranularityDate.getTime() - defaultSecsGranularityDate.getTime(), "Expected the ms part to be 0");
     assertTrue(HoodieTimeline.compareTimestamps(secondGranularityInstant, HoodieTimeline.LESSER_THAN, compactionInstant));
     assertTrue(HoodieTimeline.compareTimestamps(compactionInstant, HoodieTimeline.GREATER_THAN, secondGranularityInstant));
+  }
+
+  @Test
+  public void testMillisGranularityInstantDateParsing() throws ParseException {
+    // Old second granularity instant ID
+    String secondGranularityInstant = "20210101120101";
+    Date defaultMsGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant);
+    // New ms granularity instant ID
+    String specificMsGranularityInstant = secondGranularityInstant + "009";
+    Date msGranularityDate = HoodieActiveTimeline.parseDateFromInstantTime(specificMsGranularityInstant);
+    assertEquals(999, defaultMsGranularityDate.getTime() % 1000, "Expected the ms part to be 999");
+    assertEquals(9, msGranularityDate.getTime() % 1000, "Expected the ms part to be 9");
+
+    // Ensure that any date math which expects second granularity still works
+    String laterDateInstant = "20210101120111"; // + 10 seconds from original instant
+    assertEquals(
+        10,
+        HoodieActiveTimeline.parseDateFromInstantTime(laterDateInstant).getTime() / 1000
+            - HoodieActiveTimeline.parseDateFromInstantTime(secondGranularityInstant).getTime() / 1000,
+        "Expected the difference between later instant and previous instant to be 10 seconds"
+    );
   }
 
   /**
