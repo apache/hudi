@@ -32,8 +32,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -58,21 +56,21 @@ import static org.mockito.Mockito.mock;
 public class TestPostgresDebeziumSource extends UtilitiesTestBase {
 
   private static String TEST_TOPIC_NAME = "hoodie_test";
-  private static final String POSTGRES_GITHUB_SCHEMA = "{\"connect.name\": \"postgres.ghschema.gharchive.Envelope\",\n" +
-      "  \"fields\": [{\"default\": null,\"name\": \"before\",\"type\": [\"null\",{\"connect.name\": \"postgres.ghschema.gharchive.Value\",\n" +
-      "  \"fields\": [{\"name\": \"id\",\"type\": \"string\"},{\"name\": \"date\",\"type\": \"string\"},{\"default\": null,\"name\": \"timestamp\",\n" +
-      "  \"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"type\",\"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"payload\",\n" +
-      "  \"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"org\",\"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"created_at\",\n" +
-      "  \"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"public\",\"type\": [\"null\",\"boolean\"]}],\"name\": \"Value\",\"type\": \"record\"\n" +
-      "  }]},{\"default\": null,\"name\": \"after\",\"type\": [\"null\",\"Value\"]},{\"name\": \"source\",\"type\": {\"connect.name\": \"io.debezium.connector.postgresql.Source\",\n" +
-      "  \"fields\": [{\"name\": \"connector\",\"type\": \"string\"},{\"name\": \"name\",\"type\": \"string\"},{\"name\": \"ts_ms\",\"type\": \"long\"},\n" +
-      "  {\"name\": \"db\",\"type\": \"string\"},{\"name\": \"schema\",\"type\": \"string\"},{\"name\": \"table\",\"type\": \"string\"},{\"default\": null,\n" +
-      "  \"name\": \"txId\",\"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"lsn\",\"type\": [\"null\",\"long\"]},{\"default\": null,\n" +
-      "  \"name\": \"xmin\",\"type\": [\"null\",\"long\"]}],\"name\": \"Source\",\"namespace\": \"io.debezium.connector.postgresql\",\"type\": \"record\"\n" +
-      "  }},{\"name\": \"op\",\"type\": \"string\"},{\"default\": null,\"name\": \"ts_ms\",\"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"transaction\",\n" +
-      "  \"type\": [\"null\",{\"fields\": [{\"name\": \"id\",\"type\": \"string\"},{\"name\": \"total_order\",\"type\": \"long\"},{\"name\": \"data_collection_order\",\n" +
-      "  \"type\": \"long\"}],\"name\": \"ConnectDefault\",\"namespace\": \"io.confluent.connect.avro\",\"type\": \"record\"}]}],\"name\": \"Envelope\",\n" +
-      "  \"namespace\": \"postgres.ghschema.gharchive\",\"type\": \"record\"}";
+  private static final String POSTGRES_GITHUB_SCHEMA = "{\"connect.name\": \"postgres.ghschema.gharchive.Envelope\",\n"
+      + "  \"fields\": [{\"default\": null,\"name\": \"before\",\"type\": [\"null\",{\"connect.name\": \"postgres.ghschema.gharchive.Value\",\n"
+      + "  \"fields\": [{\"name\": \"id\",\"type\": \"string\"},{\"name\": \"date\",\"type\": \"string\"},{\"default\": null,\"name\": \"timestamp\",\n"
+      + "  \"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"type\",\"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"payload\",\n"
+      + "  \"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"org\",\"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"created_at\",\n"
+      + "  \"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"public\",\"type\": [\"null\",\"boolean\"]}],\"name\": \"Value\",\"type\": \"record\"\n"
+      + "  }]},{\"default\": null,\"name\": \"after\",\"type\": [\"null\",\"Value\"]},{\"name\": \"source\",\"type\": {\"connect.name\": \"io.debezium.connector.postgresql.Source\",\n"
+      + "  \"fields\": [{\"name\": \"connector\",\"type\": \"string\"},{\"name\": \"name\",\"type\": \"string\"},{\"name\": \"ts_ms\",\"type\": \"long\"},\n"
+      + "  {\"name\": \"db\",\"type\": \"string\"},{\"name\": \"schema\",\"type\": \"string\"},{\"name\": \"table\",\"type\": \"string\"},{\"default\": null,\n"
+      + "  \"name\": \"txId\",\"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"lsn\",\"type\": [\"null\",\"long\"]},{\"default\": null,\n"
+      + "  \"name\": \"xmin\",\"type\": [\"null\",\"long\"]}],\"name\": \"Source\",\"namespace\": \"io.debezium.connector.postgresql\",\"type\": \"record\"\n"
+      + "  }},{\"name\": \"op\",\"type\": \"string\"},{\"default\": null,\"name\": \"ts_ms\",\"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"transaction\",\n"
+      + "  \"type\": [\"null\",{\"fields\": [{\"name\": \"id\",\"type\": \"string\"},{\"name\": \"total_order\",\"type\": \"long\"},{\"name\": \"data_collection_order\",\n"
+      + "  \"type\": \"long\"}],\"name\": \"ConnectDefault\",\"namespace\": \"io.confluent.connect.avro\",\"type\": \"record\"}]}],\"name\": \"Envelope\",\n"
+      + "  \"namespace\": \"postgres.ghschema.gharchive\",\"type\": \"record\"}";
   private static final Schema POSTGRES_GITHUB_AVRO_SCHEMA = new Schema.Parser().parse(POSTGRES_GITHUB_SCHEMA);
 
   private MockSchemaRegistryProvider schemaProvider;
@@ -88,7 +86,6 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
   public static void cleanupClass() {
     UtilitiesTestBase.cleanupClass();
   }
-
 
   @BeforeEach
   public void setup() throws Exception {
@@ -127,7 +124,7 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
     PostgresDebeziumSource postgresDebeziumSource = new PostgresDebeziumSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter debeziumSource = new SourceFormatAdapter(postgresDebeziumSource);
 
-    testUtils.sendMessages(TEST_TOPIC_NAME, new String[] { generateDebeziumEvent(operation).toString() });
+    testUtils.sendMessages(TEST_TOPIC_NAME, new String[] {generateDebeziumEvent(operation).toString()});
 
     InputBatch<Dataset<Row>> fetch = debeziumSource.fetchNewDataInRowFormat(Option.empty(), 10);
     assertEquals(1, fetch.getBatch().get().count());
@@ -142,7 +139,7 @@ public class TestPostgresDebeziumSource extends UtilitiesTestBase {
         .allMatch(r -> r.getString(0).startsWith(fieldPrefix)));
 
     assertTrue(fetch.getBatch().get().select(DebeziumConstants.MODIFIED_TX_ID_COL_NAME).collectAsList().stream()
-      .allMatch(r -> r.getLong(0) > 0));
+        .allMatch(r -> r.getLong(0) > 0));
     assertTrue(fetch.getBatch().get().select(DebeziumConstants.MODIFIED_LSN_COL_NAME).collectAsList().stream()
         .allMatch(r -> r.getLong(0) > 0));
     assertTrue(fetch.getBatch().get().select(DebeziumConstants.MODIFIED_TS_COL_NAME).collectAsList().stream()
