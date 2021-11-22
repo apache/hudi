@@ -23,7 +23,8 @@ import java.util.{Date, Locale, Properties}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.SparkAdapterSupport
+
+import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -31,9 +32,8 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+
 import org.apache.spark.SPARK_VERSION
-import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -46,6 +46,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 
 import java.text.SimpleDateFormat
+
 import scala.collection.immutable.Map
 
 object HoodieSqlUtils extends SparkAdapterSupport {
@@ -83,8 +84,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     catch {
       case _: Throwable => None
     }
-    avroSchema.map(SchemaConverters.toSqlType(_).dataType
-      .asInstanceOf[StructType]).map(removeMetaFields)
+    avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType).map(removeMetaFields)
   }
 
   def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {

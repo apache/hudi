@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
+
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -26,10 +27,10 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Column, SparkSession}
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
@@ -38,6 +39,7 @@ import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieSqlUtils}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
+
 import java.util.Properties
 
 import scala.collection.JavaConverters._
@@ -96,8 +98,7 @@ case class HoodieFileIndex(
    */
   lazy val schema: StructType = schemaSpec.getOrElse({
     val schemaUtil = new TableSchemaResolver(metaClient)
-    SchemaConverters.toSqlType(schemaUtil.getTableAvroSchema)
-      .dataType.asInstanceOf[StructType]
+    AvroConversionUtils.convertAvroSchemaToStructType(schemaUtil.getTableAvroSchema)
   })
 
   /**
