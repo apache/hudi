@@ -142,6 +142,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
 
+  /**
+   * Using space-filling curves to optimize the layout of table to boost query performance.
+   * The table data which sorted by space-filling curve has better aggregation;
+   * combine with min-max filtering, it can achieve good performance improvement.
+   *
+   * Notice:
+   * when we use this feature, we need specify the sort columns.
+   * The more columns involved in sorting, the worse the aggregation, and the smaller the query performance improvement.
+   * Choose the filter columns which commonly used in query sql as sort columns.
+   * It is recommend that 2 ~ 4 columns participate in sorting.
+   */
   public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
       .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "enable")
       .defaultValue(false)

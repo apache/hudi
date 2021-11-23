@@ -230,18 +230,14 @@ public class ZCurveOptimizeHelper {
             rows.add(currentColRangeMetaData.getMinValue());
             rows.add(currentColRangeMetaData.getMaxValue());
           } else if (colType instanceof StringType) {
-            String minString = new String(((Binary)currentColRangeMetaData.getMinValue()).getBytes());
-            String maxString = new String(((Binary)currentColRangeMetaData.getMaxValue()).getBytes());
-            rows.add(minString);
-            rows.add(maxString);
+            rows.add(currentColRangeMetaData.getMinValueAsString());
+            rows.add(currentColRangeMetaData.getMaxValueAsString());
           } else if (colType instanceof DecimalType) {
-            Double minDecimal = Double.parseDouble(currentColRangeMetaData.getStringifier().stringify(Long.valueOf(currentColRangeMetaData.getMinValue().toString())));
-            Double maxDecimal = Double.parseDouble(currentColRangeMetaData.getStringifier().stringify(Long.valueOf(currentColRangeMetaData.getMaxValue().toString())));
-            rows.add(BigDecimal.valueOf(minDecimal));
-            rows.add(BigDecimal.valueOf(maxDecimal));
+            rows.add(new BigDecimal(currentColRangeMetaData.getMinValueAsString()));
+            rows.add(new BigDecimal(currentColRangeMetaData.getMaxValueAsString()));
           } else if (colType instanceof DateType) {
-            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getStringifier().stringify((int)currentColRangeMetaData.getMinValue())));
-            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getStringifier().stringify((int)currentColRangeMetaData.getMaxValue())));
+            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMinValueAsString()));
+            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMaxValueAsString()));
           } else if (colType instanceof LongType) {
             rows.add(currentColRangeMetaData.getMinValue());
             rows.add(currentColRangeMetaData.getMaxValue());
@@ -344,6 +340,8 @@ public class ZCurveOptimizeHelper {
           List columns = Arrays.asList(statisticsDF.schema().fieldNames());
           spark.sql(HoodieSparkUtils$
               .MODULE$.createMergeSql(originalTable, updateTable, JavaConversions.asScalaBuffer(columns))).repartition(1).write().save(savePath.toString());
+        } else {
+          statisticsDF.repartition(1).write().mode("overwrite").save(savePath.toString());
         }
       } else {
         statisticsDF.repartition(1).write().mode("overwrite").save(savePath.toString());
