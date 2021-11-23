@@ -24,7 +24,7 @@ import org.apache.spark.sql.types.DataType
  * This is to be compatible with the type returned by Spark 3.1
  * and other spark versions for AvroDeserializer
  */
-case class HooodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
+case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
   extends AvroDeserializer(rootAvroType, rootCatalystType) {
 
   def deserializeData(data: Any): Any = {
