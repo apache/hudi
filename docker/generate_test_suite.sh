@@ -58,7 +58,7 @@ CLUSTER_NUM_ITR=30
 CLUSTER_DELAY_MINS=1
 CLUSTER_ITR_COUNT=15
 EXECUTE_TEST_SUITE=true
-JAR_NAME=hudi-integ-test-bundle-0.9.0-SNAPSHOT.jar
+JAR_NAME=hudi-integ-test-bundle-0.10.0-SNAPSHOT.jar
 INPUT_PATH="/user/hive/warehouse/hudi-integ-test-suite/input/"
 OUTPUT_PATH="/user/hive/warehouse/hudi-integ-test-suite/output/"
 
