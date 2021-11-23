@@ -354,6 +354,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
           + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
 
+  public static final ConfigProperty<Integer> MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT = ConfigProperty
+      .key("hoodie.merge.small.file.group.candidates.limit")
+      .defaultValue(1)
+      .withDocumentation("Limits number of file groups, whose base file satisfies small-file limit, to consider for appending records during upsert operation. "
+          + "Only applicable to MOR tables");
+
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")
       .defaultValue(60 * 1000)
@@ -1033,6 +1039,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean allowDuplicateInserts() {
     return getBoolean(MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE);
+  }
+
+  public int getSmallFileGroupCandidatesLimit() {
+    return getInt(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT);
   }
 
   public EngineType getEngineType() {
@@ -2113,6 +2123,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withMergeAllowDuplicateOnInserts(boolean routeInsertsToNewFiles) {
       writeConfig.setValue(MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE, String.valueOf(routeInsertsToNewFiles));
+      return this;
+    }
+
+    public Builder withMergeSmallFileGroupCandidatesLimit(int limit) {
+      writeConfig.setValue(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT, String.valueOf(limit));
       return this;
     }
 
