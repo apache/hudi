@@ -1020,36 +1020,6 @@ public class TestHiveSyncTool {
     ddlExecutor.runSQL(dropTableSql);
   }
 
-  @Test
-  public void testHiveSyncOfKerberosEnvironment() throws Exception {
-    // Path to the krb5 file
-    String ker5Path = "/krb5.conf";
-    // Path to the user keytab file
-    String principal = "/test.keytab";
-    // User Principal
-    String keytabPath = "test@HADOOP";
-    // Kerberos authentication of the client
-    System.setProperty("java.security.krb5.conf", ker5Path);
-    Configuration conf = new Configuration();
-    conf.set("hadoop.security.authentication", "kerberos");
-    UserGroupInformation.setConfiguration(conf);
-    UserGroupInformation.loginUserFromKeytab(principal, keytabPath);
-    // If flink or Spark is used, you need to use the Kerberos authentication method recommended by Flink or Spark
-
-    // Setting Kerberos Parameters
-    // Hive Principal
-    String hivePrincipal = "hive@HADOOP";
-    HiveTestUtil.hiveSyncConfig.useKerberos = true;
-    HiveTestUtil.hiveSyncConfig.kerberosPrincipal = hivePrincipal;
-    HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
-    HoodieHiveClient hoodieHiveClient = hiveSyncTool.hoodieHiveClient;
-
-    // Create a database in Hive. If the database is created successfully
-    // the client synchronizes the Kerberos metadata for managing Hive
-    hoodieHiveClient.createDatabase(hiveSyncConfig.databaseName);
-    assertTrue(hoodieHiveClient.doesDataBaseExist(hiveSyncConfig.databaseName));
-  }
-
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncWithoutDiffs(String syncMode) throws Exception {
