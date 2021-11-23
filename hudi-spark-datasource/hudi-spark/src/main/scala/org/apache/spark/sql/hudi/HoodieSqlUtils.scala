@@ -85,7 +85,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     catch {
       case _: Throwable => None
     }
-    avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType).map(removeMetaFields)
+    avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType)
   }
 
   def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
