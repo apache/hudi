@@ -18,11 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -36,10 +31,15 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
-
 import org.apache.hudi.table.HoodieSparkTable;
 
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -53,14 +53,15 @@ import java.util.stream.Collectors;
 
 public class HoodieClusteringJob {
 
+  public static final String EXECUTE = "execute";
+  public static final String SCHEDULE = "schedule";
+  public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
   private static final Logger LOG = LogManager.getLogger(HoodieClusteringJob.class);
   private final Config cfg;
   private transient FileSystem fs;
   private TypedProperties props;
   private final JavaSparkContext jsc;
-  public static final String EXECUTE = "execute";
-  public static final String SCHEDULE = "schedule";
-  public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
+  private final HoodieTableMetaClient metaClient;
 
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
     this.cfg = cfg;
@@ -68,6 +69,7 @@ public class HoodieClusteringJob {
     this.props = cfg.propsFilePath == null
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
+    this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
   }
 
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
@@ -83,8 +85,10 @@ public class HoodieClusteringJob {
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
-    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only need when set --mode execute. "
-            + "When set \"--mode scheduleAndExecute\" this instant-time will be ignored.", required = false)
+    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only used when set --mode execute. "
+        + "If the instant time is not provided with --mode execute, "
+        + "the earliest scheduled clustering instant time is used by default. "
+        + "When set \"--mode scheduleAndExecute\" this instant-time will be ignored.", required = false)
     public String clusteringInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
     public int parallelism = 1;
@@ -153,10 +157,6 @@ public class HoodieClusteringJob {
     if (StringUtils.isNullOrEmpty(cfg.runningMode)) {
       cfg.runningMode = cfg.runSchedule ? SCHEDULE : EXECUTE;
     }
-
-    if (cfg.runningMode.equalsIgnoreCase(EXECUTE) && cfg.clusteringInstantTime == null) {
-      throw new RuntimeException("--instant-time couldn't be null when executing clustering plan.");
-    }
   }
 
   public int cluster(int retry) {
@@ -192,7 +192,6 @@ public class HoodieClusteringJob {
   }
 
   private String getSchemaFromLatestInstant() throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath).setLoadActiveTimelineOnLoad(true).build();
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
       throw new HoodieException("Cannot run clustering without any completed commits");
@@ -204,6 +203,20 @@ public class HoodieClusteringJob {
   private int doCluster(JavaSparkContext jsc) throws Exception {
     String schemaStr = getSchemaFromLatestInstant();
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+      if (StringUtils.isNullOrEmpty(cfg.clusteringInstantTime)) {
+        // Instant time is not specified
+        // Find the earliest scheduled clustering instant for execution
+        Option<HoodieInstant> firstClusteringInstant =
+            metaClient.getActiveTimeline().firstInstant(
+                HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.REQUESTED);
+        if (firstClusteringInstant.isPresent()) {
+          cfg.clusteringInstantTime = firstClusteringInstant.get().getTimestamp();
+          LOG.info("Found the earliest scheduled clustering instant which will be executed: "
+              + cfg.clusteringInstantTime);
+        } else {
+          throw new HoodieClusteringException("There is no scheduled clustering in the table.");
+        }
+      }
       Option<HoodieCommitMetadata> commitMetadata = client.cluster(cfg.clusteringInstantTime, true).getCommitMetadata();
 
       return handleErrors(commitMetadata.get(), cfg.clusteringInstantTime);
@@ -267,7 +280,7 @@ public class HoodieClusteringJob {
 
   private int handleErrors(HoodieCommitMetadata metadata, String instantTime) {
     List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
-            e.getValue().stream()).collect(Collectors.toList());
+        e.getValue().stream()).collect(Collectors.toList());
     long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount == 0) {
       LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
@@ -277,5 +290,4 @@ public class HoodieClusteringJob {
     LOG.error(String.format("Import failed with %d errors.", errorsCount));
     return -1;
   }
-
 }

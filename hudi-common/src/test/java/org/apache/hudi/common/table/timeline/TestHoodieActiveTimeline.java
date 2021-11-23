@@ -26,6 +26,7 @@ import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -176,6 +177,15 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(timeline.empty());
     assertFalse(timeline.getCommitTimeline().filterPendingExcludingCompaction().empty());
     assertEquals(12, timeline.countInstants());
+    assertEquals("01", timeline.firstInstant(
+        HoodieTimeline.COMMIT_ACTION, State.COMPLETED).get().getTimestamp());
+    assertEquals("21", timeline.firstInstant(
+        HoodieTimeline.COMMIT_ACTION, State.INFLIGHT).get().getTimestamp());
+    assertFalse(timeline.firstInstant(
+        HoodieTimeline.COMMIT_ACTION, State.REQUESTED).isPresent());
+    assertFalse(timeline.firstInstant(
+        HoodieTimeline.REPLACE_COMMIT_ACTION, State.COMPLETED).isPresent());
+    
     HoodieTimeline activeCommitTimeline = timeline.getCommitTimeline().filterCompletedInstants();
     assertEquals(10, activeCommitTimeline.countInstants());
 

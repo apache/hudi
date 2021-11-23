@@ -469,6 +469,15 @@ public class UtilHelpers {
     };
   }
 
+  public static HoodieTableMetaClient createMetaClient(
+      JavaSparkContext jsc, String basePath, boolean shouldLoadActiveTimelineOnLoad) {
+    return HoodieTableMetaClient.builder()
+        .setConf(jsc.hadoopConfiguration())
+        .setBasePath(basePath)
+        .setLoadActiveTimelineOnLoad(shouldLoadActiveTimelineOnLoad)
+        .build();
+  }
+
   @FunctionalInterface
   public interface CheckedSupplier<T> {
     T get() throws Throwable;
