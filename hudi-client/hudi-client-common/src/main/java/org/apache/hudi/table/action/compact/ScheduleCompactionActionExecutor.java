@@ -184,7 +184,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
   private Long parsedToSeconds(String time) {
     long timestamp;
     try {
-      timestamp = HoodieActiveTimeline.parseInstantTime(time).getTime() / 1000;
+      timestamp = HoodieActiveTimeline.parseDateFromInstantTime(time).getTime() / 1000;
     } catch (ParseException e) {
       throw new HoodieCompactionException(e.getMessage(), e);
     }

@@ -148,7 +148,7 @@ public class HoodieTestTable {
   }
 
   public static String makeNewCommitTime(Instant dateTime) {
-    return HoodieActiveTimeline.formatInstantTime(Date.from(dateTime));
+    return HoodieActiveTimeline.formatDate(Date.from(dateTime));
   }
 
   public static List<String> makeIncrementalCommitTimes(int num) {
