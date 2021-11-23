@@ -50,9 +50,5 @@ public class TestReflectUtil extends HoodieClientTestBase {
 
     Assertions.assertTrue(
         ((UnresolvedRelation)newStatment.table()).multipartIdentifier().contains("test_reflect_util"));
-
-    if (!spark.version().startsWith("3.0")) {
-      Assertions.assertTrue(newStatment.userSpecifiedCols().isEmpty());
-    }
   }
 }

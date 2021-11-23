@@ -61,7 +61,7 @@ Once downloaded and built, run the Zookeeper server and Kafka server using the c
 
 ```bash
 export KAFKA_HOME=/path/to/kafka_install_dir
-cd $KAFKA_KAFKA_HOME
+cd $KAFKA_HOME
 ./bin/zookeeper-server-start.sh ./config/zookeeper.properties
 ./bin/kafka-server-start.sh ./config/server.properties
 ```
@@ -71,8 +71,9 @@ Wait until the kafka cluster is up and running.
 ### 2 - Set up the schema registry
 
 Hudi leverages schema registry to obtain the latest schema when writing records. While it supports most popular schema
-registries, we use Confluent schema registry. Download the latest confluent platform and run the schema registry
-service.
+registries, we use Confluent schema registry. Download the
+latest [confluent platform](https://docs.confluent.io/platform/current/installation/index.html) and run the schema
+registry service.
 
 ```bash
 cd $CONFLUENT_DIR
@@ -96,6 +97,13 @@ Open a terminal to execute the following command:
 ```bash
 cd $HUDI_DIR/hudi-kafka-connect/demo/
 bash setupKafka.sh -n <total_kafka_messages>
+```
+
+To generate data for long-running tests, you can add `-b` option to specify the number of batches of data
+to generate, with each batch containing a number of messages and idle time between batches, as follows:
+
+```bash
+bash setupKafka.sh -n <num_kafka_messages_per_batch> -b <num_batches>
 ```
 
 ### 4 - Run the Sink connector worker (multiple workers can be run)

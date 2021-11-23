@@ -19,16 +19,18 @@ package org.apache.spark.sql.hudi.command.payload
 
 import org.apache.avro.generic.IndexedRecord
 import org.apache.avro.Schema
-import org.apache.spark.sql.avro.{HooodieAvroDeserializer, SchemaConverters}
+
+import org.apache.hudi.AvroConversionUtils
+
+import org.apache.spark.sql.avro.HooodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types._
 
 /**
  * A sql typed record which will convert the avro field to sql typed value.
  */
 class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
 
-  private lazy val sqlType = SchemaConverters.toSqlType(getSchema).dataType.asInstanceOf[StructType]
+  private lazy val sqlType = AvroConversionUtils.convertAvroSchemaToStructType(getSchema)
   private lazy val avroDeserializer = HooodieAvroDeserializer(record.getSchema, sqlType)
   private lazy val sqlRow = avroDeserializer.deserializeData(record).asInstanceOf[InternalRow]
 

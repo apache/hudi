@@ -120,6 +120,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
   public Boolean withOperationField = false;
 
+  @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
+  public Boolean isConditionalSync = false;
+
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -143,6 +146,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
     newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
     newConfig.withOperationField = cfg.withOperationField;
+    newConfig.isConditionalSync = cfg.isConditionalSync;
     return newConfig;
   }
 
@@ -174,6 +178,7 @@ public class HiveSyncConfig implements Serializable {
       + ", syncAsSparkDataSourceTable=" + syncAsSparkDataSourceTable
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
+      + ", isConditionalSync=" + isConditionalSync
       + '}';
   }
 }

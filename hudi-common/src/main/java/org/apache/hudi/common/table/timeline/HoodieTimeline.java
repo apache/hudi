@@ -210,6 +210,13 @@ public interface HoodieTimeline extends Serializable {
   Option<HoodieInstant> firstInstant();
 
   /**
+   * @param action Instant action String.
+   * @param state  Instant State.
+   * @return first instant of a specific action and state if available
+   */
+  Option<HoodieInstant> firstInstant(String action, State state);
+
+  /**
    * @return nth completed instant from the first completed instant
    */
   Option<HoodieInstant> nthInstant(int n);

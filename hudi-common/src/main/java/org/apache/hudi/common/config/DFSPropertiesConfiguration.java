@@ -96,7 +96,7 @@ public class DFSPropertiesConfiguration {
       try {
         conf.addPropsFromFile(new Path(DEFAULT_CONF_FILE_DIR));
       } catch (Exception ignored) {
-        LOG.debug("Didn't find config file under default conf file dir: " + DEFAULT_CONF_FILE_DIR);
+        LOG.warn("Didn't find config file under default conf file dir: " + DEFAULT_CONF_FILE_DIR);
       }
     }
     return conf.getProps();
