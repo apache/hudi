@@ -462,6 +462,7 @@ public class TestInputFormat {
     List<RowData> result = readData(inputFormat);
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
+
   /**
    * Test reading file groups with compaction plan scheduled and delta logs.
    * File-slice after pending compaction-requested instant-time should also be considered valid.

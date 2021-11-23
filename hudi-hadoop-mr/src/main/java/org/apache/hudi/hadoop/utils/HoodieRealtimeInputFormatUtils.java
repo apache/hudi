@@ -237,7 +237,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       try {
         // Both commit and delta-commits are included - pick the latest completed one
         Option<HoodieInstant> latestCompletedInstant =
-            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+            metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants().lastInstant();
 
         Stream<FileSlice> latestFileSlices = latestCompletedInstant
             .map(instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))
