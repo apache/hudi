@@ -59,6 +59,7 @@ extends RunnableCommand {
       parameters,
       sparkSession.emptyDataFrame)
 
+    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     Seq.empty[Row]
   }
 
