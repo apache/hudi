@@ -57,13 +57,11 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
@@ -170,6 +168,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
     HoodieWriteConfig config = getWriteConfig();
     HoodieTable table = getHoodieTable();
     List<HoodieRecord<T>> records = new ArrayList<>();
+
     clusteringOps.forEach(clusteringOp -> {
       long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
       LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
@@ -186,29 +185,19 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
             .withReverseReader(config.getCompactionReverseLogReadEnabled())
             .withBufferSize(config.getMaxDFSStreamBufferSize())
             .withSpillableMapBasePath(config.getSpillableMapBasePath())
+            .withPartition(clusteringOp.getPartitionPath())
             .build();
 
+        Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
+            ? Option.empty()
+            : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-        if (!StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())) {
-          HoodieFileReader<? extends IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-          Iterator<HoodieRecord<T>> fileSliceReader = getFileSliceReader(baseFileReader, scanner, readerSchema,
-              tableConfig.getPayloadClass(),
-              tableConfig.getPreCombineField(),
-              tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
-                  tableConfig.getPartitionFieldProp())));
-          fileSliceReader.forEachRemaining(record -> records.add(record));
-        } else {
-          // Since there is no base file, fall back to reading log files
-          Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
-          StreamSupport.stream(iterable.spliterator(), false)
-              .map(e -> {
-                try {
-                  return transform((IndexedRecord) e.getData().getInsertValue(readerSchema).get());
-                } catch (IOException io) {
-                  throw new UncheckedIOException(io);
-                }
-              }).iterator().forEachRemaining(records::add);
-        }
+        Iterator<HoodieRecord<T>> fileSliceReader = getFileSliceReader(baseFileReader, scanner, readerSchema,
+            tableConfig.getPayloadClass(),
+            tableConfig.getPreCombineField(),
+            tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
+                tableConfig.getPartitionFieldProp())));
+        fileSliceReader.forEachRemaining(records::add);
       } catch (IOException e) {
         throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
             + " and " + clusteringOp.getDeltaFilePaths(), e);
