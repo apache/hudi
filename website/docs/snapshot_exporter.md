@@ -6,7 +6,7 @@ toc: true
 
 ## Introduction
 HoodieSnapshotExporter allows you to copy data from one location to another for backups or other purposes. 
-You can write data as Hudi, Json, or Parquet file formats. In addition to copying data, you can also repartition data 
+You can write data as Hudi, Json, Orc, or Parquet file formats. In addition to copying data, you can also repartition data 
 with a provided field or implement custom repartitioning by extending a class shown in detail below.
 
 ## Arguments
@@ -76,7 +76,7 @@ The output directory will look like this
 `_SUCCESS symbol=AMRS symbol=AYX symbol=CDMO symbol=CRC symbol=DRNA ...`
 ```
 
-### Custom Re=partitioning
+### Custom Re-partitioning
 `--output-partitioner` parameter takes in a fully-qualified name of a class that implements `HoodieSnapshotExporter.Partitioner`. 
 This parameter takes higher precedence than `--output-partition-field`, which will be ignored if this is provided.
 
