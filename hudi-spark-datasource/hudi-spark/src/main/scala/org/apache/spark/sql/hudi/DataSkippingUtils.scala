@@ -122,7 +122,7 @@ object DataSkippingUtils {
       // Translates to "colA_maxValue >= b" for index lookup
       case GreaterThanOrEqual(attribute: AttributeReference, right: Literal) =>
         val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, GreaterThanOrEqual(maxValue(colName), right))
+        rewriteCondition(colName, GreaterThanOrEqual(maxValue(colName), right))
       // Filter "b >= colA"
       // Translates to "b >= colA_minValue" for index lookup
       case GreaterThanOrEqual(value: Literal, attribute: AttributeReference) =>
