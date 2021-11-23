@@ -50,6 +50,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
@@ -458,15 +459,19 @@ public class DeltaSync implements Serializable {
   }
 
   private Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
-    List<HoodieInstant> instants = timeline.getReverseOrderedInstants().collect(Collectors.toList());
-    for (HoodieInstant instant : instants) {
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-          .fromBytes(commitTimelineOpt.get().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-      if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
-        return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+    return (Option<String>) timeline.getReverseOrderedInstants().map(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(commitTimelineOpt.get().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
+          return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+        } else {
+          return Option.empty();
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }
-    }
-    return Option.empty();
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
   }
 
   /**

@@ -113,7 +113,8 @@ public class TransactionUtils {
             case HoodieTimeline.COMMIT_ACTION:
               HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
                   .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
-              if (!commitMetadata.getOperationType().equals(WriteOperationType.UNKNOWN)
+              if (commitMetadata.getOperationType() != null
+                  && !commitMetadata.getOperationType().equals(WriteOperationType.UNKNOWN)
                   && !commitMetadata.getOperationType().equals(WriteOperationType.COMPACT)) { // skip compaction instants
                 return Option.of(Pair.of(hoodieInstant, commitMetadata.getExtraMetadata()));
               }
