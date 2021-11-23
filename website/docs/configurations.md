@@ -14,6 +14,7 @@ This page covers the different ways of configuring your job to write/read Hudi t
 - [**Write Client Configs**](#WRITE_CLIENT): Internally, the Hudi datasource uses a RDD based HoodieWriteClient API to actually perform writes to storage. These configs provide deep control over lower level aspects like file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
 - [**Metrics Configs**](#METRICS): These set of configs are used to enable monitoring and reporting of keyHudi stats and metrics.
 - [**Record Payload Config**](#RECORD_PAYLOAD): This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and stored old record. Hudi provides default implementations such as OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. This can be overridden to a custom class extending HoodieRecordPayload class, on both datasource and WriteClient levels.
+- [**Environment Config**](#ENVIRONMENT_CONFIG): Instead of directly passing configurations to Hudi jobs, since 0.10.0, Hudi also supports configurations via a configuration file `hudi-default.conf` in which each line consists of a key and a value separated by whitespace or = sign.
 
 ## Spark Datasource Configs {#SPARK_DATASOURCE}
 These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
@@ -3243,4 +3244,15 @@ Payload related configs, that can be leveraged to control merges based on specif
 > `Config Param: ORDERING_FIELD`<br></br>
 
 ---
+
+## Environment Config {#ENVIRONMENT_CONFIG}
+Hudi supports passing configurations via a configuration file `hudi-default.conf` in which each line consists of a key and a value separated by whitespace or = sign. For example:
+```
+hoodie.datasource.hive_sync.mode               jdbc
+hoodie.datasource.hive_sync.jdbcurl            jdbc:hive2://localhost:10000
+hoodie.datasource.hive_sync.support_timestamp  false
+```
+It helps to have a central configuration file for your common cross job configurations/tunings, so all the jobs on your cluster can utilize it. It also works with Spark SQL DML/DDL, and helps avoid having to pass configs inside the SQL statements.
+
+By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable.
 
