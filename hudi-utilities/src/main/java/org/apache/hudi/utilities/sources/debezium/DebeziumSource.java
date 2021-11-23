@@ -67,7 +67,6 @@ public abstract class DebeziumSource extends RowSource {
   // these are native kafka's config. do not change the config names.
   private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
-  private static final String SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
   private static final String OVERRIDE_CHECKPOINT_STRING = "hoodie.debezium.override.initial.checkpoint.key";
   private static final String CONNECT_NAME_KEY = "connect.name";
   private static final String DATE_CONNECT_NAME = "custom.debezium.DateString";
@@ -120,7 +119,7 @@ public abstract class DebeziumSource extends RowSource {
       return Pair.of(Option.of(sparkSession.emptyDataFrame()), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
     } else {
       try {
-        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(SCHEMA_REGISTRY_URL_PROP);
+        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(props.getString(SchemaRegistryProvider.Config.SRC_SCHEMA_REGISTRY_URL_PROP));
         Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
         LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
         LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
