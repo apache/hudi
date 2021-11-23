@@ -74,7 +74,6 @@ public class HoodieMetadataHFileDataBlock extends HoodieHFileDataBlock {
   @Override
   protected ByteBuffer serializeRecord(final IndexedRecord record, final Option<Schema.Field> schemaKeyField) {
     if (!schemaKeyField.isPresent()) {
-      LOG.error("XXX unknown schema key field!");
       return super.serializeRecord(record, schemaKeyField);
     }
 

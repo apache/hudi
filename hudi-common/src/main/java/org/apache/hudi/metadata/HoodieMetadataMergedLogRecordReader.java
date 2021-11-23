@@ -93,7 +93,6 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                                final Option<Pair<String, String>> simpleKeyGenFields,
                                                final Option<String> partitionName) {
     if (hoodieTableConfig.populateMetaFields()) {
-      // TODO
       return super.createHoodieRecord(rec, hoodieTableConfig, payloadClassFQN, preCombineField, withOperationField,
           simpleKeyGenFields, partitionName);
     }

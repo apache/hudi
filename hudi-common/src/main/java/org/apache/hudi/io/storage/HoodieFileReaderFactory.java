@@ -24,6 +24,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hudi.metadata.HoodieMetadataHFileReader;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import java.io.IOException;
 
@@ -54,6 +56,9 @@ public class HoodieFileReaderFactory {
 
   private static <R extends IndexedRecord> HoodieFileReader<R> newHFileFileReader(Configuration conf, Path path) throws IOException {
     CacheConfig cacheConfig = new CacheConfig(conf);
+    if (HoodieTableMetadata.isMetadataTable(path.getName())) {
+      return new HoodieMetadataHFileReader<>(conf, path, cacheConfig);
+    }
     return new HoodieHFileReader<>(conf, path, cacheConfig);
   }
 

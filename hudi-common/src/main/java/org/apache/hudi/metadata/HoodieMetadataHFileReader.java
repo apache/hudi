@@ -66,9 +66,6 @@ public class HoodieMetadataHFileReader<R extends IndexedRecord> extends HoodieHF
     }
 
     Schema.Field keySchemaField = record.getSchema().getField(keyField.get());
-    record.put(keySchemaField.pos(), new String(keyBytes.array()));
-
-    keySchemaField = record.getSchema().getField(keyField.get());
     if (keySchemaField != null) {
       record.put(keySchemaField.pos(), new String(keyBytes.array()));
     }
