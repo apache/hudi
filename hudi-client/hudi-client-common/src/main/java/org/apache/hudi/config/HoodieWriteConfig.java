@@ -1481,6 +1481,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return Compression.Algorithm.valueOf(getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME));
   }
 
+  public String getHFileComparatorClassName() {
+    return getString(HoodieStorageConfig.HFILE_COMPARATOR_CLASS_NAME);
+  }
+
   public long getOrcMaxFileSize() {
     return getLong(HoodieStorageConfig.ORC_FILE_MAX_SIZE);
   }

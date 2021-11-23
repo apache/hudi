@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata;
+package org.apache.hudi.io.storage;
 
 import org.apache.hadoop.hbase.KeyValue;
 
@@ -25,5 +25,8 @@ import org.apache.hadoop.hbase.KeyValue;
  * This class is explicitly used as Key Comparator to work around the hard coded
  * legacy format class names inside HBase. Otherwise, we will face issues with shading.
  */
-public class HoodieMetadataKVComparator extends KeyValue.KVComparator {
+public class HoodieHBaseComparators {
+  public static class HoodieHBaseKVComparator
+      extends KeyValue.KVComparator {
+  }
 }

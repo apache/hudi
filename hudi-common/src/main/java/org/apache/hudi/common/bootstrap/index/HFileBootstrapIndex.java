@@ -583,5 +583,4 @@ public class HFileBootstrapIndex extends BootstrapIndex {
    */
   public static class HoodieKVComparator extends KeyValue.KVComparator {
   }
-
 }

@@ -20,12 +20,12 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.metadata.HoodieMetadataKVComparator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -96,7 +96,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.writer = HFile.getWriterFactory(conf, cacheConfig)
         .withPath(this.fs, this.file)
         .withFileContext(context)
-        .withComparator(new HoodieMetadataKVComparator())
+        .withComparator(hfileConfig.getHfileComparator())
         .create();
 
     writer.appendFileInfo(HoodieHFileReader.KEY_SCHEMA.getBytes(), schema.toString().getBytes());
@@ -150,7 +150,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
         }
 
         @Override
-        public void readFields(DataInput in) throws IOException { }
+        public void readFields(DataInput in) throws IOException {
+        }
       });
     }
 

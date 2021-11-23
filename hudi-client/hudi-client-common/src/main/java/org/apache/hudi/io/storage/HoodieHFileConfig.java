@@ -18,13 +18,19 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.bloom.BloomFilter;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HColumnDescriptor;
+import org.apache.hadoop.hbase.KeyValue;
+import org.apache.hadoop.hbase.io.compress.Compression;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+
 public class HoodieHFileConfig {
+
+  // This is private in CacheConfig so have been copied here.
+  private static boolean DROP_BEHIND_CACHE_COMPACTION_DEFAULT = true;
+  private static KeyValue.KVComparator defaultHFileComparator = new HoodieHBaseComparators.HoodieHBaseKVComparator();
 
   private Compression.Algorithm compressionAlgorithm;
   private int blockSize;
@@ -34,19 +40,23 @@ public class HoodieHFileConfig {
   private boolean dropBehindCacheCompaction;
   private Configuration hadoopConf;
   private BloomFilter bloomFilter;
-
-  // This is private in CacheConfig so have been copied here.
-  private static boolean DROP_BEHIND_CACHE_COMPACTION_DEFAULT = true;
+  private KeyValue.KVComparator hfileComparator;
 
   public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
                            long maxFileSize, BloomFilter bloomFilter) {
     this(hadoopConf, compressionAlgorithm, blockSize, maxFileSize, CacheConfig.DEFAULT_PREFETCH_ON_OPEN,
-        HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION_DEFAULT, bloomFilter);
+        HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION_DEFAULT, bloomFilter, defaultHFileComparator);
+  }
+
+  public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
+      long maxFileSize, BloomFilter bloomFilter, KeyValue.KVComparator hfileComparator) {
+    this(hadoopConf, compressionAlgorithm, blockSize, maxFileSize, CacheConfig.DEFAULT_PREFETCH_ON_OPEN,
+        HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION_DEFAULT, bloomFilter, hfileComparator);
   }
 
   public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
                            long maxFileSize, boolean prefetchBlocksOnOpen, boolean cacheDataInL1,
-                           boolean dropBehindCacheCompaction, BloomFilter bloomFilter) {
+                           boolean dropBehindCacheCompaction, BloomFilter bloomFilter, KeyValue.KVComparator hfileComparator) {
     this.hadoopConf = hadoopConf;
     this.compressionAlgorithm = compressionAlgorithm;
     this.blockSize = blockSize;
@@ -55,6 +65,7 @@ public class HoodieHFileConfig {
     this.cacheDataInL1 = cacheDataInL1;
     this.dropBehindCacheCompaction = dropBehindCacheCompaction;
     this.bloomFilter = bloomFilter;
+    this.hfileComparator = hfileComparator;
   }
 
   public Configuration getHadoopConf() {
@@ -91,5 +102,9 @@ public class HoodieHFileConfig {
 
   public BloomFilter getBloomFilter() {
     return bloomFilter;
+  }
+
+  public KeyValue.KVComparator getHfileComparator() {
+    return hfileComparator;
   }
 }

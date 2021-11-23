@@ -83,6 +83,14 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Lower values increase the size of metadata tracked within HFile, but can offer potentially "
           + "faster lookup times.");
 
+  public static final ConfigProperty<String> HFILE_COMPARATOR_CLASS_NAME = ConfigProperty
+      .key("hoodie.hfile.comparator.class")
+      .noDefaultValue()
+      .sinceVersion("0.10.0")
+      .withDocumentation("The comparator to use to compare cells in HFile. If none is specified, then `org.apache.hudi.io.storage.HoodieHBaseComparators$HoodieHBaseKVComparator` is used by "
+          + "file writer for data files in HFile format. For Hudi versions 0.9.0 or earlier, this used to be the default legacy comparator class in HBase version 1.2.3. "
+          + "This config is not used in the bootstrap index path, where we still use `org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex$HoodieKVComparator`.");
+
   // used to size log files
   public static final ConfigProperty<String> LOGFILE_MAX_SIZE = ConfigProperty
       .key("hoodie.logfile.max.size")
@@ -301,6 +309,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder hfileBlockSize(int blockSize) {
       storageConfig.setValue(HFILE_BLOCK_SIZE, String.valueOf(blockSize));
+      return this;
+    }
+
+    public Builder hfileComparatorClassName(String hfileComparatorClassName) {
+      storageConfig.setValue(HFILE_COMPARATOR_CLASS_NAME, hfileComparatorClassName);
       return this;
     }
 
