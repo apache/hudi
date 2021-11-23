@@ -145,6 +145,31 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
+  public void testLocalFileSystemLoading() {
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t1.props"));
+
+    cfg.addPropsFromFile(
+        new Path(
+            String.format(
+                "file:%s",
+                getClass().getClassLoader()
+                    .getResource("props/test.properties")
+                    .getPath()
+            )
+        )
+    );
+
+    TypedProperties props = cfg.getProps();
+
+    assertEquals(123, props.getInteger("int.prop"));
+    assertEquals(113.4, props.getDouble("double.prop"), 0.001);
+    assertTrue(props.getBoolean("boolean.prop"));
+    assertEquals("str", props.getString("string.prop"));
+    assertEquals(1354354354, props.getLong("long.prop"));
+    assertEquals(123, props.getInteger("some.random.prop"));
+  }
+
+  @Test
   public void testNoGlobalConfFileConfigured() {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
     // Should not throw any exception when no external configuration file configured
