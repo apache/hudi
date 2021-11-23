@@ -172,9 +172,14 @@ total 5168
 
 ### 7 - Run async compaction and clustering if scheduled
 
-When using Merge-On-Read (MOR) as the table, compaction and clustering can be scheduled when the Sink is running. Inline
-execution of compaction and clustering are disabled due to performance reason. You run async compaction and clustering
-using Spark jobs and Hudi CLI.
+When using Merge-On-Read (MOR) as the table type, async compaction and clustering can be scheduled when the Sink is
+running. Inline compaction and clustering are disabled by default due to performance reason. By default, async
+compaction scheduling is enabled, and you can disable it by setting `hoodie.kafka.compaction.async.enable` to `false`.
+Async clustering scheduling is disabled by default, and you can enable it by setting `hoodie.clustering.async.enabled`
+to `true`.
+
+The Sink only schedules the compaction and clustering if necessary and does not execute them for performance. You need
+to execute the scheduled compaction and clustering using separate Spark jobs or Hudi CLI.
 
 After the compaction is scheduled, you can see the requested compaction instant (`20211111111410.compaction.requested`)
 below:
