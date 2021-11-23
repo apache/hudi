@@ -315,13 +315,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @throws IOException
    */
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    // Create the path if it does not exist already
-    if (!metaClient.getFs().exists(partitionPath)) {
-      metaClient.getFs().mkdirs(partitionPath);
-      return new FileStatus[0];
-    } else {
+    try {
       return metaClient.getFs().listStatus(partitionPath);
+    } catch (IOException e) {
+      // Create the path if it does not exist already
+      if (!metaClient.getFs().exists(partitionPath)) {
+        metaClient.getFs().mkdirs(partitionPath);
+        return new FileStatus[0];
+      }
     }
+    throw new HoodieIOException(String.format("Failed to list partition path: %s", partitionPath));
   }
 
   /**
