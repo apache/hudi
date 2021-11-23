@@ -164,7 +164,7 @@ public class HoodieCompactor {
     // Get schema.
     SparkRDDWriteClient client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props);
-    if (cfg.compactionInstantTime == null) {
+    if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
       throw new IllegalArgumentException("No instant time is provided for scheduling compaction. "
           + "Please specify the compaction instant time by using --instant-time.");
     }

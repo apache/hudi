@@ -106,7 +106,7 @@ to generate, with each batch containing a number of messages and idle time betwe
 bash setupKafka.sh -n <num_kafka_messages_per_batch> -b <num_batches>
 ```
 
-### 4 - Run the Sink connector worker (multiple workers can be run)
+### 5 - Run the Sink connector worker (multiple workers can be run)
 
 The Kafka connect is a distributed platform, with the ability to run one or more workers (each running multiple tasks) 
 that parallely process the records from the Kafka partitions for the same topic. We provide a properties file with 
@@ -120,7 +120,7 @@ cd $KAFKA_HOME
 ./bin/connect-distributed.sh $HUDI_DIR/hudi-kafka-connect/demo/connect-distributed.properties
 ```
 
-### 5- To add the Hudi Sink to the Connector (delete it if you want to re-configure)
+### 6 - To add the Hudi Sink to the Connector (delete it if you want to re-configure)
 
 Once the Connector has started, it will not run the Sink, until the Hudi sink is added using the web api. The following 
 curl APIs can be used to delete and add a new Hudi Sink. Again, a default configuration is provided for the Hudi Sink, 
@@ -170,4 +170,132 @@ total 5168
 -rw-r--r--  1 user  wheel  440214 Sep 13 21:43 E200FA75DCD1CED60BE86BCE6BF5D23A-0_0-0-0_20210913214114.parquet
 ```
 
+### 7 - Run async compaction and clustering if scheduled
 
+When using Merge-On-Read (MOR) as the table type, async compaction and clustering can be scheduled when the Sink is
+running. Inline compaction and clustering are disabled by default due to performance reason. By default, async
+compaction scheduling is enabled, and you can disable it by setting `hoodie.kafka.compaction.async.enable` to `false`.
+Async clustering scheduling is disabled by default, and you can enable it by setting `hoodie.clustering.async.enabled`
+to `true`.
+
+The Sink only schedules the compaction and clustering if necessary and does not execute them for performance. You need
+to execute the scheduled compaction and clustering using separate Spark jobs or Hudi CLI.
+
+After the compaction is scheduled, you can see the requested compaction instant (`20211111111410.compaction.requested`)
+below:
+
+```
+ls -l /tmp/hoodie/hudi-test-topic/.hoodie
+total 280
+-rw-r--r--  1 user  wheel  21172 Nov 11 11:09 20211111110807.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:08 20211111110807.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:08 20211111110807.deltacommit.requested
+-rw-r--r--  1 user  wheel  22458 Nov 11 11:11 20211111110940.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:09 20211111110940.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:09 20211111110940.deltacommit.requested
+-rw-r--r--  1 user  wheel  21445 Nov 11 11:13 20211111111110.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:11 20211111111110.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:11 20211111111110.deltacommit.requested
+-rw-r--r--  1 user  wheel  24943 Nov 11 11:14 20211111111303.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:13 20211111111303.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:13 20211111111303.deltacommit.requested
+-rw-r--r--  1 user  wheel   9885 Nov 11 11:14 20211111111410.compaction.requested
+-rw-r--r--  1 user  wheel  21192 Nov 11 11:15 20211111111411.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:14 20211111111411.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:14 20211111111411.deltacommit.requested
+-rw-r--r--  1 user  wheel      0 Nov 11 11:15 20211111111530.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:15 20211111111530.deltacommit.requested
+drwxr-xr-x  2 user  wheel     64 Nov 11 11:08 archived
+-rw-r--r--  1 user  wheel    387 Nov 11 11:08 hoodie.properties
+```
+
+Then you can run async compaction job with `HoodieCompactor` and `spark-submit` by:
+
+```
+spark-submit \
+  --class org.apache.hudi.utilities.HoodieCompactor \
+  hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.10.0-SNAPSHOT.jar \
+  --base-path /tmp/hoodie/hudi-test-topic \
+  --table-name hudi-test-topic \
+  --schema-file /Users/user/repo/hudi/docker/demo/config/schema.avsc \
+  --instant-time 20211111111410 \
+  --parallelism 2 \
+  --spark-memory 1g
+```
+
+Note that you don't have to provide the instant time through `--instant-time`. In that case, the earliest scheduled
+compaction is going to be executed.
+
+Alternatively, you can use Hudi CLI to execute compaction:
+
+```
+hudi-> connect --path /tmp/hoodie/hudi-test-topic
+hudi:hudi-test-topic-> compactions show all
+╔═════════════════════════╤═══════════╤═══════════════════════════════╗
+║ Compaction Instant Time │ State     │ Total FileIds to be Compacted ║
+╠═════════════════════════╪═══════════╪═══════════════════════════════╣
+║ 20211111111410          │ REQUESTED │ 12                            ║
+╚═════════════════════════╧═══════════╧═══════════════════════════════╝
+
+compaction validate --instant 20211111111410
+compaction run --compactionInstant 20211111111410 --parallelism 2 --schemaFilePath /Users/user/repo/hudi/docker/demo/config/schema.avsc
+```
+
+Similarly, you can see the requested clustering instant (`20211111111813.replacecommit.requested`) after it is scheduled
+by the Sink:
+
+```
+ls -l /tmp/hoodie/hudi-test-topic/.hoodie
+total 736
+-rw-r--r--  1 user  wheel  24943 Nov 11 11:14 20211111111303.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:13 20211111111303.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:13 20211111111303.deltacommit.requested
+-rw-r--r--  1 user  wheel  18681 Nov 11 11:17 20211111111410.commit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:17 20211111111410.compaction.inflight
+-rw-r--r--  1 user  wheel   9885 Nov 11 11:14 20211111111410.compaction.requested
+-rw-r--r--  1 user  wheel  21192 Nov 11 11:15 20211111111411.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:14 20211111111411.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:14 20211111111411.deltacommit.requested
+-rw-r--r--  1 user  wheel  22460 Nov 11 11:17 20211111111530.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:15 20211111111530.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:15 20211111111530.deltacommit.requested
+-rw-r--r--  1 user  wheel  21357 Nov 11 11:18 20211111111711.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:17 20211111111711.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:17 20211111111711.deltacommit.requested
+-rw-r--r--  1 user  wheel   6516 Nov 11 11:18 20211111111813.replacecommit.requested
+-rw-r--r--  1 user  wheel  26070 Nov 11 11:20 20211111111815.deltacommit
+-rw-r--r--  1 user  wheel      0 Nov 11 11:18 20211111111815.deltacommit.inflight
+-rw-r--r--  1 user  wheel      0 Nov 11 11:18 20211111111815.deltacommit.requested
+```
+
+Then you can run async clustering job with `HoodieClusteringJob` and `spark-submit` by:
+
+```
+spark-submit \
+  --class org.apache.hudi.utilities.HoodieClusteringJob \
+  hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.10.0-SNAPSHOT.jar \
+  --props clusteringjob.properties \
+  --mode execute \
+  --base-path /tmp/hoodie/hudi-test-topic \
+  --table-name sample_table \
+  --instant-time 20211111111813 \
+  --spark-memory 1g
+```
+
+Sample `clusteringjob.properties`:
+
+```
+hoodie.datasource.write.recordkey.field=volume
+hoodie.datasource.write.partitionpath.field=date
+hoodie.deltastreamer.schemaprovider.registry.url=http://localhost:8081/subjects/hudi-test-topic/versions/latest
+
+hoodie.clustering.plan.strategy.target.file.max.bytes=1073741824
+hoodie.clustering.plan.strategy.small.file.limit=629145600
+hoodie.clustering.execution.strategy.class=org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy
+hoodie.clustering.plan.strategy.sort.columns=volume
+
+hoodie.write.concurrency.mode=single_writer
+```
+
+Note that you don't have to provide the instant time through `--instant-time`. In that case, the earliest scheduled
+clustering is going to be executed.

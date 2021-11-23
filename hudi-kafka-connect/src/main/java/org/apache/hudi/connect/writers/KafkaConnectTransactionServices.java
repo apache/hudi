@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -54,6 +55,8 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
   private final Option<HoodieTableMetaClient> tableMetaClient;
   private final Configuration hadoopConf;
+  private final HoodieWriteConfig writeConfig;
+  private final KafkaConnectConfigs connectConfigs;
   private final String tableBasePath;
   private final String tableName;
   private final HoodieEngineContext context;
@@ -61,8 +64,11 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
   private final HoodieJavaWriteClient<HoodieAvroPayload> javaClient;
 
   public KafkaConnectTransactionServices(KafkaConnectConfigs connectConfigs) throws HoodieException {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withProperties(connectConfigs.getProps()).build();
+    this.connectConfigs = connectConfigs;
+    this.writeConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withProperties(connectConfigs.getProps())
+        .build();
 
     tableBasePath = writeConfig.getBasePath();
     tableName = writeConfig.getTableName();
@@ -95,6 +101,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     }
   }
 
+  @Override
   public String startCommit() {
     String newCommitTime = javaClient.startCommit();
     javaClient.transitionInflight(newCommitTime);
@@ -102,11 +109,23 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     return newCommitTime;
   }
 
+  @Override
   public void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
     javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
     LOG.info("Ending Hudi commit " + commitTime);
+
+    // Schedule clustering and compaction as needed.
+    if (writeConfig.isAsyncClusteringEnabled()) {
+      javaClient.scheduleClustering(Option.empty()).ifPresent(
+          instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
+    }
+    if (isAsyncCompactionEnabled()) {
+      javaClient.scheduleCompaction(Option.empty()).ifPresent(
+          instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
+    }
   }
 
+  @Override
   public Map<String, String> fetchLatestExtraCommitMetadata() {
     if (tableMetaClient.isPresent()) {
       Option<HoodieCommitMetadata> metadata = KafkaConnectUtils.getCommitMetadataForLatestInstant(tableMetaClient.get());
@@ -118,5 +137,11 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       }
     }
     throw new HoodieException("Fatal error retrieving Hoodie Extra Metadata since Table Meta Client is absent");
+  }
+
+  private boolean isAsyncCompactionEnabled() {
+    return tableMetaClient.isPresent()
+        && HoodieTableType.MERGE_ON_READ.equals(tableMetaClient.get().getTableType())
+        && connectConfigs.isAsyncCompactEnabled();
   }
 }

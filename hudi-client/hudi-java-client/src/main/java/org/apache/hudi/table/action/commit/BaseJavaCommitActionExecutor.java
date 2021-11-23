@@ -126,13 +126,14 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     return result;
   }
 
-  protected void updateIndex(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
+  protected List<WriteStatus> updateIndex(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
     List<WriteStatus> statuses = HoodieList.getList(
         table.getIndex().updateLocation(HoodieList.of(writeStatuses), context, table));
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
+    return statuses;
   }
 
   @Override

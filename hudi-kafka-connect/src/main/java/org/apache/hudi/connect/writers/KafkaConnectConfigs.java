@@ -73,6 +73,11 @@ public class KafkaConnectConfigs extends HoodieConfig {
           + "the coordinator will wait for the write statuses from all the partitions"
           + "to ignore the current commit and start a new commit.");
 
+  public static final ConfigProperty<String> ASYNC_COMPACT_ENABLE = ConfigProperty
+      .key("hoodie.kafka.compaction.async.enable")
+      .defaultValue("true")
+      .withDocumentation("Controls whether async compaction should be turned on for MOR table writing.");
+
   public static final ConfigProperty<String> META_SYNC_ENABLE = ConfigProperty
       .key("hoodie.meta.sync.enable")
       .defaultValue("false")
@@ -119,6 +124,10 @@ public class KafkaConnectConfigs extends HoodieConfig {
 
   public String getKafkaValueConverter() {
     return getString(KAFKA_VALUE_CONVERTER);
+  }
+
+  public Boolean isAsyncCompactEnabled() {
+    return getBoolean(ASYNC_COMPACT_ENABLE);
   }
 
   public Boolean isMetaSyncEnabled() {

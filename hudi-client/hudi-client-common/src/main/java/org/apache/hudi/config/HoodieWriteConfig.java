@@ -2182,7 +2182,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultOnCondition(!isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isClusteringConfigSet,
-          HoodieClusteringConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+          HoodieClusteringConfig.newBuilder().withEngineType(engineType)
+              .fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(
           writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isBootstrapConfigSet,

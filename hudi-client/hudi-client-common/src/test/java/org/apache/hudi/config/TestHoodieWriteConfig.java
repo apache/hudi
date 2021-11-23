@@ -20,7 +20,6 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
-
 import org.apache.hudi.index.HoodieIndex;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -79,6 +78,52 @@ public class TestHoodieWriteConfig {
     // flink default in-memory
     writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.FLINK).withPath("/tmp").build();
     assertEquals(HoodieIndex.IndexType.INMEMORY, writeConfig.getIndexType());
+  }
+
+  @Test
+  public void testDefaultClusteringPlanStrategyClassAccordingToEngineType() {
+    // Default (as Spark)
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
+    assertEquals(
+        HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
+        writeConfig.getClusteringPlanStrategyClass());
+
+    // Spark
+    writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.SPARK).withPath("/tmp").build();
+    assertEquals(
+        HoodieClusteringConfig.SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
+        writeConfig.getClusteringPlanStrategyClass());
+
+    // Flink and Java
+    for (EngineType engineType : new EngineType[] {EngineType.FLINK, EngineType.JAVA}) {
+      writeConfig = HoodieWriteConfig.newBuilder().withEngineType(engineType).withPath("/tmp").build();
+      assertEquals(
+              HoodieClusteringConfig.JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY,
+              writeConfig.getClusteringPlanStrategyClass());
+    }
+  }
+
+  @Test
+  public void testDefaultClusteringExecutionStrategyClassAccordingToEngineType() {
+    // Default (as Spark)
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
+    assertEquals(
+        HoodieClusteringConfig.SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY,
+        writeConfig.getClusteringExecutionStrategyClass());
+
+    // Spark
+    writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.SPARK).withPath("/tmp").build();
+    assertEquals(
+        HoodieClusteringConfig.SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY,
+        writeConfig.getClusteringExecutionStrategyClass());
+
+    // Flink and Java
+    for (EngineType engineType : new EngineType[] {EngineType.FLINK, EngineType.JAVA}) {
+      writeConfig = HoodieWriteConfig.newBuilder().withEngineType(engineType).withPath("/tmp").build();
+      assertEquals(
+          HoodieClusteringConfig.JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY,
+          writeConfig.getClusteringExecutionStrategyClass());
+    }
   }
 
   private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params) throws IOException {

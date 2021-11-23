@@ -22,7 +22,9 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.File;
 import java.io.FileReader;
@@ -41,6 +43,14 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
+  public static final String SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
+  public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy";
+  public static final String SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY =
+      "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
+  public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
+      "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
 
   // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
   public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
@@ -59,7 +69,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
-      .defaultValue("org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy")
+      .defaultValue(SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY)
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
           + "i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by "
@@ -67,7 +77,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> EXECUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.execution.strategy.class")
-      .defaultValue("org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
+      .defaultValue(SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY)
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the "
           + " clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while "
@@ -336,6 +346,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static class Builder {
 
     private final HoodieClusteringConfig clusteringConfig = new HoodieClusteringConfig();
+    private EngineType engineType = EngineType.SPARK;
+
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
+      return this;
+    }
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -455,8 +471,36 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public HoodieClusteringConfig build() {
+      clusteringConfig.setDefaultValue(
+          PLAN_STRATEGY_CLASS_NAME, getDefaultPlanStrategyClassName(engineType));
+      clusteringConfig.setDefaultValue(
+          EXECUTION_STRATEGY_CLASS_NAME, getDefaultExecutionStrategyClassName(engineType));
       clusteringConfig.setDefaults(HoodieClusteringConfig.class.getName());
       return clusteringConfig;
+    }
+
+    private String getDefaultPlanStrategyClassName(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+        case FLINK:
+        case JAVA:
+          return JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private String getDefaultExecutionStrategyClassName(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
+        case FLINK:
+        case JAVA:
+          return JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
     }
   }
 

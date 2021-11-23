@@ -18,18 +18,15 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.spark.api.java.JavaRDD;
 
-import java.io.IOException;
+import org.apache.avro.Schema;
+import org.apache.spark.api.java.JavaRDD;
 
 /**
  * A partitioner that does sorting based on specified column values for each RDD partition.
@@ -57,33 +54,14 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
                                                      int outputSparkPartitions) {
     final String[] sortColumns = this.sortColumnNames;
     final SerializableSchema schema = this.serializableSchema;
-    return records.sortBy(record -> getRecordSortColumnValues(record, sortColumns, schema), 
+    return records.sortBy(
+        record -> HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema),
         true, outputSparkPartitions);
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return true;
-  }
-
-  private static Object getRecordSortColumnValues(HoodieRecord<? extends HoodieRecordPayload> record,
-                                                  String[] sortColumns,
-                                                  SerializableSchema schema) {
-    try {
-      GenericRecord genericRecord = (GenericRecord) record.getData().getInsertValue(schema.get()).get();
-      if (sortColumns.length == 1) {
-        return HoodieAvroUtils.getNestedFieldVal(genericRecord, sortColumns[0], true);
-      } else {
-        StringBuilder sb = new StringBuilder();
-        for (String col : sortColumns) {
-          sb.append(HoodieAvroUtils.getNestedFieldValAsString(genericRecord, col, true));
-        }
-
-        return sb.toString();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
-    }
   }
 
   private String[] getSortColumnName(HoodieWriteConfig config) {
