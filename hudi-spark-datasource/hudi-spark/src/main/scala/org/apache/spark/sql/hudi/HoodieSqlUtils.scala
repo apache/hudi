@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import scala.collection.JavaConverters._
 import java.net.URI
-import java.util.{Date, Locale, Properties}
+import java.util.{Locale, Properties}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
