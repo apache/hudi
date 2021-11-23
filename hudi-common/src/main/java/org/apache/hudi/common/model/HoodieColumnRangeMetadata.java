@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.parquet.schema.PrimitiveStringifier;
+
 import java.util.Objects;
 
 /**
@@ -28,28 +30,16 @@ public class HoodieColumnRangeMetadata<T> {
   private final String columnName;
   private final T minValue;
   private final T maxValue;
-  private long numNulls;
-  // For Decimal Type/Date Type, minValue/maxValue cannot represent it's original value.
-  // eg: when parquet collects column information, the decimal type is collected as int/binary type.
-  // so we cannot use minValue and maxValue directly, use minValueAsString/maxValueAsString instead.
-  private final String minValueAsString;
-  private final String maxValueAsString;
+  private final long numNulls;
+  private final PrimitiveStringifier stringifier;
 
-  public HoodieColumnRangeMetadata(
-      final String filePath,
-      final String columnName,
-      final T minValue,
-      final T maxValue,
-      long numNulls,
-      final String minValueAsString,
-      final String maxValueAsString) {
+  public HoodieColumnRangeMetadata(final String filePath, final String columnName, final T minValue, final T maxValue, final long numNulls, final PrimitiveStringifier stringifier) {
     this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
     this.maxValue = maxValue;
-    this.numNulls = numNulls == -1 ? 0 : numNulls;
-    this.minValueAsString = minValueAsString;
-    this.maxValueAsString = maxValueAsString;
+    this.numNulls = numNulls;
+    this.stringifier = stringifier;
   }
 
   public String getFilePath() {
@@ -68,12 +58,8 @@ public class HoodieColumnRangeMetadata<T> {
     return this.maxValue;
   }
 
-  public String getMaxValueAsString() {
-    return maxValueAsString;
-  }
-
-  public String getMinValueAsString() {
-    return minValueAsString;
+  public PrimitiveStringifier getStringifier() {
+    return stringifier;
   }
 
   public long getNumNulls() {
@@ -93,14 +79,12 @@ public class HoodieColumnRangeMetadata<T> {
         && Objects.equals(getColumnName(), that.getColumnName())
         && Objects.equals(getMinValue(), that.getMinValue())
         && Objects.equals(getMaxValue(), that.getMaxValue())
-        && Objects.equals(getNumNulls(), that.getNumNulls())
-        && Objects.equals(getMinValueAsString(), that.getMinValueAsString())
-        && Objects.equals(getMaxValueAsString(), that.getMaxValueAsString());
+        && Objects.equals(getNumNulls(), that.getNumNulls());
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getColumnName(), getMinValue(), getMaxValue(), getNumNulls(), getMinValueAsString(), getMaxValueAsString());
+    return Objects.hash(getColumnName(), getMinValue(), getMaxValue(), getNumNulls());
   }
 
   @Override
@@ -110,8 +94,6 @@ public class HoodieColumnRangeMetadata<T> {
         + "columnName='" + columnName + '\''
         + ", minValue=" + minValue
         + ", maxValue=" + maxValue
-        + ", numNulls=" + numNulls
-        + ", minValueAsString=" + minValueAsString
-        + ", minValueAsString=" + maxValueAsString + '}';
+        + ", numNulls=" + numNulls + '}';
   }
 }
