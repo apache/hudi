@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -58,6 +60,10 @@ import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+
+import static org.junit.jupiter.params.provider.Arguments.arguments;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -117,16 +123,44 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata, int minArchivalCommits, int maxArchivalCommits, int maxDeltaCommitsMetadataTable) throws Exception {
-    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE);
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, false, 10);
   }
 
-  private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata, int minArchivalCommits, int maxArchivalCommits, int maxDeltaCommitsMetadataTable,
+  private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
+                                                           int minArchivalCommits,
+                                                           int maxArchivalCommits,
+                                                           int maxDeltaCommitsMetadataTable,
                                                            HoodieTableType tableType) throws Exception {
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, tableType, false, 10);
+  }
+
+  private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
+                                                           int minArchivalCommits,
+                                                           int maxArchivalCommits,
+                                                           int maxDeltaCommitsMetadataTable,
+                                                           boolean enableArchiveClean,
+                                                           int archiveFilesToKeep) throws Exception {
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, enableArchiveClean, archiveFilesToKeep);
+  }
+
+  private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
+                                                           int minArchivalCommits,
+                                                           int maxArchivalCommits,
+                                                           int maxDeltaCommitsMetadataTable,
+                                                           HoodieTableType tableType,
+                                                           boolean enableArchiveClean,
+                                                           int archiveFilesToKeep) throws Exception {
     init(tableType);
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(minArchivalCommits, maxArchivalCommits).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .retainCommits(1)
+            .withCleanArchiveFilesEnable(enableArchiveClean)
+            .archiveFilesToKeep(archiveFilesToKeep)
+            .archiveCommitsWith(minArchivalCommits, maxArchivalCommits)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(enableMetadata)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsMetadataTable).build())
         .forTable("test-trip-table").build();
     initWriteConfigAndMetatableWriter(writeConfig, enableMetadata);
@@ -177,6 +211,24 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         assertEquals(originalCommits, commitsAfterArchival);
       }
     }
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArchiveTableWithArchivalCleanUp")
+  public void testArchiveTableWithArchivalCleanUp(boolean enableMetadata, boolean enableArchiveClean, int archiveFilesToKeep) throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 3, 2, enableArchiveClean, archiveFilesToKeep);
+    for (int i = 1; i < 10; i++) {
+      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      // trigger archival
+      archiveAndGetCommitsList(writeConfig);
+    }
+    String archivePath = metaClient.getArchivePath();
+    RemoteIterator<LocatedFileStatus> iter = metaClient.getFs().listFiles(new Path(archivePath), false);
+    ArrayList<LocatedFileStatus> files = new ArrayList<>();
+    while (iter.hasNext()) {
+      files.add(iter.next());
+    }
+    assertEquals(archiveFilesToKeep, files.size());
   }
 
   @ParameterizedTest
@@ -710,5 +762,15 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       HoodieTestTable.of(metaClient).addRollback(rollbackTime, hoodieRollbackMetadata);
     }
     return new HoodieInstant(inflight, "rollback", rollbackTime);
+  }
+
+  private static Stream<Arguments> testArchiveTableWithArchivalCleanUp() {
+    // boolean enableMetadata, boolean enableArchiveClean, int archiveFilesToKeep
+    return Stream.of(
+        arguments(false, true, 1),
+        arguments(false, false, 3),
+        arguments(true, true, 1),
+        arguments(true, false, 3)
+    );
   }
 }

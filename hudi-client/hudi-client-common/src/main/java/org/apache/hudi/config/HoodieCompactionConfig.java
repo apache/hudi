@@ -236,6 +236,18 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
+  public static final ConfigProperty<String> ARCHIVE_FILES_TO_KEEP_PROP = ConfigProperty
+      .key("hoodie.keep.archive.files")
+      .defaultValue("10")
+      .withDocumentation("The numbers of kept archive files under archived");
+
+  public static final ConfigProperty<String> CLEAN_ARCHIVE_FILE_ENABLE_DROP = ConfigProperty
+      .key("hoodie.archive.clean.enable")
+      .defaultValue("false")
+      .withDocumentation("When enabled, hoodie will keep archive files in a fixed number");
+
+
+
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
   public static final String CLEANER_POLICY_PROP = CLEANER_POLICY.key();
@@ -520,6 +532,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
     public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
       compactionConfig.setValue(MIN_COMMITS_TO_KEEP, String.valueOf(minToKeep));
       compactionConfig.setValue(MAX_COMMITS_TO_KEEP, String.valueOf(maxToKeep));
+      return this;
+    }
+
+    public Builder archiveFilesToKeep(int number) {
+      compactionConfig.setValue(ARCHIVE_FILES_TO_KEEP_PROP, String.valueOf(number));
+      return this;
+    }
+
+    public Builder withCleanArchiveFilesEnable(boolean enable) {
+      compactionConfig.setValue(CLEAN_ARCHIVE_FILE_ENABLE_DROP, String.valueOf(enable));
       return this;
     }
 

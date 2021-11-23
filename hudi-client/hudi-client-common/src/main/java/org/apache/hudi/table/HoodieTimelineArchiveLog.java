@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -80,6 +81,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   private Writer writer;
   private final int maxInstantsToKeep;
   private final int minInstantsToKeep;
+  private final int archiveFilesToKeep;
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
 
@@ -90,6 +92,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.maxInstantsToKeep = config.getMaxCommitsToKeep();
     this.minInstantsToKeep = config.getMinCommitsToKeep();
+    this.archiveFilesToKeep = config.getArchiveFilesToKeep();
   }
 
   private Writer openWriter() {
@@ -130,6 +133,9 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         archive(context, instantsToArchive);
         LOG.info("Deleting archived instants " + instantsToArchive);
         success = deleteArchivedInstants(instantsToArchive, context);
+        if (config.getCleanArchiveEnable()) {
+          cleanArchiveFilesIfNecessary(context);
+        }
       } else {
         LOG.info("No Instants to archive");
       }
@@ -138,6 +144,48 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     } finally {
       close();
     }
+  }
+
+  private void cleanArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
+    Stream<HoodieLogFile> allLogFiles = FSUtils.getAllLogFiles(metaClient.getFs(),
+        archiveFilePath.getParent(),
+        archiveFilePath.getName(),
+        HoodieArchivedLogFile.ARCHIVE_EXTENSION,
+        "");
+    List<HoodieLogFile> sortedLogFilesList = allLogFiles.sorted(HoodieLogFile.getReverseLogFileComparator()).collect(Collectors.toList());
+    if (!sortedLogFilesList.isEmpty()) {
+      List<String> skipped = sortedLogFilesList.stream().skip(archiveFilesToKeep).map(HoodieLogFile::getPath).map(Path::toString).collect(Collectors.toList());
+      if (!skipped.isEmpty()) {
+        LOG.info("Deleting archive files :  " + skipped);
+        context.setJobStatus(this.getClass().getSimpleName(), "Delete archive files");
+        Map<String, Boolean> result = deleteFilesParallelize(metaClient, skipped, context, true);
+      }
+    }
+  }
+
+  private Map<String, Boolean> deleteFilesParallelize(HoodieTableMetaClient metaClient, List<String> paths, HoodieEngineContext context, boolean ignoreFailed) {
+
+    return FSUtils.parallelizeFilesProcess(context,
+        metaClient.getFs(),
+        config.getArchiveDeleteParallelism(),
+        pairOfSubPathAndConf -> {
+          Path file = new Path(pairOfSubPathAndConf.getKey());
+          try {
+            FileSystem fs = metaClient.getFs();
+            if (fs.exists(file)) {
+              return fs.delete(file, false);
+            }
+            return true;
+          } catch (IOException e) {
+            if (!ignoreFailed) {
+              throw new HoodieIOException("Failed to delete : " + file, e);
+            } else {
+              LOG.warn("Ignore failed deleting : " + file);
+              return true;
+            }
+          }
+        },
+        paths);
   }
 
   private Stream<HoodieInstant> getCleanInstantsToArchive() {
@@ -234,22 +282,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }).map(Path::toString).collect(Collectors.toList());
 
     context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants");
-    Map<String, Boolean> resultDeleteInstantFiles = FSUtils.parallelizeFilesProcess(context,
-        metaClient.getFs(),
-        config.getArchiveDeleteParallelism(),
-        pairOfSubPathAndConf -> {
-          Path commitFile = new Path(pairOfSubPathAndConf.getKey());
-          try {
-            FileSystem fs = commitFile.getFileSystem(pairOfSubPathAndConf.getValue().get());
-            if (fs.exists(commitFile)) {
-              return fs.delete(commitFile, false);
-            }
-            return true;
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to delete archived instant " + commitFile, e);
-          }
-        },
-        instantFiles);
+    Map<String, Boolean> resultDeleteInstantFiles = deleteFilesParallelize(metaClient, instantFiles, context, false);
 
     for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
       LOG.info("Archived and deleted instant file " + result.getKey() + " : " + result.getValue());
