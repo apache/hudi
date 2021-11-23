@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -58,7 +60,8 @@ public class DFSPropertiesConfiguration {
   // props read from hudi-defaults.conf
   private static TypedProperties GLOBAL_PROPS = loadGlobalProps();
 
-  private final FileSystem fs;
+  @Nullable
+  private final Configuration hadoopConfig;
 
   private Path currentFilePath;
 
@@ -68,8 +71,8 @@ public class DFSPropertiesConfiguration {
   // Keep track of files visited, to detect loops
   private final Set<String> visitedFilePaths;
 
-  public DFSPropertiesConfiguration(FileSystem fs, Path filePath) {
-    this.fs = fs;
+  public DFSPropertiesConfiguration(@Nonnull Configuration hadoopConf, @Nonnull Path filePath) {
+    this.hadoopConfig = hadoopConf;
     this.currentFilePath = filePath;
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
@@ -77,7 +80,7 @@ public class DFSPropertiesConfiguration {
   }
 
   public DFSPropertiesConfiguration() {
-    this.fs = null;
+    this.hadoopConfig = null;
     this.currentFilePath = null;
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
@@ -119,19 +122,22 @@ public class DFSPropertiesConfiguration {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
-    FileSystem fileSystem;
-    try {
-      fileSystem = fs != null ? fs : filePath.getFileSystem(new Configuration());
-    } catch (IOException e) {
-      throw new IllegalArgumentException("Cannot get the file system from file path", e);
-    }
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fileSystem.open(filePath)))) {
+    FileSystem fs = getFileSystem(filePath);
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)))) {
       visitedFilePaths.add(filePath.toString());
       currentFilePath = filePath;
       addPropsFromStream(reader);
     } catch (IOException ioe) {
       LOG.error("Error reading in properties from dfs");
       throw new IllegalArgumentException("Cannot read properties from dfs", ioe);
+    }
+  }
+
+  private FileSystem getFileSystem(Path filePath) {
+    try {
+      return filePath.getFileSystem(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new));
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Cannot get the file system from file path", e);
     }
   }
 
