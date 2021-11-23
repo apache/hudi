@@ -21,6 +21,7 @@ package org.apache.hudi.common.config;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -122,7 +123,12 @@ public class DFSPropertiesConfiguration {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
-    FileSystem fs = getFileSystem(filePath);
+
+    FileSystem fs = FSUtils.getFs(
+        filePath.toString(),
+        Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
+    );
+
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)))) {
       visitedFilePaths.add(filePath.toString());
       currentFilePath = filePath;
@@ -130,14 +136,6 @@ public class DFSPropertiesConfiguration {
     } catch (IOException ioe) {
       LOG.error("Error reading in properties from dfs");
       throw new IllegalArgumentException("Cannot read properties from dfs", ioe);
-    }
-  }
-
-  private FileSystem getFileSystem(Path filePath) {
-    try {
-      return filePath.getFileSystem(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new));
-    } catch (IOException e) {
-      throw new IllegalArgumentException("Cannot get the file system from file path", e);
     }
   }
 
