@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -65,7 +66,7 @@ public class TestPriorityBasedFileSystemView {
 
   @BeforeEach
   public void setUp() {
-    fsView = new PriorityBasedFileSystemView(primary, secondary);
+    fsView = new PriorityBasedFileSystemView(primary, secondary, WriteConcurrencyMode.SINGLE_WRITER);
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
         "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
@@ -86,6 +87,34 @@ public class TestPriorityBasedFileSystemView {
 
     resetMocks();
     when(primary.getLatestBaseFiles()).thenThrow(new RuntimeException());
+    when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
+    actual = fsView.getLatestBaseFiles();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
+    actual = fsView.getLatestBaseFiles();
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getLatestBaseFiles()).thenThrow(new RuntimeException());
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestBaseFiles();
+    });
+  }
+
+  @Test
+  public void testRetryWithSecondary() {
+    fsView = new PriorityBasedFileSystemView(primary, secondary, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
+    testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
+    testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
+        "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
+
+    Stream<HoodieBaseFile> actual;
+    Stream<HoodieBaseFile> expected = testBaseFileStream;
+
+    resetMocks();
+    when(primary.getLatestBaseFiles()).thenThrow(new RuntimeException("dummy text Server Error"));
     when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
     actual = fsView.getLatestBaseFiles();
     assertEquals(expected, actual);

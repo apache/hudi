@@ -25,20 +25,28 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
@@ -68,6 +76,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.config.HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieClientTestHarness.buildProfile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -269,6 +280,84 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
       }
     }
+  }
+
+  @Test
+  public void testOutOfSyncView() throws Exception {
+    // insert 100 records
+    HoodieWriteConfig.Builder cfgBuilder1 = getConfigBuilder(false, false, IndexType.BLOOM,
+        1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build(), 3)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+    addConfigsForPopulateMetaFields(cfgBuilder1, true);
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath() + "/.hoodie/.locks");
+    properties.setProperty(LOCK_PROVIDER_CLASS_NAME.key(), "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
+    cfgBuilder1.withProperties(properties);
+    HoodieWriteConfig config1 = cfgBuilder1.build();
+
+    HoodieWriteConfig.Builder cfgBuilder2 = getConfigBuilder(false, false, IndexType.BLOOM,
+        1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build(), 1)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
+    addConfigsForPopulateMetaFields(cfgBuilder1, true);
+    cfgBuilder2.withProperties(properties);
+    HoodieWriteConfig config2 = cfgBuilder2.build();
+
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config1);) {
+
+      SparkRDDWriteClient writeClient1 = getHoodieWriteClient(config2);
+
+      String newCommitTime = "100";
+      writeClient.startCommitWithTime(newCommitTime);
+      //writeClient1.startCommitWithTime("101");
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
+      JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
+      statuses.collect();
+      //writeClient.commit(newCommitTime, statuses);
+
+      writeClient1.startCommitWithTime("101");
+      List<HoodieRecord> records1 = dataGen.generateInserts("101", 100);
+      JavaRDD<HoodieRecord> recordsRDD1 = jsc().parallelize(records1, 1);
+      JavaRDD<WriteStatus> statuses1 = writeClient1.insert(recordsRDD1, "101");
+      //statuses.collect();
+
+      writeClient.commit(newCommitTime, statuses);
+
+      metaClient.reloadActiveTimeline();
+      HoodieTable table = HoodieSparkTable.create(config1, context(), metaClient);
+      SyncableFileSystemView fileSystemView = ((SyncableFileSystemView) table.getSliceView());
+
+      writeClient1.commit("101", statuses1);
+
+      // Verify that all data file has one log file
+      metaClient.reloadActiveTimeline();
+      fileSystemView.sync();
+      String partitionPath = dataGen.getPartitionPaths()[0];
+      List<FileSlice> groupedLogFiles =
+          fileSystemView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
+      for (FileSlice fileSlice : groupedLogFiles) {
+        System.out.println("Latest base file " + fileSlice.getBaseInstantTime());
+      }
+    }
+  }
+
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType,
+                                                       long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig, int retainCommits) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withDeleteParallelism(2)
+        .withAutoCommit(autoCommit)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(compactionSmallFileSize)
+            .retainCommits(retainCommits)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
+        .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
+        .withClusteringConfig(clusteringConfig)
+        .withRollbackUsingMarkers(rollbackUsingMarkers);
   }
 
   /**

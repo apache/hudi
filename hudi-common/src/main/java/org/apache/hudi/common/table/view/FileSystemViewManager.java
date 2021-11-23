@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableSupplier;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function2;
@@ -205,18 +206,20 @@ public class FileSystemViewManager {
   }
 
   public static FileSystemViewManager createViewManager(final HoodieEngineContext context,
+                                                        final WriteConcurrencyMode writeConcurrencyMode,
                                                         final HoodieMetadataConfig metadataConfig,
                                                         final FileSystemViewStorageConfig config,
                                                         final HoodieCommonConfig commonConfig) {
-    return createViewManager(context, metadataConfig, config, commonConfig, (SerializableSupplier<HoodieTableMetadata>) null);
+    return createViewManager(context, writeConcurrencyMode, metadataConfig, config, commonConfig, (SerializableSupplier<HoodieTableMetadata>) null);
   }
 
   public static FileSystemViewManager createViewManager(final HoodieEngineContext context,
+                                                        final WriteConcurrencyMode writeConcurrencyMode,
                                                         final HoodieMetadataConfig metadataConfig,
                                                         final FileSystemViewStorageConfig config,
                                                         final HoodieCommonConfig commonConfig,
                                                         final String basePath) {
-    return createViewManager(context, metadataConfig, config, commonConfig,
+    return createViewManager(context, writeConcurrencyMode, metadataConfig, config, commonConfig,
         () -> HoodieTableMetadata.create(context, metadataConfig, basePath, config.getSpillableDir(), true));
   }
 
@@ -225,6 +228,7 @@ public class FileSystemViewManager {
    *
    */
   public static FileSystemViewManager createViewManager(final HoodieEngineContext context,
+                                                        final WriteConcurrencyMode writeConcurrencyMode,
                                                         final HoodieMetadataConfig metadataConfig,
                                                         final FileSystemViewStorageConfig config,
                                                         final HoodieCommonConfig commonConfig,
@@ -268,7 +272,7 @@ public class FileSystemViewManager {
               throw new IllegalArgumentException("Secondary Storage type can only be in-memory or spillable. Was :"
                   + viewConfig.getSecondaryStorageType());
           }
-          return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryView);
+          return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryView, writeConcurrencyMode);
         });
       default:
         throw new IllegalArgumentException("Unknown file system view type :" + config.getStorageType());

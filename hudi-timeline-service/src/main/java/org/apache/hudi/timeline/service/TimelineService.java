@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -296,20 +297,20 @@ public class TimelineService {
       case MEMORY:
         FileSystemViewStorageConfig.Builder inMemConfBuilder = FileSystemViewStorageConfig.newBuilder();
         inMemConfBuilder.withStorageType(FileSystemViewStorageType.MEMORY);
-        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, inMemConfBuilder.build(), commonConfig);
+        return FileSystemViewManager.createViewManager(localEngineContext, WriteConcurrencyMode.SINGLE_WRITER, metadataConfig, inMemConfBuilder.build(), commonConfig);
       case SPILLABLE_DISK: {
         FileSystemViewStorageConfig.Builder spillableConfBuilder = FileSystemViewStorageConfig.newBuilder();
         spillableConfBuilder.withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
             .withBaseStoreDir(config.baseStorePathForFileGroups)
             .withMaxMemoryForView(config.maxViewMemPerTableInMB * 1024 * 1024L)
             .withMemFractionForPendingCompaction(config.memFractionForCompactionPerTable);
-        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, spillableConfBuilder.build(), commonConfig);
+        return FileSystemViewManager.createViewManager(localEngineContext, WriteConcurrencyMode.SINGLE_WRITER, metadataConfig, spillableConfBuilder.build(), commonConfig);
       }
       case EMBEDDED_KV_STORE: {
         FileSystemViewStorageConfig.Builder rocksDBConfBuilder = FileSystemViewStorageConfig.newBuilder();
         rocksDBConfBuilder.withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE)
             .withRocksDBPath(config.rocksDBPath);
-        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, rocksDBConfBuilder.build(), commonConfig);
+        return FileSystemViewManager.createViewManager(localEngineContext, WriteConcurrencyMode.SINGLE_WRITER, metadataConfig, rocksDBConfBuilder.build(), commonConfig);
       }
       default:
         throw new IllegalArgumentException("Invalid view manager storage type :" + config.viewStorageType);

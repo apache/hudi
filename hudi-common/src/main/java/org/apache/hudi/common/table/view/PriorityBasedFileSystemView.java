@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function0;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.util.Functions.Function3;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.http.client.HttpResponseException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -50,11 +52,14 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private final SyncableFileSystemView preferredView;
   private final SyncableFileSystemView secondaryView;
   private boolean errorOnPreferredView;
+  private WriteConcurrencyMode writeConcurrencyMode;
 
-  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SyncableFileSystemView secondaryView) {
+  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SyncableFileSystemView secondaryView,
+                                     WriteConcurrencyMode writeConcurrencyMode) {
     this.preferredView = preferredView;
     this.secondaryView = secondaryView;
     this.errorOnPreferredView = false;
+    this.writeConcurrencyMode = writeConcurrencyMode;
   }
 
   private <R> R execute(Function0<R> preferredFunction, Function0<R> secondaryFunction) {
@@ -65,7 +70,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       try {
         return preferredFunction.apply();
       } catch (RuntimeException re) {
-        LOG.error("Got error running preferred function. Trying secondary", re);
+        if (writeConcurrencyMode.supportsOptimisticConcurrencyControl()) {
+          LOG.warn("Got error running preferred function. Likely due to another concurrent writer in progress. Trying secondary");
+        } else {
+          LOG.error("Got error running preferred function. Trying secondary", re);
+        }
         errorOnPreferredView = true;
         return secondaryFunction.apply();
       }
@@ -80,7 +89,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       try {
         return preferredFunction.apply(val);
       } catch (RuntimeException re) {
-        LOG.error("Got error running preferred function. Trying secondary", re);
+        if (writeConcurrencyMode.supportsOptimisticConcurrencyControl()
+            && re.getCause() instanceof HttpResponseException && re.getMessage().contains("Server Error")) {
+          LOG.warn("Got error running preferred function. Likely due to another concurrent writer in progress. Trying secondary");
+        } else {
+          LOG.error("Got error running preferred function. Trying secondary", re);
+        }
         errorOnPreferredView = true;
         return secondaryFunction.apply(val);
       }
@@ -96,7 +110,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       try {
         return preferredFunction.apply(val, val2);
       } catch (RuntimeException re) {
-        LOG.error("Got error running preferred function. Trying secondary", re);
+        if (writeConcurrencyMode.supportsOptimisticConcurrencyControl()
+            && re.getCause() instanceof HttpResponseException && re.getMessage().contains("Server Error")) {
+          LOG.warn("Got error running preferred function. Likely due to another concurrent writer in progress. Trying secondary");
+        } else {
+          LOG.error("Got error running preferred function. Trying secondary", re);
+        }
         errorOnPreferredView = true;
         return secondaryFunction.apply(val, val2);
       }
@@ -112,7 +131,12 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
       try {
         return preferredFunction.apply(val, val2, val3);
       } catch (RuntimeException re) {
-        LOG.error("Got error running preferred function. Trying secondary", re);
+        if (writeConcurrencyMode.supportsOptimisticConcurrencyControl()
+            && re.getCause() instanceof HttpResponseException && re.getMessage().contains("Server Error")) {
+          LOG.warn("Got error running preferred function. Likely due to another concurrent writer in progress. Trying secondary");
+        } else {
+          LOG.error("Got error running preferred function. Trying secondary", re);
+        }
         errorOnPreferredView = true;
         return secondaryFunction.apply(val, val2, val3);
       }
