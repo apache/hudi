@@ -45,7 +45,8 @@ module.exports = {
             items: [
                 'migration_guide',
                 'compaction',
-                'clustering'
+                'clustering',
+                'snapshot_exporter'
             ],
         },
         'configurations',
