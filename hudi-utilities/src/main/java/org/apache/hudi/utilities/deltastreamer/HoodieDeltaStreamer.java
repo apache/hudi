@@ -128,9 +128,7 @@ public class HoodieDeltaStreamer implements Serializable {
     } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
       hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
     } else {
-      hoodieConfig.setAll(UtilHelpers.readConfig(
-          FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
-          new Path(cfg.propsFilePath), cfg.configs).getProps());
+      hoodieConfig.setAll(UtilHelpers.readConfig(jssc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs).getProps());
     }
     hoodieConfig.setDefaultValue(DataSourceWriteOptions.RECONCILE_SCHEMA());
     this.properties = (TypedProperties) hoodieConfig.getProps(true);

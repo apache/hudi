@@ -73,10 +73,7 @@ public class HoodieClusteringJob {
   }
 
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    final FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
-
-    return UtilHelpers
-        .readConfig(fs, new Path(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 

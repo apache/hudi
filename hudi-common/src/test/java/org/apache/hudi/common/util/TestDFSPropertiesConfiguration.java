@@ -103,7 +103,7 @@ public class TestDFSPropertiesConfiguration {
 
   @Test
   public void testParsing() {
-    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t1.props"));
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t1.props"));
     TypedProperties props = cfg.getProps();
     assertEquals(5, props.size());
     assertThrows(IllegalArgumentException.class, () -> {
@@ -131,7 +131,7 @@ public class TestDFSPropertiesConfiguration {
 
   @Test
   public void testIncludes() {
-    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t3.props"));
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t3.props"));
     TypedProperties props = cfg.getProps();
 
     assertEquals(123, props.getInteger("int.prop"));
