@@ -62,7 +62,7 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
       KafkaConnectConfigs connectConfigs,
       TopicPartition partition) throws HoodieException {
     this.connectConfigs = connectConfigs;
-    Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf();
+    Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf(connectConfigs);
 
     try {
       this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null
