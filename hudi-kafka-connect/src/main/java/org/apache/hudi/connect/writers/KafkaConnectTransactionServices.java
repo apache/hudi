@@ -69,7 +69,6 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
   private final Option<HoodieTableMetaClient> tableMetaClient;
   private final Configuration hadoopConf;
   private final HoodieWriteConfig writeConfig;
-  private final KafkaConnectConfigs connectConfigs;
   private final String tableBasePath;
   private final String tableName;
   private final HoodieEngineContext context;

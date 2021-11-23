@@ -55,8 +55,8 @@ After downloading the connector, copy the jars from the lib folder to the Kafka 
 
 ```bash
 confluent-hub install confluentinc/kafka-connect-hdfs:10.1.0
-cp confluentinc-kafka-connect-hdfs-10.1.0/lib/*.jars /usr/local/share/java/hudi-kafka-connect/
 ```
+Add `confluentinc-kafka-connect-hdfs-10.1.0/lib` to the plugin.path (comma separated) in $HUDI_DIR/hudi-kafka-connect/demo/connect-distributed.properties
 
 ### 2 - Set up the docker containers
 
