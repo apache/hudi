@@ -46,15 +46,30 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
+import java.util.Set;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 
 public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
+  public static final Set<String> SUPPORTED_HIVE_VERSIONS = Collections.unmodifiableSet(new HashSet<>(
+      Arrays.asList(
+          "2.3.0",
+          "2.3.1",
+          "2.3.2",
+          "2.3.3",
+          "2.3.4",
+          "2.3.5",
+          "2.3.6",
+          "2.3.7",
+          "2.3.8"
+  )));
   private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   private static final String HIVE_ESCAPE_CHARACTER = HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 
@@ -66,9 +81,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private final HiveSyncConfig syncConfig;
 
   static void validateHiveVersion(String version) {
-    Pattern pattern = Pattern.compile("^2\\.[0-3]\\.[0-9]+$");
-    ValidationUtils.checkState(pattern.matcher(version).matches(),
-        String.format("Unsupported or invalid hive version: %s", version));
+    ValidationUtils.checkState(SUPPORTED_HIVE_VERSIONS.contains(version),
+        String.format("Unsupported hive version: %s", version));
   }
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {

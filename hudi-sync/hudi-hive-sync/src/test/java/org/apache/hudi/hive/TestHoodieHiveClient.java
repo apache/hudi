@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hive;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -29,16 +30,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieHiveClient {
 
-  @ParameterizedTest
-  @ValueSource(strings = {"2.0.0", "2.0.1", "2.1.0", "2.1.1", "2.2.0", "2.2.1", "2.3.0", "2.3.1", "2.3.2", "2.3.10"})
-  void testValidHiveVersions(String version) {
-    assertDoesNotThrow(() -> validateHiveVersion(version));
+  @Test
+  void testValidHiveVersions() {
+    for (String version : HoodieHiveClient.SUPPORTED_HIVE_VERSIONS) {
+      assertDoesNotThrow(() -> validateHiveVersion(version));
+    }
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"", "1.0", "1.0.0", "1.0.1", "2.0", "2.1", "2.2.", "2.4.0", "3.0", "3.0.0"})
+  @ValueSource(strings = {"", "1.0", "1.0.0", "1.0.1", "2.0", "2.0.0", "2.1", "2.1.1", "2.2.", "2.4.0", "3.0", "3.0.0"})
   void testInvalidUnsupportedHiveVersions(String version) {
     Throwable t = assertThrows(IllegalStateException.class, () -> validateHiveVersion(version));
-    assertTrue(t.getMessage().startsWith("Unsupported or invalid hive version:"));
+    assertTrue(t.getMessage().startsWith("Unsupported hive version:"));
   }
 }
