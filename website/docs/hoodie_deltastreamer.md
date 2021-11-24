@@ -209,3 +209,8 @@ A deltastreamer job can then be triggered as follows:
 ```
 
 Read more in depth about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section
+
+## Hudi Kafka Connect Sink
+If you want to perform streaming ingestion into Hudi format similar to HoodieDeltaStreamer, but you don't want to depend on Spark,
+try out the new experimental release of Hudi Kafka Connect Sink. Read the [ReadMe](https://github.com/apache/hudi/tree/master/hudi-kafka-connect) 
+for full documentation.

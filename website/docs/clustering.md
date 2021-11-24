@@ -161,11 +161,11 @@ Users can leverage [HoodieClusteringJob](https://cwiki.apache.org/confluence/dis
 to setup 2-step asynchronous clustering.
 
 ### HoodieClusteringJob
-With the release of Hudi version 0.9.0, we can schedule as well as execute clustering in the same step. We just need to
-specify the `—mode` or `-m` option. There are three modes:
+By specifying the `scheduleAndExecute` mode both schedule as well as clustering can be achieved in the same step. 
+The appropriate mode can be specified using `-mode` or `-m` option. There are three modes:
 
 1. `schedule`: Make a clustering plan. This gives an instant which can be passed in execute mode.
-2. `execute`: Execute a clustering plan at given instant which means --instant-time is required here.
+2. `execute`: Execute a clustering plan at a particular instant. If no instant-time is specified, HoodieClusteringJob will execute for the earliest instant on the Hudi timeline.
 3. `scheduleAndExecute`: Make a clustering plan first and execute that plan immediately.
 
 Note that to run this job while the original writer is still running, please enable multi-writing:

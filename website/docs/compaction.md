@@ -5,11 +5,7 @@ toc: true
 last_modified_at:
 ---
 
-For Merge-On-Read table, data is stored using a combination of columnar (e.g parquet) + row based (e.g avro) file formats.
-Updates are logged to delta files & later compacted to produce new versions of columnar files synchronously or
-asynchronously. One of the main motivations behind Merge-On-Read is to reduce data latency when ingesting records.
-Hence, it makes sense to run compaction asynchronously without blocking ingestion.
-
+Compaction is executed asynchronously with Hudi by default.
 
 ## Async Compaction
 
@@ -19,15 +15,13 @@ Async Compaction is performed in 2 steps:
    slices** to be compacted. A compaction plan is finally written to Hudi timeline.
 1. ***Compaction Execution***: A separate process reads the compaction plan and performs compaction of file slices.
 
-
 ## Deployment Models
 
 There are few ways by which we can execute compactions asynchronously.
 
 ### Spark Structured Streaming
 
-With 0.6.0, we now have support for running async compactions in Spark
-Structured Streaming jobs. Compactions are scheduled and executed asynchronously inside the
+Compactions are scheduled and executed asynchronously inside the
 streaming job.  Async Compactions are enabled by default for structured streaming jobs
 on Merge-On-Read table.
 
@@ -74,22 +68,44 @@ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \
 --continous
 ```
 
-### Hudi CLI
-Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example
+### Hudi Compactor Utility
+Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/deployment#compactions)
 
-```properties
-hudi:trips->compaction run --tableName <table_name> --parallelism <parallelism> --compactionInstant <InstantTime>
-...
-```
-
-### Hudi Compactor Script
-Hudi provides a standalone tool to also execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/next/deployment#compactions)
-
+Example:
 ```properties
 spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \
 --class org.apache.hudi.utilities.HoodieCompactor \
 --base-path <base_path> \
 --table-name <table_name> \
---instant-time <compaction_instant> \
---schema-file <schema_file>
+--schema-file <schema_file> \
+--instant-time <compaction_instant>
 ```
+
+Note, the `instant-time` parameter is now optional for the Hudi Compactor Utility. If using the utility without `--instant time`, 
+the spark-submit will execute the earliest scheduled compaction on the Hudi timeline.
+
+### Hudi CLI
+Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example and you can read more in the [deployment guide](/docs/cli#compactions)
+
+Example:
+```properties
+hudi:trips->compaction run --tableName <table_name> --parallelism <parallelism> --compactionInstant <InstantTime>
+...
+```
+
+## Synchronous Compaction
+By default, compaction is run asynchronously.
+
+If latency of ingesting records is important for you, you are most likely using Merge-On-Read tables.
+Merge-On-Read tables store data using a combination of columnar (e.g parquet) + row based (e.g avro) file formats.
+Updates are logged to delta files & later compacted to produce new versions of columnar files. 
+To improve ingestion latency, Async Compaction is the default configuration.
+
+If immediate read performance of a new commit is important for you, or you want simplicity of not managing separate compaction jobs,
+you may want Synchronous compaction, which means that as a commit is written it is also compacted by the same job.
+
+Compaction is run synchronously by passing the flag "--disable-compaction" (Meaning to disable async compaction scheduling).
+When both ingestion and compaction is running in the same spark context, you can use resource allocation configuration 
+in DeltaStreamer CLI such as ("--delta-sync-scheduling-weight",
+"--compact-scheduling-weight", ""--delta-sync-scheduling-minshare", and "--compact-scheduling-minshare")
+to control executor allocation between ingestion and compaction.
