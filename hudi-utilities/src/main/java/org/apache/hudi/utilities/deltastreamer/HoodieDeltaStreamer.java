@@ -98,7 +98,7 @@ public class HoodieDeltaStreamer implements Serializable {
   protected final transient Config cfg;
 
   /**
-   * NOTE: These properties are already consolidated w/ CLI provided config-overrides
+   * NOTE: These properties are already consolidated w/ CLI provided config-overrides.
    */
   private final TypedProperties properties;
 
