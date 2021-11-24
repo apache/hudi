@@ -50,6 +50,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
@@ -106,7 +107,6 @@ import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
-import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -339,11 +339,17 @@ public class DeltaSync implements Serializable {
           resumeCheckpointStr = Option.empty();
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
-          throw new HoodieDeltaStreamerException(
-              "Unable to find previous checkpoint. Please double check if this table "
-                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                  + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
-                  + commitMetadata.toJsonString());
+          // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
+          Option<String> prevCheckpoint = getPreviousCheckpoint(commitTimelineOpt.get());
+          if (prevCheckpoint.isPresent()) {
+            resumeCheckpointStr = prevCheckpoint;
+          } else {
+            throw new HoodieDeltaStreamerException(
+                "Unable to find previous checkpoint. Please double check if this table "
+                    + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
+                    + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
+                    + commitMetadata.toJsonString());
+          }
         }
         // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
@@ -449,6 +455,18 @@ public class DeltaSync implements Serializable {
     });
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
+  }
+
+  protected Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
+    return timeline.getReverseOrderedInstants().map(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        return Option.ofNullable(commitMetadata.getMetadata(CHECKPOINT_KEY));
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      }
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
   }
 
   /**
@@ -716,12 +734,6 @@ public class DeltaSync implements Serializable {
         String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
     ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),
         String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT.key(), combineBeforeUpsert));
-    ValidationUtils.checkArgument(!config.mergeDeltastreamerStateFromPreviousCommit(),
-        String.format(
-            "Deltastreamer processes should not merge state from previous deltastreamer commits. Please unset '%s'",
-            WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key())
-    );
-
     return config;
   }
 

@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -37,10 +38,12 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -48,8 +51,10 @@ import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
+import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
@@ -68,6 +73,7 @@ import org.apache.hudi.utilities.transform.Transformer;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -102,6 +108,7 @@ import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -1689,6 +1696,46 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertRecordCount(1950, tableBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertDistanceCount(1950, tableBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
+  }
+
+  @Test
+  public void testFetchingCheckpointFromPreviousCommits() throws IOException {
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dfsBasePath + "/testFetchPreviousCheckpoint", WriteOperationType.BULK_INSERT);
+
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty("hoodie.datasource.write.recordkey.field","key");
+    properties.setProperty("hoodie.datasource.write.partitionpath.field","pp");
+    TestDeltaSync testDeltaSync = new TestDeltaSync(cfg, sparkSession, null, properties,
+        jsc, dfs, jsc.hadoopConfiguration(), null);
+
+    properties.put(HoodieTableConfig.NAME.key(), "sample_tbl");
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), dfsBasePath, HoodieTableType.COPY_ON_WRITE, properties);
+
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "abc");
+    addCommitToTimeline(metaClient, extraMetadata);
+    metaClient.reloadActiveTimeline();
+    assertEquals(testDeltaSync.getPreviousCheckpoint(metaClient.getActiveTimeline().getCommitsTimeline()).get(), "abc");
+
+    addCommitToTimeline(metaClient, Collections.emptyMap());
+    metaClient.reloadActiveTimeline();
+    extraMetadata.put(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY, "def");
+    addCommitToTimeline(metaClient, extraMetadata);
+    metaClient.reloadActiveTimeline();
+    assertEquals(testDeltaSync.getPreviousCheckpoint(metaClient.getActiveTimeline().getCommitsTimeline()).get(), "def");
+  }
+
+  class TestDeltaSync extends DeltaSync {
+
+    public TestDeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
+                         JavaSparkContext jssc, FileSystem fs, Configuration conf,
+                         Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+      super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
+    }
+
+    protected Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
+      return super.getPreviousCheckpoint(timeline);
+    }
   }
 
   /**

@@ -64,6 +64,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.INSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.PROPS_FILENAME_TEST_MULTI_WRITER;
+import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.addCommitToTimeline;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.defaultSchemaProviderClassName;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.prepareInitialConfigs;
 import static org.apache.hudi.utilities.functional.TestHoodieDeltaStreamer.deltaStreamerTestRunner;
@@ -155,7 +156,11 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE"})
-  void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType) throws Exception {
+  public void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType) throws Exception {
+    testCheckpointCarryOver(tableType);
+  }
+
+  private void testCheckpointCarryOver(HoodieTableType tableType) throws Exception {
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
@@ -196,34 +201,28 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
     backfillJob.sync();
 
-    // Save the checkpoint information from the deltastreamer run and perform next write
-    String checkpointAfterDeltaSync = getLatestMetadata(meta).getMetadata(CHECKPOINT_KEY);
-    // this writer will enable HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key() so that deltastreamer checkpoint will be carried over.
-    performWriteWithDeltastreamerStateMerge();
+    meta.reloadActiveTimeline();
+    int totalCommits = meta.getCommitsTimeline().filterCompletedInstants().countInstants();
 
-    // Verify that the checkpoint is carried over
-    HoodieCommitMetadata commitMetaAfterDatasourceWrite = getLatestMetadata(meta);
-    Assertions.assertEquals(checkpointAfterDeltaSync, commitMetaAfterDatasourceWrite.getMetadata(CHECKPOINT_KEY));
+    // add a new commit to timeline which may not have the checkpoint in extra metadata
+    addCommitToTimeline(meta);
+    meta.reloadActiveTimeline();
+    verifyCommitMetadataCheckpoint(meta, null);
+
+    cfgBackfillJob.checkpoint = null;
+    new HoodieDeltaStreamer(cfgBackfillJob, jsc()).sync(); // if deltastreamer checkpoint fetch does not walk back to older commits, this sync will fail
+    meta.reloadActiveTimeline();
+    Assertions.assertEquals(totalCommits + 2, meta.getCommitsTimeline().filterCompletedInstants().countInstants());
+    verifyCommitMetadataCheckpoint(meta, "00008");
   }
 
-  /**
-   * Performs a hudi datasource write with deltastreamer state merge enabled.
-   */
-  private void performWriteWithDeltastreamerStateMerge() {
-    spark().read()
-            .format("hudi")
-            .load(tableBasePath + "/*/*.parquet")
-            .limit(1)
-            .write()
-            .format("hudi")
-            .option(HoodieWriteConfig.TBL_NAME.key(), COW_TEST_TABLE_NAME)
-            .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())
-            .option(DataSourceWriteOptions.INSERT_DROP_DUPS().key(), "true")
-            .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
-            .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-            .option(HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key(), "true")
-            .mode(SaveMode.Append)
-            .save(tableBasePath + "/*/*.parquet");
+  private void verifyCommitMetadataCheckpoint(HoodieTableMetaClient metaClient, String expectedCheckpoint) throws IOException {
+    HoodieCommitMetadata commitMeta = getLatestMetadata(metaClient);
+    if (expectedCheckpoint == null) {
+      Assertions.assertNull(commitMeta.getMetadata(CHECKPOINT_KEY));
+    } else {
+      Assertions.assertEquals(expectedCheckpoint, commitMeta.getMetadata(CHECKPOINT_KEY));
+    }
   }
 
   private static HoodieCommitMetadata getLatestMetadata(HoodieTableMetaClient meta) throws IOException {
