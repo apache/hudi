@@ -83,7 +83,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     java.nio.file.Path path2 = Paths.get(basePath, "nonhoodiefolder/somefile");
     Files.createFile(path2);
     assertTrue(pathFilter.accept(new Path(path2.toUri())));
-    assertEquals(2, pathFilter.getNonHoodiePathCache().size());
+    assertEquals(2, pathFilter.getNonHoodiePathCache().size(), "NonHoodiePathCache size should be 2");
   }
 
   @Test
@@ -95,6 +95,6 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     Path partitionPath2 = testTable.getPartitionPath(p2).getParent();
     assertTrue(pathFilter.accept(partitionPath1), "Directories should be accepted");
     assertTrue(pathFilter.accept(partitionPath2), "Directories should be accepted");
-    assertEquals(2, pathFilter.getNonHoodiePathCache().size(), "NonHoodiePathCache size should be 1");
+    assertEquals(2, pathFilter.getNonHoodiePathCache().size(), "NonHoodiePathCache size should be 2");
   }
 }
