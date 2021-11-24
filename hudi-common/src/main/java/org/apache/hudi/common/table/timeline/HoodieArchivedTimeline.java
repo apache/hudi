@@ -35,6 +35,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -145,8 +146,9 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     final String instantTime  = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     if (loadDetails) {
-      Option.ofNullable(record.get(getMetadataKey(action)))
-          .map(actionData -> {
+      Option.ofNullable(getMetadataKey(action))
+          .map(key -> {
+              Object actionData = record.get(key);
               if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
                 this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord)actionData));
               } else {
@@ -158,6 +160,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action, instantTime);
   }
 
+  @Nullable
   private String getMetadataKey(String action) {
     switch (action) {
       case HoodieTimeline.CLEAN_ACTION:
@@ -174,7 +177,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
         return "hoodieReplaceCommitMetadata";
       default:
-        throw new HoodieIOException("Unknown action in metadata " + action);
+        LOG.error(String.format("Unknown action in metadata (%s)", action));
+        return null;
     }
   }
 
