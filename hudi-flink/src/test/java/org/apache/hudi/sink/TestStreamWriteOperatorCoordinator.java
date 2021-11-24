@@ -222,6 +222,32 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(6L));
     assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant + "001"));
     assertThat(completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
+    // write another 2 commits
+    for (int i = 6; i < 8; i++) {
+      instant = mockWriteWithMetadata();
+      metadataTableMetaClient.reloadActiveTimeline();
+      completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
+      assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(i + 1L));
+      assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
+    }
+
+    // write another commit to trigger clean
+    instant = mockWriteWithMetadata();
+    metadataTableMetaClient.reloadActiveTimeline();
+    completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(10L));
+    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant + "002"));
+    assertThat(completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.CLEAN_ACTION));
+
+    // write another commit
+    mockWriteWithMetadata();
+    // write another commit to trigger compaction
+    instant = mockWriteWithMetadata();
+    metadataTableMetaClient.reloadActiveTimeline();
+    completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    assertThat("One instant need to sync to metadata table", completedTimeline.getInstants().count(), is(13L));
+    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant + "001"));
+    assertThat(completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.COMMIT_ACTION));
   }
 
   // -------------------------------------------------------------------------
