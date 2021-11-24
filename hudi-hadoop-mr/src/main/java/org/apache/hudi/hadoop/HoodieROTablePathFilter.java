@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -43,6 +44,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -218,8 +220,9 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         } catch (TableNotFoundException e) {
           // Non-hoodie path, accept it.
           if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("(1) Caching non-hoodie path under %s \n",  baseDir.toString()));
+            LOG.debug(String.format("(1) Caching non-hoodie path under %s and %s \n",  folder.toString(), baseDir.toString()));
           }
+          nonHoodiePathCache.add(folder.toString());
           nonHoodiePathCache.add(baseDir.toString());
           return true;
         }
@@ -237,6 +240,12 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       throw new HoodieException(msg, e);
     }
   }
+
+  @VisibleForTesting
+  public Set<String> getNonHoodiePathCache() {
+    return nonHoodiePathCache;
+  }
+
 
   @Override
   public void setConf(Configuration conf) {
