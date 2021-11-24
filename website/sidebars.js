@@ -60,6 +60,7 @@ module.exports = {
             label: 'Guides',
             items: [
                 'query_engine_setup',
+                'file_sizing',
                 'performance',
                 'deployment',
                 'cli',
