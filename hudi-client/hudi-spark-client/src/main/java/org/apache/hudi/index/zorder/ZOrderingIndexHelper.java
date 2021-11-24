@@ -442,7 +442,7 @@ public class ZOrderingIndexHelper {
       });
     } catch (IOException e) {
       LOG.error("Failed to build new Z-index table", e);
-      throw new HoodieException(e);
+      throw new HoodieException("Failed to build new Z-index table", e);
     }
   }
 
