@@ -126,7 +126,7 @@ module.exports = {
       items: [
         {
           label: 'Docs',
-          to: '/docs/quick-start-guide',
+          to: '/docs/overview',
         },
         {
           label: 'Learn',
