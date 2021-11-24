@@ -35,6 +35,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Serializable;
@@ -146,39 +147,38 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     final String instantTime  = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     if (loadDetails) {
-      Option.ofNullable(getMetadataKey(action))
-          .map(key -> {
-            Object actionData = record.get(key);
-            if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-              this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord)actionData));
-            } else {
-              this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
-            }
-            return null;
-          });
+      getMetadataKey(action).map(key -> {
+          Object actionData = record.get(key);
+          if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
+            this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord)actionData));
+          } else {
+            this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
+          }
+          return null;
+      });
     }
     return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action, instantTime);
   }
 
-  @Nullable
-  private String getMetadataKey(String action) {
+  @Nonnull
+  private Option<String> getMetadataKey(String action) {
     switch (action) {
       case HoodieTimeline.CLEAN_ACTION:
-        return "hoodieCleanMetadata";
+        return Option.of("hoodieCleanMetadata");
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.DELTA_COMMIT_ACTION:
-        return "hoodieCommitMetadata";
+        return Option.of("hoodieCommitMetadata");
       case HoodieTimeline.ROLLBACK_ACTION:
-        return "hoodieRollbackMetadata";
+        return Option.of("hoodieRollbackMetadata");
       case HoodieTimeline.SAVEPOINT_ACTION:
-        return "hoodieSavePointMetadata";
+        return Option.of("hoodieSavePointMetadata");
       case HoodieTimeline.COMPACTION_ACTION:
-        return "hoodieCompactionPlan";
+        return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
-        return "hoodieReplaceCommitMetadata";
+        return Option.of("hoodieReplaceCommitMetadata");
       default:
         LOG.error(String.format("Unknown action in metadata (%s)", action));
-        return null;
+        return Option.empty();
     }
   }
 
