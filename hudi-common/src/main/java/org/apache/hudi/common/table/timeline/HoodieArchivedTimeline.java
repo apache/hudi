@@ -36,7 +36,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -148,13 +147,13 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     final String action = record.get(ACTION_TYPE_KEY).toString();
     if (loadDetails) {
       getMetadataKey(action).map(key -> {
-          Object actionData = record.get(key);
-          if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-            this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord)actionData));
-          } else {
-            this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
-          }
-          return null;
+        Object actionData = record.get(key);
+        if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
+          this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord)actionData));
+        } else {
+          this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
+        }
+        return null;
       });
     }
     return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action, instantTime);
