@@ -80,13 +80,14 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     }
   }
 
-  def getTableSqlSchema(metaClient: HoodieTableMetaClient): Option[StructType] = {
+  def getTableSqlSchema(metaClient: HoodieTableMetaClient,
+      includeMetadataFields: Boolean = false): Option[StructType] = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val avroSchema = try Some(schemaResolver.getTableAvroSchema(false))
+    val avroSchema = try Some(schemaResolver.getTableAvroSchema(includeMetadataFields))
     catch {
       case _: Throwable => None
     }
-    avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType).map(removeMetaFields)
+    avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType)
   }
 
   def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
@@ -307,6 +308,23 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     } else {
       throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
         + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss' or 'yyyy-MM-dd' or 'yyyyMMddHHmmss'")
+    }
+  }
+
+  def formatName(sparkSession: SparkSession, name: String): String = {
+    if (sparkSession.sessionState.conf.caseSensitiveAnalysis) name else name.toLowerCase(Locale.ROOT)
+  }
+
+  /**
+   * Check if this is a empty table path.
+   */
+  def isEmptyPath(tablePath: String, conf: Configuration): Boolean = {
+    val basePath = new Path(tablePath)
+    val fs = basePath.getFileSystem(conf)
+    if (fs.exists(basePath)) {
+      fs.listStatus(basePath).isEmpty
+    } else {
+      true
     }
   }
 }
