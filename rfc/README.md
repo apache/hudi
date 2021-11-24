@@ -63,3 +63,4 @@ The list of all RFCs can be found here.
 | 37 | [Hudi metadata based bloom index] | `UNDER REVIEW` |
 | 38 | [Spark Datasource V2 Integration] | `UNDER REVIEW` |
 | 39 | [Incremental source for Debezium] | `UNDER REVIEW` |
+| 40 | [Hudi Connector for Trino] | `UNDER REVIEW` |
