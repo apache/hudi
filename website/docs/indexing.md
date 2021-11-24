@@ -7,8 +7,10 @@ Hudi provides efficient upserts, by mapping a given hoodie key (record key + par
 This mapping between record key and file group/file id, never changes once the first version of a record has been written to a file. In short, the
 mapped file group contains all versions of a group of records.
 
-For [Copy-On-Write tables](/docs/next/table_types#copy-on-write-table), this enables fast upsert/delete operations, by avoiding the need to join against the entire dataset to determine which files to rewrite.
-For [Merge-On-Read tables](/docs/next/table_types#merge-on-read-table), this design allows Hudi to bound the amount of records any given base file needs to be merged against.
+For [Copy-On-Write tables](/docs/next/table_types#copy-on-write-table), this enables fast upsert/delete operations, by 
+avoiding the need to join against the entire dataset to determine which files to rewrite.
+For [Merge-On-Read tables](/docs/next/table_types#merge-on-read-table), this design allows Hudi to bound the amount of 
+records any given base file needs to be merged against.
 Specifically, a given base file needs to merged only against updates for records that are part of that base file. In contrast,
 designs without an indexing component (e.g: [Apache Hive ACID](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)),
 could end up having to merge all the base files against all incoming updates/delete records:
@@ -43,7 +45,8 @@ Since data comes in at different volumes, velocity and has different access patt
 Let’s walk through some typical workload types and see how to leverage the right Hudi index for such use-cases. 
 This is based on our experience and you should diligently decide if the same strategies are best for your workloads.
 
-## Workload 1: Late arriving updates to fact tables
+## Indexing Strategies
+### Workload 1: Late arriving updates to fact tables
 Many companies store large volumes of transactional data in NoSQL data stores. For eg, trip tables in case of ride-sharing, buying and selling of shares,
 orders in an e-commerce site. These tables are usually ever growing with random updates on most recent data with long tail updates going to older data, either
 due to transactions settling at a later date/data corrections. In other words, most updates go into the latest partitions with few updates going to older ones.
@@ -61,7 +64,7 @@ false positive ratio is high, it could increase the amount of data shuffled to p
 (enabled using `hoodie.bloom.index.filter.type=DYNAMIC_V0`), which adjusts its size based on the number of records stored in a given file to deliver the
 configured false positive ratio.
 
-## Workload 2: De-Duplication in event tables
+### Workload 2: De-Duplication in event tables
 Event Streaming is everywhere. Events coming from Apache Kafka or similar message bus are typically 10-100x the size of fact tables and often treat "time" (event's arrival time/processing
 time) as a first class citizen. For eg, IoT event stream, click stream data, ad impressions etc. Inserts and updates only span the last few partitions as these are mostly append only data.
 Given duplicate events can be introduced anywhere in the end-end pipeline, de-duplication before storing on the data lake is a common requirement.
@@ -74,7 +77,7 @@ costs would grow linear with number of events and thus can be prohibitively expe
 that time is often a first class citizen and construct a key such as `event_ts + event_id` such that the inserted records have monotonically increasing keys. This yields great returns
 by pruning large amounts of files even within the latest table partitions.
 
-## Workload 3: Random updates/deletes to a dimension table
+### Workload 3: Random updates/deletes to a dimension table
 These types of tables usually contain high dimensional data and hold reference data e.g user profile, merchant information. These are high fidelity tables where the updates are often small but also spread
 across a lot of partitions and data files ranging across the dataset from old to new. Often times, these tables are also un-partitioned, since there is also not a good way to partition these tables.
 

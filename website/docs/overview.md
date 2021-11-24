@@ -22,13 +22,14 @@ largest data lakes in the world including [Uber](https://eng.uber.com/uber-big-d
 [ByteDance](http://hudi.apache.org/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance), 
 [Robinhood](https://s.apache.org/hudi-robinhood-talk) and more are transforming their production data lakes with Hudi.
 
-Apache Hudi can easily be used on any [cloud storage platform](/docs/cloud), S3, ADLS, GCS, etc. 
+Apache Hudi can easily be used on any [cloud storage platform](/docs/cloud). 
 Hudi’s advanced performance optimizations, make analytical workloads faster with any of 
 the popular query engines including, Apache Spark, Flink, Presto, Trino, Hive, etc.
 
 ## Core Concepts to Learn
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
 - [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services
+- [Hudi File Layout](/docs/next/file_layouts) - How the files are laid out on storage
 - [Hudi Table Types](/docs/next/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
 - [Hudi Query Types](/docs/next/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 
