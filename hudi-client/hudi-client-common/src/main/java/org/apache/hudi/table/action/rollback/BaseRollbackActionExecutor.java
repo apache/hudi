@@ -255,7 +255,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
     try {
-      if (!skipLocking && config.isMetadataTableEnabled()) {
+      if (!skipLocking) {
         this.txnManager.beginTransaction(Option.empty(), Option.empty());
       }
       writeTableMetadata(rollbackMetadata);
@@ -265,7 +265,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
     } catch (IOException e) {
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
-      if (!skipLocking && config.isMetadataTableEnabled()) {
+      if (!skipLocking) {
         this.txnManager.endTransaction();
       }
     }

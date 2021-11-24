@@ -205,7 +205,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           Option.of(timer.endTimer()),
           cleanStats
       );
-      if (!skipLocking && config.isMetadataTableEnabled()) {
+      if (!skipLocking) {
         this.txnManager.beginTransaction(Option.empty(), Option.empty());
       }
       writeTableMetadata(metadata);
@@ -216,7 +216,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
     } catch (IOException e) {
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
-      if (!skipLocking && config.isMetadataTableEnabled()) {
+      if (!skipLocking) {
         this.txnManager.endTransaction();
       }
     }
