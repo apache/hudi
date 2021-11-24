@@ -28,31 +28,21 @@ import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 public class HoodieHFileConfig {
 
+  public static final KeyValue.KVComparator HFILE_COMPARATOR = new HoodieHBaseKVComparator();
+  public static final boolean PREFETCH_ON_OPEN = CacheConfig.DEFAULT_PREFETCH_ON_OPEN;
+  public static final boolean CACHE_DATA_IN_L1 = HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1;
   // This is private in CacheConfig so have been copied here.
-  private static boolean DROP_BEHIND_CACHE_COMPACTION_DEFAULT = true;
-  private static KeyValue.KVComparator defaultHFileComparator = new HoodieHBaseComparators.HoodieHBaseKVComparator();
+  public static final boolean DROP_BEHIND_CACHE_COMPACTION = true;
 
-  private Compression.Algorithm compressionAlgorithm;
-  private int blockSize;
-  private long maxFileSize;
-  private boolean prefetchBlocksOnOpen;
-  private boolean cacheDataInL1;
-  private boolean dropBehindCacheCompaction;
-  private Configuration hadoopConf;
-  private BloomFilter bloomFilter;
-  private KeyValue.KVComparator hfileComparator;
-
-  public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
-                           long maxFileSize, BloomFilter bloomFilter) {
-    this(hadoopConf, compressionAlgorithm, blockSize, maxFileSize, CacheConfig.DEFAULT_PREFETCH_ON_OPEN,
-        HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION_DEFAULT, bloomFilter, defaultHFileComparator);
-  }
-
-  public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
-      long maxFileSize, BloomFilter bloomFilter, KeyValue.KVComparator hfileComparator) {
-    this(hadoopConf, compressionAlgorithm, blockSize, maxFileSize, CacheConfig.DEFAULT_PREFETCH_ON_OPEN,
-        HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION_DEFAULT, bloomFilter, hfileComparator);
-  }
+  private final Compression.Algorithm compressionAlgorithm;
+  private final int blockSize;
+  private final long maxFileSize;
+  private final boolean prefetchBlocksOnOpen;
+  private final boolean cacheDataInL1;
+  private final boolean dropBehindCacheCompaction;
+  private final Configuration hadoopConf;
+  private final BloomFilter bloomFilter;
+  private final KeyValue.KVComparator hfileComparator;
 
   public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
                            long maxFileSize, boolean prefetchBlocksOnOpen, boolean cacheDataInL1,

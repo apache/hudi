@@ -50,6 +50,10 @@ import java.util.Set;
 
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.CACHE_DATA_IN_L1;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.DROP_BEHIND_CACHE_COMPACTION;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.HFILE_COMPARATOR;
+import static org.apache.hudi.io.storage.HoodieHFileConfig.PREFETCH_ON_OPEN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieHFileReaderWriter {
@@ -76,7 +80,7 @@ public class TestHoodieHFileReaderWriter {
     String instantTime = "000";
 
     HoodieHFileConfig hoodieHFileConfig = new HoodieHFileConfig(conf, Compression.Algorithm.GZ, 1024 * 1024, 120 * 1024 * 1024,
-        filter);
+        PREFETCH_ON_OPEN, CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION, filter, HFILE_COMPARATOR);
     return new HoodieHFileWriter(instantTime, filePath, hoodieHFileConfig, avroSchema, mockTaskContextSupplier);
   }
 
