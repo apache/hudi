@@ -29,11 +29,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMySqlDebeziumAvroPayload {
 
@@ -43,11 +41,10 @@ public class TestMySqlDebeziumAvroPayload {
 
   @BeforeEach
   void setUp() {
-
     this.avroSchema = Schema.createRecord(Arrays.asList(
         new Schema.Field(KEY_FIELD_NAME, Schema.create(Schema.Type.INT), "", 0),
-        new Schema.Field("_change_operation_type", Schema.create(Schema.Type.STRING), "", null),
-        new Schema.Field("_event_seq", Schema.create(Schema.Type.STRING), "", null)
+        new Schema.Field(DebeziumConstants.FLATTENED_OP_COL_NAME, Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field(DebeziumConstants.ADDED_SEQ_COL_NAME, Schema.create(Schema.Type.STRING), "", null)
     ));
   }
 

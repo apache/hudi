@@ -32,26 +32,24 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestPostgresDebeziumAvroPayload {
 
   private static final String KEY_FIELD_NAME = "Key";
-  private static final String AVRO_SCHEMA_STRING = "{\"type\": \"record\","
-      + "\"name\": \"events\"," + "\"fields\": [ "
-      + "{\"name\": \"" + KEY_FIELD_NAME + "\", \"type\" : \"int\"},"
-      + "{\"name\": \"_change_operation_type\", \"type\": \"string\"},"
-      + "{\"name\": \"_event_lsn\", \"type\" : \"long\"}"
-      + "]}";
-
   private Schema avroSchema;
 
   @BeforeEach
   void setUp() {
-    this.avroSchema = new Schema.Parser().parse(AVRO_SCHEMA_STRING);
+    this.avroSchema = Schema.createRecord(Arrays.asList(
+        new Schema.Field(KEY_FIELD_NAME, Schema.create(Schema.Type.INT), "", 0),
+        new Schema.Field(DebeziumConstants.FLATTENED_OP_COL_NAME, Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field(DebeziumConstants.FLATTENED_LSN_COL_NAME, Schema.create(Schema.Type.LONG), "", null)
+    ));
   }
 
   @Test
@@ -148,8 +146,8 @@ public class TestPostgresDebeziumAvroPayload {
 
     assertEquals("valid string value", outputRecord.get("string_col"));
     assertEquals("valid byte value", new String(((ByteBuffer) outputRecord.get("byte_col")).array(), StandardCharsets.UTF_8));
-    assertEquals(null, outputRecord.get("string_null_col_1"));
-    assertEquals(null, outputRecord.get("byte_null_col_1"));
+    assertNull(outputRecord.get("string_null_col_1"));
+    assertNull(outputRecord.get("byte_null_col_1"));
     assertEquals("valid string value", ((Utf8) outputRecord.get("string_null_col_2")).toString());
     assertEquals("valid byte value", new String(((ByteBuffer) outputRecord.get("byte_null_col_2")).array(), StandardCharsets.UTF_8));
   }
