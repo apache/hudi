@@ -176,7 +176,7 @@ case class HoodieFileIndex(
    * @return list of pruned (data-skipped) candidate base-files' names
    */
   private def lookupCandidateFilesInZIndex(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
-    val indexPath = metaClient.getZindexPath
+    val indexPath = metaClient.getColumnStatsIndexPath
     val fs = metaClient.getFs
 
     if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || queryFilters.isEmpty) {
