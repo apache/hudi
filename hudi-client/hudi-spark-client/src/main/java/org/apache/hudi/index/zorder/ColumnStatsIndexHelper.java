@@ -81,9 +81,10 @@ public class ColumnStatsIndexHelper {
   }
 
   /**
-   * Parse min/max statistics from Parquet footers for provided columns and composes Z-index
-   * table in the following format with 3 statistics denominated for each Z-ordered column.
-   * For ex, if original table contained Z-ordered column {@code A}:
+   * Parse min/max statistics from Parquet footers for provided columns and composes column-stats
+   * index table in the following format with 3 statistics denominated for each
+   * linear/Z-curve/Hilbert-curve-ordered column. For ex, if original table contained
+   * column {@code A}:
    *
    * <pre>
    * +---------------------------+------------+------------+-------------+
@@ -101,12 +102,12 @@ public class ColumnStatsIndexHelper {
    * @VisibleForTesting
    *
    * @param sparkSession encompassing Spark session
-   * @param baseFilesPaths list of base-files paths to be sourced for Z-index
+   * @param baseFilesPaths list of base-files paths to be sourced for column-stats index
    * @param zorderedColumnSchemas target Z-ordered columns
    * @return Spark's {@link Dataset} holding an index table
    */
   @Nonnull
-  public static Dataset<Row> buildZIndexTableFor(
+  public static Dataset<Row> buildColumnStatsTableFor(
       @Nonnull SparkSession sparkSession,
       @Nonnull List<String> baseFilesPaths,
       @Nonnull List<StructField> zorderedColumnSchemas
@@ -196,19 +197,20 @@ public class ColumnStatsIndexHelper {
 
   /**
    * <p/>
-   * Updates state of the Z-index by:
+   * Updates state of the column-stats index by:
    * <ol>
-   *   <li>Updating Z-index with statistics for {@code sourceBaseFiles}, collecting corresponding
-   *   column statistics from Parquet footers</li>
-   *   <li>Merging newly built Z-index table with the most recent one (if present and not preempted)</li>
+   *   <li>Updating column-stats index with statistics for {@code sourceBaseFiles},
+   *   collecting corresponding column statistics from Parquet footers</li>
+   *   <li>Merging newly built column-stats index table with the most recent one (if present
+   *   and not preempted)</li>
    *   <li>Cleans up any residual index tables, that weren't cleaned up before</li>
    * </ol>
    *
    * @param sparkSession encompassing Spark session
    * @param sourceTableSchema instance of {@link StructType} bearing source table's writer's schema
    * @param sourceBaseFiles list of base-files to be indexed
-   * @param zorderedCols target Z-ordered columns
-   * @param zindexFolderPath Z-index folder path
+   * @param orderedCols target ordered columns
+   * @param indexFolderPath col-stats index folder path
    * @param commitTime current operation commit instant
    * @param completedCommits all previously completed commit instants
    */
@@ -216,26 +218,26 @@ public class ColumnStatsIndexHelper {
       @Nonnull SparkSession sparkSession,
       @Nonnull StructType sourceTableSchema,
       @Nonnull List<String> sourceBaseFiles,
-      @Nonnull List<String> zorderedCols,
-      @Nonnull String zindexFolderPath,
+      @Nonnull List<String> orderedCols,
+      @Nonnull String indexFolderPath,
       @Nonnull String commitTime,
       @Nonnull List<String> completedCommits
   ) {
-    FileSystem fs = FSUtils.getFs(zindexFolderPath, sparkSession.sparkContext().hadoopConfiguration());
+    FileSystem fs = FSUtils.getFs(indexFolderPath, sparkSession.sparkContext().hadoopConfiguration());
 
-    // Compose new Z-index table for the given source base files
-    Dataset<Row> newZIndexDf =
-        buildZIndexTableFor(
+    // Compose new col-stats index table for the given source base files
+    Dataset<Row> newColStatsIndexDf =
+        buildColumnStatsTableFor(
             sparkSession,
             sourceBaseFiles,
-            zorderedCols.stream()
+            orderedCols.stream()
                 .map(col -> sourceTableSchema.fields()[sourceTableSchema.fieldIndex(col)])
                 .collect(Collectors.toList())
         );
 
     try {
       //
-      // Z-Index has the following folder structure:
+      // Column Stats Index has the following folder structure:
       //
       // .hoodie/
       // ├── .colstatsindex/
@@ -245,10 +247,10 @@ public class ColumnStatsIndexHelper {
       //
       // If index is currently empty (no persisted tables), we simply create one
       // using clustering operation's commit instance as it's name
-      Path newIndexTablePath = new Path(zindexFolderPath, commitTime);
+      Path newIndexTablePath = new Path(indexFolderPath, commitTime);
 
-      if (!fs.exists(new Path(zindexFolderPath))) {
-        newZIndexDf.repartition(1)
+      if (!fs.exists(new Path(indexFolderPath))) {
+        newColStatsIndexDf.repartition(1)
             .write()
             .format("parquet")
             .mode("overwrite")
@@ -259,7 +261,7 @@ public class ColumnStatsIndexHelper {
       // Filter in all index tables (w/in {@code .zindex} folder)
       List<String> allIndexTables =
           Arrays.stream(
-                  fs.listStatus(new Path(zindexFolderPath))
+                  fs.listStatus(new Path(indexFolderPath))
               )
               .filter(FileStatus::isDirectory)
               .map(f -> f.getPath().getName())
@@ -278,23 +280,23 @@ public class ColumnStatsIndexHelper {
               .filter(f -> !completedCommits.contains(f))
               .collect(Collectors.toList());
 
-      Dataset<Row> finalZIndexDf;
+      Dataset<Row> finalColStatsIndexDf;
 
-      // Before writing out new version of the Z-index table we need to merge it
+      // Before writing out new version of the col-stats-index table we need to merge it
       // with the most recent one that were successfully persisted previously
       if (validIndexTables.isEmpty()) {
-        finalZIndexDf = newZIndexDf;
+        finalColStatsIndexDf = newColStatsIndexDf;
       } else {
         // NOTE: That Parquet schema might deviate from the original table schema (for ex,
         //       by upcasting "short" to "integer" types, etc), and hence we need to re-adjust it
         //       prior to merging, since merging might fail otherwise due to schemas incompatibility
-        finalZIndexDf =
+        finalColStatsIndexDf =
             tryMergeMostRecentIndexTableInto(
                 sparkSession,
-                newZIndexDf,
-                // Load current most recent Z-index table
+                newColStatsIndexDf,
+                // Load current most recent col-stats-index table
                 sparkSession.read().load(
-                    new Path(zindexFolderPath, validIndexTables.get(validIndexTables.size() - 1)).toString()
+                    new Path(indexFolderPath, validIndexTables.get(validIndexTables.size() - 1)).toString()
                 )
             );
 
@@ -302,28 +304,28 @@ public class ColumnStatsIndexHelper {
         tablesToCleanup.addAll(validIndexTables);
       }
 
-      // Persist new Z-index table
-      finalZIndexDf
+      // Persist new col-stats-index table
+      finalColStatsIndexDf
           .repartition(1)
           .write()
           .format("parquet")
           .save(newIndexTablePath.toString());
 
-      // Clean up residual Z-index tables that have might have been dangling since
+      // Clean up residual col-stats-index tables that have might have been dangling since
       // previous iterations (due to intermittent failures during previous clean up)
       tablesToCleanup.forEach(f -> {
         try {
-          fs.delete(new Path(zindexFolderPath, f), true);
+          fs.delete(new Path(indexFolderPath, f), true);
         } catch (IOException ie) {
           // NOTE: Exception is deliberately swallowed to not affect overall clustering operation,
-          //       since failing Z-index table will be attempted to be cleaned up upon subsequent
+          //       since failing col-stats-index table will be attempted to be cleaned up upon subsequent
           //       clustering iteration
-          LOG.warn(String.format("Failed to cleanup residual Z-index table: %s", f), ie);
+          LOG.warn(String.format("Failed to cleanup residual col-stats-index table: %s", f), ie);
         }
       });
     } catch (IOException e) {
-      LOG.error("Failed to build new Z-index table", e);
-      throw new HoodieException("Failed to build new Z-index table", e);
+      LOG.error("Failed to build new col-stats-index table", e);
+      throw new HoodieException("Failed to build new col-stats-index table", e);
     }
   }
 
@@ -333,7 +335,7 @@ public class ColumnStatsIndexHelper {
       @Nonnull Dataset<Row> newIndexTableDf,
       @Nonnull Dataset<Row> existingIndexTableDf
   ) {
-    // NOTE: If new Z-index table schema is incompatible with that one of existing table
+    // NOTE: If new col-stats index table schema is incompatible with that one of existing table
     //       that is most likely due to changing settings of list of Z-ordered columns, that
     //       occurred since last index table have been persisted.
     //

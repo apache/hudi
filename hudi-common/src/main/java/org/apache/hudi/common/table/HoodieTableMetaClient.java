@@ -178,7 +178,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * @return z-index path
+   * @return Column Statistics index path
    */
   public String getColumnStatsIndexPath() {
     return new Path(metaPath, COLUMN_STATISTICS_INDEX_NAME).toString();

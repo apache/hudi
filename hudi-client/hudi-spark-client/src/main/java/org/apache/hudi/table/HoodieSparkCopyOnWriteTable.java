@@ -208,7 +208,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
 
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
 
-    // Fetch table schema to appropriately construct Z-index schema
+    // Fetch table schema to appropriately construct col-stats index schema
     Schema tableWriteSchema =
         HoodieAvroUtils.createHoodieWriteSchema(
             new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
