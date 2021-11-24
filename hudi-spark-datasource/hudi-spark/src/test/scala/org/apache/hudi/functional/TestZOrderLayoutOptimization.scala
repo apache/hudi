@@ -18,19 +18,16 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.{LocatedFileStatus, Path}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
-import org.apache.hudi.index.zorder.ZOrderingIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
-import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Tag, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Tag}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -142,242 +139,9 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
     )
   }
 
-  @Test
-  @Disabled
-  def testZIndexTableComposition(): Unit = {
-    val inputDf =
-      // NOTE: Schema here is provided for validation that the input date is in the appropriate format
-      spark.read
-        .schema(sourceTableSchema)
-        .parquet(
-          getClass.getClassLoader.getResource("index/zorder/input-table").toString
-        )
-
-    val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
-    val zorderedColsSchemaFields = inputDf.schema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
-
-    // {@link TimestampType} is not supported, and will throw -- hence skipping "c4"
-    val newZIndexTableDf =
-      ZOrderingIndexHelper.buildZIndexTableFor(
-        inputDf.sparkSession,
-        inputDf.inputFiles.toSeq,
-        zorderedColsSchemaFields
-      )
-
-    val indexSchema =
-      ZOrderingIndexHelper.composeIndexSchema(
-        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
-      )
-
-    // Collect Z-index stats manually (reading individual Parquet files)
-    val manualZIndexTableDf =
-      buildZIndexTableManually(
-        getClass.getClassLoader.getResource("index/zorder/input-table").toString,
-        zorderedCols,
-        indexSchema
-      )
-
-    // NOTE: Z-index is built against stats collected w/in Parquet footers, which will be
-    //       represented w/ corresponding Parquet schema (INT, INT64, INT96, etc).
-    //
-    //       When stats are collected manually, produced Z-index table is inherently coerced into the
-    //       schema of the original source Parquet base-file and therefore we have to similarly coerce newly
-    //       built Z-index table (built off Parquet footers) into the canonical index schema (built off the
-    //       original source file schema)
-    assertEquals(asJson(sort(manualZIndexTableDf)), asJson(sort(newZIndexTableDf)))
-
-    // Match against expected Z-index table
-    val expectedZIndexTableDf =
-      spark.read
-        .schema(indexSchema)
-        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
-
-    assertEquals(asJson(sort(expectedZIndexTableDf)), asJson(sort(newZIndexTableDf)))
-  }
-
-  @Test
-  @Disabled
-  def testZIndexTableMerge(): Unit = {
-    val testZIndexPath = new Path(basePath, "zindex")
-
-    val zorderedCols = Seq("c1", "c2", "c3", "c5", "c6", "c7", "c8")
-    val indexSchema =
-      ZOrderingIndexHelper.composeIndexSchema(
-        sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
-      )
-
-    //
-    // Bootstrap Z-index table
-    //
-
-    val firstCommitInstance = "0"
-    val firstInputDf =
-      spark.read.parquet(
-        getClass.getClassLoader.getResource("index/zorder/input-table").toString
-      )
-
-    ZOrderingIndexHelper.updateZIndexFor(
-      firstInputDf.sparkSession,
-      sourceTableSchema,
-      firstInputDf.inputFiles.toSeq,
-      zorderedCols.toSeq,
-      testZIndexPath.toString,
-      firstCommitInstance,
-      Seq()
-    )
-
-    // NOTE: We don't need to provide schema upon reading from Parquet, since Spark will be able
-    //       to reliably retrieve it
-    val initialZIndexTable =
-      spark.read
-        .parquet(new Path(testZIndexPath, firstCommitInstance).toString)
-
-    val expectedInitialZIndexTableDf =
-        spark.read
-          .schema(indexSchema)
-          .json(getClass.getClassLoader.getResource("index/zorder/z-index-table.json").toString)
-
-    assertEquals(asJson(sort(expectedInitialZIndexTableDf)), asJson(sort(initialZIndexTable)))
-
-    val secondCommitInstance = "1"
-    val secondInputDf =
-      spark.read
-        .schema(sourceTableSchema)
-        .parquet(
-          getClass.getClassLoader.getResource("index/zorder/another-input-table").toString
-        )
-
-    //
-    // Update Z-index table
-    //
-
-    ZOrderingIndexHelper.updateZIndexFor(
-      secondInputDf.sparkSession,
-      sourceTableSchema,
-      secondInputDf.inputFiles.toSeq,
-      zorderedCols.toSeq,
-      testZIndexPath.toString,
-      secondCommitInstance,
-      Seq(firstCommitInstance)
-    )
-
-    // NOTE: We don't need to provide schema upon reading from Parquet, since Spark will be able
-    //       to reliably retrieve it
-    val mergedZIndexTable =
-      spark.read
-        .parquet(new Path(testZIndexPath, secondCommitInstance).toString)
-
-    val expectedMergedZIndexTableDf =
-      spark.read
-        .schema(indexSchema)
-        .json(getClass.getClassLoader.getResource("index/zorder/z-index-table-merged.json").toString)
-
-    assertEquals(asJson(sort(expectedMergedZIndexTableDf)), asJson(sort(mergedZIndexTable)))
-  }
-
-  @Test
-  @Disabled
-  def testZIndexTablesGarbageCollection(): Unit = {
-    val testZIndexPath = new Path(System.getProperty("java.io.tmpdir"), "zindex")
-    val fs = testZIndexPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
-
-    val inputDf =
-      spark.read.parquet(
-        getClass.getClassLoader.getResource("index/zorder/input-table").toString
-      )
-
-    // Try to save statistics
-    ZOrderingIndexHelper.updateZIndexFor(
-      inputDf.sparkSession,
-      sourceTableSchema,
-      inputDf.inputFiles.toSeq,
-      Seq("c1","c2","c3","c5","c6","c7","c8"),
-      testZIndexPath.toString,
-      "2",
-      Seq("0", "1")
-    )
-
-    // Save again
-    ZOrderingIndexHelper.updateZIndexFor(
-      inputDf.sparkSession,
-      sourceTableSchema,
-      inputDf.inputFiles.toSeq,
-      Seq("c1","c2","c3","c5","c6","c7","c8"),
-      testZIndexPath.toString,
-      "3",
-      Seq("0", "1", "2")
-    )
-
-    // Test old index table being cleaned up
-    ZOrderingIndexHelper.updateZIndexFor(
-      inputDf.sparkSession,
-      sourceTableSchema,
-      inputDf.inputFiles.toSeq,
-      Seq("c1","c2","c3","c5","c6","c7","c8"),
-      testZIndexPath.toString,
-      "4",
-      Seq("0", "1", "3")
-    )
-
-    assertEquals(!fs.exists(new Path(testZIndexPath, "2")), true)
-    assertEquals(!fs.exists(new Path(testZIndexPath, "3")), true)
-    assertEquals(fs.exists(new Path(testZIndexPath, "4")), true)
-  }
-
-  private def buildZIndexTableManually(tablePath: String, zorderedCols: Seq[String], indexSchema: StructType) = {
-    val files = {
-      val it = fs.listFiles(new Path(tablePath), true)
-      var seq = Seq[LocatedFileStatus]()
-      while (it.hasNext) {
-        seq = seq :+ it.next()
-      }
-      seq
-    }
-
-    spark.createDataFrame(
-      files.flatMap(file => {
-        val df = spark.read.schema(sourceTableSchema).parquet(file.getPath.toString)
-        val exprs: Seq[String] =
-          s"'${typedLit(file.getPath.getName)}' AS file" +:
-          df.columns
-            .filter(col => zorderedCols.contains(col))
-            .flatMap(col => {
-              val minColName = s"${col}_minValue"
-              val maxColName = s"${col}_maxValue"
-              Seq(
-                s"min($col) AS $minColName",
-                s"max($col) AS $maxColName",
-                s"sum(cast(isnull($col) AS long)) AS ${col}_num_nulls"
-              )
-            })
-
-        df.selectExpr(exprs: _*)
-          .collect()
-      }),
-      indexSchema
-    )
-  }
-
-  private def asJson(df: DataFrame) =
-    df.toJSON
-      .select("value")
-      .collect()
-      .toSeq
-      .map(_.getString(0))
-      .mkString("\n")
-
   private def assertRowsMatch(one: DataFrame, other: DataFrame) = {
     val rows = one.count()
     assert(rows == other.count() && one.intersect(other).count() == rows)
-  }
-
-  private def sort(df: DataFrame): DataFrame = {
-    // Since upon parsing JSON, Spark re-order columns in lexicographical order
-    // of their names, we have to shuffle new Z-index table columns order to match
-    // Rows are sorted by filename as well to avoid
-    val sortedCols = df.columns.sorted
-    df.select(sortedCols.head, sortedCols.tail: _*)
-      .sort("file")
   }
 
   def createComplexDataFrame(spark: SparkSession): DataFrame = {
