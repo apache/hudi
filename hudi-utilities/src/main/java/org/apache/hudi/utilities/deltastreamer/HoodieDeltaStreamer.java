@@ -373,18 +373,9 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     public boolean isInlineCompactionEnabled() {
+      // Inline compaction is disabled for continuous mode, otherwise enabled for MOR
       return !continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
-    }
-
-    public boolean isAsyncClusteringEnabled() {
-      return Boolean.parseBoolean(String.valueOf(UtilHelpers.getConfig(this.configs).getProps()
-          .getOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE.key(), false)));
-    }
-
-    public boolean isInlineClusteringEnabled() {
-      return Boolean.parseBoolean(String.valueOf(UtilHelpers.getConfig(this.configs).getProps()
-          .getOrDefault(HoodieClusteringConfig.INLINE_CLUSTERING.key(), false)));
     }
 
     @Override
@@ -646,9 +637,7 @@ public class HoodieDeltaStreamer implements Serializable {
                     HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.get().getLeft().get()));
                 asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
               }
-              if (HoodieClusteringConfig.newBuilder()
-                  .fromProperties(props)
-                  .build().isAsyncClusteringEnabled()) {
+              if (HoodieClusteringConfig.from(props).isAsyncClusteringEnabled()) {
                 Option<String> clusteringInstant = deltaSync.getClusteringInstantOpt();
                 if (clusteringInstant.isPresent()) {
                   LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());
@@ -721,9 +710,7 @@ public class HoodieDeltaStreamer implements Serializable {
         }
       }
       // start async clustering if required
-      if (HoodieClusteringConfig.newBuilder()
-          .fromProperties(props)
-          .build().isAsyncClusteringEnabled()) {
+      if (HoodieClusteringConfig.from(props).isAsyncClusteringEnabled()) {
         if (asyncClusteringService.isPresent()) {
           asyncClusteringService.get().updateWriteClient(writeClient);
         } else {

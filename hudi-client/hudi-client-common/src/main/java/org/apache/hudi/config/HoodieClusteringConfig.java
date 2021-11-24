@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -346,6 +347,10 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public boolean isInlineClusteringEnabled() {
     return getBooleanOrDefault(HoodieClusteringConfig.INLINE_CLUSTERING);
+  }
+
+  public static HoodieClusteringConfig from(TypedProperties props) {
+    return  HoodieClusteringConfig.newBuilder().fromProperties(props).build();
   }
 
   public static Builder newBuilder() {
