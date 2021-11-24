@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -467,6 +468,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         .withAutoCommit(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
         .withEmbeddedTimelineServerEnabled(true)
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024).parquetMaxFileSize(1024).build()).forTable("test-trip-table");
 
@@ -561,7 +564,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         }
       }
       if (rollbackUsingMarkers) {
-        metaClient.getFs().copyFromLocalFile(markerDir,
+        metaClient.getFs().copyFromLocalFile(new Path(markerDir, lastCommitTime),
             new Path(metaClient.getMarkerFolderPath(lastCommitTime)));
       }
       Thread.sleep(1000);

@@ -84,6 +84,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     initSparkContexts("TestHoodieMetadata");
     initFileSystem();
     fs.mkdirs(new Path(basePath));
+    initTimelineService();
     initMetaClient(tableType);
     initTestDataGenerator();
     metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);

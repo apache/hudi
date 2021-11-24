@@ -71,6 +71,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     initTestDataGenerator();
     initFileSystem();
     fs.mkdirs(new Path(basePath));
+    initTimelineService();
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, HoodieFileFormat.PARQUET);
     initTestDataGenerator();
   }
@@ -215,7 +216,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
                 .withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .withEmbeddedTimelineServerEnabled(false)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(
-            FileSystemViewStorageType.MEMORY).build())
+            FileSystemViewStorageType.MEMORY).withRemoteServerPort(timelineServicePort).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build()).withAutoCommit(false).withProperties(properties);
