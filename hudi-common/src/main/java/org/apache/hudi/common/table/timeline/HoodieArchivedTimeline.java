@@ -148,13 +148,13 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     if (loadDetails) {
       Option.ofNullable(getMetadataKey(action))
           .map(key -> {
-              Object actionData = record.get(key);
-              if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-                this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord)actionData));
-              } else {
-                this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
-              }
-              return null;
+            Object actionData = record.get(key);
+            if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
+              this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord)actionData));
+            } else {
+              this.readCommits.put(instantTime, actionData.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            return null;
           });
     }
     return new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action, instantTime);
