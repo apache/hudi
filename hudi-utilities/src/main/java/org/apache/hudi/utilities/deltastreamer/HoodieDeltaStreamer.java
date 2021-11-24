@@ -156,7 +156,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     hoodieConfig.setDefaultValue(DataSourceWriteOptions.RECONCILE_SCHEMA());
 
-    return (TypedProperties) hoodieConfig.getProps();
+    return hoodieConfig.getProps(true);
   }
 
   public void shutdownGracefully() {
