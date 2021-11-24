@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -75,7 +74,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           FileSystem.get(new Configuration()),
           FileSystemViewManager.createViewManager(
-              localEngineContext, WriteConcurrencyMode.SINGLE_WRITER, metadataConfig, storageConf, HoodieCommonConfig.newBuilder().build()));
+              localEngineContext, metadataConfig, storageConf, HoodieCommonConfig.newBuilder().build()));
       timelineService.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);

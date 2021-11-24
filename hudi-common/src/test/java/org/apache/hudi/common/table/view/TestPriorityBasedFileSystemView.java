@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -73,7 +72,7 @@ public class TestPriorityBasedFileSystemView {
 
   @BeforeEach
   public void setUp() {
-    fsView = new PriorityBasedFileSystemView(primary, secondary, WriteConcurrencyMode.SINGLE_WRITER);
+    fsView = new PriorityBasedFileSystemView(primary, secondary);
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
         "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
@@ -116,11 +115,6 @@ public class TestPriorityBasedFileSystemView {
     final Logger logger = Logger.getRootLogger();
     try {
       logger.addAppender(appender);
-      fsView = new PriorityBasedFileSystemView(primary, secondary, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
-      testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
-      testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
-          "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
-
       Stream<HoodieBaseFile> actual;
       Stream<HoodieBaseFile> expected = testBaseFileStream;
 

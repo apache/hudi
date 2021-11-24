@@ -70,8 +70,7 @@ public class EmbeddedTimelineService {
       // Reset to default if set to Remote
       builder.withStorageType(FileSystemViewStorageType.MEMORY);
     }
-    return FileSystemViewManager.createViewManager(context, writeConfig.getWriteConcurrencyMode(), writeConfig.getMetadataConfig(),
-        builder.build(), writeConfig.getCommonConfig(), basePath);
+    return FileSystemViewManager.createViewManager(context, writeConfig.getMetadataConfig(), builder.build(), writeConfig.getCommonConfig(), basePath);
   }
 
   public void startServer() throws IOException {

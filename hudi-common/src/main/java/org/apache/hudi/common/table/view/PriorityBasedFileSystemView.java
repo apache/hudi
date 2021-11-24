@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function0;
@@ -53,14 +52,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private final SyncableFileSystemView preferredView;
   private final SyncableFileSystemView secondaryView;
   private boolean errorOnPreferredView;
-  private WriteConcurrencyMode writeConcurrencyMode;
 
-  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SyncableFileSystemView secondaryView,
-                                     WriteConcurrencyMode writeConcurrencyMode) {
+  public PriorityBasedFileSystemView(SyncableFileSystemView preferredView, SyncableFileSystemView secondaryView) {
     this.preferredView = preferredView;
     this.secondaryView = secondaryView;
     this.errorOnPreferredView = false;
-    this.writeConcurrencyMode = writeConcurrencyMode;
   }
 
   private <R> R execute(Function0<R> preferredFunction, Function0<R> secondaryFunction) {
@@ -126,9 +122,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   private void handleRuntimeException(RuntimeException re) {
-    if (writeConcurrencyMode.supportsOptimisticConcurrencyControl()
-        && re.getCause() instanceof HttpResponseException
-        && ((HttpResponseException)re.getCause()).getStatusCode() == HttpStatus.SC_BAD_REQUEST) {
+    if (re.getCause() instanceof HttpResponseException && ((HttpResponseException)re.getCause()).getStatusCode() == HttpStatus.SC_BAD_REQUEST) {
       LOG.warn("Got error running preferred function. Likely due to another concurrent writer in progress. Trying secondary");
     } else {
       LOG.error("Got error running preferred function. Trying secondary", re);
