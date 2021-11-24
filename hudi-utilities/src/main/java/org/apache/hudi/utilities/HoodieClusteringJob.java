@@ -59,7 +59,7 @@ public class HoodieClusteringJob {
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
     this.cfg = cfg;
     this.jsc = jsc;
-    this.props = cfg.propsFilePath == null
+    this.props = (cfg.propsFilePath == null || cfg.propsFilePath.isEmpty())
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
   }
