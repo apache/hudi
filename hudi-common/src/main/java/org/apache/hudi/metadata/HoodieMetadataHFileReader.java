@@ -27,6 +27,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.storage.HoodieHFileReader;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -41,6 +43,9 @@ import java.nio.ByteBuffer;
  * @param <R> Metadata table record type.
  */
 public class HoodieMetadataHFileReader<R extends IndexedRecord> extends HoodieHFileReader<R> {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieMetadataHFileReader.class);
+
   public HoodieMetadataHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
     super(configuration, path, cacheConfig);
   }
@@ -55,9 +60,11 @@ public class HoodieMetadataHFileReader<R extends IndexedRecord> extends HoodieHF
   }
 
   /**
-   * @param keyField
-   * @param keyBytes
-   * @param record
+   * Materialize the record key field.
+   *
+   * @param keyField - Key field in the schema
+   * @param keyBytes - Key byte array
+   * @param record   - Record to materialize
    */
   @Override
   protected void materializeRecordIfNeeded(final Option<String> keyField, final ByteBuffer keyBytes, R record) {
@@ -65,8 +72,8 @@ public class HoodieMetadataHFileReader<R extends IndexedRecord> extends HoodieHF
       return;
     }
 
-    Schema.Field keySchemaField = record.getSchema().getField(keyField.get());
-    if (keySchemaField != null) {
+    final Schema.Field keySchemaField = record.getSchema().getField(keyField.get());
+    if (keySchemaField != null && record.get(keySchemaField.pos()) == null) {
       record.put(keySchemaField.pos(), new String(keyBytes.array()));
     }
   }

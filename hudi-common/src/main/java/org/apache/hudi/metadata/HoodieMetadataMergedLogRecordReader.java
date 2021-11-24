@@ -178,16 +178,6 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
     }
 
     @Override
-    public Builder withReadBlocksLazily(boolean readBlocksLazily) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Builder withReverseReader(boolean reverseReader) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public Builder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
       return this;

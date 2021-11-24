@@ -117,7 +117,6 @@ public class TestHoodieHFileReaderWriter {
     for (int i = 0; i < 100; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       String key = String.format("%s%04d", "key", i);
-      record.put("_row_key", key);
       keys.add(key);
       record.put("time", Integer.toString(RANDOM.nextInt()));
       record.put("number", i);
@@ -145,7 +144,7 @@ public class TestHoodieHFileReaderWriter {
       Set<String> rowsToFetch = getRandomKeys(randomRowstoFetch, keys);
       List<String> rowsList = new ArrayList<>(rowsToFetch);
       Collections.sort(rowsList);
-      hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf), null);
+      hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf), "_row_key");
       List<Pair<String, GenericRecord>> result = hoodieHFileReader.readRecords(rowsList);
       assertEquals(result.size(), randomRowstoFetch);
       result.forEach(entry -> {

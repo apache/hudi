@@ -33,6 +33,8 @@ import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -188,6 +190,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     protected Option<InstantRange> instantRange = Option.empty();
     // auto scan default true
     private boolean autoScan = true;
+    // full record scan
+    private boolean enableFullScan = true;
     // operation field default false
     private boolean withOperationField = false;
     protected String partitionName;
@@ -282,12 +286,35 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder enableFullScan(boolean enableFullScan) {
+      this.enableFullScan = enableFullScan;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordScanner build() {
+      if (HoodieTableMetadata.isMetadataTable(basePath)) {
+        return HoodieMetadataMergedLogRecordReader.newBuilder()
+            .withFileSystem(fs)
+            .withBasePath(basePath)
+            .withLogFilePaths(logFilePaths)
+            .withReaderSchema(readerSchema)
+            .withLatestInstantTime(latestInstantTime)
+            .withMaxMemorySizeInBytes(maxMemorySizeInBytes)
+            .withBufferSize(bufferSize)
+            .withSpillableMapBasePath(spillableMapBasePath)
+            .withAutoScan(autoScan)
+            .enableFullScan(enableFullScan)
+            .withDiskMapType(diskMapType)
+            .withBitCaskDiskMapCompressionEnabled(isBitCaskDiskMapCompressionEnabled)
+            .withPartition(partitionName)
+            .withReverseReader(reverseReader)
+            .withReadBlocksLazily(readBlocksLazily).build();
+      }
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, true,
+          diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, enableFullScan,
           Option.ofNullable(partitionName));
     }
   }

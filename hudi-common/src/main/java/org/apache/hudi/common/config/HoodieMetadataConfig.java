@@ -137,6 +137,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
           + "determines how to handle such spurious deletes");
 
+  public static final ConfigProperty<String> RECORDKEY_DE_DUPLICATE = ConfigProperty
+      .key(METADATA_PREFIX + ".recordkey.deduplicate")
+      .defaultValue("false")
+      .sinceVersion("0.10.0")
+      .withDocumentation("When enabled, Metadata table records will have key de-duplication.");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -175,6 +181,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean ignoreSpuriousDeletes() {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
+  }
+
+  public boolean getRecordKeyDeDuplicate() {
+    return getBooleanOrDefault(HoodieMetadataConfig.RECORDKEY_DE_DUPLICATE);
   }
 
   public static class Builder {

@@ -70,6 +70,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
   private final String keyField;
+  private final boolean keyDeDuplication;
   private boolean readBlockLazily;
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
@@ -100,6 +101,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.reverseReader = reverseReader;
     this.enableInlineReading = enableInlineReading;
     this.keyField = keyField;
+    this.keyDeDuplication = false;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = logFile.getFileSize();
     }
@@ -257,7 +259,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
               contentPosition, contentLength, blockEndPos, readerSchema, header, footer, keyField);
         }
       case HFILE_DATA_BLOCK:
-        if (HoodieTableMetadata.isMetadataTable(logFile)) {
+        if (HoodieTableMetadata.isMetadataTable(logFile) && keyDeDuplication) {
           return new HoodieMetadataHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
               contentPosition, contentLength, blockEndPos, readerSchema,
               header, footer, enableInlineReading, keyField);
