@@ -89,7 +89,41 @@ In this demo, we ran a `HoodieDeltaStreamer` job with `HoodieMetrics` turned on 
 
  * `<prefix>.<table name>.deltastreamer.duration`
  * `<prefix>.<table name>.deltastreamer.hiveSyncDuration`
- 
+
+### PrometheusMetricsReporter
+[Prometheus](https://prometheus.io/) is an open source systems monitoring and alerting toolkit.
+Prometheus has a [PushGateway](https://prometheus.io/docs/practices/pushing/) that Apache Hudi can leverage for metrics reporting.
+Follow [Prometheus documentation](https://prometheus.io/docs/introduction/first_steps/) for basic setup instructions.
+
+Similar to other supported reporters, the following attributes are required to enable pushgateway reporters:
+
+```scala
+hoodie.metrics.on=true
+hoodie.metrics.reporter.type=PROMETHEUS_PUSHGATEWAY
+```
+
+The following properties are used to configure the address and port number of pushgateway. The default address is
+localhost, and the default port is 9091
+
+```scala
+hoodie.metrics.pushgateway.host=xxxx
+hoodie.metrics.pushgateway.port=9091
+```
+
+You can configure whether to delete the monitoring information from pushgateway at the end of the task, the default is true
+
+```scala
+hoodie.metrics.pushgateway.job.name=xiaomm
+hoodie.metrics.pushgateway.random.job.name.suffix=false
+```
+
+You can configure the task name prefix and whether a random suffix is required. The default is true
+
+```scala
+hoodie.metrics.pushgateway.job.name=xiaomm
+hoodie.metrics.pushgateway.random.job.name.suffix=false
+```
+
 ### UserDefinedMetricsReporter
 
 Allows users to define a custom metrics reporter.
