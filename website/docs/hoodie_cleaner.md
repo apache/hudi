@@ -10,7 +10,7 @@ provide history and enable time travel and rollbacks, but it is important to man
 [Automatic Hudi cleaning](/docs/configurations/#hoodiecleanautomatic) is enabled by default. Cleaning is invoked immediately after
 each commit, to delete older file slices. It's recommended to leave this enabled to ensure metadata and data storage growth is bounded. 
 
-### Cleaning Retention Policies
+### Cleaning Retention Policies 
 When cleaning old files, you should be careful not to remove files that are being actively used by long running queries.
 Hudi cleaner currently supports the below cleaning policies to keep a certain number of commits or file versions:
 
