@@ -1418,8 +1418,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     dataGen = new HoodieTestDataGenerator();
     String commitTime = HoodieActiveTimeline.createNewInstantTime();
     allRecords.addAll(dataGen.generateInserts(commitTime, 200));
-    writeAndVerifyBatch(client, allRecords, commitTime, populateMetaFields);
-
+    assertThrows(HoodieUpsertException.class, () -> writeAndVerifyBatch(client, allRecords, commitTime, populateMetaFields));
     // verify pending clustering can be rolled back (even though there is a completed commit greater than pending clustering)
     client.rollback(pendingClusteringInstant.getTimestamp());
     metaClient.reloadActiveTimeline();
