@@ -19,7 +19,6 @@
 
 package org.apache.hudi.hive;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -30,11 +29,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieHiveClient {
 
-  @Test
-  void testValidHiveVersions() {
-    for (String version : HoodieHiveClient.SUPPORTED_HIVE_VERSIONS) {
-      assertDoesNotThrow(() -> validateHiveVersion(version));
-    }
+  @ParameterizedTest
+  @ValueSource(strings = {"1.2.1.spark2", "2.3.0", "2.3.1", "2.3.3"})
+  void testValidHiveVersions(String version) {
+    assertDoesNotThrow(() -> validateHiveVersion(version));
   }
 
   @ParameterizedTest

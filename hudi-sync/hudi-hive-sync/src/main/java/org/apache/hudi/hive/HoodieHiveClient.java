@@ -60,6 +60,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   public static final Set<String> SUPPORTED_HIVE_VERSIONS = Collections.unmodifiableSet(new HashSet<>(
       Arrays.asList(
+          "1.2.1",
           "2.3.0",
           "2.3.1",
           "2.3.2",
@@ -81,7 +82,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private final HiveSyncConfig syncConfig;
 
   static void validateHiveVersion(String version) {
-    ValidationUtils.checkState(SUPPORTED_HIVE_VERSIONS.contains(version),
+    ValidationUtils.checkState(SUPPORTED_HIVE_VERSIONS.stream().anyMatch(version::startsWith),
         String.format("Unsupported hive version: %s", version));
   }
 
