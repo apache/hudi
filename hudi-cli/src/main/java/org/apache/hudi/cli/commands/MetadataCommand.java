@@ -18,20 +18,25 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
+import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -40,9 +45,15 @@ import org.springframework.stereotype.Component;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * CLI commands to operate on the Metadata Table.
@@ -50,15 +61,16 @@ import java.util.Map;
 @Component
 public class MetadataCommand implements CommandMarker {
 
-  private JavaSparkContext jsc;
+  private static final Logger LOG = LogManager.getLogger(MetadataCommand.class);
   private static String metadataBaseDirectory;
+  private JavaSparkContext jsc;
 
   /**
    * Sets the directory to store/read Metadata Table.
-   *
+   * <p>
    * This can be used to store the metadata table away from the dataset directory.
-   *  - Useful for testing as well as for using via the HUDI CLI so that the actual dataset is not written to.
-   *  - Useful for testing Metadata Table performance and operations on existing datasets before enabling.
+   * - Useful for testing as well as for using via the HUDI CLI so that the actual dataset is not written to.
+   * - Useful for testing Metadata Table performance and operations on existing datasets before enabling.
    */
   public static void setMetadataBaseDirectory(String metadataDir) {
     ValidationUtils.checkState(metadataBaseDirectory == null,
@@ -75,8 +87,7 @@ public class MetadataCommand implements CommandMarker {
 
   @CliCommand(value = "metadata set", help = "Set options for Metadata Table")
   public String set(@CliOption(key = {"metadataDir"},
-      help = "Directory to read/write metadata table (can be different from dataset)", unspecifiedDefaultValue = "")
-                    final String metadataDir) {
+      help = "Directory to read/write metadata table (can be different from dataset)", unspecifiedDefaultValue = "") final String metadataDir) {
     if (!metadataDir.isEmpty()) {
       setMetadataBaseDirectory(metadataDir);
     }
@@ -152,16 +163,22 @@ public class MetadataCommand implements CommandMarker {
         config, HoodieCLI.basePath, "/tmp");
     Map<String, String> stats = metadata.stats();
 
-    StringBuffer out = new StringBuffer("\n");
-    out.append(String.format("Base path: %s\n", getMetadataTableBasePath(HoodieCLI.basePath)));
+    final List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, String> entry : stats.entrySet()) {
-      out.append(String.format("%s: %s\n", entry.getKey(), entry.getValue()));
+      Comparable[] row = new Comparable[2];
+      row[0] = entry.getKey();
+      row[1] = entry.getValue();
+      rows.add(row);
     }
 
-    return out.toString();
+    TableHeader header = new TableHeader()
+        .addTableHeaderField("stat key")
+        .addTableHeaderField("stat value");
+    return HoodiePrintHelper.print(header, new HashMap<>(), "",
+        false, Integer.MAX_VALUE, false, rows);
   }
 
-  @CliCommand(value = "metadata list-partitions", help = "Print a list of all partitions from the metadata")
+  @CliCommand(value = "metadata list-partitions", help = "List all partitions from metadata")
   public String listPartitions() throws IOException {
     HoodieCLI.getTableMetaClient();
     initJavaSparkContext();
@@ -169,55 +186,169 @@ public class MetadataCommand implements CommandMarker {
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), config,
         HoodieCLI.basePath, "/tmp");
 
-    StringBuffer out = new StringBuffer("\n");
     if (!metadata.enabled()) {
-      out.append("=== Metadata Table not initilized. Using file listing to get list of partitions. ===\n\n");
+      return "[ERROR] Metadata Table not enabled/initialized\n\n";
     }
 
-    long t1 = System.currentTimeMillis();
+    HoodieTimer timer = new HoodieTimer().startTimer();
     List<String> partitions = metadata.getAllPartitionPaths();
-    long t2 = System.currentTimeMillis();
+    LOG.debug("Took " + timer.endTimer() + " ms");
 
-    int[] count = {0};
-    partitions.stream().sorted((p1, p2) -> p2.compareTo(p1)).forEach(p -> {
-      out.append(p);
-      if (++count[0] % 15 == 0) {
-        out.append("\n");
-      } else {
-        out.append(", ");
-      }
+    final List<Comparable[]> rows = new ArrayList<>();
+    partitions.stream().sorted(Comparator.reverseOrder()).forEach(p -> {
+      Comparable[] row = new Comparable[1];
+      row[0] = p;
+      rows.add(row);
+      LOG.debug(">> partition " + p);
     });
 
-    out.append(String.format("\n\n=== List of partitions retrieved in %.2fsec ===", (t2 - t1) / 1000.0));
-
-    return out.toString();
+    TableHeader header = new TableHeader().addTableHeaderField("partition");
+    return HoodiePrintHelper.print(header, new HashMap<>(), "",
+        false, Integer.MAX_VALUE, false, rows);
   }
 
   @CliCommand(value = "metadata list-files", help = "Print a list of all files in a partition from the metadata")
   public String listFiles(
-      @CliOption(key = {"partition"}, help = "Name of the partition to list files", mandatory = true)
-      final String partition) throws IOException {
+      @CliOption(key = {"partition"}, help = "Name of the partition to list files", mandatory = true) final String partition) throws IOException {
     HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
-    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath, "/tmp");
+    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath, "/tmp");
 
-    StringBuffer out = new StringBuffer("\n");
     if (!metaReader.enabled()) {
-      out.append("=== Metadata Table not initialized. Using file listing to get list of files in partition. ===\n\n");
+      return "[ERROR] Metadata Table not enabled/initialized\n\n";
     }
 
-    long t1 = System.currentTimeMillis();
+    HoodieTimer timer = new HoodieTimer().startTimer();
     FileStatus[] statuses = metaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
-    long t2 = System.currentTimeMillis();
+    LOG.debug("Took " + timer.endTimer() + " ms");
 
-    Arrays.stream(statuses).sorted((p1, p2) -> p2.getPath().getName().compareTo(p1.getPath().getName())).forEach(p -> {
-      out.append("\t" + p.getPath().getName());
-      out.append("\n");
+    final List<Comparable[]> rows = new ArrayList<>();
+    Arrays.stream(statuses).sorted((p1, p2) -> p2.getPath().getName().compareTo(p1.getPath().getName())).forEach(f -> {
+      Comparable[] row = new Comparable[1];
+      row[0] = f;
+      rows.add(row);
     });
 
-    out.append(String.format("\n=== Files in partition retrieved in %.2fsec ===", (t2 - t1) / 1000.0));
+    TableHeader header = new TableHeader().addTableHeaderField("file path");
+    return HoodiePrintHelper.print(header, new HashMap<>(), "",
+        false, Integer.MAX_VALUE, false, rows);
+  }
 
-    return out.toString();
+  @CliCommand(value = "metadata validate-files", help = "Validate all files in all partitions from the metadata")
+  public String validateFiles(
+      @CliOption(key = {"verbose"}, help = "Print all file details", unspecifiedDefaultValue = "false") final boolean verbose) throws IOException {
+    HoodieCLI.getTableMetaClient();
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath, "/tmp");
+
+    if (!metaReader.enabled()) {
+      return "[ERROR] Metadata Table not enabled/initialized\n\n";
+    }
+
+    HoodieMetadataConfig fsConfig = HoodieMetadataConfig.newBuilder().enable(false).build();
+    HoodieBackedTableMetadata fsMetaReader = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(HoodieCLI.conf), fsConfig, HoodieCLI.basePath, "/tmp");
+
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    List<String> metadataPartitions = metaReader.getAllPartitionPaths();
+    List<String> fsPartitions = fsMetaReader.getAllPartitionPaths();
+    Collections.sort(fsPartitions);
+    Collections.sort(metadataPartitions);
+
+    Set<String> allPartitions = new HashSet<>();
+    allPartitions.addAll(fsPartitions);
+    allPartitions.addAll(metadataPartitions);
+
+    LOG.info("All FS partitions count " + fsPartitions.size() + ", metadata partition count " + metadataPartitions.size());
+    LOG.info("Partitions equality " + fsPartitions.equals(metadataPartitions));
+
+    if (!fsPartitions.equals(metadataPartitions)) {
+      LOG.error("All FS partitions " + Arrays.toString(fsPartitions.toArray()));
+      LOG.error("All Metadata partitions " + Arrays.toString(metadataPartitions.toArray()));
+    }
+
+    final List<Comparable[]> rows = new ArrayList<>();
+    for (String partition : allPartitions) {
+      Map<String, FileStatus> fileStatusMap = new HashMap<>();
+      Map<String, FileStatus> metaFileStatusMap = new HashMap<>();
+      FileStatus[] metadataStatuses = metaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
+      Arrays.stream(metadataStatuses).forEach(entry -> metaFileStatusMap.put(entry.getPath().getName(), entry));
+      FileStatus[] fsStatus = fsMetaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
+      Arrays.stream(fsStatus).forEach(entry -> fileStatusMap.put(entry.getPath().getName(), entry));
+
+      Set<String> allFiles = new HashSet<>();
+      allFiles.addAll(fileStatusMap.keySet());
+      allFiles.addAll(metaFileStatusMap.keySet());
+
+      for (String file : allFiles) {
+        Comparable[] row = new Comparable[6];
+        row[0] = partition;
+        FileStatus fsFileStatus = fileStatusMap.get(file);
+        FileStatus metaFileStatus = metaFileStatusMap.get(file);
+        row[1] = file;
+        row[2] = fsFileStatus != null;
+        row[3] = metaFileStatus != null;
+        row[4] = (fsFileStatus != null) ? fsFileStatus.getLen() : 0;
+        row[5] = (metaFileStatus != null) ? metaFileStatus.getLen() : 0;
+        if (verbose) {
+          rows.add(row);
+        }
+      }
+
+      LOG.info("Validating partition " + partition);
+      LOG.info(" total FS Files count " + metadataStatuses.length + ", metadata files count " + fsStatus.length);
+      if (metadataStatuses.length != fsStatus.length) {
+        LOG.error(" Files equality size failed ");
+      }
+
+      for (Map.Entry<String, FileStatus> entry : fileStatusMap.entrySet()) {
+        if (!metaFileStatusMap.containsKey(entry.getKey())) {
+          LOG.error("FS file not found in metadata " + entry.getKey());
+        } else {
+          if (entry.getValue().getLen() != metaFileStatusMap.get(entry.getKey()).getLen()) {
+            LOG.error(" FS file size mismatch " + entry.getKey() + ", size equality "
+                + (entry.getValue().getLen() == metaFileStatusMap.get(entry.getKey()).getLen())
+                + ". FS size " + entry.getValue().getLen() + ", metadata size "
+                + metaFileStatusMap.get(entry.getKey()).getLen());
+          } else {
+            LOG.info("  FS File " + entry.getKey() + ", size equality "
+                + (entry.getValue().getLen() == metaFileStatusMap.get(entry.getKey()).getLen())
+                + ". FS size " + entry.getValue().getLen() + ", metadata size "
+                + metaFileStatusMap.get(entry.getKey()).getLen());
+          }
+        }
+      }
+      for (Map.Entry<String, FileStatus> entry : metaFileStatusMap.entrySet()) {
+        if (!fileStatusMap.containsKey(entry.getKey())) {
+          LOG.error("Metadata file not found in FS " + entry.getKey());
+        } else {
+          if (entry.getValue().getLen() != fileStatusMap.get(entry.getKey()).getLen()) {
+            LOG.error(" Metadata file size mismatch " + entry.getKey() + ", size equality "
+                + (entry.getValue().getLen() == fileStatusMap.get(entry.getKey()).getLen())
+                + ". Metadata size " + entry.getValue().getLen() + ", FS size "
+                + metaFileStatusMap.get(entry.getKey()).getLen());
+          } else {
+            LOG.info("  Metadata File " + entry.getKey() + ", size equality "
+                + (entry.getValue().getLen() == fileStatusMap.get(entry.getKey()).getLen())
+                + ". Metadata size " + entry.getValue().getLen() + ", FS size "
+                + metaFileStatusMap.get(entry.getKey()).getLen());
+          }
+        }
+      }
+    }
+
+    if (verbose) {
+      TableHeader header = new TableHeader().addTableHeaderField("Partition")
+          .addTableHeaderField("File Name")
+          .addTableHeaderField(" isPresent FS ")
+          .addTableHeaderField(" IsPresent Metadata")
+          .addTableHeaderField(" FS size")
+          .addTableHeaderField(" Metadata size");
+      return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
+    }
+    return "Validation completed!";
   }
 
   private HoodieWriteConfig getWriteConfig() {
@@ -227,7 +358,7 @@ public class MetadataCommand implements CommandMarker {
 
   private void initJavaSparkContext() {
     if (jsc == null) {
-      jsc = SparkUtil.initJavaSparkConf("HoodieClI");
+      jsc = SparkUtil.initJavaSparkConf(SparkUtil.getDefaultConf("HoodieCLI", Option.empty()));
     }
   }
 }
