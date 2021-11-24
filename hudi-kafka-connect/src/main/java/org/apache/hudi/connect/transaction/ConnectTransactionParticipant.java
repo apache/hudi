@@ -201,7 +201,7 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
   }
 
   private void handleAckCommit(ControlMessage message) {
-    // // Update committedKafkaOffset that tracks the last committed kafka offset locally.
+    // Update committedKafkaOffset that tracks the last committed kafka offset locally.
     if (ongoingTransactionInfo != null && committedKafkaOffset < ongoingTransactionInfo.getExpectedKafkaOffset()) {
       committedKafkaOffset = ongoingTransactionInfo.getExpectedKafkaOffset();
     }
@@ -226,6 +226,12 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
                 partition,
                 ongoingTransactionInfo.getExpectedKafkaOffset()));
             context.offset(partition, ongoingTransactionInfo.getExpectedKafkaOffset());
+          } else if (record != null && record.kafkaOffset() < ongoingTransactionInfo.getExpectedKafkaOffset()) {
+            LOG.warn(String.format("Received a kafka record with offset %s below the next expected kafka offset %s for partition %s, "
+                    + "no action will be taken but this record will be ignored since its already written",
+                record.kafkaOffset(),
+                ongoingTransactionInfo.getExpectedKafkaOffset(),
+                partition));
           }
           buffer.poll();
         } catch (Exception exception) {
@@ -254,9 +260,22 @@ public class ConnectTransactionParticipant implements TransactionParticipant {
       // Recover kafka committed offsets, treating the commit offset from the coordinator
       // as the source of truth
       if (coordinatorCommittedKafkaOffset != null && coordinatorCommittedKafkaOffset >= 0) {
+        // Debug only messages
+        if (coordinatorCommittedKafkaOffset != committedKafkaOffset) {
+          LOG.warn(String.format("The coordinator offset for kafka partition %s is %d while the locally committed offset is %d, "
+                  + "hence resetting the local committed offset to the coordinator provided one to ensure consistency",
+              partition,
+              coordinatorCommittedKafkaOffset,
+              committedKafkaOffset));
+        }
         committedKafkaOffset = coordinatorCommittedKafkaOffset;
         return;
       }
+    } else {
+      LOG.warn(String.format("The coordinator offset for kafka partition %s is not present while the locally committed offset is %d, "
+              + "hence resetting the local committed offset to 0 to avoid data loss",
+          partition,
+          committedKafkaOffset));
     }
     // If the coordinator does not have a committed offset for this partition, reset to zero offset.
     committedKafkaOffset = 0;
