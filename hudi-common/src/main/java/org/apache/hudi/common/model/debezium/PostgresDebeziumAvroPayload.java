@@ -79,39 +79,48 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     Option<IndexedRecord> insertOrDeleteRecord = super.combineAndGetUpdateValue(currentValue, schema);
 
     if (insertOrDeleteRecord.isPresent()) {
-      List<Schema.Field> fields = insertOrDeleteRecord.get().getSchema().getFields();
-
-      fields.forEach(field -> {
-        // There are only four avro data types that have unconstrained sizes, which are
-        // NON-NULLABLE STRING, NULLABLE STRING, NON-NULLABLE BYTES, NULLABLE BYTES
-        boolean isToastedValue =
-            (
-                (
-                    field.schema().getType() == Schema.Type.STRING
-                        || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.STRING))
-                )
-                    && ((GenericData.Record) insertOrDeleteRecord.get()).get(field.name()) != null
-                    // Check length first as an optimization
-                    && ((CharSequence) ((GenericData.Record) insertOrDeleteRecord.get()).get(field.name())).length() == DEBEZIUM_TOASTED_VALUE.length()
-                    && DEBEZIUM_TOASTED_VALUE.equals(((CharSequence) ((GenericData.Record) insertOrDeleteRecord.get()).get(field.name())).toString())
-            )
-                ||
-                (
-                    (
-                        field.schema().getType() == Schema.Type.BYTES
-                            || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.BYTES))
-                    )
-                        && ((GenericData.Record) insertOrDeleteRecord.get()).get(field.name()) != null
-                        && ((ByteBuffer) ((GenericData.Record) insertOrDeleteRecord.get()).get(field.name())).array().length == DEBEZIUM_TOASTED_VALUE.length()
-                        && DEBEZIUM_TOASTED_VALUE.equals(new String(((ByteBuffer) ((GenericData.Record) insertOrDeleteRecord.get()).get(field.name())).array(), StandardCharsets.UTF_8))
-                );
-
-        if (isToastedValue) {
-          ((GenericData.Record) insertOrDeleteRecord.get()).put(field.name(), ((GenericData.Record) currentValue).get(field.name()));
-        }
-      });
+      mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue);
     }
     return insertOrDeleteRecord;
+  }
+
+  private void mergeToastedValuesIfPresent(IndexedRecord incomingRecord, IndexedRecord currentRecord) {
+    List<Schema.Field> fields = incomingRecord.getSchema().getFields();
+
+    fields.forEach(field -> {
+      // There are only four avro data types that have unconstrained sizes, which are
+      // NON-NULLABLE STRING, NULLABLE STRING, NON-NULLABLE BYTES, NULLABLE BYTES
+      if (((GenericData.Record) incomingRecord).get(field.name()) != null
+          && (containsStringToastedValues(incomingRecord, field) || containsBytesToastedValues(incomingRecord, field))) {
+        ((GenericData.Record) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
+      }
+    });
+  }
+
+  /**
+   * @param incomingRecord The incoming avro record
+   * @param field          the column of interest
+   * @return
+   */
+  private boolean containsStringToastedValues(IndexedRecord incomingRecord, Schema.Field field) {
+    return ((field.schema().getType() == Schema.Type.STRING
+        || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.STRING)))
+        // Check length first as an optimization
+        && ((CharSequence) ((GenericData.Record) incomingRecord).get(field.name())).length() == DEBEZIUM_TOASTED_VALUE.length()
+        && DEBEZIUM_TOASTED_VALUE.equals(((CharSequence) ((GenericData.Record) incomingRecord).get(field.name())).toString()));
+  }
+
+  /**
+   * @param incomingRecord The incoming avro record
+   * @param field          the column of interest
+   * @return
+   */
+  private boolean containsBytesToastedValues(IndexedRecord incomingRecord, Schema.Field field) {
+    return ((field.schema().getType() == Schema.Type.BYTES
+        || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.BYTES)))
+        // Check length first as an optimization
+        && ((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array().length == DEBEZIUM_TOASTED_VALUE.length()
+        && DEBEZIUM_TOASTED_VALUE.equals(new String(((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array(), StandardCharsets.UTF_8)));
   }
 }
 

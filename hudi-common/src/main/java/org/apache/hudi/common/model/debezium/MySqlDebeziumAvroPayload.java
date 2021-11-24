@@ -53,8 +53,7 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
   }
 
   private String extractSeq(IndexedRecord record) {
-    GenericRecord genericRecord = (GenericRecord) record;
-    return genericRecord.get(DebeziumConstants.ADDED_SEQ_COL_NAME).toString();
+    return ((CharSequence) ((GenericRecord) record).get(DebeziumConstants.ADDED_SEQ_COL_NAME)).toString();
   }
 
   @Override
