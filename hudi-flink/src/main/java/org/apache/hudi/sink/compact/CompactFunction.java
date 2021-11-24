@@ -75,8 +75,6 @@ public class CompactFunction extends ProcessFunction<CompactionPlanEvent, Compac
 
   @Override
   public void open(Configuration parameters) throws Exception {
-    // always use the user classloader
-    Thread.currentThread().setContextClassLoader(getRuntimeContext().getUserCodeClassLoader());
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
     if (this.asyncCompaction) {
