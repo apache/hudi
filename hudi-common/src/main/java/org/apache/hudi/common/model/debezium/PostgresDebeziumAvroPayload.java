@@ -98,6 +98,8 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
   }
 
   /**
+   * Returns true if a column is either of type string or a union of one or more strings that contain a debezium toasted value.
+   *
    * @param incomingRecord The incoming avro record
    * @param field          the column of interest
    * @return
@@ -111,6 +113,8 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
   }
 
   /**
+   * Returns true if a column is either of type bytes or a union of one or more bytes that contain a debezium toasted value.
+   *
    * @param incomingRecord The incoming avro record
    * @param field          the column of interest
    * @return
