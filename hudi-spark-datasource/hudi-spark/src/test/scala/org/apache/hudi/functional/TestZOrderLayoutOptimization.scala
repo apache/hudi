@@ -19,6 +19,8 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.{LocatedFileStatus, Path}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.index.zorder.ZOrderingIndexHelper
@@ -27,7 +29,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -102,6 +104,17 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "begin_lat, begin_lon")
       .mode(SaveMode.Overwrite)
       .save(basePath)
+
+    val hudiMetaClient = HoodieTableMetaClient.builder
+      .setConf(hadoopConf)
+      .setBasePath(basePath)
+      .setLoadActiveTimelineOnLoad(true)
+      .build
+
+    val lastCommit = hudiMetaClient.getActiveTimeline.getAllCommitsTimeline.lastInstant().get()
+
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, lastCommit.getAction)
+    assertEquals(HoodieInstant.State.COMPLETED, lastCommit.getState)
 
     val readDf =
       spark.read
