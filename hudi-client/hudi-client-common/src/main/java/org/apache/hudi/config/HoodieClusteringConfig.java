@@ -334,9 +334,18 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /** @deprecated Use {@link #ASYNC_CLUSTERING_ENABLE} and its methods instead */
   @Deprecated
   public static final String DEFAULT_ASYNC_CLUSTERING_ENABLE_OPT_VAL = ASYNC_CLUSTERING_ENABLE.defaultValue();
-  
+
+  // NOTE: This ctor is required for appropriate deserialization
   public HoodieClusteringConfig() {
     super();
+  }
+
+  public boolean isAsyncClusteringEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
+  }
+
+  public boolean isInlineClusteringEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.INLINE_CLUSTERING);
   }
 
   public static Builder newBuilder() {
@@ -421,6 +430,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder fromProperties(Properties props) {
+      // TODO this should cherry-pick only clustering properties
       this.clusteringConfig.getProps().putAll(props);
       return this;
     }

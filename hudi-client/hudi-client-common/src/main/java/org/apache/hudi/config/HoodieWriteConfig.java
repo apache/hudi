@@ -1150,11 +1150,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean inlineClusteringEnabled() {
-    return getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING);
+    return getBooleanOrDefault(HoodieClusteringConfig.INLINE_CLUSTERING);
   }
 
   public boolean isAsyncClusteringEnabled() {
-    return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
+    return getBooleanOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
   }
 
   public boolean isPreserveHoodieCommitMetadata() {
