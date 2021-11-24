@@ -31,6 +31,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.http.client.HttpResponseException;
+import org.apache.log4j.AppenderSkeleton;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.apache.log4j.spi.LoggingEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,12 +43,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -104,31 +111,32 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
-  public void testRetryWithSecondary() {
-    fsView = new PriorityBasedFileSystemView(primary, secondary, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
-    testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
-    testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
-        "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
+  public void testBadRequestExceptionWithPrimary() {
+    final TestLogAppender appender = new TestLogAppender();
+    final Logger logger = Logger.getRootLogger();
+    try {
+      logger.addAppender(appender);
+      fsView = new PriorityBasedFileSystemView(primary, secondary, WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL);
+      testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
+      testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
+          "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
 
-    Stream<HoodieBaseFile> actual;
-    Stream<HoodieBaseFile> expected = testBaseFileStream;
+      Stream<HoodieBaseFile> actual;
+      Stream<HoodieBaseFile> expected = testBaseFileStream;
 
-    resetMocks();
-    when(primary.getLatestBaseFiles()).thenThrow(new RuntimeException("dummy text Server Error"));
-    when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
-    actual = fsView.getLatestBaseFiles();
-    assertEquals(expected, actual);
-
-    resetMocks();
-    when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
-    actual = fsView.getLatestBaseFiles();
-    assertEquals(expected, actual);
-
-    resetMocks();
-    when(secondary.getLatestBaseFiles()).thenThrow(new RuntimeException());
-    assertThrows(RuntimeException.class, () -> {
-      fsView.getLatestBaseFiles();
-    });
+      resetMocks();
+      when(primary.getLatestBaseFiles()).thenThrow(new RuntimeException(new HttpResponseException(400, "Bad Request")));
+      when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
+      actual = fsView.getLatestBaseFiles();
+      assertEquals(expected, actual);
+      final List<LoggingEvent> logs = appender.getLog();
+      final LoggingEvent firstLogEntry = logs.get(0);
+      assertEquals(firstLogEntry.getLevel(), Level.WARN);
+      assertTrue(((String)firstLogEntry.getMessage()).contains("Got error running preferred function. Likely due to another "
+          + "concurrent writer in progress. Trying secondary"));
+    } finally {
+      logger.removeAppender(appender);
+    }
   }
 
   @Test
@@ -661,5 +669,27 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testGetSecondaryView() {
     assertEquals(secondary, fsView.getSecondaryView());
+  }
+
+  class TestLogAppender extends AppenderSkeleton {
+    private final List<LoggingEvent> log = new ArrayList<LoggingEvent>();
+
+    @Override
+    public boolean requiresLayout() {
+      return false;
+    }
+
+    @Override
+    protected void append(final LoggingEvent loggingEvent) {
+      log.add(loggingEvent);
+    }
+
+    @Override
+    public void close() {
+    }
+
+    public List<LoggingEvent> getLog() {
+      return new ArrayList<LoggingEvent>(log);
+    }
   }
 }
