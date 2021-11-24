@@ -626,6 +626,8 @@ public class HoodieDeltaStreamer implements Serializable {
           LOG.info("Setting Spark Pool name for delta-sync to " + DELTASYNC_POOL_NAME);
           jssc.setLocalProperty("spark.scheduler.pool", DELTASYNC_POOL_NAME);
         }
+
+        HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.from(props);
         try {
           while (!isShutdownRequested()) {
             try {
@@ -637,7 +639,7 @@ public class HoodieDeltaStreamer implements Serializable {
                     HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.get().getLeft().get()));
                 asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
               }
-              if (HoodieClusteringConfig.from(props).isAsyncClusteringEnabled()) {
+              if (clusteringConfig.isAsyncClusteringEnabled()) {
                 Option<String> clusteringInstant = deltaSync.getClusteringInstantOpt();
                 if (clusteringInstant.isPresent()) {
                   LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());

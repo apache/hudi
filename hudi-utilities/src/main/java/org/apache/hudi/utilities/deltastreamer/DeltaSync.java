@@ -683,7 +683,7 @@ public class DeltaSync implements Serializable {
     final boolean combineBeforeUpsert = true;
     final boolean autoCommit = false;
 
-    // NOTE: Provided that we're injection combined properties
+    // NOTE: Provided that we're injecting combined properties
     //       (from {@code props}, including CLI overrides), there's no
     //       need to explicitly set up some configuration aspects that
     //       are based on these (for ex Clustering configuration)
