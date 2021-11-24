@@ -27,6 +27,8 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 
+import scala.collection.JavaConversions._
+
 class TestColumnStatsIndex extends HoodieClientTestBase {
   var spark: SparkSession = _
 
@@ -78,7 +80,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
       )
 
     val indexSchema =
-      ColumnStatsIndexHelper.buildColumnStatsTableFor(
+      ColumnStatsIndexHelper.composeIndexSchema(
         sourceTableSchema.fields.filter(f => zorderedCols.contains(f.name)).toSeq
       )
 
