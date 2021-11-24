@@ -111,8 +111,6 @@ public class BulkInsertWriteFunction<I>
 
   @Override
   public void open(Configuration parameters) throws IOException {
-    // always use the user classloader
-    Thread.currentThread().setContextClassLoader(getRuntimeContext().getUserCodeClassLoader());
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.metaClient = StreamerUtil.createMetaClient(this.config);
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
