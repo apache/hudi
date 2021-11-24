@@ -7,7 +7,7 @@ import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 
 class TestColumnStatsIndex extends HoodieClientTestBase {
   var spark: SparkSession = _
@@ -38,6 +38,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
   }
 
   @Test
+  @Disabled
   def testColumnStatsTableComposition(): Unit = {
     val inputDf =
     // NOTE: Schema here is provided for validation that the input date is in the appropriate format
@@ -90,6 +91,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
   }
 
   @Test
+  @Disabled
   def testColumnStatsTableMerge(): Unit = {
     val testZIndexPath = new Path(basePath, "zindex")
 
@@ -169,6 +171,7 @@ class TestColumnStatsIndex extends HoodieClientTestBase {
   }
 
   @Test
+  @Disabled
   def testColumnStatsTablesGarbageCollection(): Unit = {
     val testZIndexPath = new Path(System.getProperty("java.io.tmpdir"), "zindex")
     val fs = testZIndexPath.getFileSystem(spark.sparkContext.hadoopConfiguration)

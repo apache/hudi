@@ -387,9 +387,9 @@ public class ColumnStatsIndexHelper {
   }
 
   private static Pair<Object, Object>
-  fetchMinMaxValues(
-      @Nonnull DataType colType,
-      @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
+      fetchMinMaxValues(
+          @Nonnull DataType colType,
+          @Nonnull HoodieColumnRangeMetadata<Comparable> colMetadata) {
     if (colType instanceof IntegerType) {
       return Pair.of(
           new Integer(colMetadata.getMinValue().toString()),

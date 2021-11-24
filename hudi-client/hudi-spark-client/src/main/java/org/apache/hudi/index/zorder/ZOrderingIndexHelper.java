@@ -18,29 +18,12 @@
 
 package org.apache.hudi.index.zorder;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.ParquetUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.optimize.ZOrderingUtil;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.parquet.io.api.Binary;
-import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.Row$;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.hudi.execution.RangeSampleSort$;
 import org.apache.spark.sql.hudi.execution.ZorderingBinarySort;
 import org.apache.spark.sql.types.BinaryType;
@@ -54,34 +37,19 @@ import org.apache.spark.sql.types.DoubleType;
 import org.apache.spark.sql.types.FloatType;
 import org.apache.spark.sql.types.IntegerType;
 import org.apache.spark.sql.types.LongType;
-import org.apache.spark.sql.types.LongType$;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.ShortType;
 import org.apache.spark.sql.types.StringType;
-import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
-import org.apache.spark.util.SerializableConfiguration;
+import scala.collection.JavaConversions;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
-import java.io.IOException;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
-
-import scala.collection.JavaConversions;
-
-import static org.apache.hudi.util.DataTypeUtils.areCompatible;
 
 public class ZOrderingIndexHelper {
 
