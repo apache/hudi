@@ -107,7 +107,6 @@ import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT;
-import static org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -458,16 +457,12 @@ public class DeltaSync implements Serializable {
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }
 
-  private Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
-    return (Option<String>) timeline.getReverseOrderedInstants().map(instant -> {
+  protected Option<String> getPreviousCheckpoint(HoodieTimeline timeline) throws IOException {
+    return timeline.getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimelineOpt.get().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
-          return Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else {
-          return Option.empty();
-        }
+            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        return Option.ofNullable(commitMetadata.getMetadata(CHECKPOINT_KEY));
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }
@@ -739,12 +734,6 @@ public class DeltaSync implements Serializable {
         String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
     ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),
         String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT.key(), combineBeforeUpsert));
-    ValidationUtils.checkArgument(!config.mergeDeltastreamerStateFromPreviousCommit(),
-        String.format(
-            "Deltastreamer processes should not merge state from previous deltastreamer commits. Please unset '%s'",
-            WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key())
-    );
-
     return config;
   }
 

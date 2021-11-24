@@ -40,7 +40,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.sql.SaveMode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -65,6 +64,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.INSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.PROPS_FILENAME_TEST_MULTI_WRITER;
+import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.addCommitToTimeline;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.defaultSchemaProviderClassName;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.prepareInitialConfigs;
 import static org.apache.hudi.utilities.functional.TestHoodieDeltaStreamer.deltaStreamerTestRunner;
@@ -157,15 +157,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE"})
   public void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType) throws Exception {
-    testCheckpointCarryOver(tableType, false);
+    testCheckpointCarryOver(tableType);
   }
 
-  @Test
-  public void testGapsInDeltaStreamerCheckpoints() throws Exception {
-    testCheckpointCarryOver(HoodieTableType.COPY_ON_WRITE, true);
-  }
-
-  private void testCheckpointCarryOver(HoodieTableType tableType, boolean addGaps) throws Exception {
+  private void testCheckpointCarryOver(HoodieTableType tableType) throws Exception {
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
@@ -209,23 +204,15 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     meta.reloadActiveTimeline();
     int totalCommits = meta.getCommitsTimeline().filterCompletedInstants().countInstants();
 
-    // Save the checkpoint information from the deltastreamer run and perform next write
-    String checkpointAfterDeltaSync = getLatestMetadata(meta).getMetadata(CHECKPOINT_KEY);
-    // this writer will enable HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key() so that deltastreamer checkpoint will be carried over.
-    doSparkWriteWithDeltastreamerStateMerge(true);// Verify that the checkpoint is carried over
-    verifyCommitMetadataCheckpoint(meta, checkpointAfterDeltaSync);
-    if (addGaps) {
-      // add a spark data source write which will not carry over deltastreamer checkpoint.
-      doSparkWriteWithDeltastreamerStateMerge(false);
-      verifyCommitMetadataCheckpoint(meta, null);
-    }
+    // add a new commit to timeline which may not have the checkpoint in extra metadata
+    addCommitToTimeline(meta);
     meta.reloadActiveTimeline();
-    Assertions.assertEquals(totalCommits + ((addGaps) ? 2 : 1), meta.getCommitsTimeline().filterCompletedInstants().countInstants());
+    verifyCommitMetadataCheckpoint(meta, null);
 
-    cfgBackfillJob.checkpoint =  null;
-    new HoodieDeltaStreamer(cfgBackfillJob, jsc()).sync(); //nothing to commit, but checkpoint parsing will fail if not found in previous commits.
+    cfgBackfillJob.checkpoint = null;
+    new HoodieDeltaStreamer(cfgBackfillJob, jsc()).sync(); // if deltastreamer checkpoint fetch does not walk back to older commits, this sync will fail
     meta.reloadActiveTimeline();
-    Assertions.assertEquals(totalCommits + ((addGaps) ? 3 : 2), meta.getCommitsTimeline().filterCompletedInstants().countInstants());
+    Assertions.assertEquals(totalCommits + 2, meta.getCommitsTimeline().filterCompletedInstants().countInstants());
     verifyCommitMetadataCheckpoint(meta, "00008");
   }
 
@@ -236,29 +223,6 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     } else {
       Assertions.assertEquals(expectedCheckpoint, commitMeta.getMetadata(CHECKPOINT_KEY));
     }
-  }
-
-  /**
-   * Performs a hudi datasource write with deltastreamer state merge enabled.
-   */
-  private void doSparkWriteWithDeltastreamerStateMerge(boolean mergeState) {
-    spark().read()
-            .format("hudi")
-            .load(tableBasePath + "/*/*.parquet")
-            .limit(1)
-            .write()
-            .format("hudi")
-            .option(HoodieWriteConfig.TBL_NAME.key(), "hoodie_trips")
-            .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())
-            .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
-            .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
-            .option(HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE.key(), Boolean.toString(mergeState))
-            .option("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass")
-            .option("hoodie.write.lock.filesystem.path", tableBasePath)
-            .option("hoodie.cleaner.policy.failed.writes","LAZY")
-            .option("hoodie.write.concurrency.mode","OPTIMISTIC_CONCURRENCY_CONTROL")
-            .mode(SaveMode.Append)
-            .save(tableBasePath);
   }
 
   private static HoodieCommitMetadata getLatestMetadata(HoodieTableMetaClient meta) throws IOException {

@@ -22,7 +22,6 @@ import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -37,10 +36,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class TransactionUtils {
@@ -82,10 +78,6 @@ public class TransactionUtils {
       });
       LOG.info("Successfully resolved conflicts, if any");
 
-      if (config.mergeDeltastreamerStateFromPreviousCommit()) {
-        mergeCheckpointStateFromPreviousCommit(table.getMetaClient(), thisOperation.getCommitMetadataOption());
-      }
-
       return thisOperation.getCommitMetadataOption();
     }
     return thisCommitMetadata;
@@ -99,63 +91,28 @@ public class TransactionUtils {
    */
   public static Option<Pair<HoodieInstant, Map<String, String>>> getLastCompletedTxnInstantAndMetadata(
       HoodieTableMetaClient metaClient) {
-    List<HoodieInstant> hoodieInstants = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().getReverseOrderedInstants().collect(Collectors.toList());
-    if (!hoodieInstants.isEmpty()) {
-      for (HoodieInstant hoodieInstant : hoodieInstants) {
-        try {
-          switch (hoodieInstant.getAction()) {
-            case HoodieTimeline.REPLACE_COMMIT_ACTION:
-              HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-                  .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
-              return Option.of(Pair.of(hoodieInstant, replaceCommitMetadata.getExtraMetadata()));
-            case HoodieTimeline.DELTA_COMMIT_ACTION:
-            case HoodieTimeline.COMMIT_ACTION:
-              HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                  .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
-              if (commitMetadata.getOperationType() != null
-                  && !commitMetadata.getOperationType().equals(WriteOperationType.UNKNOWN)
-                  && !commitMetadata.getOperationType().equals(WriteOperationType.COMPACT)) { // skip compaction instants
-                return Option.of(Pair.of(hoodieInstant, commitMetadata.getExtraMetadata()));
-              }
-              break;
-            default:
-              throw new IllegalArgumentException("Unknown instant action" + hoodieInstant.getAction());
-          }
-        } catch (IOException io) {
-          throw new HoodieIOException("Unable to read metadata for instant " + hoodieInstant, io);
+    Option<HoodieInstant> hoodieInstantOption = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().lastInstant();
+    try {
+      if (hoodieInstantOption.isPresent()) {
+        switch (hoodieInstantOption.get().getAction()) {
+          case HoodieTimeline.REPLACE_COMMIT_ACTION:
+            HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
+                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstantOption.get()).get(), HoodieReplaceCommitMetadata.class);
+            return Option.of(Pair.of(hoodieInstantOption.get(), replaceCommitMetadata.getExtraMetadata()));
+          case HoodieTimeline.DELTA_COMMIT_ACTION:
+          case HoodieTimeline.COMMIT_ACTION:
+            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstantOption.get()).get(), HoodieCommitMetadata.class);
+            return Option.of(Pair.of(hoodieInstantOption.get(), commitMetadata.getExtraMetadata()));
+          default:
+            throw new IllegalArgumentException("Unknown instant action" + hoodieInstantOption.get().getAction());
         }
+      } else {
+        return Option.empty();
       }
-      return Option.empty();
-    } else {
-      return Option.empty();
-    }
-  }
-
-  protected static void mergeCheckpointStateFromPreviousCommit(HoodieTableMetaClient metaClient, Option<HoodieCommitMetadata> thisMetadata) {
-    overrideWithLatestCommitMetadata(metaClient, thisMetadata, Collections.singletonList(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY));
-  }
-
-  /**
-   * Generic method allowing us to override the current metadata with the metadata from
-   * the latest instant for the specified key prefixes.
-   *
-   * @param metaClient
-   * @param thisMetadata
-   * @param keyPrefixes  The key prefixes to merge from the previous commit
-   */
-  private static void overrideWithLatestCommitMetadata(HoodieTableMetaClient metaClient,
-                                                       Option<HoodieCommitMetadata> thisMetadata,
-                                                       List<String> keyPrefixes) {
-    if (keyPrefixes.size() == 1 && keyPrefixes.get(0).length() < 1) {
-      return;
-    }
-    Option<Pair<HoodieInstant, Map<String, String>>> lastInstant = getLastCompletedTxnInstantAndMetadata(metaClient);
-    if (lastInstant.isPresent() && thisMetadata.isPresent()) {
-      Stream<String> lastCommitMetadataKeys = lastInstant.get().getRight().keySet().stream();
-      keyPrefixes.stream().forEach(keyPrefix -> lastCommitMetadataKeys
-          .filter(key -> key.startsWith(keyPrefix))
-          .forEach(key -> thisMetadata.get().getExtraMetadata().put(key, lastInstant.get().getRight().get(key))));
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to read metadata for instant " + hoodieInstantOption.get(), io);
     }
   }
 }
