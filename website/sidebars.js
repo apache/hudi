@@ -46,6 +46,7 @@ module.exports = {
                 'migration_guide',
                 'compaction',
                 'clustering',
+                'hoodie_cleaner',
                 'snapshot_exporter'
             ],
         },
