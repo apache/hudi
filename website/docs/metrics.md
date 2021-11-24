@@ -113,14 +113,13 @@ hoodie.metrics.pushgateway.port=9091
 You can configure whether to delete the monitoring information from pushgateway at the end of the task, the default is true
 
 ```scala
-hoodie.metrics.pushgateway.job.name=xiaomm
-hoodie.metrics.pushgateway.random.job.name.suffix=false
+hoodie.metrics.pushgateway.delete.on.shutdown=false
 ```
 
 You can configure the task name prefix and whether a random suffix is required. The default is true
 
 ```scala
-hoodie.metrics.pushgateway.job.name=xiaomm
+hoodie.metrics.pushgateway.job.name=xxxx
 hoodie.metrics.pushgateway.random.job.name.suffix=false
 ```
 
