@@ -26,32 +26,42 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.api.java.UDF2;
+import org.apache.spark.sql.types.DataTypes;
+
+import static org.apache.spark.sql.functions.callUDF;
 
 /**
- * Source for incrementally ingesting debezium generated change logs for PostgresDB.
+ * Source for incrementally ingesting debezium generated change logs for Mysql DB.
  */
-public class PostgresDebeziumSource extends DebeziumSource {
+public class MysqlDebeziumSource extends DebeziumSource {
 
-  public PostgresDebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
-                                SparkSession sparkSession,
-                                SchemaProvider schemaProvider,
-                                HoodieDeltaStreamerMetrics metrics) {
+  private final SQLContext sqlContext;
+  private final String generateUniqueSeqUdfFn = "mysql_generate_order_key";
+
+  public MysqlDebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
+                             SparkSession sparkSession,
+                             SchemaProvider schemaProvider,
+                             HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider, metrics);
+    this.sqlContext = sparkSession.sqlContext();
+    sqlContext.udf().register(generateUniqueSeqUdfFn, (UDF2<String, Long, String>) MysqlDebeziumSource::generateUniqueSequence, DataTypes.StringType);
   }
 
   /**
-   * Debezium Kafka Payload has a nested structure (see https://debezium.io/documentation/reference/1.4/connectors/postgresql.html#postgresql-create-events).
-   * This function flattens this nested structure for the Postgres data, and also extracts a subset of Debezium metadata fields.
+   * Debezium Kafka Payload has a nested structure (see https://debezium.io/documentation/reference/1.4/connectors/mysql.html).
+   * This function flattens this nested structure for the Mysql data, and also extracts a subset of Debezium metadata fields.
    *
    * @param rowDataset Dataset containing Debezium Payloads
    * @return New dataset with flattened columns
    */
   @Override
   protected Dataset<Row> processDataset(Dataset<Row> rowDataset) {
+    Dataset<Row> flattenedDataset = rowDataset;
     if (rowDataset.columns().length > 0) {
-      // Pick selective debezium and postgres meta fields: pick the row values from before field for delete record
-      // and row values from after field for insert or update records.
+      // Only flatten for non-empty schemas
       Dataset<Row> insertedOrUpdatedData = rowDataset
           .selectExpr(
               String.format("%s as %s", DebeziumConstants.INCOMING_OP_FIELD, DebeziumConstants.FLATTENED_OP_COL_NAME),
@@ -59,8 +69,9 @@ public class PostgresDebeziumSource extends DebeziumSource {
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_NAME_FIELD, DebeziumConstants.FLATTENED_SHARD_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_TS_MS_FIELD, DebeziumConstants.FLATTENED_TS_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_TXID_FIELD, DebeziumConstants.FLATTENED_TX_ID_COL_NAME),
-              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_LSN_FIELD, DebeziumConstants.FLATTENED_LSN_COL_NAME),
-              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_XMIN_FIELD, DebeziumConstants.FLATTENED_XMIN_COL_NAME),
+              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_FILE_FIELD, DebeziumConstants.FLATTENED_FILE_COL_NAME),
+              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_POS_FIELD, DebeziumConstants.FLATTENED_POS_COL_NAME),
+              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_ROW_FIELD, DebeziumConstants.FLATTENED_ROW_COL_NAME),
               String.format("%s.*", DebeziumConstants.INCOMING_AFTER_FIELD)
           )
           .filter(rowDataset.col(DebeziumConstants.INCOMING_OP_FIELD).notEqual(DebeziumConstants.DELETE_OP));
@@ -72,16 +83,22 @@ public class PostgresDebeziumSource extends DebeziumSource {
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_NAME_FIELD, DebeziumConstants.FLATTENED_SHARD_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_TS_MS_FIELD, DebeziumConstants.FLATTENED_TS_COL_NAME),
               String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_TXID_FIELD, DebeziumConstants.FLATTENED_TX_ID_COL_NAME),
-              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_LSN_FIELD, DebeziumConstants.FLATTENED_LSN_COL_NAME),
-              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_XMIN_FIELD, DebeziumConstants.FLATTENED_XMIN_COL_NAME),
+              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_FILE_FIELD, DebeziumConstants.FLATTENED_FILE_COL_NAME),
+              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_POS_FIELD, DebeziumConstants.FLATTENED_POS_COL_NAME),
+              String.format("%s as %s", DebeziumConstants.INCOMING_SOURCE_ROW_FIELD, DebeziumConstants.FLATTENED_ROW_COL_NAME),
               String.format("%s.*", DebeziumConstants.INCOMING_BEFORE_FIELD)
           )
           .filter(rowDataset.col(DebeziumConstants.INCOMING_OP_FIELD).equalTo(DebeziumConstants.DELETE_OP));
 
-      return insertedOrUpdatedData.union(deletedData);
-    } else {
-      return rowDataset;
+      flattenedDataset = insertedOrUpdatedData.union(deletedData);
     }
+
+    return flattenedDataset.withColumn(DebeziumConstants.ADDED_SEQ_COL_NAME,
+            callUDF(generateUniqueSeqUdfFn, flattenedDataset.col(DebeziumConstants.FLATTENED_FILE_COL_NAME),
+                flattenedDataset.col(DebeziumConstants.FLATTENED_POS_COL_NAME)));
+  }
+
+  private static String generateUniqueSequence(String fileId, Long pos) {
+    return fileId.substring(fileId.lastIndexOf('.') + 1).concat("." + pos);
   }
 }
-

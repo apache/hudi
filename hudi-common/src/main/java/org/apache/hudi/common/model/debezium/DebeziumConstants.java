@@ -40,41 +40,42 @@ public class DebeziumConstants {
 
   // INPUT COLUMNS SPECIFIC TO MYSQL
   public static final String INCOMING_SOURCE_FILE_FIELD = "source.file";
-  public static final String INP_QUALIFIED_SOURCE_POS_FIELD = "source.pos";
-  public static final String INP_QUALIFIED_SOURCE_ROW_FIELD = "source.row";
+  public static final String INCOMING_SOURCE_POS_FIELD = "source.pos";
+  public static final String INCOMING_SOURCE_ROW_FIELD = "source.row";
 
   // INPUT COLUMNS SPECIFIC TO POSTGRES
   public static final String INCOMING_SOURCE_LSN_FIELD = "source.lsn";
   public static final String INCOMING_SOURCE_XMIN_FIELD = "source.xmin";
 
   // OUTPUT COLUMNS
-  public static final String MODIFIED_OP_COL_NAME = "_change_operation_type";
+  public static final String FLATTENED_OP_COL_NAME = "_change_operation_type";
   public static final String UPSTREAM_PROCESSING_TS_COL_NAME = "_upstream_event_processed_ts_ms";
-  public static final String MODIFIED_SHARD_NAME = "db_shard_source_partition";
-  public static final String MODIFIED_TS_COL_NAME = "_event_origin_ts_ms";
-  public static final String MODIFIED_TX_ID_COL_NAME = "_event_tx_id";
+  public static final String FLATTENED_SHARD_NAME = "db_shard_source_partition";
+  public static final String FLATTENED_TS_COL_NAME = "_event_origin_ts_ms";
+  public static final String FLATTENED_TX_ID_COL_NAME = "_event_tx_id";
 
   // OUTPUT COLUMNS SPECIFIC TO MYSQL
-  public static final String SOURCE_FILE_COL_NAME = "_event_bin_file";
-  public static final String SOURCE_POS_COL_NAME = "_event_pos";
-  public static final String SOURCE_ROW_COL_NAME = "_event_row";
+  public static final String FLATTENED_FILE_COL_NAME = "_event_bin_file";
+  public static final String FLATTENED_POS_COL_NAME = "_event_pos";
+  public static final String FLATTENED_ROW_COL_NAME = "_event_row";
+  public static final String ADDED_SEQ_COL_NAME = "_event_seq";
 
   // OUTPUT COLUMNS SPECIFIC TO POSTGRES
-  public static final String MODIFIED_LSN_COL_NAME = "_event_lsn";
-  public static final String MODIFIED_XMIN_COL_NAME = "_event_xmin";
+  public static final String FLATTENED_LSN_COL_NAME = "_event_lsn";
+  public static final String FLATTENED_XMIN_COL_NAME = "_event_xmin";
 
   // Other Constants
   public static final String DELETE_OP = "d";
 
   // List of meta data columns
   public static List<String> META_COLUMNS = Collections.unmodifiableList(Arrays.asList(
-      MODIFIED_OP_COL_NAME,
+      FLATTENED_OP_COL_NAME,
       UPSTREAM_PROCESSING_TS_COL_NAME,
-      MODIFIED_TS_COL_NAME,
-      MODIFIED_TX_ID_COL_NAME,
-      MODIFIED_LSN_COL_NAME,
-      MODIFIED_XMIN_COL_NAME,
-      MODIFIED_SHARD_NAME
+      FLATTENED_TS_COL_NAME,
+      FLATTENED_TX_ID_COL_NAME,
+      FLATTENED_LSN_COL_NAME,
+      FLATTENED_XMIN_COL_NAME,
+      FLATTENED_SHARD_NAME
   ));
 }
 

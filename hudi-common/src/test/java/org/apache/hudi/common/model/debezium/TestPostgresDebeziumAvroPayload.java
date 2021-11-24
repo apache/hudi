@@ -114,7 +114,7 @@ public class TestPostgresDebeziumAvroPayload {
         .record("test_schema")
         .namespace("test_namespace")
         .fields()
-        .name(DebeziumConstants.MODIFIED_LSN_COL_NAME).type().longType().noDefault()
+        .name(DebeziumConstants.FLATTENED_LSN_COL_NAME).type().longType().noDefault()
         .name("string_col").type().stringType().noDefault()
         .name("byte_col").type().bytesType().noDefault()
         .name("string_null_col_1").type().nullable().stringType().noDefault()
@@ -124,7 +124,7 @@ public class TestPostgresDebeziumAvroPayload {
         .endRecord();
 
     GenericRecord oldVal = new GenericData.Record(avroSchema);
-    oldVal.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 100L);
+    oldVal.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, 100L);
     oldVal.put("string_col", "valid string value");
     oldVal.put("byte_col", ByteBuffer.wrap("valid byte value".getBytes()));
     oldVal.put("string_null_col_1", "valid string value");
@@ -133,7 +133,7 @@ public class TestPostgresDebeziumAvroPayload {
     oldVal.put("byte_null_col_2", null);
 
     GenericRecord newVal = new GenericData.Record(avroSchema);
-    newVal.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, 105L);
+    newVal.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, 105L);
     newVal.put("string_col", PostgresDebeziumAvroPayload.DEBEZIUM_TOASTED_VALUE);
     newVal.put("byte_col", ByteBuffer.wrap(PostgresDebeziumAvroPayload.DEBEZIUM_TOASTED_VALUE.getBytes()));
     newVal.put("string_null_col_1", null);
@@ -157,16 +157,16 @@ public class TestPostgresDebeziumAvroPayload {
   private GenericRecord createRecord(int primaryKeyValue, Operation op, long lsnValue) {
     GenericRecord record = new GenericData.Record(avroSchema);
     record.put(KEY_FIELD_NAME, primaryKeyValue);
-    record.put(DebeziumConstants.MODIFIED_OP_COL_NAME, op.op);
-    record.put(DebeziumConstants.MODIFIED_LSN_COL_NAME, lsnValue);
+    record.put(DebeziumConstants.FLATTENED_OP_COL_NAME, op.op);
+    record.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, lsnValue);
     return record;
   }
 
   private void validateRecord(Option<IndexedRecord> iRecord, int primaryKeyValue, Operation op, long lsnValue) {
     IndexedRecord record = iRecord.get();
-    assertTrue((int) record.get(0) == primaryKeyValue);
-    assertTrue(record.get(1).toString().equals(op.op));
-    assertTrue((long) record.get(2) == lsnValue);
+    assertEquals(primaryKeyValue, (int) record.get(0));
+    assertEquals(op.op, record.get(1).toString());
+    assertEquals(lsnValue, (long) record.get(2));
   }
 
   private enum Operation {

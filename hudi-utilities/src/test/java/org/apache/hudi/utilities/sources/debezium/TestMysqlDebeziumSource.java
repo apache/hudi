@@ -28,70 +28,73 @@ import org.apache.spark.sql.Row;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestPostgresDebeziumSource extends TestAbstractDebeziumSource {
+public class TestMysqlDebeziumSource extends TestAbstractDebeziumSource {
 
-  private static final String POSTGRES_GITHUB_SCHEMA = "{\"connect.name\": \"postgres.ghschema.gharchive.Envelope\",\n"
-      + "  \"fields\": [{\"default\": null,\"name\": \"before\",\"type\": [\"null\",{\"connect.name\": \"postgres.ghschema.gharchive.Value\",\n"
+  private static final String MYSQL_GITHUB_SCHEMA = "{\"connect.name\": \"mysql.ghschema.gharchive.Envelope\",\n"
+      + "  \"fields\": [{\"default\": null,\"name\": \"before\",\"type\": [\"null\",{\"connect.name\": \"mysql.ghschema.gharchive.Value\",\n"
       + "  \"fields\": [{\"name\": \"id\",\"type\": \"string\"},{\"name\": \"date\",\"type\": \"string\"},{\"default\": null,\"name\": \"timestamp\",\n"
       + "  \"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"type\",\"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"payload\",\n"
       + "  \"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"org\",\"type\": [\"null\",\"string\"]},{\"default\": null,\"name\": \"created_at\",\n"
       + "  \"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"public\",\"type\": [\"null\",\"boolean\"]}],\"name\": \"Value\",\"type\": \"record\"\n"
-      + "  }]},{\"default\": null,\"name\": \"after\",\"type\": [\"null\",\"Value\"]},{\"name\": \"source\",\"type\": {\"connect.name\": \"io.debezium.connector.postgresql.Source\",\n"
+      + "  }]},{\"default\": null,\"name\": \"after\",\"type\": [\"null\",\"Value\"]},{\"name\": \"source\",\"type\": {\"connect.name\": \"io.debezium.connector.mysql.Source\",\n"
       + "  \"fields\": [{\"name\": \"connector\",\"type\": \"string\"},{\"name\": \"name\",\"type\": \"string\"},{\"name\": \"ts_ms\",\"type\": \"long\"},\n"
-      + "  {\"name\": \"db\",\"type\": \"string\"},{\"name\": \"schema\",\"type\": \"string\"},{\"name\": \"table\",\"type\": \"string\"},{\"default\": null,\n"
-      + "  \"name\": \"txId\",\"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"lsn\",\"type\": [\"null\",\"long\"]},{\"default\": null,\n"
-      + "  \"name\": \"xmin\",\"type\": [\"null\",\"long\"]}],\"name\": \"Source\",\"namespace\": \"io.debezium.connector.postgresql\",\"type\": \"record\"\n"
+      + "  {\"name\": \"db\",\"type\": \"string\"},{\"name\": \"table\",\"type\": \"string\"},{\"default\": null,\n"
+      + "  \"name\": \"txId\",\"type\": [\"null\",\"long\"]},{\"name\": \"file\",\"type\": \"string\"},{\"default\": null,\"name\": \"pos\",\"type\": [\"null\",\"long\"]},{\"default\": null,\n"
+      + "  \"name\": \"row\",\"type\": [\"null\",\"long\"]}],\"name\": \"Source\",\"namespace\": \"io.debezium.connector.mysql\",\"type\": \"record\"\n"
       + "  }},{\"name\": \"op\",\"type\": \"string\"},{\"default\": null,\"name\": \"ts_ms\",\"type\": [\"null\",\"long\"]},{\"default\": null,\"name\": \"transaction\",\n"
       + "  \"type\": [\"null\",{\"fields\": [{\"name\": \"id\",\"type\": \"string\"},{\"name\": \"total_order\",\"type\": \"long\"},{\"name\": \"data_collection_order\",\n"
       + "  \"type\": \"long\"}],\"name\": \"ConnectDefault\",\"namespace\": \"io.confluent.connect.avro\",\"type\": \"record\"}]}],\"name\": \"Envelope\",\n"
-      + "  \"namespace\": \"postgres.ghschema.gharchive\",\"type\": \"record\"}";
+      + "  \"namespace\": \"mysql.ghschema.gharchive\",\"type\": \"record\"}";
 
-  private static final String TEST_DB = "postgres";
-  private static final String TEST_SCHEMA = "ghschema";
+  private static final String TEST_DB = "ghschema";
   private static final String TEST_TABLE = "gharchive";
   private static final long TEST_TS_MS = 12345L;
   private static final long TEST_TXID = 543L;
-  private static final long TEST_LSN = 98765L;
+  private static final String TEST_FILE = "mysql-bin.00007";
+  private static final long TEST_POS = 98765L;
+  private static final String EXPECTED_TEST_SEQ = "00007.98765";
 
   @Override
   protected String getIndexName() {
-    return "postgres";
+    return "mysql";
   }
 
   @Override
   protected String getSourceClass() {
-    return PostgresDebeziumSource.class.getName();
+    return MysqlDebeziumSource.class.getName();
   }
 
   @Override
   protected String getSchema() {
-    return POSTGRES_GITHUB_SCHEMA;
+    return MYSQL_GITHUB_SCHEMA;
   }
 
   @Override
   protected GenericRecord generateMetaFields(GenericRecord rec) {
     Schema schema = new Schema.Parser().parse(getSchema());
-    // Source fields specific to Postgres DB
+    // Source fields specific to Mysql DB
     GenericRecord sourceRecord = new GenericData.Record(schema.getField(DebeziumConstants.INCOMING_SOURCE_FIELD).schema());
     sourceRecord.put("name", getIndexName());
     sourceRecord.put("connector", getIndexName());
     sourceRecord.put("db", TEST_DB);
-    sourceRecord.put("schema", TEST_SCHEMA);
     sourceRecord.put("table", TEST_TABLE);
     sourceRecord.put("ts_ms", TEST_TS_MS);
     sourceRecord.put("txId", TEST_TXID);
-    sourceRecord.put("lsn", TEST_LSN);
+    sourceRecord.put("file", TEST_FILE);
+    sourceRecord.put("pos", TEST_POS);
     rec.put(DebeziumConstants.INCOMING_SOURCE_FIELD, sourceRecord);
     return rec;
   }
 
   @Override
   protected void validateMetaFields(Dataset<Row> records) {
+    assertTrue(records.select(DebeziumConstants.FLATTENED_SHARD_NAME).collectAsList().stream()
+        .allMatch(r -> r.getString(0).equals(getIndexName())));
     assertTrue(records.select(DebeziumConstants.FLATTENED_TS_COL_NAME).collectAsList().stream()
         .allMatch(r -> r.getLong(0) == TEST_TS_MS));
     assertTrue(records.select(DebeziumConstants.FLATTENED_TX_ID_COL_NAME).collectAsList().stream()
         .allMatch(r -> r.getLong(0) == TEST_TXID));
-    assertTrue(records.select(DebeziumConstants.FLATTENED_LSN_COL_NAME).collectAsList().stream()
-        .allMatch(r -> r.getLong(0) == TEST_LSN));
+    assertTrue(records.select(DebeziumConstants.ADDED_SEQ_COL_NAME).collectAsList().stream()
+        .allMatch(r -> r.getString(0).equals(EXPECTED_TEST_SEQ)));
   }
 }
