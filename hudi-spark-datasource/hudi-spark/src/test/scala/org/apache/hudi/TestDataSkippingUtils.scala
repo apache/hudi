@@ -19,8 +19,9 @@ package org.apache.hudi
 
 import org.apache.hudi.index.zorder.ZOrderingIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation}
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.{Column, SparkSession}
@@ -32,9 +33,15 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 
 import scala.collection.JavaConverters._
 
-case class IndexRow(file: String, A_minValue: Long, A_maxValue: Long, A_num_nulls: Long)
-
-case class TestCase()
+case class IndexRow(
+  file: String,
+  A_minValue: Long,
+  A_maxValue: Long,
+  A_num_nulls: Long,
+  B_minValue: String = null,
+  B_maxValue: String = null,
+  B_num_nulls: Long = -1
+)
 
 class TestDataSkippingUtils extends HoodieClientTestBase {
 
@@ -49,7 +56,8 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
   val sourceTableSchema =
     StructType(
       Seq(
-        StructField("A", LongType)
+        StructField("A", LongType),
+        StructField("B", StringType)
       )
     )
 
@@ -77,23 +85,66 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
     assertEquals(output, rows)
   }
 
-  private def resolveFilterExpr(s: String, tableSchema: StructType) = {
-    val expr = spark.sessionState.sqlParser.parseExpression(s)
+  @ParameterizedTest
+  @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
+  def testStringsLookupFilterExpressions(expr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
+    var resolvedExpr = resolveFilterExpr(expr, sourceTableSchema)
+    val lookupFilter = DataSkippingUtils.createZIndexLookupFilter(resolvedExpr, indexSchema)
+
+    val spark2 = spark
+    import spark2.implicits._
+
+    val indexDf = spark.createDataset(input)
+
+    val rows = indexDf.where(new Column(lookupFilter))
+      .select("file")
+      .collect()
+      .map(_.getString(0))
+      .toSeq
+
+    assertEquals(output, rows)
+  }
+
+  private def resolveFilterExpr(exprString: String, tableSchema: StructType) = {
+    val expr = spark.sessionState.sqlParser.parseExpression(exprString)
+    resolveFilterExpr(expr, tableSchema)
+  }
+
+  private def resolveFilterExpr(expr: Expression, tableSchema: StructType) = {
     val schemaFields = tableSchema.fields
     spark.sessionState.analyzer.ResolveReferences(
-      Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1):_*))
+      Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
     )
       .asInstanceOf[Filter].condition
   }
 }
 
 object TestDataSkippingUtils {
+  def testStringsLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(
+        col("B").startsWith("abc").expr,
+        Seq(
+          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1),
+          IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
+          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        Not(col("B").startsWith("abc").expr),
+        Seq(
+          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1),
+          IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
+          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0)
+        ),
+        Seq("file_1", "file_2", "file_3"))
+    )
+  }
+
   def testLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       // TODO cases
       //    A = null
-      //    A like xxx
-      //    A not like xxx
       arguments(
         "A = 0",
         Seq(
