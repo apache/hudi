@@ -313,11 +313,17 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
                                     String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
-    finalizeWrite(table, compactionCommitTime, writeStats);
-    writeTableMetadataForTableServices(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime));
-    // commit to data table after committing to metadata table.
-    LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
-    CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+    try {
+      HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime);
+      this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
+      finalizeWrite(table, compactionCommitTime, writeStats);
+      // commit to data table after committing to metadata table.
+      writeTableMetadataForTableServices(table, metadata, compactionInstant);
+      LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
+      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+    } finally {
+      this.txnManager.endTransaction();
+    }
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (compactionTimer != null) {
@@ -385,9 +391,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       throw new HoodieClusteringException("Clustering failed to write to files:"
           + writeStats.stream().filter(s -> s.getTotalWriteErrors() > 0L).map(s -> s.getFileId()).collect(Collectors.joining(",")));
     }
-    finalizeWrite(table, clusteringCommitTime, writeStats);
-    writeTableMetadataForTableServices(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime));
     try {
+      HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
+      this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+      finalizeWrite(table, clusteringCommitTime, writeStats);
+      writeTableMetadataForTableServices(table, metadata,clusteringInstant);
       // try to save statistics info to hudi
       if (config.isDataSkippingEnabled() && config.isLayoutOptimizationEnabled() && !config.getClusteringSortColumns().isEmpty()) {
         table.updateStatistics(context, writeStats, clusteringCommitTime, true);
@@ -398,6 +406,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     } catch (IOException e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
+    } finally {
+      this.txnManager.endTransaction();
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
@@ -415,16 +425,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   private void writeTableMetadataForTableServices(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieCommitMetadata commitMetadata,
-                                                  HoodieInstant hoodieInstant) {
-    try {
-      this.txnManager.beginTransaction(Option.of(hoodieInstant), Option.empty());
-      boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
-      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
-      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
-    } finally {
-      this.txnManager.endTransaction();
-    }
+                                  HoodieInstant hoodieInstant) {
+    boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
+    // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
+    // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
+    table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
   }
 
   @Override
