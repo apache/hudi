@@ -752,6 +752,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   /**
    * Get Table metadata writer.
+   * <p>
+   * Note:
+   * Get the metadata writer for the conf. If the metadata table doesn't exist,
+   * this wil trigger the creation of the table and the initial bootstrapping.
+   * Since this call is under the transaction lock, other concurrent writers
+   * are blocked from doing the similar initial metadata table creation and
+   * the bootstrapping.
    *
    * @return instance of {@link HoodieTableMetadataWriter}
    */
