@@ -127,6 +127,7 @@
                   <include>org.apache.kafka:kafka-clients</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
+                  <include>io.dropwizard.metrics:metrics-jmx</include>
                   <include>io.prometheus:simpleclient</include>
                   <include>io.prometheus:simpleclient_httpserver</include>
                   <include>io.prometheus:simpleclient_dropwizard</include>

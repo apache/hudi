@@ -101,6 +101,7 @@
 
                                     <include>io.dropwizard.metrics:metrics-core</include>
                                     <include>io.dropwizard.metrics:metrics-graphite</include>
+                                    <include>io.dropwizard.metrics:metrics-jmx</include>
                                     <include>io.prometheus:simpleclient</include>
                                     <include>io.prometheus:simpleclient_httpserver</include>
                                     <include>io.prometheus:simpleclient_dropwizard</include>
@@ -111,7 +112,7 @@
                                     <include>org.objenesis:objenesis</include>
                                     <include>com.esotericsoftware:kryo-shaded</include>
                                     <include>com.esotericsoftware:minlog</include>
-
+                                    
                                     <include>org.apache.hbase:hbase-client</include>
                                     <include>org.apache.hbase:hbase-common</include>
                                     <include>org.apache.hbase:hbase-protocol</include>
