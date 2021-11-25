@@ -49,7 +49,6 @@ public class TestMysqlDebeziumSource extends TestAbstractDebeziumSource {
   private static final String TEST_DB = "ghschema";
   private static final String TEST_TABLE = "gharchive";
   private static final long TEST_TS_MS = 12345L;
-  private static final long TEST_TXID = 543L;
   private static final String TEST_FILE = "mysql-bin.00007";
   private static final long TEST_POS = 98765L;
   private static final String EXPECTED_TEST_SEQ = "00007.98765";
@@ -79,7 +78,6 @@ public class TestMysqlDebeziumSource extends TestAbstractDebeziumSource {
     sourceRecord.put("db", TEST_DB);
     sourceRecord.put("table", TEST_TABLE);
     sourceRecord.put("ts_ms", TEST_TS_MS);
-    sourceRecord.put("txId", TEST_TXID);
     sourceRecord.put("file", TEST_FILE);
     sourceRecord.put("pos", TEST_POS);
     rec.put(DebeziumConstants.INCOMING_SOURCE_FIELD, sourceRecord);
@@ -92,8 +90,6 @@ public class TestMysqlDebeziumSource extends TestAbstractDebeziumSource {
         .allMatch(r -> r.getString(0).equals(getIndexName())));
     assertTrue(records.select(DebeziumConstants.FLATTENED_TS_COL_NAME).collectAsList().stream()
         .allMatch(r -> r.getLong(0) == TEST_TS_MS));
-    assertTrue(records.select(DebeziumConstants.FLATTENED_TX_ID_COL_NAME).collectAsList().stream()
-        .allMatch(r -> r.getLong(0) == TEST_TXID));
     assertTrue(records.select(DebeziumConstants.ADDED_SEQ_COL_NAME).collectAsList().stream()
         .allMatch(r -> r.getString(0).equals(EXPECTED_TEST_SEQ)));
   }
