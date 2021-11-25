@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Bound
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.DataSkippingUtils.createZIndexLookupFilter
+import org.apache.spark.sql.hudi.DataSkippingUtils.createColumnStatsIndexFilterExpr
 import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -210,7 +210,7 @@ case class HoodieFileIndex(
     dataFrameOpt.map(df => {
       val indexSchema = df.schema
       val indexFilter =
-        queryFilters.map(createZIndexLookupFilter(_, indexSchema))
+        queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
           .reduce(And)
 
       logInfo(s"Index filter condition: $indexFilter")
