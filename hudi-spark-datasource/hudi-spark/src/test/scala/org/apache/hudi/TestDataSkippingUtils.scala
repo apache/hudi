@@ -26,10 +26,10 @@ import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.{Column, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
-import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import scala.collection.JavaConverters._
 
@@ -105,12 +105,12 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
     assertEquals(output, rows)
   }
 
-  private def resolveFilterExpr(exprString: String, tableSchema: StructType) = {
+  private def resolveFilterExpr(exprString: String, tableSchema: StructType): Expression = {
     val expr = spark.sessionState.sqlParser.parseExpression(exprString)
     resolveFilterExpr(expr, tableSchema)
   }
 
-  private def resolveFilterExpr(expr: Expression, tableSchema: StructType) = {
+  private def resolveFilterExpr(expr: Expression, tableSchema: StructType): Expression = {
     val schemaFields = tableSchema.fields
     spark.sessionState.analyzer.ResolveReferences(
       Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
@@ -125,7 +125,7 @@ object TestDataSkippingUtils {
       arguments(
         col("B").startsWith("abc").expr,
         Seq(
-          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1),
+          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1), // may contain strings starting w/ "abc"
           IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
           IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0)
         ),
@@ -133,9 +133,10 @@ object TestDataSkippingUtils {
       arguments(
         Not(col("B").startsWith("abc").expr),
         Seq(
-          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1),
+          IndexRow("file_1", 0, 0, 0, "aba", "adf", 1), // may contain strings starting w/ "abc"
           IndexRow("file_2", 0, 0, 0, "adf", "azy", 0),
-          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0)
+          IndexRow("file_3", 0, 0, 0, "aaa", "aba", 0),
+          IndexRow("file_4", 0, 0, 0, "abc123", "abc345", 0) // all strings start w/ "abc"
         ),
         Seq("file_1", "file_2", "file_3"))
     )
@@ -163,14 +164,16 @@ object TestDataSkippingUtils {
         "A != 0",
         Seq(
           IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0)
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", 0, 0, 0) // Contains only 0s
         ),
         Seq("file_1", "file_2")),
       arguments(
         "0 != A",
         Seq(
           IndexRow("file_1", 1, 2, 0),
-          IndexRow("file_2", -1, 1, 0)
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", 0, 0, 0) // Contains only 0s
         ),
         Seq("file_1", "file_2")),
       arguments(
@@ -250,7 +253,7 @@ object TestDataSkippingUtils {
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 1)
         ),
-        Seq("file_1", "file_2")),
+        Seq("file_1")),
       arguments(
         "A in (0, 1)",
         Seq(
@@ -264,7 +267,9 @@ object TestDataSkippingUtils {
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
-          IndexRow("file_3", -2, -1, 0)
+          IndexRow("file_3", -2, -1, 0),
+          IndexRow("file_4", 0, 0, 0), // only contains 0
+          IndexRow("file_5", 1, 1, 0) // only contains 1
         ),
         Seq("file_1", "file_2", "file_3"))
     )
