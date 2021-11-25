@@ -90,6 +90,10 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
 object TestDataSkippingUtils {
   def testLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
+      // TODO cases
+      //    A = null
+      //    A like xxx
+      //    A not like xxx
       arguments(
         "A = 0",
         Seq(
@@ -103,7 +107,115 @@ object TestDataSkippingUtils {
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0)
         ),
-        Seq("file_2"))
+        Seq("file_2")),
+      arguments(
+        "A != 0",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "0 != A",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "A < 0",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_2", "file_3")),
+      arguments(
+        "0 > A",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_2", "file_3")),
+      arguments(
+        "A > 0",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "0 < A",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "A <= -1",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_2", "file_3")),
+      arguments(
+        "-1 >= A",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_2", "file_3")),
+      arguments(
+        "A >= 1",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "1 <= A",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "A is null",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 1)
+        ),
+        Seq("file_2")),
+      arguments(
+        "A is not null",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 1)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "A in (0, 1)",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        "A not in (0, 1)",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0)
+        ),
+        Seq("file_1", "file_2", "file_3"))
     )
   }
 }

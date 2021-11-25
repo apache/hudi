@@ -83,6 +83,11 @@ object DataSkippingUtils extends Logging {
       case LessThan(attribute: AttributeReference, value: Literal) =>
         val colName = getTargetColName(attribute, indexSchema)
         LessThan(minValue(colName), value)
+      // Filter "b > colA"
+      // Translates to "b > colA_minValue" for index lookup
+      case GreaterThan(value: Literal, attribute: AttributeReference) =>
+        val colName = getTargetColName(attribute, indexSchema)
+        LessThan(minValue(colName), value)
       // Filter "b < colA"
       // Translates to "b < colA_maxValue" for index lookup
       case LessThan(value: Literal, attribute: AttributeReference) =>
@@ -93,14 +98,14 @@ object DataSkippingUtils extends Logging {
       case GreaterThan(attribute: AttributeReference, value: Literal) =>
         val colName = getTargetColName(attribute, indexSchema)
         GreaterThan(maxValue(colName), value)
-      // Filter "b > colA"
-      // Translates to "b > colA_minValue" for index lookup
-      case GreaterThan(value: Literal, attribute: AttributeReference) =>
-        val colName = getTargetColName(attribute, indexSchema)
-        LessThan(minValue(colName), value)
       // Filter "colA <= b"
       // Translates to "colA_minValue <= b" for index lookup
       case LessThanOrEqual(attribute: AttributeReference, value: Literal) =>
+        val colName = getTargetColName(attribute, indexSchema)
+        LessThanOrEqual(minValue(colName), value)
+      // Filter "b >= colA"
+      // Translates to "b >= colA_minValue" for index lookup
+      case GreaterThanOrEqual(value: Literal, attribute: AttributeReference) =>
         val colName = getTargetColName(attribute, indexSchema)
         LessThanOrEqual(minValue(colName), value)
       // Filter "b <= colA"
@@ -113,11 +118,6 @@ object DataSkippingUtils extends Logging {
       case GreaterThanOrEqual(attribute: AttributeReference, right: Literal) =>
         val colName = getTargetColName(attribute, indexSchema)
         GreaterThanOrEqual(maxValue(colName), right)
-      // Filter "b >= colA"
-      // Translates to "b >= colA_minValue" for index lookup
-      case GreaterThanOrEqual(value: Literal, attribute: AttributeReference) =>
-        val colName = getTargetColName(attribute, indexSchema)
-        LessThanOrEqual(minValue(colName), value)
       // Filter "colA is null"
       // Translates to "colA_num_nulls > 0" for index lookup
       case IsNull(attribute: AttributeReference) =>
@@ -133,6 +133,12 @@ object DataSkippingUtils extends Logging {
       case In(attribute: AttributeReference, list: Seq[Literal]) =>
         val colName = getTargetColName(attribute, indexSchema)
         colContainsValuesEqualToLiterals(colName, list)
+      // Filter "colA not in (a, b, ...)"
+      // Translates to "(colA_minValue > a OR colA_maxValue < a) AND (colA_minValue > b OR colA_maxValue < b)" for index lookup
+      // NOTE: This is an inversion of `in (a, b, ...)` expr
+      case Not(In(attribute: AttributeReference, list: Seq[Literal])) =>
+        val colName = getTargetColName(attribute, indexSchema)
+        Not(colContainsValuesEqualToLiterals(colName, list))
       // Filter "colA like xxx"
       // Translates to "colA_minValue <= xxx AND colA_maxValue >= xxx" for index lookup
       // NOTE: That this operator only matches string prefixes, and this is
@@ -140,12 +146,12 @@ object DataSkippingUtils extends Logging {
       case StartsWith(attribute, v @ Literal(_: UTF8String, _)) =>
         val colName = getTargetColName(attribute, indexSchema)
         colContainsValuesEqualToLiteral(colName, v)
-      // Filter "colA not in (a, b, ...)"
-      // Translates to "(colA_minValue > a OR colA_maxValue < a) AND (colA_minValue > b OR colA_maxValue < b)" for index lookup
-      // NOTE: This is an inversion of `in (a, b, ...)` expr
-      case Not(In(attribute: AttributeReference, list: Seq[Literal])) =>
+      // Filter "colA not like xxx"
+      // Translates to "!(colA_minValue <= xxx AND colA_maxValue >= xxx)" for index lookup
+      // NOTE: This is a inversion of "colA like xxx" assuming that colA is a string-based type
+      case Not(StartsWith(attribute, value @ Literal(_: UTF8String, _))) =>
         val colName = getTargetColName(attribute, indexSchema)
-        Not(colContainsValuesEqualToLiterals(colName, list))
+        Not(colContainsValuesEqualToLiteral(colName, value))
       // Filter "colA != b"
       // Translates to "colA_minValue > b OR colA_maxValue < b" (which is an inversion of expr for "colA = b") for index lookup
       // NOTE: This is an inversion of `colA = b` expr
@@ -156,12 +162,6 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_minValue > b OR colA_maxValue < b" (which is an inversion of expr for "colA = b") for index lookup
       // NOTE: This is an inversion of `colA != b` expr
       case Not(EqualTo(value: Literal, attribute: AttributeReference)) =>
-        val colName = getTargetColName(attribute, indexSchema)
-        Not(colContainsValuesEqualToLiteral(colName, value))
-      // Filter "colA not like xxx"
-      // Translates to "!(colA_minValue <= xxx AND colA_maxValue >= xxx)" for index lookup
-      // NOTE: This is a inversion of "colA like xxx" assuming that colA is a string-based type
-      case Not(StartsWith(attribute, value @ Literal(_: UTF8String, _))) =>
         val colName = getTargetColName(attribute, indexSchema)
         Not(colContainsValuesEqualToLiteral(colName, value))
 
