@@ -1568,6 +1568,22 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieMetricsDatadogConfig.METRIC_TAG_VALUES, ",").split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
+  public int getCloudWatchReportPeriodSeconds() {
+    return getInt(HoodieMetricsCloudWatchConfig.REPORT_PERIOD_SECONDS);
+  }
+
+  public String getCloudWatchMetricPrefix() {
+    return getString(HoodieMetricsCloudWatchConfig.METRIC_PREFIX);
+  }
+
+  public String getCloudWatchMetricNamespace() {
+    return getString(HoodieMetricsCloudWatchConfig.METRIC_NAMESPACE);
+  }
+
+  public int getCloudWatchMaxDatumsPerRequest() {
+    return getInt(HoodieMetricsCloudWatchConfig.MAX_DATUMS_PER_REQUEST);
+  }
+
   public String getMetricReporterClassName() {
     return getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME);
   }
