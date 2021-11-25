@@ -44,10 +44,10 @@ import java.util.stream.Collectors;
  */
 public class LogReaderUtils {
 
-  private static Schema readSchemaFromLogFileInReverse(FileSystem fs, HoodieActiveTimeline activeTimeline, Pair<String, Long> logPathFilePathSizePair)
+  private static Schema readSchemaFromLogFileInReverse(FileSystem fs, HoodieActiveTimeline activeTimeline, Pair<String, Long> logFilePathSizePairs)
       throws IOException {
     // set length for the HoodieLogFile as it will be leveraged by HoodieLogFormat.Reader with reverseReading enabled
-    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logPathFilePathSizePair.getKey()), logPathFilePathSizePair.getValue()), null, true, true);
+    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFilePathSizePairs.getKey()), logFilePathSizePairs.getValue()), null, true, true);
     Schema writerSchema = null;
     HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     while (reader.hasPrev()) {
