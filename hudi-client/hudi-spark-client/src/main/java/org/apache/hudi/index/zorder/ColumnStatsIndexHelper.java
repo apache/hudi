@@ -75,7 +75,7 @@ import static org.apache.hudi.util.DataTypeUtils.areCompatible;
 
 public class ColumnStatsIndexHelper {
 
-  private static final Logger LOG = LogManager.getLogger(ZOrderingIndexHelper.class);
+  private static final Logger LOG = LogManager.getLogger(ColumnStatsIndexHelper.class);
 
   private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
 
