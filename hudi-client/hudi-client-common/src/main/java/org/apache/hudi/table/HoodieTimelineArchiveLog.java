@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -50,6 +49,7 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -57,7 +57,6 @@ import org.apache.log4j.Logger;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -67,6 +66,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.table.action.archive.ArchiveUtils.getCleanRollbackInstantsToArchive;
 
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
@@ -140,20 +140,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  private Stream<HoodieInstant> getCleanInstantsToArchive() {
-    HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
-        .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION, HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants();
-    return cleanAndRollbackTimeline.getInstants()
-        .collect(Collectors.groupingBy(HoodieInstant::getAction)).values().stream()
-        .map(hoodieInstants -> {
-          if (hoodieInstants.size() > this.maxInstantsToKeep) {
-            return hoodieInstants.subList(0, hoodieInstants.size() - this.minInstantsToKeep);
-          } else {
-            return new ArrayList<HoodieInstant>();
-          }
-        }).flatMap(Collection::stream);
-  }
-
   private Stream<HoodieInstant> getCommitInstantsToArchive() {
     // TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
     // with logic above to avoid Stream.concats
@@ -194,7 +180,9 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   }
 
   private Stream<HoodieInstant> getInstantsToArchive() {
-    Stream<HoodieInstant> instants = Stream.concat(getCleanInstantsToArchive(), getCommitInstantsToArchive());
+    Stream<HoodieInstant> instants = Stream.concat(
+        getCleanRollbackInstantsToArchive(table.getActiveTimeline(), config.getMinCommitsToKeep(), config.getMaxCommitsToKeep()),
+        getCommitInstantsToArchive());
 
     // For archiving and cleaning instants, we need to include intermediate state files if they exist
     HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);

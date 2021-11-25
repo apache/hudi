@@ -356,13 +356,6 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     assertFalse(wrapperFs.exists(markerPath));
   }
 
-  private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().reload()
-        .getTimelineOfActions(Collections.singleton(HoodieTimeline.CLEAN_ACTION)).filterInflights();
-    assertEquals(expectedTotalInstants, timeline.countInstants(),
-        "Loaded inflight clean actions and the count should match");
-  }
-
   @Test
   public void testConvertCommitMetadata() throws Exception {
     init();
