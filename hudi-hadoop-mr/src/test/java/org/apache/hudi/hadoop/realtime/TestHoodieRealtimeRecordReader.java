@@ -693,6 +693,7 @@ public class TestHoodieRealtimeRecordReader {
     writeStat.setNumUpdateWrites(100);
     writeStat.setNumWrites(100);
     writeStat.setPath(filePath);
+    writeStat.setFileSizeInBytes(new File(new Path(basePath.toString(), filePath).toString()).length());
     writeStat.setPartitionPath(partitionPath);
     writeStat.setTotalLogFilesCompacted(100L);
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
