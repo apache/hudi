@@ -103,7 +103,7 @@ public class TestDFSPropertiesConfiguration {
 
   @Test
   public void testParsing() {
-    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t1.props"));
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t1.props"));
     TypedProperties props = cfg.getProps();
     assertEquals(5, props.size());
     assertThrows(IllegalArgumentException.class, () -> {
@@ -131,7 +131,7 @@ public class TestDFSPropertiesConfiguration {
 
   @Test
   public void testIncludes() {
-    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t3.props"));
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t3.props"));
     TypedProperties props = cfg.getProps();
 
     assertEquals(123, props.getInteger("int.prop"));
@@ -142,6 +142,31 @@ public class TestDFSPropertiesConfiguration {
     assertThrows(IllegalStateException.class, () -> {
       cfg.addPropsFromFile(new Path(dfsBasePath + "/t4.props"));
     }, "Should error out on a self-included file.");
+  }
+
+  @Test
+  public void testLocalFileSystemLoading() {
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t1.props"));
+
+    cfg.addPropsFromFile(
+        new Path(
+            String.format(
+                "file:%s",
+                getClass().getClassLoader()
+                    .getResource("props/test.properties")
+                    .getPath()
+            )
+        )
+    );
+
+    TypedProperties props = cfg.getProps();
+
+    assertEquals(123, props.getInteger("int.prop"));
+    assertEquals(113.4, props.getDouble("double.prop"), 0.001);
+    assertTrue(props.getBoolean("boolean.prop"));
+    assertEquals("str", props.getString("string.prop"));
+    assertEquals(1354354354, props.getLong("long.prop"));
+    assertEquals(123, props.getInteger("some.random.prop"));
   }
 
   @Test

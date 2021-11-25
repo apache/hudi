@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -334,9 +335,22 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /** @deprecated Use {@link #ASYNC_CLUSTERING_ENABLE} and its methods instead */
   @Deprecated
   public static final String DEFAULT_ASYNC_CLUSTERING_ENABLE_OPT_VAL = ASYNC_CLUSTERING_ENABLE.defaultValue();
-  
+
+  // NOTE: This ctor is required for appropriate deserialization
   public HoodieClusteringConfig() {
     super();
+  }
+
+  public boolean isAsyncClusteringEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
+  }
+
+  public boolean isInlineClusteringEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.INLINE_CLUSTERING);
+  }
+
+  public static HoodieClusteringConfig from(TypedProperties props) {
+    return  HoodieClusteringConfig.newBuilder().fromProperties(props).build();
   }
 
   public static Builder newBuilder() {
@@ -421,6 +435,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder fromProperties(Properties props) {
+      // TODO this should cherry-pick only clustering properties
       this.clusteringConfig.getProps().putAll(props);
       return this;
     }

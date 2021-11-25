@@ -102,7 +102,7 @@ public class StreamerUtil {
       return new TypedProperties();
     }
     return readConfig(
-        FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
+        getHadoopConf(),
         new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
 
@@ -127,8 +127,8 @@ public class StreamerUtil {
   /**
    * Read config from properties file (`--props` option) and cmd line (`--hoodie-conf` option).
    */
-  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(fs, cfgPath);
+  public static DFSPropertiesConfiguration readConfig(org.apache.hadoop.conf.Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");

@@ -172,6 +172,8 @@ public class DeltaSync implements Serializable {
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
+   *
+   * NOTE: These properties are already consolidated w/ CLI provided config-overrides
    */
   private final TypedProperties props;
 
@@ -698,22 +700,33 @@ public class DeltaSync implements Serializable {
   private HoodieWriteConfig getHoodieClientConfig(Schema schema) {
     final boolean combineBeforeUpsert = true;
     final boolean autoCommit = false;
-    HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, combineBeforeUpsert)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName)
-                // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
-                .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
-            .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-                .withInlineClustering(cfg.isInlineClusteringEnabled())
-                .withAsyncClustering(cfg.isAsyncClusteringEnabled()).build())
-            .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(cfg.sourceOrderingField)
-                .build())
-            .forTable(cfg.targetTableName)
-            .withAutoCommit(autoCommit).withProps(props);
 
-    if (null != schema) {
-      builder = builder.withSchema(schema.toString());
+    // NOTE: Provided that we're injecting combined properties
+    //       (from {@code props}, including CLI overrides), there's no
+    //       need to explicitly set up some configuration aspects that
+    //       are based on these (for ex Clustering configuration)
+    HoodieWriteConfig.Builder builder =
+        HoodieWriteConfig.newBuilder()
+            .withPath(cfg.targetBasePath)
+            .combineInput(cfg.filterDupes, combineBeforeUpsert)
+            .withCompactionConfig(
+                HoodieCompactionConfig.newBuilder()
+                    .withPayloadClass(cfg.payloadClassName)
+                    .withInlineCompaction(cfg.isInlineCompactionEnabled())
+                    .build()
+            )
+            .withPayloadConfig(
+                HoodiePayloadConfig.newBuilder()
+                    .withPayloadOrderingField(cfg.sourceOrderingField)
+                    .build())
+            .forTable(cfg.targetTableName)
+            .withAutoCommit(autoCommit)
+            .withProps(props);
+
+    if (schema != null) {
+      builder.withSchema(schema.toString());
     }
+
     HoodieWriteConfig config = builder.build();
 
     // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
@@ -721,13 +734,15 @@ public class DeltaSync implements Serializable {
       HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
     }
 
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.from(props);
+
     // Validate what deltastreamer assumes of write-config to be really safe
     ValidationUtils.checkArgument(config.inlineCompactionEnabled() == cfg.isInlineCompactionEnabled(),
         String.format("%s should be set to %s", INLINE_COMPACT.key(), cfg.isInlineCompactionEnabled()));
-    ValidationUtils.checkArgument(config.inlineClusteringEnabled() == cfg.isInlineClusteringEnabled(),
-        String.format("%s should be set to %s", INLINE_CLUSTERING.key(), cfg.isInlineClusteringEnabled()));
-    ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == cfg.isAsyncClusteringEnabled(),
-        String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), cfg.isAsyncClusteringEnabled()));
+    ValidationUtils.checkArgument(config.inlineClusteringEnabled() == clusteringConfig.isInlineClusteringEnabled(),
+        String.format("%s should be set to %s", INLINE_CLUSTERING.key(), clusteringConfig.isInlineClusteringEnabled()));
+    ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == clusteringConfig.isAsyncClusteringEnabled(),
+        String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), clusteringConfig.isAsyncClusteringEnabled()));
     ValidationUtils.checkArgument(!config.shouldAutoCommit(),
         String.format("%s should be set to %s", AUTO_COMMIT_ENABLE.key(), autoCommit));
     ValidationUtils.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes,
