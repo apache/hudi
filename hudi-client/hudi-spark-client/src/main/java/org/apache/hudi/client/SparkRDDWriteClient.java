@@ -425,23 +425,26 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
         metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
     if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
-      if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      try {
+        // Lock the upgrade step and the follow-on metadata table creation
+        // and the initial bootstrapping so that concurrent writers if any
+        // are blocked from racing with these one time operations.
         this.txnManager.beginTransaction();
-        try {
+        if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
           // Ensure no in-flight commits by setting EAGER policy and explicitly cleaning all failed commits
-          this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime)), true);
-          new UpgradeDowngrade(
-              metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+          this.rollbackFailedWrites(getInstantsToRollback(metaClient,
+              HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime)), true);
+          new UpgradeDowngrade(metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
               .run(HoodieTableVersion.current(), instantTime);
-        } finally {
-          this.txnManager.endTransaction();
+        } else {
+          upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
         }
-      } else {
-        upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
+        metaClient.reloadActiveTimeline();
+        initializeMetadataTable(Option.of(instantTime));
+      } finally {
+        // Release the lock
+        this.txnManager.endTransaction();
       }
-      metaClient.reloadActiveTimeline();
-
-      initializeMetadataTable(Option.of(instantTime));
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
@@ -450,9 +453,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   /**
    * Initialize the metadata table if needed. Creating the metadata table writer
    * will trigger the initial bootstrapping from the data table.
-   * <p>
-   * TODO: HUDI-2862 Guard the initial bootstrapping with transaction lock so
-   * as to make the initial metadata table bootstrapping single threaded.
    *
    * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
    */
