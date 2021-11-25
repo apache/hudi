@@ -156,11 +156,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     List<String> partitions = Collections.emptyList();
     if (hoodieRecord.isPresent()) {
-      if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
-        throw new HoodieMetadataException("Metadata partition list record is inconsistent: "
-            + hoodieRecord.get().getData());
-      }
-
+      mayBeHandleSpuriousDeletes(hoodieRecord, "\"all partitions\"");
       partitions = hoodieRecord.get().getData().getFilenames();
       // Partition-less tables have a single empty partition
       if (partitions.contains(NON_PARTITIONED_NAME)) {
@@ -190,10 +186,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     FileStatus[] statuses = {};
     if (hoodieRecord.isPresent()) {
-      if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
-        throw new HoodieMetadataException("Metadata record for partition " + partitionName + " is inconsistent: "
-            + hoodieRecord.get().getData());
-      }
+      mayBeHandleSpuriousDeletes(hoodieRecord, partitionName);
       statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
     }
 
@@ -228,16 +221,30 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
     for (Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>> entry: partitionsFileStatus) {
       if (entry.getValue().isPresent()) {
-        if (!entry.getValue().get().getData().getDeletions().isEmpty()) {
-          throw new HoodieMetadataException("Metadata record for partition " + entry.getKey() + " is inconsistent: "
-              + entry.getValue().get().getData());
-        }
+        mayBeHandleSpuriousDeletes(entry.getValue(), entry.getKey());
         result.put(partitionInfo.get(entry.getKey()).toString(), entry.getValue().get().getData().getFileStatuses(hadoopConf.get(), partitionInfo.get(entry.getKey())));
       }
     }
 
     LOG.info("Listed files in partitions from metadata: partition list =" + Arrays.toString(partitionPaths.toArray()));
     return result;
+  }
+
+  /**
+   * May be handle spurious deletes. Depending on config, throw an exception or log a warn msg.
+   * @param hoodieRecord instance of {@link HoodieRecord} of interest.
+   * @param partitionName partition name of interest.
+   */
+  private void mayBeHandleSpuriousDeletes(Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord, String partitionName) {
+    if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
+      if (!metadataConfig.ignoreSpuriousDeletes()) {
+        throw new HoodieMetadataException("Metadata record for " + partitionName + " is inconsistent: "
+            + hoodieRecord.get().getData());
+      } else {
+        LOG.warn("Metadata record for " + partitionName + " encountered some files to be deleted which was not added before. "
+            + "Ignoring the spurious deletes as the `" + HoodieMetadataConfig.IGNORE_SPURIOUS_DELETES.key() + "` config is set to false");
+      }
+    }
   }
 
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);

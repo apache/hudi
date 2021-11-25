@@ -258,10 +258,10 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
     this.metadataWriterOption.ifPresent(w -> {
       w.initTableMetadata(); // refresh the timeline
-      w.update(metadata, inflightInstant.getTimestamp(), getHoodieTable().isTableServiceAction(inflightInstant.getAction()));
+      w.update(metadata, instantTime, getHoodieTable().isTableServiceAction(actionType));
     });
   }
 
@@ -362,9 +362,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    writeTableMetadata(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime));
-    // commit to data table after committing to metadata table.
     finalizeWrite(table, compactionCommitTime, writeStats);
+    // commit to data table after committing to metadata table.
+    writeTableMetadata(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime));
     LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
     CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
 

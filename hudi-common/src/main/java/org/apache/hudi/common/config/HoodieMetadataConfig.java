@@ -138,6 +138,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
 
+  public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
+      .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")
+      .defaultValue(true)
+      .sinceVersion("0.10.10")
+      .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
+          + "determines how to handle such spurious deletes");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -172,6 +179,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieMetadataConfig.POPULATE_META_FIELDS);
+  }
+
+  public boolean ignoreSpuriousDeletes() {
+    return getBoolean(IGNORE_SPURIOUS_DELETES);
   }
 
   public static class Builder {
@@ -249,6 +260,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder enableFullScan(boolean enableFullScan) {
       metadataConfig.setValue(ENABLE_FULL_SCAN_LOG_FILES, String.valueOf(enableFullScan));
+      return this;
+    }
+
+    public Builder ignoreSpuriousDeletes(boolean validateMetadataPayloadConsistency) {
+      metadataConfig.setValue(IGNORE_SPURIOUS_DELETES, String.valueOf(validateMetadataPayloadConsistency));
       return this;
     }
 

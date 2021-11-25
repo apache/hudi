@@ -96,6 +96,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -121,6 +122,7 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
@@ -224,7 +226,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @MethodSource("bootstrapAndTableOperationTestArgs")
   public void testTableOperations(HoodieTableType tableType, boolean enableFullScan) throws Exception {
-    init(tableType, true, enableFullScan, false);
+    init(tableType, true, enableFullScan, false, false);
     doWriteInsertAndUpsert(testTable);
 
     // trigger an upsert
@@ -482,7 +484,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType) throws Exception {
-    init(tableType, true, true, true);
+    init(tableType, true, true, true, false);
     long baseCommitTime = Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
     for (int i = 1; i < 25; i += 7) {
       long commitTime1 = getNextCommitTime(baseCommitTime);
@@ -541,6 +543,34 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  /**
+   * Tests the metadata payload spurious deletes.
+   * Lets say a commit was applied to metadata table, and later was explicitly got rolledback. Due to spark task failures, there could be more files in rollback
+   * metadata when compared to the original commit metadata. When payload consistency check is enabled, it will throw exception. If not, it will succeed.
+   * @throws Exception
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testMetadataPayloadSpuriousDeletes(boolean ignoreSpuriousDeletes) throws Exception {
+    tableType = COPY_ON_WRITE;
+    init(tableType, true, true, false, ignoreSpuriousDeletes);
+    doWriteInsertAndUpsert(testTable);
+    // trigger an upsert
+    doWriteOperationAndValidate(testTable, "0000003");
+
+    // trigger a commit and rollback
+    doWriteOperation(testTable, "0000004");
+    // add extra files in rollback to check for payload consistency
+    Map<String, List<String>> extraFiles = new HashMap<>();
+    extraFiles.put("p1", Collections.singletonList("f10"));
+    extraFiles.put("p2", Collections.singletonList("f12"));
+    testTable.doRollbackWithExtraFiles("0000004", "0000005", extraFiles);
+    if (!ignoreSpuriousDeletes) {
+      assertThrows(HoodieMetadataException.class, () -> validateMetadata(testTable));
+    } else {
+      validateMetadata(testTable);
+    }
+  }
 
   /**
    * Test several table operations with restore. This test uses SparkRDDWriteClient.
@@ -1101,7 +1131,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
         true)) {
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
@@ -1132,7 +1162,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
         true)) {
       String newCommitTime = client.startCommit();
       // Next insert
@@ -1154,7 +1184,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // TESTCASE: If commit on the metadata table succeeds but fails on the dataset, then on next init the metadata table
     // should be rolled back to last valid commit.
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
         true)) {
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
@@ -1178,7 +1208,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext,
-        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false).build(),
+        getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false, false).build(),
         true)) {
       String newCommitTime = client.startCommit();
       // Next insert
