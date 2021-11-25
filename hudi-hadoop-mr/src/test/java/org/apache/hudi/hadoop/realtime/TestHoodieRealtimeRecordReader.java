@@ -221,7 +221,7 @@ public class TestHoodieRealtimeRecordReader {
         HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
             new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + baseInstant + ".parquet"), 0, 1, baseJobConf),
             basePath.toUri().toString(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-            .map(h -> h.getPath().toString()).collect(Collectors.toList()),
+            .collect(Collectors.toList()),
             instantTime, Option.empty());
 
         // create a RecordReader to be used by HoodieRealtimeRecordReader
@@ -290,10 +290,9 @@ public class TestHoodieRealtimeRecordReader {
     FileCreateUtils.createDeltaCommit(basePath.toString(), newCommitTime);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
-    String logFilePath = writer.getLogFile().getPath().toString();
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
         new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + instantTime + ".parquet"), 0, 1, baseJobConf),
-        basePath.toUri().toString(), Collections.singletonList(logFilePath), newCommitTime, Option.empty());
+        basePath.toUri().toString(), Collections.singletonList(writer.getLogFile()), newCommitTime, Option.empty());
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
     RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
@@ -370,10 +369,9 @@ public class TestHoodieRealtimeRecordReader {
     InputFormatTestUtil.deltaCommit(basePath, newCommitTime);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
-    String logFilePath = writer.getLogFile().getPath().toString();
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
         new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + instantTime + ".parquet"), 0, 1, baseJobConf),
-        basePath.toUri().toString(), Collections.singletonList(logFilePath), newCommitTime, Option.empty());
+        basePath.toUri().toString(), Collections.singletonList(writer.getLogFile()), newCommitTime, Option.empty());
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
     RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
@@ -483,7 +481,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testSchemaEvolutionAndRollbackBlockInLastLogFile(ExternalSpillableMap.DiskMapType diskMapType,
                                                                boolean isCompressionEnabled) throws Exception {
     // initial commit
-    List<String> logFilePaths = new ArrayList<>();
+    List<HoodieLogFile> logFiles = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
@@ -504,7 +502,7 @@ public class TestHoodieRealtimeRecordReader {
         InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
             numberOfLogRecords, 0, 1);
     long size = writer.getCurrentSize();
-    logFilePaths.add(writer.getLogFile().getPath().toString());
+    logFiles.add(writer.getLogFile());
     writer.close();
     assertTrue(size > 0, "block - size should be > 0");
 
@@ -512,14 +510,14 @@ public class TestHoodieRealtimeRecordReader {
     newCommitTime = "102";
     writer = InputFormatTestUtil.writeRollbackBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime,
         newCommitTime, "101", 1);
-    logFilePaths.add(writer.getLogFile().getPath().toString());
+    logFiles.add(writer.getLogFile());
     writer.close();
     InputFormatTestUtil.deltaCommit(basePath, newCommitTime);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
         new FileSplit(new Path(partitionDir + "/fileid0_1_" + instantTime + ".parquet"), 0, 1, baseJobConf),
-        basePath.toUri().toString(), logFilePaths, newCommitTime, Option.empty());
+        basePath.toUri().toString(), logFiles, newCommitTime, Option.empty());
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
     RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
@@ -695,6 +693,7 @@ public class TestHoodieRealtimeRecordReader {
     writeStat.setNumUpdateWrites(100);
     writeStat.setNumWrites(100);
     writeStat.setPath(filePath);
+    writeStat.setFileSizeInBytes(new File(new Path(basePath.toString(), filePath).toString()).length());
     writeStat.setPartitionPath(partitionPath);
     writeStat.setTotalLogFilesCompacted(100L);
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
@@ -750,14 +749,14 @@ public class TestHoodieRealtimeRecordReader {
       assertTrue(size > 0, "block - size should be > 0");
       FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime);
       // create a split with new log file(s)
-      fileSlice.addLogFile(writer.getLogFile());
-      RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(new FileStatus(0, false, 1, 1, 0, writer.getLogFile().getPath()));
+      fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size));
+      RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0, writer.getLogFile().getPath()));
       realtimeFileStatus.setMaxCommitTime(instantTime);
       realtimeFileStatus.setBasePath(basePath.toString());
-      realtimeFileStatus.setDeltaLogPaths(fileSlice.getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList()));
+      realtimeFileStatus.setDeltaLogFiles(fileSlice.getLogFiles().collect(Collectors.toList()));
       PathWithLogFilePath pathWithLogFileStatus = (PathWithLogFilePath) realtimeFileStatus.getPath();
       BaseFileWithLogsSplit bs = pathWithLogFileStatus.buildSplit(pathWithLogFileStatus, 0, 0, new String[] {""});
-      HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogPaths(), bs.getMaxCommitTime(), Option.empty());
+      HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogFiles(), bs.getMaxCommitTime(), Option.empty());
 
       JobConf newJobConf = new JobConf(baseJobConf);
       List<Schema.Field> fields = schema.getFields();

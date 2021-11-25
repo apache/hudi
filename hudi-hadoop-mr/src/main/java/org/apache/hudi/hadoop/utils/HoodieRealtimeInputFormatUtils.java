@@ -120,13 +120,13 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           List<FileSplit> dataFileSplits = groupedInputSplits.getOrDefault(fileSlice.getFileId(), new ArrayList<>());
           dataFileSplits.forEach(split -> {
             try {
-              List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
+              List<HoodieLogFile> logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+                  .collect(Collectors.toList());
               if (split instanceof BootstrapBaseFileSplit) {
                 BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
-                rtSplits.add(createRealtimeBoostrapBaseFileSplit(eSplit, metaClient.getBasePath(), logFilePaths, maxCommitTime));
+                rtSplits.add(createRealtimeBoostrapBaseFileSplit(eSplit, metaClient.getBasePath(), logFiles, maxCommitTime));
               } else {
-                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime, finalHoodieVirtualKeyInfo));
+                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFiles, maxCommitTime, finalHoodieVirtualKeyInfo));
               }
             } catch (IOException e) {
               throw new HoodieIOException("Error creating hoodie real time split ", e);
@@ -162,7 +162,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         if (s instanceof BaseFileWithLogsSplit) {
           BaseFileWithLogsSplit bs = (BaseFileWithLogsSplit)s;
           if (bs.getBelongToIncrementalSplit()) {
-            rtSplits.add(new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogPaths(), bs.getMaxCommitTime(), finalHoodieVirtualKeyInfo));
+            rtSplits.add(new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogFiles(), bs.getMaxCommitTime(), finalHoodieVirtualKeyInfo));
           }
         } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
           rtSplits.add(s);
@@ -206,7 +206,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
   }
 
   public static RealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(
-      BootstrapBaseFileSplit split, String basePath, List<String> deltaLogPaths, String maxInstantTime) {
+      BootstrapBaseFileSplit split, String basePath, List<HoodieLogFile> logFiles, String maxInstantTime) {
     try {
       String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
           .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
@@ -214,7 +214,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
       FileSplit baseSplit = new FileSplit(split.getPath(), split.getStart(), split.getLength(),
           hosts, inMemoryHosts);
-      return new RealtimeBootstrapBaseFileSplit(baseSplit, basePath, deltaLogPaths, maxInstantTime, split.getBootstrapFileSplit());
+      return new RealtimeBootstrapBaseFileSplit(baseSplit, basePath, logFiles, maxInstantTime, split.getBootstrapFileSplit());
     } catch (IOException e) {
       throw new HoodieIOException("Error creating hoodie real time split ", e);
     }
