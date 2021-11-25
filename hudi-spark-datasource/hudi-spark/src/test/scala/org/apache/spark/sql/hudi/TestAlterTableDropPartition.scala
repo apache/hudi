@@ -22,8 +22,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
 
-import scala.util.control.NonFatal
-
 class TestAlterTableDropPartition extends TestHoodieSqlBase {
 
   test("Drop non-partitioned table") {

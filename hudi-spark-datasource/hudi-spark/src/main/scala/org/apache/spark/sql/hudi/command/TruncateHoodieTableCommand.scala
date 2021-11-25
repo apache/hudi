@@ -36,13 +36,12 @@ class TruncateHoodieTableCommand(
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
     val properties = hoodieCatalogTable.tableConfig.getProps
-    val tablePath = hoodieCatalogTable.tableLocation
 
     // Delete all data in the table directory
     super.run(sparkSession)
 
     // If we have not specified the partition, truncate will delete all the data in the table path
-    // include the hoodi.properties. In this case we should reInit the table.
+    // include the hoodie.properties. In this case we should reInit the table.
     if (partitionSpec.isEmpty) {
       val hadoopConf = sparkSession.sessionState.newHadoopConf()
       // ReInit hoodie.properties

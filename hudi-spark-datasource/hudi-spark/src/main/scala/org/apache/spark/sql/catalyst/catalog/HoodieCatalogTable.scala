@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -159,9 +159,16 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
     val properties = new Properties()
     properties.putAll(tableConfigs.asJava)
 
+    val isDbTableName = tableConfigs.getOrElse(DataSourceWriteOptions.SQL_USE_DATABASE_TABLE_NAME.key,
+      DataSourceWriteOptions.SQL_USE_DATABASE_TABLE_NAME.defaultValue()).toBoolean
+    val newDatabaseName = formatName(spark, table.identifier.database
+      .getOrElse(spark.sessionState.catalog.getCurrentDatabase))
+    val dbTableName = if (isDbTableName) newDatabaseName + "." + table.identifier.table else table.identifier.table
+    val hoodieTableName = if (hoodieTableExists) tableName else dbTableName
+
     HoodieTableMetaClient.withPropertyBuilder()
       .fromProperties(properties)
-      .setTableName(table.identifier.table)
+      .setTableName(hoodieTableName)
       .setTableCreateSchema(SchemaConverters.toAvroType(finalSchema).toString())
       .setPartitionFields(table.partitionColumnNames.mkString(","))
       .initTable(hadoopConf, tableLocation)
@@ -244,6 +251,9 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
     } else {
       extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
       extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue()
+      extraConfig(DataSourceWriteOptions.SQL_USE_DATABASE_TABLE_NAME.key) =
+        sparkSession.conf.getOption(DataSourceWriteOptions.SQL_USE_DATABASE_TABLE_NAME.key())
+          .getOrElse(DataSourceWriteOptions.SQL_USE_DATABASE_TABLE_NAME.defaultValue())
     }
 
     if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
