@@ -281,11 +281,11 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
           }
         }
       }
-      this.iterators.forEach(ClosableIterator::close);
     } catch (Exception e) {
       // delete the file for any sort of exception
 	  LOG.error("BitCaskDisMap close error ", e);
     } finally {
+	  this.iterators.forEach(ClosableIterator::close);
 	  writeOnlyFile.delete();
       super.close();
     }
