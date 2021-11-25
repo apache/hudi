@@ -62,7 +62,7 @@ public class RollbackUtils {
    * @return Rollback plan corresponding to rollback instant
    * @throws IOException
    */
-  static HoodieRollbackPlan getRollbackPlan(HoodieTableMetaClient metaClient, HoodieInstant rollbackInstant)
+  public static HoodieRollbackPlan getRollbackPlan(HoodieTableMetaClient metaClient, HoodieInstant rollbackInstant)
       throws IOException {
     // TODO: add upgrade step if required.
     return TimelineMetadataUtils.deserializeAvroMetadata(

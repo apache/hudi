@@ -340,6 +340,10 @@ public class FileCreateUtils {
     removeMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION);
   }
 
+  public static void deleteRollbackCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION);
+  }
+
   public static long getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime, IOType ioType) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
     if (Files.notExists(parentPath)) {
