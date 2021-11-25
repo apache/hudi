@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.mapred.FileSplit;
 
@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
 
   private List<String> deltaLogPaths;
-  private List<Pair<String, Long>> deltaLogFilePathSizePairs = new ArrayList<>();
+  private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
 
   private String maxCommitTime;
 
@@ -48,12 +48,12 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
     super();
   }
 
-  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<Pair<String, Long>> deltaLogFilePathSizePairs, String maxCommitTime,
+  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<HoodieLogFile> deltaLogFiles, String maxCommitTime,
                                  Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo)
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
-    this.deltaLogFilePathSizePairs = deltaLogFilePathSizePairs;
-    this.deltaLogPaths = deltaLogFilePathSizePairs.stream().map(entry -> entry.getKey()).collect(Collectors.toList());
+    this.deltaLogFiles = deltaLogFiles;
+    this.deltaLogPaths = deltaLogFiles.stream().map(entry -> entry.getPath().toString()).collect(Collectors.toList());
     this.maxCommitTime = maxCommitTime;
     this.basePath = basePath;
     this.hoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
@@ -63,8 +63,8 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
     return deltaLogPaths;
   }
 
-  public List<Pair<String, Long>> getDeltaLogFilePathSizePairs() {
-    return deltaLogFilePathSizePairs;
+  public List<HoodieLogFile> getDeltaLogFiles() {
+    return deltaLogFiles;
   }
 
   public String getMaxCommitTime() {

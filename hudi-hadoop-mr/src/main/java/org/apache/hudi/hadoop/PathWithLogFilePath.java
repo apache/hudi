@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.model.HoodieLogFile;
 
 import org.apache.hadoop.fs.Path;
 
@@ -33,7 +33,7 @@ public class PathWithLogFilePath extends Path {
   // a flag to mark this split is produced by incremental query or not.
   private boolean belongToIncrementalPath = false;
   // the log files belong this path.
-  private List<Pair<String, Long>> deltaLogPathSizePairs = new ArrayList<>();
+  private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   // max commit time of current path.
   private String maxCommitTime = "";
   // the basePath of current hoodie table.
@@ -52,12 +52,12 @@ public class PathWithLogFilePath extends Path {
     this.belongToIncrementalPath = belongToIncrementalPath;
   }
 
-  public List<Pair<String, Long>> getDeltaLogPathSizePairs() {
-    return deltaLogPathSizePairs;
+  public List<HoodieLogFile> getDeltaLogFiles() {
+    return deltaLogFiles;
   }
 
-  public void setDeltaLogPathSizePairs(List<Pair<String, Long>> deltaLogPathSizePairs) {
-    this.deltaLogPathSizePairs = deltaLogPathSizePairs;
+  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
+    this.deltaLogFiles = deltaLogFiles;
   }
 
   public String getMaxCommitTime() {
@@ -99,7 +99,7 @@ public class PathWithLogFilePath extends Path {
   public BaseFileWithLogsSplit buildSplit(Path file, long start, long length, String[] hosts) {
     BaseFileWithLogsSplit bs = new BaseFileWithLogsSplit(file, start, length, hosts);
     bs.setBelongToIncrementalSplit(belongToIncrementalPath);
-    bs.setDeltaLogPathSizePairs(deltaLogPathSizePairs);
+    bs.setDeltaLogFiles(deltaLogFiles);
     bs.setMaxCommitTime(maxCommitTime);
     bs.setBasePath(basePath);
     bs.setBaseFilePath(baseFilePath);

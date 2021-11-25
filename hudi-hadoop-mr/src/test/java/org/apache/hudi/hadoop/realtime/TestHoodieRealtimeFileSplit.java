@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
@@ -57,7 +57,7 @@ public class TestHoodieRealtimeFileSplit {
 
   private HoodieRealtimeFileSplit split;
   private String basePath;
-  private List<Pair<String, Long>> deltaLogFilePathSizePairs;
+  private List<HoodieLogFile> deltaLogFiles;
   private List<String> deltaLogPaths;
   private String fileSplitName;
   private FileSplit baseFileSplit;
@@ -66,13 +66,13 @@ public class TestHoodieRealtimeFileSplit {
   @BeforeEach
   public void setUp(@TempDir java.nio.file.Path tempDir) throws Exception {
     basePath = tempDir.toAbsolutePath().toString();
-    deltaLogFilePathSizePairs = Collections.singletonList(Pair.of(basePath + "/1.log", 0L));
+    deltaLogFiles = Collections.singletonList(new HoodieLogFile(new Path(basePath + "/1.log"), 0L));
     deltaLogPaths = Collections.singletonList(basePath + "/1.log");
     fileSplitName = basePath + "/test.file";
     baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[] {});
     maxCommitTime = "10001";
 
-    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogFilePathSizePairs, maxCommitTime, Option.empty());
+    split = new HoodieRealtimeFileSplit(baseFileSplit, basePath, deltaLogFiles, maxCommitTime, Option.empty());
   }
 
   @Test

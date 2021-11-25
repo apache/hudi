@@ -36,7 +36,6 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
@@ -467,7 +466,7 @@ public class HoodieInputFormatUtils {
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
             FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
-        Map<FileStatus, List<Pair<String, Long>>> filteredLogs = new HashMap<>();
+        Map<FileStatus, List<HoodieLogFile>> filteredLogs = new HashMap<>();
         for (Path p : entry.getValue()) {
           String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
           List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());
@@ -477,8 +476,7 @@ public class HoodieInputFormatUtils {
                 .filter(f -> !f.getBaseFile().isPresent() && f.getLatestLogFile().isPresent())
                 .collect(Collectors.toList());
             logMatched.forEach(f -> {
-              List<Pair<String, Long>> logPathSizePairs = f.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(log -> Pair.of(log.getPath().toString(), log.getFileSize())).collect(Collectors.toList());
+              List<HoodieLogFile> logPathSizePairs = f.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
               filteredLogs.put(f.getLatestLogFile().get().getFileStatus(), logPathSizePairs);
             });
           }
@@ -493,9 +491,9 @@ public class HoodieInputFormatUtils {
           returns.add(getFileStatus(filteredFile));
         }
 
-        for (Map.Entry<FileStatus, List<Pair<String, Long>>> filterLogEntry : filteredLogs.entrySet()) {
+        for (Map.Entry<FileStatus, List<HoodieLogFile>> filterLogEntry : filteredLogs.entrySet()) {
           RealtimeFileStatus rs = new RealtimeFileStatus(filterLogEntry.getKey());
-          rs.setDeltaLogPathSizePairs(filterLogEntry.getValue());
+          rs.setDeltaLogFiles(filterLogEntry.getValue());
           returns.add(rs);
         }
       }

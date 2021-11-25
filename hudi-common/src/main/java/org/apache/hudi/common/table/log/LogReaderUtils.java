@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.List;
@@ -44,10 +43,10 @@ import java.util.stream.Collectors;
  */
 public class LogReaderUtils {
 
-  private static Schema readSchemaFromLogFileInReverse(FileSystem fs, HoodieActiveTimeline activeTimeline, Pair<String, Long> logFilePathSizePairs)
+  private static Schema readSchemaFromLogFileInReverse(FileSystem fs, HoodieActiveTimeline activeTimeline, HoodieLogFile hoodieLogFile)
       throws IOException {
     // set length for the HoodieLogFile as it will be leveraged by HoodieLogFormat.Reader with reverseReading enabled
-    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFilePathSizePairs.getKey()), logFilePathSizePairs.getValue()), null, true, true);
+    Reader reader = HoodieLogFormat.newReader(fs, hoodieLogFile, null, true, true);
     Schema writerSchema = null;
     HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     while (reader.hasPrev()) {
@@ -65,18 +64,17 @@ public class LogReaderUtils {
     return writerSchema;
   }
 
-  public static Schema readLatestSchemaFromLogFiles(String basePath, List<Pair<String, Long>> logFilePathSizePairs, Configuration config)
+  public static Schema readLatestSchemaFromLogFiles(String basePath, List<HoodieLogFile> logFiles, Configuration config)
       throws IOException {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(config).setBasePath(basePath).build();
-    List<String> deltaPaths = logFilePathSizePairs.stream().map(s -> new HoodieLogFile(s.getKey()))
-        .sorted(HoodieLogFile.getReverseLogFileComparator()).map(s -> s.getPath().toString())
+    List<String> deltaPaths = logFiles.stream().sorted(HoodieLogFile.getReverseLogFileComparator()).map(s -> s.getPath().toString())
         .collect(Collectors.toList());
     if (deltaPaths.size() > 0) {
-      Map<String, Long> deltaFilePathToFileStatus = logFilePathSizePairs.stream().collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+      Map<String, HoodieLogFile> deltaFilePathToFileStatus = logFiles.stream().map(entry -> Pair.of(entry.getPath().toString(), entry))
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
       for (String logPath : deltaPaths) {
         FileSystem fs = FSUtils.getFs(logPath, config);
-        Schema schemaFromLogFile =
-            readSchemaFromLogFileInReverse(fs, metaClient.getActiveTimeline(), Pair.of(logPath, deltaFilePathToFileStatus.get(logPath)));
+        Schema schemaFromLogFile = readSchemaFromLogFileInReverse(fs, metaClient.getActiveTimeline(), deltaFilePathToFileStatus.get(logPath));
         if (schemaFromLogFile != null) {
           return schemaFromLogFile;
         }

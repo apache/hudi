@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.model.HoodieLogFile;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
@@ -38,7 +38,7 @@ public class BaseFileWithLogsSplit extends FileSplit {
   // a flag to mark this split is produced by incremental query or not.
   private boolean belongToIncrementalSplit = false;
   // the log file paths of this split.
-  private List<Pair<String, Long>> deltaLogPathSizePairs = new ArrayList<>();
+  private List<HoodieLogFile> deltaLogFiles = new ArrayList<>();
   // max commit time of current split.
   private String maxCommitTime = "";
   // the basePath of current hoodie table.
@@ -57,10 +57,10 @@ public class BaseFileWithLogsSplit extends FileSplit {
     Text.writeString(out, maxCommitTime);
     Text.writeString(out, basePath);
     Text.writeString(out, baseFilePath);
-    out.writeInt(deltaLogPathSizePairs.size());
-    for (Pair<String, Long> logPathSizePair : deltaLogPathSizePairs) {
-      Text.writeString(out, logPathSizePair.getKey());
-      out.writeLong(logPathSizePair.getValue());
+    out.writeInt(deltaLogFiles.size());
+    for (HoodieLogFile logFile : deltaLogFiles) {
+      Text.writeString(out, logFile.getPath().toString());
+      out.writeLong(logFile.getFileSize());
     }
   }
 
@@ -72,13 +72,13 @@ public class BaseFileWithLogsSplit extends FileSplit {
     basePath = Text.readString(in);
     baseFilePath = Text.readString(in);
     int deltaLogSize = in.readInt();
-    List<Pair<String, Long>> tempDeltaLogs = new ArrayList<>();
+    List<HoodieLogFile> tempDeltaLogs = new ArrayList<>();
     for (int i = 0; i < deltaLogSize; i++) {
       String logPath = Text.readString(in);
       long logFileSize = in.readLong();
-      tempDeltaLogs.add(Pair.of(logPath, logFileSize));
+      tempDeltaLogs.add(new HoodieLogFile(new Path(logPath), logFileSize));
     }
-    deltaLogPathSizePairs = tempDeltaLogs;
+    deltaLogFiles = tempDeltaLogs;
   }
 
   public boolean getBelongToIncrementalSplit() {
@@ -89,12 +89,12 @@ public class BaseFileWithLogsSplit extends FileSplit {
     this.belongToIncrementalSplit = belongToIncrementalSplit;
   }
 
-  public List<Pair<String, Long>> getDeltaLogPathSizePairs() {
-    return deltaLogPathSizePairs;
+  public List<HoodieLogFile> getDeltaLogFiles() {
+    return deltaLogFiles;
   }
 
-  public void setDeltaLogPathSizePairs(List<Pair<String, Long>> deltaLogPathSizePairs) {
-    this.deltaLogPathSizePairs = deltaLogPathSizePairs;
+  public void setDeltaLogFiles(List<HoodieLogFile> deltaLogFiles) {
+    this.deltaLogFiles = deltaLogFiles;
   }
 
   public String getMaxCommitTime() {
