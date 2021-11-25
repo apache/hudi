@@ -23,7 +23,7 @@ import org.apache.hudi.index.zorder.ZOrderingIndexHelper.{getMaxColumnNameFor, g
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, BitwiseXor, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.functions.col
@@ -173,6 +173,20 @@ object DataSkippingUtils extends Logging {
         val resRight = createZIndexLookupFilter(and.right, indexSchema)
         And(resLeft, resRight)
 
+      //
+      // Pushing Logical NOT inside the AND/OR expressions
+      // NOTE: This is required to make sure we're properly handling negations in
+      //       cases like {@code NOT(colA = 0)}, {@code NOT(colA in (a, b, ...)}
+      //
+
+      case Not(And(left: Expression, right: Expression)) =>
+        createZIndexLookupFilter(Or(Not(left), Not(right)), indexSchema)
+
+      case Not(Or(left: Expression, right: Expression)) =>
+        createZIndexLookupFilter(And(Not(left), Not(right)), indexSchema)
+
+      // In case it's neither of the cases above, we fallback to {@code TrueLiteral},
+      // to avoid filtering any indexed files on that
       case _: Expression =>
         Literal.TrueLiteral
     }

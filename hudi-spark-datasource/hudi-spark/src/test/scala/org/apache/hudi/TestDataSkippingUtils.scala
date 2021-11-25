@@ -65,7 +65,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
     ZOrderingIndexHelper.composeIndexSchema(sourceTableSchema.fields.toSeq.asJava)
 
   @ParameterizedTest
-  @MethodSource(Array("testLookupFilterExpressionsSource"))
+  @MethodSource(Array("testBaseLookupFilterExpressionsSource", "testAdvancedLookupFilterExpressionsSource"))
   def testLookupFilterExpressions(expr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
     val resolvedExpr: Expression = resolveFilterExpr(expr, sourceTableSchema)
 
@@ -88,7 +88,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(expr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    var resolvedExpr = resolveFilterExpr(expr, sourceTableSchema)
+    val resolvedExpr = resolveFilterExpr(expr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.createZIndexLookupFilter(resolvedExpr, indexSchema)
 
     val spark2 = spark
@@ -142,7 +142,7 @@ object TestDataSkippingUtils {
     )
   }
 
-  def testLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
+  def testBaseLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       // TODO cases
       //    A = null
@@ -264,6 +264,33 @@ object TestDataSkippingUtils {
         Seq("file_1", "file_2")),
       arguments(
         "A not in (0, 1)",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0),
+          IndexRow("file_4", 0, 0, 0), // only contains 0
+          IndexRow("file_5", 1, 1, 0) // only contains 1
+        ),
+        Seq("file_1", "file_2", "file_3"))
+    )
+  }
+
+  def testAdvancedLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(
+        // The only files we can filter, are the ones containing excluded values
+        "A != 0 AND A != 1",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0),
+          IndexRow("file_4", 0, 0, 0), // only contains 0
+          IndexRow("file_5", 1, 1, 0) // only contains 1
+        ),
+        Seq("file_1", "file_2", "file_3")),
+      arguments(
+        // This is an equivalent to the above expression
+        "NOT(A = 0 OR A = 1)",
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
