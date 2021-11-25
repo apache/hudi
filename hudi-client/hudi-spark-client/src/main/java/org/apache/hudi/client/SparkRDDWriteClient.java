@@ -424,26 +424,12 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     LOG.info("Clustering successfully on commit " + clusteringCommitTime);
   }
 
-/*<<<<<<< HEAD
-  private void writeTableMetadataForTableServices(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieCommitMetadata commitMetadata,
-                                                  HoodieInstant hoodieInstant) {
-    try {
-      this.txnManager.beginTransaction(Option.of(hoodieInstant), Option.empty());
-      boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
-      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
-      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
-    } finally {
-      this.txnManager.endTransaction();
-    }
-=======*/
   private void writeTableMetadataForTableServices(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieCommitMetadata commitMetadata,
                                   HoodieInstant hoodieInstant) {
     boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
     // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
     // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
     table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
-//>>>>>>> 7d8864031 (Fixing a single lock to commit table services across metadata table and data table)
   }
 
   @Override

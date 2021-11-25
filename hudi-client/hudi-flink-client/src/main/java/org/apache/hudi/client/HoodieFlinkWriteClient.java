@@ -362,13 +362,6 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       String compactionCommitTime) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-/*<<<<<<< HEAD
-    finalizeWrite(table, compactionCommitTime, writeStats);
-    // commit to data table after committing to metadata table.
-    writeTableMetadata(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime));
-    LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
-    CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
-=======*/
     try {
       HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime);
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
@@ -382,8 +375,6 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     } finally {
       this.txnManager.endTransaction();
     }
-//>>>>>>> e0075f1f5 (Addressing comments)
-
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
       try {
