@@ -371,7 +371,7 @@ object RangeSampleSort {
       }.filter(_._1 != -1)
       // Complex type found, use createZIndexedDataFrameByRange
       if (zFields.length != zCols.length) {
-        return sortDataFrameBySampleSupportAllTypes(df, zCols, fieldNum)
+        return sortDataFrameBySampleSupportAllTypes(df, zCols, fileNum)
       }
 
       val rawRdd = df.rdd
@@ -515,7 +515,7 @@ object RangeSampleSort {
             }
           }.filter(v => v != -1)
           val mapValues = if (hilbertCurve.isDefined) {
-            hilbertCurve.get.indexBytes(values.map(_.toLong): _*)
+            hilbertCurve.get.indexBytes(values.map(_.toLong).toArray)
           } else {
             ZOrderingUtil.interleaving(values.map(ZOrderingUtil.intTo8Byte(_)).toArray, 8)
           }

@@ -51,7 +51,7 @@ object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
   def runNormalTableSkippingBenchMark(): Unit = {
     withTempDir { f =>
       withTempTable("table_z_sort_byMap", "table_z_sort_bySample", "table_hilbert_sort_byMap", "table_hilbert_sort_bySample") {
-        prepareNormalTable(new Path(f.getAbsolutePath), 1000000)
+        prepareInterTypeTable(new Path(f.getAbsolutePath), 1000000)
         // choose median value as filter condition.
         // the median value of c1_int is 500000
         // the median value of c2_int is 500000
@@ -72,7 +72,8 @@ object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
   def runSkewTableSkippingBenchMark(): Unit = {
     withTempDir { f =>
       withTempTable("table_z_sort_byMap_skew", "table_z_sort_bySample_skew", "table_hilbert_sort_byMap_skew", "table_hilbert_sort_bySample_skew") {
-        prepareSkewTable(new Path(f.getAbsolutePath), 1000000)
+        // prepare skewed table.
+        prepareInterTypeTable(new Path(f.getAbsolutePath), 1000000, 10000, 1000000, true)
         // choose median value as filter condition.
         // the median value of c1_int is 5000
         // the median value of c2_int is 500000
@@ -93,7 +94,7 @@ object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
     try f finally tableNames.foreach(spark.catalog.dropTempView)
   }
 
-  def prepareNormalTable(tablePath: Path, numRows: Int): Unit = {
+  def prepareInterTypeTable(tablePath: Path, numRows: Int, col1Range: Int = 1000000, col2Range: Int = 1000000, skewed: Boolean = false): Unit = {
     import spark.implicits._
     val df = spark.range(numRows).map(_ => (Random.nextInt(1000000), Random.nextInt(1000000))).toDF("c1_int", "c2_int")
     val dfOptimizeByMap = SpaceCurveOptimizeHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "z-order")
@@ -102,25 +103,10 @@ object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
     val dfHilbertOptimizeByMap = SpaceCurveOptimizeHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "hilbert")
     val dfHilbertOptimizeBySample = SpaceCurveOptimizeHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "hilbert")
 
-    saveAsTable(dfOptimizeByMap, tablePath, "z_sort_byMap")
-    saveAsTable(dfOptimizeBySample, tablePath, "z_sort_bySample")
-    saveAsTable(dfHilbertOptimizeByMap, tablePath, "hilbert_sort_byMap")
-    saveAsTable(dfHilbertOptimizeBySample, tablePath, "hilbert_sort_bySample")
-  }
-
-  def prepareSkewTable(tablePath: Path, numRows: Int): Unit = {
-    import spark.implicits._
-    val df = spark.range(numRows).map(_ => (Random.nextInt(10000), Random.nextInt(1000000))).toDF("c1_int", "c2_int")
-    val dfOptimizeByMap = SpaceCurveOptimizeHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "z-order")
-    val dfOptimizeBySample = SpaceCurveOptimizeHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "z-order")
-
-    val dfHilbertOptimizeByMap = SpaceCurveOptimizeHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "hilbert")
-    val dfHilbertOptimizeBySample = SpaceCurveOptimizeHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "hilbert")
-
-    saveAsTable(dfOptimizeByMap, tablePath, "z_sort_byMap_skew")
-    saveAsTable(dfOptimizeBySample, tablePath, "z_sort_bySample_skew")
-    saveAsTable(dfHilbertOptimizeByMap, tablePath, "hilbert_sort_byMap_skew")
-    saveAsTable(dfHilbertOptimizeBySample, tablePath, "hilbert_sort_bySample_skew")
+    saveAsTable(dfOptimizeByMap, tablePath, if (skewed) "z_sort_byMap_skew" else "z_sort_byMap")
+    saveAsTable(dfOptimizeBySample, tablePath, if (skewed) "z_sort_bySample_skew" else "z_sort_bySample")
+    saveAsTable(dfHilbertOptimizeByMap, tablePath, if (skewed) "hilbert_sort_byMap_skew" else "hilbert_sort_byMap")
+    saveAsTable(dfHilbertOptimizeBySample, tablePath, if (skewed) "hilbert_sort_bySample_skew" else "hilbert_sort_bySample")
   }
 
   def saveAsTable(df: DataFrame, savePath: Path, suffix: String): Unit = {

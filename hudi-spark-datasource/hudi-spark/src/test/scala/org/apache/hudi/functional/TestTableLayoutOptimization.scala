@@ -31,9 +31,9 @@ import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
-
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import java.sql.{Date, Timestamp}
+
 import scala.collection.JavaConversions._
 import scala.util.Random
 
@@ -66,11 +66,8 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE, hilbert", "COPY_ON_WRITE, z-order", "MERGE_ON_READ, hilbert", "MERGE_ON_READ, z-order"))
-  def testOptimizewithClustering(parameter: String): Unit = {
-    val splits = parameter.split(",").map(_.trim)
-    val tableType = splits(0)
-    val optimizeMode = splits(1)
+  @CsvSource(Array("COPY_ON_WRITE, hilbert", "COPY_ON_WRITE, z-order", "MERGE_ON_READ, hilbert", "MERGE_ON_READ, z-order"))
+  def testOptimizewithClustering(tableType: String, optimizeMode: String): Unit = {
     val targetRecordsCount = 10000
     // Bulk Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
