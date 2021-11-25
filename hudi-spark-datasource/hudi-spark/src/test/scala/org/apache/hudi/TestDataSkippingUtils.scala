@@ -19,11 +19,12 @@ package org.apache.hudi
 
 import org.apache.hudi.index.zorder.ZOrderingIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils
-import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType, VarcharType}
 import org.apache.spark.sql.{Column, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -33,6 +34,7 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import scala.collection.JavaConverters._
 
+// NOTE: Only A, B columns are indexed
 case class IndexRow(
   file: String,
   A_minValue: Long,
@@ -53,21 +55,27 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
     spark = sqlContext.sparkSession
   }
 
+  val indexedCols = Seq("A", "B")
   val sourceTableSchema =
     StructType(
       Seq(
         StructField("A", LongType),
-        StructField("B", StringType)
+        StructField("B", StringType),
+        StructField("C", VarcharType(32))
       )
     )
 
   val indexSchema =
-    ZOrderingIndexHelper.composeIndexSchema(sourceTableSchema.fields.toSeq.asJava)
+    ZOrderingIndexHelper.composeIndexSchema(
+      sourceTableSchema.fields.toSeq
+        .filter(f => indexedCols.contains(f.name))
+        .asJava
+    )
 
   @ParameterizedTest
   @MethodSource(Array("testBaseLookupFilterExpressionsSource", "testAdvancedLookupFilterExpressionsSource"))
-  def testLookupFilterExpressions(expr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    val resolvedExpr: Expression = resolveFilterExpr(expr, sourceTableSchema)
+  def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
+    val resolvedExpr: Expression = resolveFilterExpr(sourceExpr, sourceTableSchema)
 
     val lookupFilter = DataSkippingUtils.createZIndexLookupFilter(resolvedExpr, indexSchema)
 
@@ -87,8 +95,8 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
-  def testStringsLookupFilterExpressions(expr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
-    val resolvedExpr = resolveFilterExpr(expr, sourceTableSchema)
+  def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
+    val resolvedExpr = resolveFilterExpr(sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.createZIndexLookupFilter(resolvedExpr, indexSchema)
 
     val spark2 = spark
@@ -112,11 +120,19 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
 
   private def resolveFilterExpr(expr: Expression, tableSchema: StructType): Expression = {
     val schemaFields = tableSchema.fields
-    spark.sessionState.analyzer.ResolveReferences(
+    val resolvedExpr = spark.sessionState.analyzer.ResolveReferences(
       Filter(expr, LocalRelation(schemaFields.head, schemaFields.drop(1): _*))
     )
       .asInstanceOf[Filter].condition
+
+    checkForUnresolvedRefs(resolvedExpr)
   }
+
+  def checkForUnresolvedRefs(resolvedExpr: Expression): Expression =
+    resolvedExpr match {
+      case UnresolvedAttribute(_) => throw new IllegalStateException("unresolved attribute")
+      case _ => resolvedExpr.mapChildren(e => checkForUnresolvedRefs(e))
+    }
 }
 
 object TestDataSkippingUtils {
@@ -277,8 +293,8 @@ object TestDataSkippingUtils {
 
   def testAdvancedLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-      // The only files we can filter, are the ones containing excluded values
       arguments(
+        // Filter out all rows that contain either A = 0 OR A = 1
         "A != 0 AND A != 1",
         Seq(
           IndexRow("file_1", 1, 2, 0),
@@ -288,8 +304,8 @@ object TestDataSkippingUtils {
           IndexRow("file_5", 1, 1, 0) // only contains 1
         ),
         Seq("file_1", "file_2", "file_3")),
-      // This is an equivalent to the above expression
       arguments(
+        // This is an equivalent to the above expression
         "NOT(A = 0 OR A = 1)",
         Seq(
           IndexRow("file_1", 1, 2, 0),
@@ -300,8 +316,8 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1", "file_2", "file_3")),
 
-      // The only files we can filter, are the ones containing excluded values
       arguments(
+        // Filter out all rows that contain A = 0 AND B = 'abc'
       "A != 0 OR B != 'abc'",
         Seq(
           IndexRow("file_1", 1, 2, 0),
@@ -311,8 +327,8 @@ object TestDataSkippingUtils {
           IndexRow("file_5", 0, 0, 0, "abc", "abc", 0) // only contains A = 0, B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3")),
-      // This is an equivalent to the above expression
       arguments(
+        // This is an equivalent to the above expression
         "NOT(A = 0 AND B = 'abc')",
         Seq(
           IndexRow("file_1", 1, 2, 0),
@@ -321,7 +337,29 @@ object TestDataSkippingUtils {
           IndexRow("file_4", 0, 0, 0, "abc", "abc", 0), // only contains A = 0, B = 'abc'
           IndexRow("file_5", 0, 0, 0, "abc", "abc", 0) // only contains A = 0, B = 'abc'
         ),
-        Seq("file_1", "file_2", "file_3"))
+        Seq("file_1", "file_2", "file_3")),
+
+      arguments(
+        // Queries contains expression involving non-indexed column C
+        "A = 0 AND B = 'abc' AND C = '...'",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0),
+          IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain B = 'abc'
+        ),
+        Seq("file_2", "file_4")),
+
+      arguments(
+        // Queries that contain non-indexed columns can't be pruned
+        "A = 0 AND B = 'abc' AND C = '...'",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0),
+          IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain B = 'abc'
+        ),
+        Seq("file_2", "file_4"))
     )
   }
 }
