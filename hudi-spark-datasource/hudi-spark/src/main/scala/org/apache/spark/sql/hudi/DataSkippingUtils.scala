@@ -23,7 +23,7 @@ import org.apache.hudi.index.zorder.ZOrderingIndexHelper.{getMaxColumnNameFor, g
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.codegen.TrueLiteral
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -53,7 +53,7 @@ object DataSkippingUtils extends Logging {
       case Some(e) => e
       // NOTE: In case we can't transform source filter expression, we fallback
       // to {@code TrueLiteral}, to essentially avoid pruning any indexed files from scanning
-      case None => TrueLiteral.asInstanceOf[Expression]
+      case None => TrueLiteral
     }
   }
 

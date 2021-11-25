@@ -346,20 +346,20 @@ object TestDataSkippingUtils {
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
           IndexRow("file_3", -2, -1, 0),
-          IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain B = 'abc'
+          IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain A = 0 AND B = 'abc'
         ),
-        Seq("file_2", "file_4")),
+        Seq("file_4")),
 
       arguments(
-        // Queries that contain non-indexed columns can't be pruned
-        "A = 0 AND B = 'abc' AND C = '...'",
+        // Queries contains expression involving non-indexed column C
+        "A = 0 OR B = 'abc' OR C = '...'",
         Seq(
           IndexRow("file_1", 1, 2, 0),
           IndexRow("file_2", -1, 1, 0),
           IndexRow("file_3", -2, -1, 0),
           IndexRow("file_4", 0, 0, 0, "aaa", "xyz", 0) // might contain B = 'abc'
         ),
-        Seq("file_2", "file_4"))
+        Seq("file_1", "file_2", "file_3", "file_4"))
     )
   }
 }
