@@ -277,8 +277,8 @@ object TestDataSkippingUtils {
 
   def testAdvancedLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
+      // The only files we can filter, are the ones containing excluded values
       arguments(
-        // The only files we can filter, are the ones containing excluded values
         "A != 0 AND A != 1",
         Seq(
           IndexRow("file_1", 1, 2, 0),
@@ -288,8 +288,8 @@ object TestDataSkippingUtils {
           IndexRow("file_5", 1, 1, 0) // only contains 1
         ),
         Seq("file_1", "file_2", "file_3")),
+      // This is an equivalent to the above expression
       arguments(
-        // This is an equivalent to the above expression
         "NOT(A = 0 OR A = 1)",
         Seq(
           IndexRow("file_1", 1, 2, 0),
@@ -297,6 +297,29 @@ object TestDataSkippingUtils {
           IndexRow("file_3", -2, -1, 0),
           IndexRow("file_4", 0, 0, 0), // only contains 0
           IndexRow("file_5", 1, 1, 0) // only contains 1
+        ),
+        Seq("file_1", "file_2", "file_3")),
+
+      // The only files we can filter, are the ones containing excluded values
+      arguments(
+      "A != 0 OR B != 'abc'",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0),
+          IndexRow("file_4", 0, 0, 0, "abc", "abc", 0), // only contains A = 0, B = 'abc'
+          IndexRow("file_5", 0, 0, 0, "abc", "abc", 0) // only contains A = 0, B = 'abc'
+        ),
+        Seq("file_1", "file_2", "file_3")),
+      // This is an equivalent to the above expression
+      arguments(
+        "NOT(A = 0 AND B = 'abc')",
+        Seq(
+          IndexRow("file_1", 1, 2, 0),
+          IndexRow("file_2", -1, 1, 0),
+          IndexRow("file_3", -2, -1, 0),
+          IndexRow("file_4", 0, 0, 0, "abc", "abc", 0), // only contains A = 0, B = 'abc'
+          IndexRow("file_5", 0, 0, 0, "abc", "abc", 0) // only contains A = 0, B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3"))
     )
