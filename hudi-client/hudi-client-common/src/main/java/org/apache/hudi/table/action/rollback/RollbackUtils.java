@@ -228,6 +228,7 @@ public class RollbackUtils {
     // used to write the new log files. In this case, the commit time for the log file is the compaction requested time.
     // But the index (global) might store the baseCommit of the base and not the requested, hence get the
     // baseCommit always by listing the file slice
+    // With multi writers, rollbacks could be lazy. and so we need to use getLatestFileSlicesBeforeOrOn() instead of getLatestFileSlices()
     Map<String, String> fileIdToBaseCommitTimeForLogMap = table.getSliceView().getLatestFileSlicesBeforeOrOn(partitionPath, rollbackInstant.getTimestamp(),
         true).collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
 
