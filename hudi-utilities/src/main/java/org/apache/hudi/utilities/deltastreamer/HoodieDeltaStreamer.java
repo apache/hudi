@@ -46,8 +46,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieClusteringUpdateException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.IdentitySplitter;
@@ -649,6 +651,8 @@ public class HoodieDeltaStreamer implements Serializable {
                     + toSleepMs + " ms.");
                 Thread.sleep(toSleepMs);
               }
+            } catch (HoodieUpsertException ue) {
+              handleUpsertException(ue);
             } catch (Exception e) {
               LOG.error("Shutting down delta-sync due to exception", e);
               error = true;
@@ -660,6 +664,21 @@ public class HoodieDeltaStreamer implements Serializable {
         }
         return true;
       }, executor), executor);
+    }
+
+    private void handleUpsertException(HoodieUpsertException ue) {
+      if (ue.getCause() instanceof HoodieClusteringUpdateException) {
+        LOG.warn("Write rejected due to conflicts with pending clustering operation. Going to retry after 1 min with the hope "
+            + "that clustering will complete by then.", ue);
+        try {
+          Thread.sleep(60000); // Intentionally not using cfg.minSyncIntervalSeconds, since it could be too high or it could be 0.
+          // Once the delta streamer gets past this clustering update exception, regular syncs will honor cfg.minSyncIntervalSeconds.
+        } catch (InterruptedException e) {
+          throw new HoodieException("Deltastreamer interrupted while waiting for next round ", e);
+        }
+      } else {
+        throw ue;
+      }
     }
 
     /**
