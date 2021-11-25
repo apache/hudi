@@ -96,21 +96,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-    initializeMetadataTable(Option.empty());
-  }
-
-  private void initializeMetadataTable(Option<String> inflightInstantTimestamp) {
-    if (config.isMetadataTableEnabled()) {
-      // Defer bootstrap if upgrade / downgrade is pending
-      HoodieTableMetaClient metaClient = createMetaClient(true);
-      UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
-          metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
-      if (!upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
-        // TODO: Check if we can remove this requirement - auto bootstrap on commit
-        SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context, Option.empty(),
-                                                    inflightInstantTimestamp);
-      }
-    }
   }
 
   /**
@@ -459,17 +444,32 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       }
       metaClient.reloadActiveTimeline();
 
-      // re-bootstrap metadata table if required
       initializeMetadataTable(Option.of(instantTime));
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
   }
 
+  /**
+   * Initialize the metadata table if needed. Creating the metadata table writer
+   * will trigger the initial bootstrapping from the data table.
+   * <p>
+   * TODO: HUDI-2862 Guard the initial bootstrapping with transaction lock so
+   * as to make the initial metadata table bootstrapping single threaded.
+   *
+   * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
+   */
+  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
+    if (config.isMetadataTableEnabled()) {
+      SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+          context, Option.empty(), inFlightInstantTimestamp);
+    }
+  }
+
   // TODO : To enforce priority between table service and ingestion writer, use transactions here and invoke strategy
   private void completeTableService(TableServiceType tableServiceType, HoodieCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
-                                      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
-                                      String commitInstant) {
+                                    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
+                                    String commitInstant) {
 
     switch (tableServiceType) {
       case CLUSTER:

@@ -31,25 +31,17 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
-
-import java.io.IOException;
 
 import static org.apache.hudi.data.HoodieJavaRDD.getJavaRDD;
 
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-
-  private boolean isMetadataTableAvailable = false;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -112,19 +104,7 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
    */
   @Override
   public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
-    synchronized (this) {
-      // Metadata table bootstrapping might have failed due to pending actions.
-      // Retry the metadata table instantiation until it is successful.
-      if (config.isMetadataTableEnabled() && !isMetadataTableAvailable) {
-        try {
-          isMetadataTableAvailable = metaClient.getFs().exists(
-              new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())));
-        } catch (IOException e) {
-          throw new HoodieMetadataException("Checking existence of metadata table failed", e);
-        }
-      }
-    }
-    if (isMetadataTableAvailable) {
+    if (config.isMetadataTableEnabled()) {
       return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context,
           actionMetadata, Option.empty()));
     } else {
