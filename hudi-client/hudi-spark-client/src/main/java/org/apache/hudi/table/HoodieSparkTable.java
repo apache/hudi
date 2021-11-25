@@ -49,8 +49,7 @@ import static org.apache.hudi.data.HoodieJavaRDD.getJavaRDD;
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
-  private boolean isMetadataAvailabilityUpdated = false;
-  private boolean isMetadataTableAvailable;
+  private boolean isMetadataTableAvailable = false;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -114,16 +113,15 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
   @Override
   public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
     synchronized (this) {
-      if (!isMetadataAvailabilityUpdated) {
-        // This code assumes that if metadata availability is updated once it will not change.
-        // Please revisit this logic if that's not the case. This is done to avoid repeated calls to fs.exists().
+      // Metadata table bootstrapping might have failed due to pending actions.
+      // Retry the metadata table instantiation until it is successful.
+      if (config.isMetadataTableEnabled() && !isMetadataTableAvailable) {
         try {
-          isMetadataTableAvailable = config.isMetadataTableEnabled()
-              && metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())));
+          isMetadataTableAvailable = metaClient.getFs().exists(
+              new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())));
         } catch (IOException e) {
           throw new HoodieMetadataException("Checking existence of metadata table failed", e);
         }
-        isMetadataAvailabilityUpdated = true;
       }
     }
     if (isMetadataTableAvailable) {
