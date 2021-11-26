@@ -158,6 +158,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingReplaceTimeline();
 
   /**
+   * Filter this timeline to include pending rollbacks.
+   */
+  HoodieTimeline filterPendingRollbackTimeline();
+
+  /**
    * Create a new Timeline with all the instants after startTs.
    */
   HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);

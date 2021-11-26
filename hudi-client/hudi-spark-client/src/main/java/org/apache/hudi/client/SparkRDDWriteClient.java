@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.metrics.Registry;
@@ -443,7 +444,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         this.txnManager.beginTransaction();
         try {
           // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
-          this.rollbackFailedWrites(getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime)), true);
+          List<String> instantsToRollback = getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime));
+          Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
+          instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+          this.rollbackFailedWrites(pendingRollbacks, true);
           new UpgradeDowngrade(
               metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
               .run(HoodieTableVersion.current(), instantTime);
