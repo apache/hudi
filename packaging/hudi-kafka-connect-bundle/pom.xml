@@ -80,6 +80,7 @@
                                     <include>org.apache.hudi:hudi-sync-common</include>
                                     <include>org.apache.hudi:hudi-hadoop-mr</include>
                                     <include>org.apache.hudi:hudi-timeline-service</include>
+                                    <include>org.apache.hudi:hudi-aws</include>
 
                                     <!-- NOTE: This is temp (SchemaProvide dep) until PR3162 lands -->
                                     <include>org.apache.hudi:hudi-flink_${scala.binary.version}</include>
