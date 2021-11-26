@@ -46,10 +46,21 @@ Set the config as:
 ```
 
 ### Chained Transformer
-If you wish to use multiple transformers together, you can use the Chained transformers to execute them sequentially
+If you wish to use multiple transformers together, you can use the Chained transformers to pass multiple to be executed sequentially.
+
+Example below first flattens the incoming records and then does sql projection based on the query specified:
+```scala
+--transformer-class org.apache.hudi.utilities.transform.FlatteningTransformer,org.apache.hudi.utilities.transform.SqlQueryBasedTransformer   
+--hoodie-conf hoodie.deltastreamer.transformer.sql=SELECT a.col1, a.col3, a.col4 FROM <SRC> a
+```
 
 ### AWS DMS Transformer
 This transformer is specific for AWS DMS data. It adds `Op` field with value `I` if the field is not present.
+
+Set the config as:
+```scala
+--transformer-class org.apache.hudi.utilities.transform.AWSDmsTransformer
+```
 
 ### Custom Transformer Implementation
 You can write your own custom transformer by extending [this class](https://github.com/apache/hudi/tree/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/transform)
