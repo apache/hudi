@@ -22,7 +22,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.metadata.BaseTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
