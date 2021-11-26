@@ -256,7 +256,10 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "created by the writer. "
           + "- TIMELINE_SERVER_BASED: marker operations are all handled at the timeline service "
           + "which serves as a proxy.  New marker entries are batch processed and stored "
-          + "in a limited number of underlying files for efficiency.");
+          + "in a limited number of underlying files for efficiency.  If HDFS is used or "
+          + "timeline server is disabled, DIRECT markers are used as fallback even if this "
+          + "is configure.  For Spark structured streaming, this configuration does not "
+          + "take effect, i.e., DIRECT markers are always used for Spark structured streaming.");
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
