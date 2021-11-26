@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -31,17 +32,23 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 
+import java.io.IOException;
+
 import static org.apache.hudi.data.HoodieJavaRDD.getJavaRDD;
 
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+
+  private volatile boolean isMetadataTableBasePathExists = false;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -103,12 +110,22 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String inFlightInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
     if (config.isMetadataTableEnabled()) {
-      return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context,
-          actionMetadata, Option.empty()));
-    } else {
-      return Option.empty();
+      final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+          context.getHadoopConf().get(), config, context, actionMetadata, Option.of(inFlightInstantTimestamp));
+      try {
+        if (isMetadataTableBasePathExists || metaClient.getFs().exists(new Path(
+            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
+          isMetadataTableBasePathExists = true;
+          return Option.of(metadataWriter);
+        }
+      } catch (IOException e) {
+        throw new HoodieMetadataException("Checking existence of metadata table failed", e);
+      }
     }
+
+    return Option.empty();
   }
 }

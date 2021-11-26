@@ -737,10 +737,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Get Table metadata writer.
    *
+   * @param inFlightInstantTimestamp - InFlight instant timestamp for which metadata writer is needed
    * @return instance of {@link HoodieTableMetadataWriter
    */
-  public final Option<HoodieTableMetadataWriter> getMetadataWriter() {
-    return getMetadataWriter(Option.empty());
+  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String inFlightInstantTimestamp) {
+    return getMetadataWriter(inFlightInstantTimestamp, Option.empty());
   }
 
   /**
@@ -760,9 +761,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * are blocked from doing the similar initial metadata table creation and
    * the bootstrapping.
    *
+   * @param inFlightInstantTimestamp - InFlight instant timestamp for which metadata writer is needed
    * @return instance of {@link HoodieTableMetadataWriter}
    */
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String inFlightInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
