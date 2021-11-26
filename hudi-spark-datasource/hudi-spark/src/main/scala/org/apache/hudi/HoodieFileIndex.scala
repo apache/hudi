@@ -30,21 +30,24 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.{DataSkippingUtils, HoodieSqlUtils}
+import org.apache.spark.sql.hudi.DataSkippingUtils.createZIndexLookupFilter
+import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{AnalysisException, Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Properties
-
-import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -169,16 +172,16 @@ case class HoodieFileIndex(
    *       ultimately be scanned as part of query execution. Hence, this method has to maintain the
    *       invariant of conservatively including every base-file's name, that is NOT referenced in its index.
    *
-   * @param dataFilters list of original data filters passed down from querying engine
+   * @param queryFilters list of original data filters passed down from querying engine
    * @return list of pruned (data-skipped) candidate base-files' names
    */
-  private def lookupCandidateFilesNamesInZIndex(dataFilters: Seq[Expression]): Option[Set[String]] = {
+  private def lookupCandidateFilesInZIndex(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
     val indexPath = metaClient.getZindexPath
     val fs = metaClient.getFs
 
-    if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || dataFilters.isEmpty) {
+    if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || queryFilters.isEmpty) {
       // scalastyle:off return
-      return Option.empty
+      return Success(Option.empty)
       // scalastyle:on return
     }
 
@@ -192,7 +195,7 @@ case class HoodieFileIndex(
 
     if (candidateIndexTables.isEmpty) {
       // scalastyle:off return
-      return Option.empty
+      return Success(Option.empty)
       // scalastyle:on return
     }
 
@@ -207,7 +210,7 @@ case class HoodieFileIndex(
     dataFrameOpt.map(df => {
       val indexSchema = df.schema
       val indexFilter =
-        dataFilters.map(DataSkippingUtils.createZIndexLookupFilter(_, indexSchema))
+        queryFilters.map(createZIndexLookupFilter(_, indexSchema))
           .reduce(And)
 
       logInfo(s"Index filter condition: $indexFilter")
@@ -221,7 +224,7 @@ case class HoodieFileIndex(
           .toSet
 
       val prunedCandidateFileNames =
-        df.filter(new Column(indexFilter))
+        df.where(new Column(indexFilter))
           .select("file")
           .collect()
           .map(_.getString(0))
@@ -261,11 +264,22 @@ case class HoodieFileIndex(
     //    - Data-skipping is enabled
     //    - Z-index is present
     //    - List of predicates (filters) is present
-    val candidateFilesNamesOpt: Option[Set[String]] = lookupCandidateFilesNamesInZIndex(dataFilters)
+    val candidateFilesNamesOpt: Option[Set[String]] =
+      lookupCandidateFilesInZIndex(dataFilters) match {
+        case Success(opt) => opt
+        case Failure(e) =>
+          if (e.isInstanceOf[AnalysisException]) {
+            logDebug("Failed to relay provided data filters to Z-index lookup", e)
+          } else {
+            logError("Failed to lookup candidate files in Z-index", e)
+          }
+          Option.empty
+      }
 
     logDebug(s"Overlapping candidate files (from Z-index): ${candidateFilesNamesOpt.getOrElse(Set.empty)}")
 
-    if (queryAsNonePartitionedTable) { // Read as Non-Partitioned table.
+    if (queryAsNonePartitionedTable) {
+      // Read as Non-Partitioned table
       // Filter in candidate files based on the Z-index lookup
       val candidateFiles =
         allFiles.filter(fileStatus =>
@@ -273,9 +287,10 @@ case class HoodieFileIndex(
           candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName))
         )
 
-      logInfo(s"Total files : ${allFiles.size}," +
-        s" candidate files after data skipping: ${candidateFiles.size} " +
-        s" skipping percent ${if (allFiles.length != 0) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+      logInfo(s"Total files : ${allFiles.size}; " +
+        s"candidate files after data skipping: ${candidateFiles.size}; " +
+        s"skipping percent ${if (allFiles.nonEmpty) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+
       Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
@@ -284,27 +299,27 @@ case class HoodieFileIndex(
       var candidateFileSize = 0
 
       val result = prunedPartitions.map { partition =>
-        val baseFileStatuses = cachedAllInputFileSlices(partition).map(fileSlice => {
-          if (fileSlice.getBaseFile.isPresent) {
-            fileSlice.getBaseFile.get().getFileStatus
-          } else {
-            null
-          }
-        }).filterNot(_ == null)
+        val baseFileStatuses: Seq[FileStatus] =
+          cachedAllInputFileSlices(partition)
+            .map(fs => fs.getBaseFile.orElse(null))
+            .filter(_ != null)
+            .map(_.getFileStatus)
 
         // Filter in candidate files based on the Z-index lookup
         val candidateFiles =
-          baseFileStatuses.filter(fileStatus =>
+          baseFileStatuses.filter(fs =>
             // NOTE: This predicate is true when {@code Option} is empty
-            candidateFilesNamesOpt.forall(_.contains(fileStatus.getPath.getName)))
+            candidateFilesNamesOpt.forall(_.contains(fs.getPath.getName)))
 
         totalFileSize += baseFileStatuses.size
         candidateFileSize += candidateFiles.size
         PartitionDirectory(partition.values, candidateFiles)
       }
-      logInfo(s"Total files: ${totalFileSize}," +
-        s" Candidate files after data skipping : ${candidateFileSize} " +
-        s"skipping percent ${if (allFiles.length != 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+
+      logInfo(s"Total base files: ${totalFileSize}; " +
+        s"candidate files after data skipping : ${candidateFileSize}; " +
+        s"skipping percent ${if (allFiles.nonEmpty) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+
       result
     }
   }

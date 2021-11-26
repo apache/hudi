@@ -46,7 +46,6 @@ import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Matchers.{assertResult, be, convertToAnyShouldWrapper, intercept}
 
 import java.time.Instant
-import java.util
 import java.util.{Collections, Date, UUID}
 
 import scala.collection.JavaConversions._
@@ -147,7 +146,7 @@ class HoodieSparkSqlWriterSuite {
    * @param inputList list of Row
    * @return list of Seq
    */
-  def convertRowListToSeq(inputList: util.List[Row]): Seq[Row] =
+  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
     JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 
   /**

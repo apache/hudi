@@ -18,7 +18,10 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -37,9 +40,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -73,11 +78,12 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.ZCurveOptimizeHelper;
+import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
 import org.apache.spark.api.java.JavaRDD;
-import scala.collection.JavaConversions;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -163,29 +169,61 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  public void updateStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime, Boolean isOptimizeOperation) {
-    // deal with z-order/hilbert statistic info
-    if (isOptimizeOperation) {
-      updateOptimizeOperationStatistics(context, stats, instantTime);
-    }
+  public void updateMetadataIndexes(@Nonnull HoodieEngineContext context, @Nonnull List<HoodieWriteStat> stats, @Nonnull String instantTime) throws Exception {
+    // Updates Z-ordering Index
+    updateZIndex(context, stats, instantTime);
   }
 
-  private void updateOptimizeOperationStatistics(HoodieEngineContext context, List<HoodieWriteStat> stats, String instantTime) {
-    String cols = config.getClusteringSortColumns();
+  private void updateZIndex(
+      @Nonnull HoodieEngineContext context,
+      @Nonnull List<HoodieWriteStat> updatedFilesStats,
+      @Nonnull String instantTime
+  ) throws Exception {
+    String sortColsList = config.getClusteringSortColumns();
     String basePath = metaClient.getBasePath();
     String indexPath = metaClient.getZindexPath();
-    List<String> validateCommits = metaClient.getCommitsTimeline()
-        .filterCompletedInstants().getInstants().map(f -> f.getTimestamp()).collect(Collectors.toList());
-    List<String> touchFiles = stats.stream().map(s -> new Path(basePath, s.getPath()).toString()).collect(Collectors.toList());
-    if (touchFiles.isEmpty() || cols.isEmpty() || indexPath.isEmpty()) {
-      LOG.warn("save nothing to index table");
+
+    List<String> completedCommits =
+        metaClient.getCommitsTimeline()
+            .filterCompletedInstants()
+            .getInstants()
+            .map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList());
+
+    List<String> touchedFiles =
+        updatedFilesStats.stream()
+            .map(s -> new Path(basePath, s.getPath()).toString())
+            .collect(Collectors.toList());
+
+    if (touchedFiles.isEmpty() || StringUtils.isNullOrEmpty(sortColsList) || StringUtils.isNullOrEmpty(indexPath)) {
       return;
     }
+
+    LOG.info(String.format("Updating Z-index table (%s)", indexPath));
+
+    List<String> sortCols = Arrays.stream(sortColsList.split(","))
+        .map(String::trim)
+        .collect(Collectors.toList());
+
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
-    ZCurveOptimizeHelper.saveStatisticsInfo(sparkEngineContext
-        .getSqlContext().sparkSession().read().load(JavaConversions.asScalaBuffer(touchFiles)),
-        cols, indexPath, instantTime, validateCommits);
-    LOG.info(String.format("save statistic info sucessfully at commitTime: %s", instantTime));
+
+    // Fetch table schema to appropriately construct Z-index schema
+    Schema tableWriteSchema =
+        HoodieAvroUtils.createHoodieWriteSchema(
+            new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
+        );
+
+    ZOrderingIndexHelper.updateZIndexFor(
+        sparkEngineContext.getSqlContext().sparkSession(),
+        AvroConversionUtils.convertAvroSchemaToStructType(tableWriteSchema),
+        touchedFiles,
+        sortCols,
+        indexPath,
+        instantTime,
+        completedCommits
+    );
+
+    LOG.info(String.format("Successfully updated Z-index at instant (%s)", instantTime));
   }
 
   @Override
