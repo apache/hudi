@@ -82,6 +82,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
 /**
@@ -712,7 +713,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *
    */
   protected void bootstrapCommit(List<DirectoryInfo> partitionInfoList, String createInstantTime) {
-    List<String> partitions = partitionInfoList.stream().map(p -> p.getRelativePath()).collect(Collectors.toList());
+    List<String> partitions = partitionInfoList.stream().map(p ->
+        p.getRelativePath().isEmpty() ? NON_PARTITIONED_NAME : p.getRelativePath()).collect(Collectors.toList());
     final int totalFiles = partitionInfoList.stream().mapToInt(p -> p.getTotalFiles()).sum();
 
     // Record which saves the list of all partitions
@@ -727,7 +729,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
         // Record which saves files within a partition
         return HoodieMetadataPayload.createPartitionFilesRecord(
-            partitionInfo.getRelativePath(), Option.of(partitionInfo.getFileNameToSizeMap()), Option.empty());
+            partitionInfo.getRelativePath().isEmpty() ? NON_PARTITIONED_NAME : partitionInfo.getRelativePath(), Option.of(partitionInfo.getFileNameToSizeMap()), Option.empty());
       });
       partitionRecords = partitionRecords.union(fileListRecords);
     }

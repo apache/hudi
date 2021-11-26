@@ -338,9 +338,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build()).withAutoCommit(false).withProperties(properties);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
-    HoodieWriteConfig cfg2 = writeConfigBuilder
+    HoodieWriteConfig cfg2 = writeConfigBuilder.build();
+    HoodieWriteConfig cfg3 = writeConfigBuilder
         .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(true).withInlineClusteringNumCommits(1).build())
         .build();
+
     // Create the first commit
     createCommitWithInserts(cfg, getHoodieWriteClient(cfg), "000", "001", 200);
     // Start another inflight commit
@@ -359,7 +361,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         numRecords, 200, 2);
     client2.commit(newCommitTime, result2);
     // Schedule and run clustering while previous writer for commit 003 is running
-    SparkRDDWriteClient client3 = getHoodieWriteClient(cfg2);
+    SparkRDDWriteClient client3 = getHoodieWriteClient(cfg3);
     // schedule clustering
     Option<String> clusterInstant = client3.scheduleTableService(Option.empty(), TableServiceType.CLUSTER);
     assertTrue(clusterInstant.isPresent());

@@ -1298,7 +1298,7 @@ public class TestCleaner extends HoodieClientTestBase {
   @Test
   public void testCleanMarkerDataFilesOnRollback() throws Exception {
     HoodieTestTable testTable = HoodieTestTable.of(metaClient)
-        .addRequestedCommit("000")
+        .addRequestedCommit("001")
         .withMarkerFiles("default", 10, IOType.MERGE);
     final int numTempFilesBefore = testTable.listAllFilesInTempFolder().length;
     assertEquals(10, numTempFilesBefore, "Some marker files are created.");
@@ -1310,11 +1310,11 @@ public class TestCleaner extends HoodieClientTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
     table.getActiveTimeline().transitionRequestedToInflight(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "000"), Option.empty());
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "001"), Option.empty());
     metaClient.reloadActiveTimeline();
-    HoodieInstant rollbackInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000");
-    table.scheduleRollback(context, "001", rollbackInstant, false, config.shouldRollbackUsingMarkers());
-    table.rollback(context, "001", rollbackInstant, true, false);
+    HoodieInstant rollbackInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001");
+    table.scheduleRollback(context, "002", rollbackInstant, false, config.shouldRollbackUsingMarkers());
+    table.rollback(context, "002", rollbackInstant, true, false);
     final int numTempFilesAfter = testTable.listAllFilesInTempFolder().length;
     assertEquals(0, numTempFilesAfter, "All temp files are deleted.");
   }
