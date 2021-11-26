@@ -100,10 +100,11 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String inFlightInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
     if (config.isMetadataTableEnabled()) {
       return Option.of(FlinkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
-          context, actionMetadata));
+          context, actionMetadata, Option.of(inFlightInstantTimestamp)));
     } else {
       return Option.empty();
     }

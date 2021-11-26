@@ -56,14 +56,23 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                                 HoodieWriteConfig writeConfig,
                                                                                 HoodieEngineContext context,
                                                                                 Option<T> actionMetadata) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata);
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata, Option.empty());
+  }
+
+  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
+                                                                                HoodieWriteConfig writeConfig,
+                                                                                HoodieEngineContext context,
+                                                                                Option<T> actionMetadata,
+                                                                                Option<String> inFlightInstantTimestamp) {
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata, inFlightInstantTimestamp);
   }
 
   <T extends SpecificRecordBase> FlinkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                       HoodieWriteConfig writeConfig,
                                                                       HoodieEngineContext engineContext,
-                                                                      Option<T> actionMetadata) {
-    super(hadoopConf, writeConfig, engineContext, actionMetadata, Option.empty());
+                                                                      Option<T> actionMetadata,
+                                                                      Option<String> inFlightInstantTimestamp) {
+    super(hadoopConf, writeConfig, engineContext, actionMetadata, inFlightInstantTimestamp);
   }
 
   @Override
