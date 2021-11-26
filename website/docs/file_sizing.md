@@ -1,5 +1,5 @@
 ---
-title: "Auto File Size Management"
+title: "File Sizing"
 toc: true
 ---
 
