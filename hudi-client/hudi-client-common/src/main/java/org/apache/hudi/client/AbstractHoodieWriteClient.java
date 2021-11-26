@@ -589,8 +589,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   @Deprecated
   public boolean rollback(final String commitInstantTime) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
-    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = getPendingRollback(table.getMetaClient(), commitInstantTime);
-    return rollback(commitInstantTime, pendingRollbackInfo,false);
+    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
+    return rollback(commitInstantTime, pendingRollbackInfo, false);
   }
 
   /**
@@ -860,19 +860,18 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     return inflightTimelineExcludeClusteringCommit;
   }
 
-  private Option<HoodiePendingRollbackInfo> getPendingRollback(HoodieTableMetaClient metaClient, String commitToRollback) {
-    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = getPendingRollbacks(metaClient, Option.of(commitToRollback)).get(commitToRollback);
+  private Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback) {
+    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = getPendingRollbackInfos(metaClient).get(commitToRollback);
     return pendingRollbackInfo != null ? pendingRollbackInfo : Option.empty();
   }
 
   /**
-   * Fetch map of pending commits to be rolledback to (Rollback Instant and Rollback plan).
+   * Fetch map of pending commits to be rolledback to {@link HoodiePendingRollbackInfo}.
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
-   * @param commitToRollback optional commit time to be rolledback.
    * @return map of pending commits to be rolledback instants to Rollback Instnat and Rollback plan Pair.
    */
-  protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbacks(HoodieTableMetaClient metaClient, Option<String> commitToRollback) {
-    Stream<Pair<String, Option<HoodiePendingRollbackInfo>>> pendingRollbacksStream = metaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants().map(
+  protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInfos(HoodieTableMetaClient metaClient) {
+    return metaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants().map(
         entry -> {
           try {
             HoodieRollbackPlan rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, entry);
@@ -881,13 +880,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
             throw new HoodieIOException("Fetching rollback plan failed for " + entry, e);
           }
         }
-    );
-
-    if (commitToRollback.isPresent()) {
-      return pendingRollbacksStream.filter(entry -> entry.getKey().equals(commitToRollback.get())).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    } else {
-      return pendingRollbacksStream.collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    }
+    ).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
   /**
@@ -904,7 +897,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   public Boolean rollbackFailedWrites(boolean skipLocking) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
     List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
-    Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbacks(table.getMetaClient(), Option.empty());
+    Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
     instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
 
     HashMap<String, Option<HoodiePendingRollbackInfo>> reverseSortedRollbackInstants = pendingRollbacks.entrySet()
