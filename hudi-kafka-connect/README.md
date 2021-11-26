@@ -151,6 +151,7 @@ curl -X POST -H "Content-Type:application/json" -d @$HUDI_DIR/hudi-kafka-connect
 Now, you should see that the connector is created and tasks are running.
 
 ```bash
+mkdir /tmp/hoodie/
 curl -X GET -H "Content-Type:application/json"  http://localhost:8083/connectors
 ["hudi-sink"]
 curl -X GET -H "Content-Type:application/json"  http://localhost:8083/connectors/hudi-sink/status | jq
