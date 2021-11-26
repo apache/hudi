@@ -57,6 +57,18 @@ import java.util.Set;
 
 /**
  * CLI commands to operate on the Metadata Table.
+ * <p>
+ * <p>
+ * Example:
+ * The default spark.master conf is set to yarn. If you are running on a local deployment,
+ * we can set the spark master to local using set conf command.
+ * > set --conf SPARK_MASTER=local
+ * <p>
+ * Connect to the table
+ * > connect --path {path to hudi table}
+ * <p>
+ * Run metadata commands
+ * > metadata list-partitions
  */
 @Component
 public class MetadataCommand implements CommandMarker {
@@ -199,7 +211,6 @@ public class MetadataCommand implements CommandMarker {
       Comparable[] row = new Comparable[1];
       row[0] = p;
       rows.add(row);
-      LOG.debug(">> partition " + p);
     });
 
     TableHeader header = new TableHeader().addTableHeaderField("partition");
@@ -261,12 +272,10 @@ public class MetadataCommand implements CommandMarker {
     allPartitions.addAll(fsPartitions);
     allPartitions.addAll(metadataPartitions);
 
-    LOG.info("All FS partitions count " + fsPartitions.size() + ", metadata partition count " + metadataPartitions.size());
-    LOG.info("Partitions equality " + fsPartitions.equals(metadataPartitions));
-
     if (!fsPartitions.equals(metadataPartitions)) {
-      LOG.error("All FS partitions " + Arrays.toString(fsPartitions.toArray()));
-      LOG.error("All Metadata partitions " + Arrays.toString(metadataPartitions.toArray()));
+      LOG.error("FS partition listing is not matching with metadata partition listing!");
+      LOG.error("All FS partitions: " + Arrays.toString(fsPartitions.toArray()));
+      LOG.error("All Metadata partitions: " + Arrays.toString(metadataPartitions.toArray()));
     }
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -298,9 +307,9 @@ public class MetadataCommand implements CommandMarker {
       }
 
       LOG.info("Validating partition " + partition);
-      LOG.info(" total FS Files count " + metadataStatuses.length + ", metadata files count " + fsStatus.length);
+      LOG.info(" Total FS files count " + metadataStatuses.length + ", metadata files count " + fsStatus.length);
       if (metadataStatuses.length != fsStatus.length) {
-        LOG.error(" Files equality size failed ");
+        LOG.error(" FS and metadata files count not matching!");
       }
 
       for (Map.Entry<String, FileStatus> entry : fileStatusMap.entrySet()) {
