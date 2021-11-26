@@ -18,10 +18,10 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.metrics.Registry;
@@ -40,7 +40,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -444,10 +443,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         this.txnManager.beginTransaction();
         try {
           // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
-          Map<String, Pair<HoodieInstant, HoodieRollbackPlan>> pendingRollbacks = getPendingRollbacks(metaClient, Option.empty());
-          Map<String, Option<Pair<HoodieInstant, HoodieRollbackPlan>>> instantsToRollback = getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime),
-              pendingRollbacks);
-          this.rollbackFailedWrites(instantsToRollback, true);
+          List<String> instantsToRollback = getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime));
+          Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbacks(metaClient, Option.empty());
+          instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+          this.rollbackFailedWrites(pendingRollbacks, true);
           new UpgradeDowngrade(
               metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
               .run(HoodieTableVersion.current(), instantTime);
