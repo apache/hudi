@@ -121,7 +121,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
-    return getRecordsByKeys(Collections.singletonList(key), partitionName).get(0).getValue();
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> recordsByKeys = getRecordsByKeys(Collections.singletonList(key), partitionName);
+    return recordsByKeys.size() == 0 ? Option.empty() : recordsByKeys.get(0).getValue();
   }
 
   protected List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys, String partitionName) {
@@ -130,6 +131,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       List<Long> timings = new ArrayList<>();
       HoodieFileReader baseFileReader = readers.getKey();
       HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
+
+      if (baseFileReader == null && logRecordScanner == null) {
+        return Collections.emptyList();
+      }
 
       // local map to assist in merging with base file records
       Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords = readLogRecords(logRecordScanner, keys, timings);
@@ -241,6 +246,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         // Metadata is in sync till the latest completed instant on the dataset
         HoodieTimer timer = new HoodieTimer().startTimer();
         List<FileSlice> latestFileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
+        if (latestFileSlices.size() == 0) {
+          // empty partition
+          return Pair.of(null, null);
+        }
         ValidationUtils.checkArgument(latestFileSlices.size() == 1, String.format("Invalid number of file slices: found=%d, required=%d", latestFileSlices.size(), 1));
         final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, latestFileSlices.size()));
 
