@@ -76,7 +76,7 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
-public class SpaceCurveOptimizeHelper {
+public class OrderingIndexHelper {
 
   private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
 
@@ -86,10 +86,10 @@ public class SpaceCurveOptimizeHelper {
    * this method is more effective than createOptimizeDataFrameBySample
    *
    * @param df       a spark DataFrame holds parquet files to be read.
-   * @param sortCols sorting columns for the curve
+   * @param sortCols ordering columns for the curve
    * @param fileNum  spark partition num
    * @param sortMode layout optimization strategy
-   * @return a dataFrame sorted by the curve.
+   * @return a dataFrame ordered by the curve.
    */
   public static Dataset<Row> createOptimizedDataFrameByMapValue(Dataset<Row> df, List<String> sortCols, int fileNum, String sortMode) {
     Map<String, StructField> columnsMap = Arrays.stream(df.schema().fields()).collect(Collectors.toMap(e -> e.name(), e -> e));
@@ -304,14 +304,14 @@ public class SpaceCurveOptimizeHelper {
             rows.add(currentColRangeMetaData.getMinValue());
             rows.add(currentColRangeMetaData.getMaxValue());
           } else if (colType instanceof StringType) {
-            rows.add(currentColRangeMetaData.getMinValueAsString());
-            rows.add(currentColRangeMetaData.getMaxValueAsString());
+            rows.add(currentColRangeMetaData.getMinValue().toString());
+            rows.add(currentColRangeMetaData.getMaxValue().toString());
           } else if (colType instanceof DecimalType) {
-            rows.add(new BigDecimal(currentColRangeMetaData.getMinValueAsString()));
-            rows.add(new BigDecimal(currentColRangeMetaData.getMaxValueAsString()));
+            rows.add(new BigDecimal(currentColRangeMetaData.getMinValue().toString()));
+            rows.add(new BigDecimal(currentColRangeMetaData.getMaxValue().toString()));
           } else if (colType instanceof DateType) {
-            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMinValueAsString()));
-            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMaxValueAsString()));
+            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMinValue().toString()));
+            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMaxValue().toString()));
           } else if (colType instanceof LongType) {
             rows.add(currentColRangeMetaData.getMinValue());
             rows.add(currentColRangeMetaData.getMaxValue());
@@ -370,7 +370,7 @@ public class SpaceCurveOptimizeHelper {
     Path savePath = new Path(indexPath, commitTime);
     SparkSession spark = df.sparkSession();
     FileSystem fs = FSUtils.getFs(indexPath, spark.sparkContext().hadoopConfiguration());
-    Dataset<Row> statisticsDF = SpaceCurveOptimizeHelper.getMinMaxValue(df, cols);
+    Dataset<Row> statisticsDF = OrderingIndexHelper.getMinMaxValue(df, cols);
     // try to find last validate index table from index path
     try {
       // If there's currently no index, create one

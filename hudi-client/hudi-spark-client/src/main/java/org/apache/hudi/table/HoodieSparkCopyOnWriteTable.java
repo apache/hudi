@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -76,12 +74,16 @@ import org.apache.hudi.table.action.restore.CopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.SpaceCurveOptimizeHelper;
+import org.apache.spark.OrderingIndexHelper;
 import org.apache.spark.api.java.JavaRDD;
 
 import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -213,7 +215,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
             new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
         );
 
-    SpaceCurveOptimizeHelper.updateZIndexFor(
+    OrderingIndexHelper.updateZIndexFor(
         sparkEngineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(tableWriteSchema),
         touchedFiles,

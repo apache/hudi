@@ -25,17 +25,16 @@ import org.apache.hudi.common.util.{BaseFileUtils, ParquetUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-import org.apache.spark.SpaceCurveOptimizeHelper
+import org.apache.spark.OrderingIndexHelper
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.sql.{Date, Timestamp}
-
 import scala.collection.JavaConversions._
 import scala.util.Random
 
@@ -136,27 +135,27 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
     try {
       // test z-order/hilbert sort for all primitive type
       // shoud not throw exception.
-      SpaceCurveOptimizeHelper.createOptimizedDataFrameByMapValue(df, "c1,c2,c3,c5,c6,c7,c8", 20, "hilbert").show(1)
-      SpaceCurveOptimizeHelper.createOptimizedDataFrameByMapValue(df, "c1,c2,c3,c5,c6,c7,c8", 20, "z-order").show(1)
-      SpaceCurveOptimizeHelper.createOptimizeDataFrameBySample(df, "c1,c2,c3,c5,c6,c7,c8", 20, "hilbert").show(1)
-      SpaceCurveOptimizeHelper.createOptimizeDataFrameBySample(df, "c1,c2,c3,c5,c6,c7,c8", 20, "z-order").show(1)
+      OrderingIndexHelper.createOptimizedDataFrameByMapValue(df, "c1,c2,c3,c5,c6,c7,c8", 20, "hilbert").show(1)
+      OrderingIndexHelper.createOptimizedDataFrameByMapValue(df, "c1,c2,c3,c5,c6,c7,c8", 20, "z-order").show(1)
+      OrderingIndexHelper.createOptimizeDataFrameBySample(df, "c1,c2,c3,c5,c6,c7,c8", 20, "hilbert").show(1)
+      OrderingIndexHelper.createOptimizeDataFrameBySample(df, "c1,c2,c3,c5,c6,c7,c8", 20, "z-order").show(1)
       try {
         // do not support TimeStampType, so if we collect statistics for c4, should throw exception
-        val colDf = SpaceCurveOptimizeHelper.getMinMaxValue(df, "c1,c2,c3,c5,c6,c7,c8")
+        val colDf = OrderingIndexHelper.getMinMaxValue(df, "c1,c2,c3,c5,c6,c7,c8")
         colDf.cache()
         assertEquals(colDf.count(), 3)
         assertEquals(colDf.take(1)(0).length, 22)
         colDf.unpersist()
         // try to save statistics
-        SpaceCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "2", Seq("0", "1"))
+        OrderingIndexHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "2", Seq("0", "1"))
         // save again
-        SpaceCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "3", Seq("0", "1", "2"))
+        OrderingIndexHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "3", Seq("0", "1", "2"))
         // test old index table clean
-        SpaceCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "4", Seq("0", "1", "3"))
+        OrderingIndexHelper.saveStatisticsInfo(df, "c1,c2,c3,c5,c6,c7,c8", statisticPath.toString, "4", Seq("0", "1", "3"))
         assertEquals(!fs.exists(new Path(statisticPath, "2")), true)
         assertEquals(fs.exists(new Path(statisticPath, "3")), true)
         // test to save different index, new index on ("c1,c6,c7,c8") should be successfully saved.
-        SpaceCurveOptimizeHelper.saveStatisticsInfo(df, "c1,c6,c7,c8", statisticPath.toString, "5", Seq("0", "1", "3", "4"))
+        OrderingIndexHelper.saveStatisticsInfo(df, "c1,c6,c7,c8", statisticPath.toString, "5", Seq("0", "1", "3", "4"))
         assertEquals(fs.exists(new Path(statisticPath, "5")), true)
       } finally {
         if (fs.exists(testPath)) fs.delete(testPath)

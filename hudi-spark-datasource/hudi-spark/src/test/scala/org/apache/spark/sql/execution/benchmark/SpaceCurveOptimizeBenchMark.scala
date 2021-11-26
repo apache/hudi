@@ -19,7 +19,7 @@
 package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hadoop.fs.Path
-import org.apache.spark.SpaceCurveOptimizeHelper
+import org.apache.spark.OrderingIndexHelper
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.hudi.TestHoodieSqlBase
 
@@ -28,7 +28,7 @@ import scala.util.Random
 object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
 
   def getSkippingPercent(tableName: String, co1: String, co2: String, value1: Int, value2: Int): Unit= {
-    val minMax = SpaceCurveOptimizeHelper
+    val minMax = OrderingIndexHelper
       .getMinMaxValue(spark.sql(s"select * from ${tableName}"), s"${co1}, ${co2}")
       .collect().map(f => (f.getInt(1), f.getInt(2), f.getInt(4), f.getInt(5)))
     var c = 0
@@ -97,11 +97,11 @@ object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
   def prepareInterTypeTable(tablePath: Path, numRows: Int, col1Range: Int = 1000000, col2Range: Int = 1000000, skewed: Boolean = false): Unit = {
     import spark.implicits._
     val df = spark.range(numRows).map(_ => (Random.nextInt(1000000), Random.nextInt(1000000))).toDF("c1_int", "c2_int")
-    val dfOptimizeByMap = SpaceCurveOptimizeHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "z-order")
-    val dfOptimizeBySample = SpaceCurveOptimizeHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "z-order")
+    val dfOptimizeByMap = OrderingIndexHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "z-order")
+    val dfOptimizeBySample = OrderingIndexHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "z-order")
 
-    val dfHilbertOptimizeByMap = SpaceCurveOptimizeHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "hilbert")
-    val dfHilbertOptimizeBySample = SpaceCurveOptimizeHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "hilbert")
+    val dfHilbertOptimizeByMap = OrderingIndexHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "hilbert")
+    val dfHilbertOptimizeBySample = OrderingIndexHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "hilbert")
 
     saveAsTable(dfOptimizeByMap, tablePath, if (skewed) "z_sort_byMap_skew" else "z_sort_byMap")
     saveAsTable(dfOptimizeBySample, tablePath, if (skewed) "z_sort_bySample_skew" else "z_sort_bySample")
