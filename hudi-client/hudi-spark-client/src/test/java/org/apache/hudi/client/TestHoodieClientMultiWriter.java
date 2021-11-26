@@ -58,7 +58,6 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -345,16 +344,16 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         numRecords, 200, 2);
     // Start and finish another commit while the previous writer for commit 003 is running
     newCommitTime = "004";
-    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg2);
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
     JavaRDD<WriteStatus> result2 = updateBatch(cfg2, client2, newCommitTime, "001",
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2);
     client2.commit(newCommitTime, result2);
     // Schedule and run clustering while previous writer for commit 003 is running
-    SparkRDDWriteClient client3 = getHoodieWriteClient(cfg);
+    SparkRDDWriteClient client3 = getHoodieWriteClient(cfg2);
     // schedule clustering
     Option<String> clusterInstant = client3.scheduleTableService(Option.empty(), TableServiceType.CLUSTER);
-    assertFalse(clusterInstant.isPresent());
+    assertTrue(clusterInstant.isPresent());
     // Attempt to commit the inflight commit 003
     try {
       client1.commit("003", result1);
