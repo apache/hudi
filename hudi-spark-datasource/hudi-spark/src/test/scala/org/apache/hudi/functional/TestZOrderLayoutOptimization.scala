@@ -30,7 +30,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -143,6 +143,7 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   }
 
   @Test
+  @Disabled
   def testZIndexTableComposition(): Unit = {
     val inputDf =
       // NOTE: Schema here is provided for validation that the input date is in the appropriate format
@@ -195,6 +196,7 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   }
 
   @Test
+  @Disabled
   def testZIndexTableMerge(): Unit = {
     val testZIndexPath = new Path(basePath, "zindex")
 
@@ -274,6 +276,7 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   }
 
   @Test
+  @Disabled
   def testZIndexTablesGarbageCollection(): Unit = {
     val testZIndexPath = new Path(System.getProperty("java.io.tmpdir"), "zindex")
     val fs = testZIndexPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
