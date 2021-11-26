@@ -10,7 +10,7 @@ that a file write is in progress. When the write commit succeeds, the marker is 
 way through, a marker is left behind which indicates that the file is incomplete. Two important operations that use markers include: 
 
 - **Removing duplicate/partial data files**: 
-  - in Spark, the Hudi write client delegates the data file writing to multiple executors. One executor can fail the task, 
+  - In Spark, the Hudi write client delegates the data file writing to multiple executors. One executor can fail the task, 
   leaving partial data files written, and Spark retries the task in this case until it succeeds. 
   - When speculative execution is enabled, there can also be multiple successful attempts at writing out the same data 
   into different files, only one of which is finally handed to the Spark driver process for committing. 
@@ -29,10 +29,10 @@ or `APPEND` - either). For example, the marker `91245ce3-bb82-4f9f-969e-34336415
 that the corresponding data file is `91245ce3-bb82-4f9f-969e-343364159174-0_140-579-0_20210820173605.parquet` and the I/O type is `CREATE`.
 
 ## Marker Writing Options
-There are two ways to configure Marker write operations. 
+There are two ways to write Markers: 
 
 - Directly writing markers to storage, which is a legacy configuration.
-- Writing markers to the Timeline Server (Default), improves write performance of large files by batching marker requests.
+- Writing markers to the Timeline Server which batches marker requests before writing them to storage (Default). This option improves write performance of large files as described below.
 
 ### Direct Write Markers
 Directly writing to storage creates a new marker file corresponding to each data file, with the marker filename as described above. 
