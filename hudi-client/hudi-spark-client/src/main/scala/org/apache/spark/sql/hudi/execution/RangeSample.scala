@@ -19,26 +19,28 @@
 package org.apache.spark.sql.hudi.execution
 
 import org.apache.hudi.config.HoodieClusteringConfig
+import org.apache.hudi.optimize.{HilbertCurveUtils, ZOrderingUtil}
 import org.apache.spark.rdd.{PartitionPruningRDD, RDD}
-import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, BoundReference, SortOrder, UnsafeProjection, UnsafeRow}
-import org.apache.hudi.optimize.{HilbertCurve, ZOrderingUtil}
-import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.LazilyGeneratedOrdering
+import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, BoundReference, SortOrder, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.util.MutablePair
 import org.apache.spark.util.random.SamplingUtils
+import org.davidmoten.hilbert.HilbertCurve
 
+import java.util
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.{ClassTag, classTag}
 import scala.util.hashing.byteswap32
 
 class RangeSample[K: ClassTag, V](
-     zEncodeNum: Int,
-     rdd: RDD[_ <: Product2[K, V]],
-     private var ascend: Boolean = true,
-     val samplePointsPerPartitionHint: Int = 20) extends Serializable {
+                                   zEncodeNum: Int,
+                                   rdd: RDD[_ <: Product2[K, V]],
+                                   private var ascend: Boolean = true,
+                                   val samplePointsPerPartitionHint: Int = 20) extends Serializable {
 
   // We allow zEncodeNum = 0, which happens when sorting an empty RDD under the default settings.
   require(zEncodeNum >= 0, s"Number of zEncodeNum cannot be negative but found $zEncodeNum.")
@@ -515,7 +517,7 @@ object RangeSampleSort {
             }
           }.filter(v => v != -1)
           val mapValues = if (hilbertCurve.isDefined) {
-            hilbertCurve.get.indexBytes(values.map(_.toLong).toArray)
+            HilbertCurveUtils.indexBytes(hilbertCurve.get, values.map(_.toLong).toArray)
           } else {
             ZOrderingUtil.interleaving(values.map(ZOrderingUtil.intTo8Byte(_)).toArray, 8)
           }

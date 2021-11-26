@@ -18,13 +18,6 @@
 
 package org.apache.spark;
 
-import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.optimize.HilbertCurve;
-import scala.collection.JavaConversions;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieSparkUtils$;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -32,8 +25,14 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.optimize.HilbertCurveUtils;
 import org.apache.hudi.optimize.ZOrderingUtil;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.io.api.Binary;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -63,6 +62,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
+import org.davidmoten.hilbert.HilbertCurve;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -74,6 +74,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import scala.collection.JavaConversions;
+
 public class SpaceCurveOptimizeHelper {
 
   private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
@@ -83,11 +85,11 @@ public class SpaceCurveOptimizeHelper {
    * only support base type data. long,int,short,double,float,string,timestamp,decimal,date,byte
    * this method is more effective than createOptimizeDataFrameBySample
    *
-   * @param df a spark DataFrame holds parquet files to be read.
-   * @param sortCols z-sort/hilbert-sort cols
-   * @param fileNum spark partition num
+   * @param df       a spark DataFrame holds parquet files to be read.
+   * @param sortCols sorting columns for the curve
+   * @param fileNum  spark partition num
    * @param sortMode layout optimization strategy
-   * @return a dataFrame sorted by z-order/hilbert.
+   * @return a dataFrame sorted by the curve.
    */
   public static Dataset<Row> createOptimizedDataFrameByMapValue(Dataset<Row> df, List<String> sortCols, int fileNum, String sortMode) {
     Map<String, StructField> columnsMap = Arrays.stream(df.schema().fields()).collect(Collectors.toMap(e -> e.name(), e -> e));
@@ -214,7 +216,8 @@ public class SpaceCurveOptimizeHelper {
             return null;
           }).filter(f -> f != null).collect(Collectors.toList());
 
-          byte[] hilbertValue = hilbertCurve.indexBytes(longList.stream().mapToLong(l -> l).toArray());
+          byte[] hilbertValue = HilbertCurveUtils.indexBytes(
+              hilbertCurve, longList.stream().mapToLong(l -> l).toArray());
           List<Object> values = new ArrayList<>();
           values.addAll(scala.collection.JavaConverters.bufferAsJavaListConverter(row.toSeq().toBuffer()).asJava());
           values.add(hilbertValue);

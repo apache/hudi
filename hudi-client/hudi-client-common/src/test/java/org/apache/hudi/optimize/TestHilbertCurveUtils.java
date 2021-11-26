@@ -19,14 +19,12 @@
 
 package org.apache.hudi.optimize;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
+import org.davidmoten.hilbert.HilbertCurve;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigInteger;
-import java.util.Arrays;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestHilbertCurve {
+public class TestHilbertCurveUtils {
 
   private static final HilbertCurve INSTANCE = HilbertCurve.bits(5).dimensions(2);
 
@@ -36,30 +34,5 @@ public class TestHilbertCurve {
     assertEquals(13, INSTANCE.index(t).intValue());
     long[] t1 = {0, 16};
     assertEquals(256, INSTANCE.index(t1).intValue());
-  }
-
-  @Test
-  public void testTranspose() {
-    long[] ti = INSTANCE.transpose(BigInteger.valueOf(256));
-    assertEquals(2, ti.length);
-    assertEquals(0, ti[0]);
-    assertEquals(16, ti[1]);
-  }
-
-  @Test
-  public void toIndexByte() {
-    HilbertCurve c = HilbertCurve.bits(4).dimensions(2);
-    long[][] points = new long[][]{{1,2}, {3,2}, {5,6}, {7,8} };
-    // bits interleave
-    byte[][] resCheck = new byte[][] {{0b00, 0b00, 0b00, 0b00, 0b00, 0b00, 0b00, 0b0110},
-        {0b00, 0b00, 0b00, 0b00, 0b00, 0b00, 0b00, 0b1110},
-        {0b00, 0b00, 0b00, 0b00, 0b00, 0b00, 0b00, 0b00110110},
-        {0b00, 0b00, 0b00, 0b00, 0b00, 0b00, 0b00, 0b01101010}};
-    for (int i = 0; i < points.length; i++) {
-      byte[] res = c.toIndexBytes(Arrays.stream(points[i]).toArray());
-      for (int j = 0; j < 8; j++) {
-        assertEquals(res[j], resCheck[i][j]);
-      }
-    }
   }
 }

@@ -180,13 +180,10 @@ public class ZOrderingUtil {
   }
 
   public static long convertBytesToLong(byte[] bytes) {
-    byte[] padBytes = bytes;
-    if (bytes.length != 8) {
-      padBytes = paddingTo8Byte(bytes);
-    }
+    byte[] paddedBytes = paddingTo8Byte(bytes);
     long temp = 0L;
     for (int i = 7; i >= 0; i--) {
-      temp = temp | (((long)padBytes[i] & 0xff) << (7 - i) * 8);
+      temp = temp | (((long) paddedBytes[i] & 0xff) << (7 - i) * 8);
     }
     return temp;
   }
