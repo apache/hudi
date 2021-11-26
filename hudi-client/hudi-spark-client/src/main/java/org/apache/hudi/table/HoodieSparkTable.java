@@ -48,7 +48,7 @@ import static org.apache.hudi.data.HoodieJavaRDD.getJavaRDD;
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
-  private volatile boolean isMetadataTableBasePathExists = false;
+  private volatile boolean isMetadataTableExists = false;
 
   protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
@@ -110,15 +110,18 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   @Override
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String inFlightInstantTimestamp,
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
                                                                                             Option<T> actionMetadata) {
     if (config.isMetadataTableEnabled()) {
+      // Create the metadata table writer. First time after the upgrade this creation might trigger
+      // metadata table bootstrapping. Bootstrapping process could fail and checking the table
+      // existence after the creation is needed.
       final HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          context.getHadoopConf().get(), config, context, actionMetadata, Option.of(inFlightInstantTimestamp));
+          context.getHadoopConf().get(), config, context, actionMetadata, Option.of(triggeringInstantTimestamp));
       try {
-        if (isMetadataTableBasePathExists || metaClient.getFs().exists(new Path(
+        if (isMetadataTableExists || metaClient.getFs().exists(new Path(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
-          isMetadataTableBasePathExists = true;
+          isMetadataTableExists = true;
           return Option.of(metadataWriter);
         }
       } catch (IOException e) {
