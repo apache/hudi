@@ -1,5 +1,5 @@
 ---
-title: Snapshot Exporter
+title: Exporter
 keywords: [hudi, snapshotexporter, export]
 toc: true
 ---

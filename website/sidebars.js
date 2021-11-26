@@ -51,6 +51,7 @@ module.exports = {
                 'compaction',
                 'clustering',
                 'hoodie_cleaner',
+                'file_sizing',
                 'snapshot_exporter'
             ],
         },
@@ -60,7 +61,6 @@ module.exports = {
             label: 'Guides',
             items: [
                 'query_engine_setup',
-                'file_sizing',
                 'performance',
                 'deployment',
                 'cli',
