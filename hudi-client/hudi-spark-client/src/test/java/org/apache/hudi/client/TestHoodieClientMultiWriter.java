@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -71,7 +72,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     initTestDataGenerator();
     initFileSystem();
     fs.mkdirs(new Path(basePath));
-    initTimelineService();
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, HoodieFileFormat.PARQUET);
     initTestDataGenerator();
   }
@@ -93,6 +93,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        // Timeline-server-based markers are not used for multi-writer tests
+        .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build()).withAutoCommit(false).withProperties(properties).build();
     // Create the first commit
@@ -164,6 +166,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build())
         .withAutoCommit(false)
+        // Timeline-server-based markers are not used for multi-writer tests
+        .withMarkersType(MarkerType.DIRECT.name())
         .withProperties(properties)
         .build();
 
@@ -210,13 +214,15 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "5000");
     // Disabling embedded timeline server, it doesn't work with multiwriter
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withAutoClean(false)
-                .withInlineCompaction(false).withAsyncClean(true)
-                .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
-                .withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withAutoClean(false)
+            .withInlineCompaction(false).withAsyncClean(true)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .withEmbeddedTimelineServerEnabled(false)
+        // Timeline-server-based markers are not used for multi-writer tests
+        .withMarkersType(MarkerType.DIRECT.name())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(
-            FileSystemViewStorageType.MEMORY).withRemoteServerPort(timelineServicePort).build())
+            FileSystemViewStorageType.MEMORY).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build()).withAutoCommit(false).withProperties(properties);
@@ -328,6 +334,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        // Timeline-server-based markers are not used for multi-writer tests
+        .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProviderTestClass.class)
             .build()).withAutoCommit(false).withProperties(properties);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
