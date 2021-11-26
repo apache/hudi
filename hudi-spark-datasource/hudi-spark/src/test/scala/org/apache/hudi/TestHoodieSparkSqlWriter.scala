@@ -40,7 +40,7 @@ import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
@@ -296,6 +296,7 @@ class TestHoodieSparkSqlWriter {
         .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
         .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
         .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), BulkInsertSortMode.NONE.name())
+        .updated(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true")
 
       // generate the inserts
       val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -305,9 +306,10 @@ class TestHoodieSparkSqlWriter {
       try {
         // write to Hudi
         HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
-        Assertions.fail("Should have thrown exception")
+        fail("Should have thrown exception")
       } catch {
-        case e: HoodieException => assertTrue(e.getMessage.contains("hoodie.populate.meta.fields already disabled for the table. Can't be re-enabled back"))
+        case e: HoodieException => assertTrue(e.getMessage.startsWith("Config conflict"))
+        case e: Exception => fail(e);
       }
     }
   }
