@@ -1,10 +1,10 @@
 ---
-title: Data Quality Expectations - (Pre-commit Validator)
+title: Data Quality
 keywords: [ hudi, quality, expectations, pre-commit validator]
 ---
 
-Pre-Commit Validators allow you to validate that your data meets certain data quality expectations as you are writing
-with DeltaStreamer or Spark Datasource writers.
+Apache Hudi has what are called **Pre-Commit Validators** that allow you to validate that your data meets certain data quality
+expectations as you are writing with DeltaStreamer or Spark Datasource writers.
 
 To configure pre-commit validators, use this setting `hoodie.precommit.validators=<comma separated list of validator class names>`.
 
