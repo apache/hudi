@@ -19,10 +19,10 @@ package org.apache.hudi
 
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, INSERT_OPERATION_OPT_VAL, KEYGENERATOR_CLASS_NAME, MOR_TABLE_TYPE_OPT_VAL, OPERATION, PAYLOAD_CLASS_NAME, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.HoodieConfig
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
@@ -36,6 +36,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
@@ -48,10 +49,8 @@ import org.scalatest.Matchers.{assertResult, be, convertToAnyShouldWrapper, inte
 
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
-
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters
-import scala.util.control.NonFatal
 
 /**
  * Test suite for SparkSqlWriter class.
@@ -71,7 +70,7 @@ class TestHoodieSparkSqlWriter {
    * Setup method running before each test.
    */
   @BeforeEach
-  def setUp() {
+  def setUp(): Unit = {
     initSparkContext()
     tempPath = java.nio.file.Files.createTempDirectory("hoodie_test_path")
     tempBootStrapPath = java.nio.file.Files.createTempDirectory("hoodie_test_bootstrap")
@@ -270,7 +269,7 @@ class TestHoodieSparkSqlWriter {
   @ParameterizedTest
   @EnumSource(value = classOf[BulkInsertSortMode])
   def testBulkInsertForSortMode(sortMode: BulkInsertSortMode): Unit = {
-    testBulkInsertWithSortMode(sortMode, true)
+    testBulkInsertWithSortMode(sortMode, populateMetaFields = true)
   }
 
   /**
@@ -291,7 +290,7 @@ class TestHoodieSparkSqlWriter {
   @Test
   def testDisableAndEnableMetaFields(): Unit = {
     try {
-      testBulkInsertWithSortMode(BulkInsertSortMode.NONE, false)
+      testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields = false)
       //create a new table
       val fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
         .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
@@ -443,7 +442,7 @@ class TestHoodieSparkSqlWriter {
     val records = DataSourceTestUtils.generateRandomRows(100)
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-    initializeMetaClientForBootstrap(fooTableParams, tableType, false)
+    initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false)
     val client = spy(DataSourceUtils.createHoodieClient(
       new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
       mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
@@ -500,7 +499,7 @@ class TestHoodieSparkSqlWriter {
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
         HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
-      initializeMetaClientForBootstrap(fooTableParams, tableType, true)
+      initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true)
 
       val client = spy(DataSourceUtils.createHoodieClient(
         new JavaSparkContext(sc),
@@ -878,7 +877,6 @@ class TestHoodieSparkSqlWriter {
 
     val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     // raise exception when use params which is not same with HoodieTableConfig
-//    try {
     val configConflictException = intercept[HoodieException] {
       df2.write.format("hudi")
         .options(options)
@@ -897,5 +895,23 @@ class TestHoodieSparkSqlWriter {
     val data = spark.read.format("hudi").load(tablePath2 + "/*")
     assert(data.count() == 2)
     assert(data.select("_hoodie_partition_path").map(_.getString(0)).distinct.collect.head == "2021-10-16")
+  }
+
+  @Test
+  def testGetOriginKeyGenerator(): Unit = {
+    // for dataframe write
+    val m1 = Map(
+      HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName
+    )
+    val kg1 = HoodieWriterUtils.getOriginKeyGenerator(m1)
+    assertTrue(kg1 == classOf[ComplexKeyGenerator].getName)
+
+    // for sql write
+    val m2 = Map(
+      HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getName,
+      SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> classOf[SimpleKeyGenerator].getName
+    )
+    val kg2 = HoodieWriterUtils.getOriginKeyGenerator(m2)
+    assertTrue(kg2 == classOf[SimpleKeyGenerator].getName)
   }
 }
