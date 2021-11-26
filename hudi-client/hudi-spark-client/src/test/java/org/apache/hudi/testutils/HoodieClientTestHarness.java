@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -56,6 +57,7 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadStat;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -102,6 +104,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
   private static final Logger LOG = LogManager.getLogger(HoodieClientTestHarness.class);
 
+  protected static int timelineServicePort =
+      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
   private String testMethodName;
   protected transient JavaSparkContext jsc = null;
   protected transient HoodieSparkEngineContext context = null;
@@ -113,6 +117,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient SparkRDDWriteClient writeClient;
   protected transient HoodieReadClient readClient;
   protected transient HoodieTableFileSystemView tableView;
+  protected transient TimelineService timelineService;
 
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
 
@@ -145,12 +150,14 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     initTestDataGenerator();
     initFileSystem();
     initMetaClient();
+    initTimelineService();
   }
 
   /**
    * Cleanups resource group for the subclasses of {@link HoodieClientTestBase}.
    */
   public void cleanupResources() throws IOException {
+    cleanupTimelineService();
     cleanupClients();
     cleanupSparkContexts();
     cleanupTestDataGenerator();
@@ -245,6 +252,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    *
    * @throws IOException
    */
+  @Override
   protected void initMetaClient() throws IOException {
     initMetaClient(getTableType());
   }
@@ -270,6 +278,28 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
       properties.put(HoodieTableConfig.NAME.key(), tableName);
     }
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType, properties);
+  }
+
+  /**
+   * Initializes timeline service based on the write config.
+   */
+  protected void initTimelineService() {
+    timelineService = HoodieClientTestUtils.initTimelineService(
+        context, basePath, incrementTimelineServicePortToUse());
+    timelineServicePort = timelineService.getServerPort();
+  }
+
+  protected void cleanupTimelineService() {
+    if (timelineService != null) {
+      timelineService.close();
+    }
+  }
+
+  protected int incrementTimelineServicePortToUse() {
+    // Increment the timeline service port for each individual test
+    // to avoid port reuse causing failures
+    timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
+    return timelineServicePort;
   }
 
   protected Properties getPropertiesForKeyGen() {

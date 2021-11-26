@@ -45,6 +45,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -248,14 +249,17 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MARKERS_TYPE = ConfigProperty
       .key("hoodie.write.markers.type")
-      .defaultValue(MarkerType.DIRECT.toString())
+      .defaultValue(MarkerType.TIMELINE_SERVER_BASED.toString())
       .sinceVersion("0.9.0")
       .withDocumentation("Marker type to use.  Two modes are supported: "
           + "- DIRECT: individual marker file corresponding to each data file is directly "
           + "created by the writer. "
           + "- TIMELINE_SERVER_BASED: marker operations are all handled at the timeline service "
           + "which serves as a proxy.  New marker entries are batch processed and stored "
-          + "in a limited number of underlying files for efficiency.");
+          + "in a limited number of underlying files for efficiency.  If HDFS is used or "
+          + "timeline server is disabled, DIRECT markers are used as fallback even if this "
+          + "is configure.  For Spark structured streaming, this configuration does not "
+          + "take effect, i.e., DIRECT markers are always used for Spark structured streaming.");
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
@@ -2175,6 +2179,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     protected void setDefaults() {
+      writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Make sure the props is propagated
@@ -2228,6 +2233,19 @@ public class HoodieWriteConfig extends HoodieConfig {
       validate();
       // Build WriteConfig at the end
       return new HoodieWriteConfig(engineType, writeConfig.getProps());
+    }
+
+    private String getDefaultMarkersType(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return MarkerType.TIMELINE_SERVER_BASED.toString();
+        case FLINK:
+        case JAVA:
+          // Timeline-server-based marker is not supported for Flink and Java engines
+          return MarkerType.DIRECT.toString();
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
     }
   }
 }

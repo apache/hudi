@@ -30,8 +30,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -297,6 +299,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
     boolean populateMetaFields = true;
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false)
+        // Timeline-server-based markers are not used for multi-rollback tests
+        .withMarkersType(MarkerType.DIRECT.name())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
@@ -347,6 +351,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       newCommitTime = "002";
       // WriteClient with custom config (disable small file handling)
       HoodieWriteConfig smallFileWriteConfig = getHoodieWriteConfigWithSmallFileHandlingOffBuilder(populateMetaFields)
+          // Timeline-server-based markers are not used for multi-rollback tests
+          .withMarkersType(MarkerType.DIRECT.name())
           .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
       try (SparkRDDWriteClient nClient = getHoodieWriteClient(smallFileWriteConfig)) {
         nClient.startCommitWithTime(newCommitTime);
@@ -468,6 +474,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         .withAutoCommit(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
         .withEmbeddedTimelineServerEnabled(true)
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024).parquetMaxFileSize(1024).build()).forTable("test-trip-table");
 
@@ -562,7 +570,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         }
       }
       if (rollbackUsingMarkers) {
-        metaClient.getFs().copyFromLocalFile(markerDir,
+        metaClient.getFs().copyFromLocalFile(new Path(markerDir, lastCommitTime),
             new Path(metaClient.getMarkerFolderPath(lastCommitTime)));
       }
       Thread.sleep(1000);

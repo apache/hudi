@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.Transformations;
@@ -112,7 +113,9 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString());
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build());
   }
 
   // TODO (weiy): Add testcases for crossing file writing.
@@ -405,8 +408,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     Schema schema = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/testDataGeneratorSchema.txt");
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString())
-            .withStorageConfig(HoodieStorageConfig.newBuilder()
-                .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build()).build();
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .parquetMaxFileSize(1000 * 1024).hfileMaxFileSize(1000 * 1024).build()).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     String instantTime = "000";

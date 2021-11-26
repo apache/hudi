@@ -47,11 +47,13 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -61,6 +63,7 @@ import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -2336,13 +2339,22 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // Create a dummy marker file to simulate the case that a marker file was created without data file.
     // This should fail the commit
-    String partitionPath = Arrays
-        .stream(fs.globStatus(new Path(String.format("%s/*/*/*/*", metaClient.getMarkerFolderPath(instantTime))),
-            path -> path.toString().contains(HoodieTableMetaClient.MARKER_EXTN)))
-        .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
+    String partitionPath;
+    String markerFolderPath = metaClient.getMarkerFolderPath(instantTime);
+    if (cfg.getMarkersType() == MarkerType.TIMELINE_SERVER_BASED) {
+      String markerName = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
+              markerFolderPath, fs, context, 1).values().stream()
+          .flatMap(Collection::stream).findFirst().get();
+      partitionPath = new Path(markerFolderPath, markerName).getParent().toString();
+    } else {
+      partitionPath = Arrays
+          .stream(fs.globStatus(new Path(String.format("%s/*/*/*/*", markerFolderPath)),
+              path -> path.toString().contains(HoodieTableMetaClient.MARKER_EXTN)))
+          .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
+    }
 
     Option<Path> markerFilePath = WriteMarkersFactory.get(
-        cfg.getMarkersType(), getHoodieTable(metaClient, cfg), instantTime)
+            cfg.getMarkersType(), getHoodieTable(metaClient, cfg), instantTime)
         .create(partitionPath,
             FSUtils.makeDataFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
             IOType.MERGE);
@@ -2489,6 +2501,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             .withAutoClean(false).build())
         .withTimelineLayoutVersion(1)
         .withHeartbeatIntervalInMs(3 * 1000)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
         .withAutoCommit(false)
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen()).build();
   }
