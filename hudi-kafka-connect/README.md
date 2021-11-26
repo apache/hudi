@@ -46,11 +46,12 @@ confluent-hub install confluentinc/kafka-connect-hdfs:10.1.0
 cp confluentinc-kafka-connect-hdfs-10.1.0/* /usr/local/share/kafka/plugins/
 ```
 
-Now, build the packaged jar that contains all the hudi classes, including the Hudi Kafka Connector.
+Now, build the packaged jar that contains all the hudi classes, including the Hudi Kafka Connector. And copy it 
+to the plugin path that contains all the other jars (`/usr/local/share/kafka/plugins/lib`)
 ```bash
 cd ${HUDI_DIR}
 mvn package -DskipTests -pl packaging/hudi-kafka-connect-bundle -am
-cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.10.0-SNAPSHOT.jar /usr/local/share/kafka/plugins/lib/
+cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.10.0-SNAPSHOT.jar /usr/local/share/kafka/plugins/lib
 ```
 
 ### 2 - Set up the docker containers
