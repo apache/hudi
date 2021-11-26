@@ -28,7 +28,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -233,8 +232,6 @@ public class StreamerUtil {
     Properties properties = new Properties();
     // put all the set options
     flatConf.addAllToProperties(properties);
-    // ugly: table keygen clazz, needed by TwoToThreeUpgradeHandler
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), conf.getString(FlinkOptions.KEYGEN_CLASS_NAME));
     // put all the default options
     for (ConfigOption<?> option : FlinkOptions.optionalOptions()) {
       if (!flatConf.contains(option) && option.hasDefaultValue()) {
