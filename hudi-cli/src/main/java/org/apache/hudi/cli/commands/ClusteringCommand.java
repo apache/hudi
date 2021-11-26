@@ -40,6 +40,13 @@ public class ClusteringCommand implements CommandMarker {
 
   private static final Logger LOG = LogManager.getLogger(ClusteringCommand.class);
 
+  /**
+   * Schedule clustering table service.
+   * <p>
+   * Example:
+   * > connect --path {path to hudi table}
+   * > clustering schedule --sparkMaster local --sparkMemory 2g
+   */
   @CliCommand(value = "clustering schedule", help = "Schedule Clustering")
   public String scheduleClustering(
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
@@ -71,6 +78,14 @@ public class ClusteringCommand implements CommandMarker {
     return "Succeeded to schedule clustering for " + clusteringInstantTime;
   }
 
+  /**
+   * Run clustering table service.
+   * <p>
+   * Example:
+   * > connect --path {path to hudi table}
+   * > clustering schedule --sparkMaster local --sparkMemory 2g
+   * > clustering run --sparkMaster local --sparkMemory 2g --clusteringInstant  20211124005208
+   */
   @CliCommand(value = "clustering run", help = "Run Clustering")
   public String runClustering(
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,

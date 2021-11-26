@@ -80,11 +80,11 @@ public class SparkMain {
   }
 
   public static void main(String[] args) throws Exception {
+    ValidationUtils.checkArgument(args.length >= 4);
     final String commandString = args[0];
     LOG.info("Invoking SparkMain: " + commandString);
     final SparkCommand cmd = SparkCommand.valueOf(commandString);
 
-    ValidationUtils.checkArgument(args.length >= 4);
     JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + commandString,
         Option.of(args[1]), Option.of(args[2]));
 
