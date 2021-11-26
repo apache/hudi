@@ -35,6 +35,7 @@ import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{expr, lit}
+import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
@@ -95,6 +96,7 @@ class TestHoodieSparkSqlWriter {
     spark = SparkSession.builder()
       .appName(hoodieFooTableName)
       .master("local[2]")
+      .withExtensions(new HoodieSparkSessionExtension)
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .getOrCreate()
     sc = spark.sparkContext
@@ -250,12 +252,14 @@ class TestHoodieSparkSqlWriter {
       "hoodie.insert.shuffle.parallelism" -> "4", "hoodie.upsert.shuffle.parallelism" -> "4")
     val dataFrame2 = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
     val tableAlreadyExistException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, barTableModifier, dataFrame2))
-    assert(tableAlreadyExistException.getMessage.contains("hoodie table with name " + hoodieFooTableName + " already exist"))
+    assert(tableAlreadyExistException.getMessage.contains("Config conflict"))
+    assert(tableAlreadyExistException.getMessage.contains(s"${HoodieWriteConfig.TBL_NAME.key}:\thoodie_bar_tbl\thoodie_foo_tbl"))
 
     //on same path try append with delete operation and different("hoodie_bar_tbl") table name which should throw an exception
     val deleteTableModifier = barTableModifier ++ Map(OPERATION.key -> "delete")
     val deleteCmdException = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, deleteTableModifier, dataFrame2))
-    assert(deleteCmdException.getMessage.contains("hoodie table with name " + hoodieFooTableName + " already exist"))
+    assert(tableAlreadyExistException.getMessage.contains("Config conflict"))
+    assert(tableAlreadyExistException.getMessage.contains(s"${HoodieWriteConfig.TBL_NAME.key}:\thoodie_bar_tbl\thoodie_foo_tbl"))
   }
 
   /**
@@ -526,7 +530,8 @@ class TestHoodieSparkSqlWriter {
       .setTableType(tableType)
       .setTableName(hoodieFooTableName)
       .setRecordKeyFields(fooTableParams(DataSourceWriteOptions.RECORDKEY_FIELD.key))
-      .setBaseFileFormat(HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name())
+      .setBaseFileFormat(fooTableParams.getOrElse(HoodieWriteConfig.BASE_FILE_FORMAT.key,
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name))
       .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
       .setPayloadClassName(fooTableParams(PAYLOAD_CLASS_NAME.key))
       .setPreCombineField(fooTableParams(PRECOMBINE_FIELD.key))
@@ -873,18 +878,16 @@ class TestHoodieSparkSqlWriter {
 
     val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     // raise exception when use params which is not same with HoodieTableConfig
-    try {
+//    try {
+    val configConflictException = intercept[HoodieException] {
       df2.write.format("hudi")
         .options(options)
         .option(HoodieWriteConfig.TBL_NAME.key, tableName2)
         .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
         .mode(SaveMode.Append).save(tablePath2)
-    } catch {
-      case NonFatal(e) =>
-        assert(e.getMessage.contains("Config conflict"))
-        assert(e.getMessage.contains(
-          s"${HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key}\t${classOf[ComplexKeyGenerator].getName}\t${classOf[SimpleKeyGenerator].getName}"))
     }
+    assert(configConflictException.getMessage.contains("Config conflict"))
+    assert(configConflictException.getMessage.contains(s"KeyGenerator:\t${classOf[ComplexKeyGenerator].getName}\t${classOf[SimpleKeyGenerator].getName}"))
 
     // do not need to specify hiveStylePartitioning/urlEncodePartitioning/KeyGenerator params
     df2.write.format("hudi")
@@ -893,6 +896,6 @@ class TestHoodieSparkSqlWriter {
       .mode(SaveMode.Append).save(tablePath2)
     val data = spark.read.format("hudi").load(tablePath2 + "/*")
     assert(data.count() == 2)
-    assert(data.select("_hoodie_partition_path").map(_.getString(0)).distinct.collect.head == "dt=2021-10-16")
+    assert(data.select("_hoodie_partition_path").map(_.getString(0)).distinct.collect.head == "2021-10-16")
   }
 }
