@@ -251,10 +251,10 @@ public class MetadataCommand implements CommandMarker {
       @CliOption(key = {"verbose"}, help = "Print all file details", unspecifiedDefaultValue = "false") final boolean verbose) throws IOException {
     HoodieCLI.getTableMetaClient();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
-    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
+    HoodieBackedTableMetadata metadataReader = new HoodieBackedTableMetadata(
         new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath, "/tmp");
 
-    if (!metaReader.enabled()) {
+    if (!metadataReader.enabled()) {
       return "[ERROR] Metadata Table not enabled/initialized\n\n";
     }
 
@@ -263,7 +263,8 @@ public class MetadataCommand implements CommandMarker {
         new HoodieLocalEngineContext(HoodieCLI.conf), fsConfig, HoodieCLI.basePath, "/tmp");
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<String> metadataPartitions = metaReader.getAllPartitionPaths();
+    List<String> metadataPartitions = metadataReader.getAllPartitionPaths();
+    LOG.debug("Listing partitions Took " + timer.endTimer() + " ms");
     List<String> fsPartitions = fsMetaReader.getAllPartitionPaths();
     Collections.sort(fsPartitions);
     Collections.sort(metadataPartitions);
@@ -281,55 +282,47 @@ public class MetadataCommand implements CommandMarker {
     final List<Comparable[]> rows = new ArrayList<>();
     for (String partition : allPartitions) {
       Map<String, FileStatus> fileStatusMap = new HashMap<>();
-      Map<String, FileStatus> metaFileStatusMap = new HashMap<>();
-      FileStatus[] metadataStatuses = metaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
-      Arrays.stream(metadataStatuses).forEach(entry -> metaFileStatusMap.put(entry.getPath().getName(), entry));
-      FileStatus[] fsStatus = fsMetaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
-      Arrays.stream(fsStatus).forEach(entry -> fileStatusMap.put(entry.getPath().getName(), entry));
+      Map<String, FileStatus> metadataFileStatusMap = new HashMap<>();
+      FileStatus[] metadataStatuses = metadataReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
+      Arrays.stream(metadataStatuses).forEach(entry -> metadataFileStatusMap.put(entry.getPath().getName(), entry));
+      FileStatus[] fsStatuses = fsMetaReader.getAllFilesInPartition(new Path(HoodieCLI.basePath, partition));
+      Arrays.stream(fsStatuses).forEach(entry -> fileStatusMap.put(entry.getPath().getName(), entry));
 
       Set<String> allFiles = new HashSet<>();
       allFiles.addAll(fileStatusMap.keySet());
-      allFiles.addAll(metaFileStatusMap.keySet());
+      allFiles.addAll(metadataFileStatusMap.keySet());
 
       for (String file : allFiles) {
         Comparable[] row = new Comparable[6];
         row[0] = partition;
         FileStatus fsFileStatus = fileStatusMap.get(file);
-        FileStatus metaFileStatus = metaFileStatusMap.get(file);
+        FileStatus metaFileStatus = metadataFileStatusMap.get(file);
         row[1] = file;
         row[2] = fsFileStatus != null;
         row[3] = metaFileStatus != null;
         row[4] = (fsFileStatus != null) ? fsFileStatus.getLen() : 0;
         row[5] = (metaFileStatus != null) ? metaFileStatus.getLen() : 0;
-        if (verbose) {
-          rows.add(row);
-        }
+        rows.add(row);
       }
 
-      LOG.info("Validating partition " + partition);
-      LOG.info(" Total FS files count " + metadataStatuses.length + ", metadata files count " + fsStatus.length);
-      if (metadataStatuses.length != fsStatus.length) {
-        LOG.error(" FS and metadata files count not matching!");
+      if (metadataStatuses.length != fsStatuses.length) {
+        LOG.error(" FS and metadata files count not matching for " + partition + ". FS files count " + fsStatuses.length + ", metadata base files count "
+            + metadataStatuses.length);
       }
 
       for (Map.Entry<String, FileStatus> entry : fileStatusMap.entrySet()) {
-        if (!metaFileStatusMap.containsKey(entry.getKey())) {
+        if (!metadataFileStatusMap.containsKey(entry.getKey())) {
           LOG.error("FS file not found in metadata " + entry.getKey());
         } else {
-          if (entry.getValue().getLen() != metaFileStatusMap.get(entry.getKey()).getLen()) {
+          if (entry.getValue().getLen() != metadataFileStatusMap.get(entry.getKey()).getLen()) {
             LOG.error(" FS file size mismatch " + entry.getKey() + ", size equality "
-                + (entry.getValue().getLen() == metaFileStatusMap.get(entry.getKey()).getLen())
+                + (entry.getValue().getLen() == metadataFileStatusMap.get(entry.getKey()).getLen())
                 + ". FS size " + entry.getValue().getLen() + ", metadata size "
-                + metaFileStatusMap.get(entry.getKey()).getLen());
-          } else {
-            LOG.info("  FS File " + entry.getKey() + ", size equality "
-                + (entry.getValue().getLen() == metaFileStatusMap.get(entry.getKey()).getLen())
-                + ". FS size " + entry.getValue().getLen() + ", metadata size "
-                + metaFileStatusMap.get(entry.getKey()).getLen());
+                + metadataFileStatusMap.get(entry.getKey()).getLen());
           }
         }
       }
-      for (Map.Entry<String, FileStatus> entry : metaFileStatusMap.entrySet()) {
+      for (Map.Entry<String, FileStatus> entry : metadataFileStatusMap.entrySet()) {
         if (!fileStatusMap.containsKey(entry.getKey())) {
           LOG.error("Metadata file not found in FS " + entry.getKey());
         } else {
@@ -337,27 +330,18 @@ public class MetadataCommand implements CommandMarker {
             LOG.error(" Metadata file size mismatch " + entry.getKey() + ", size equality "
                 + (entry.getValue().getLen() == fileStatusMap.get(entry.getKey()).getLen())
                 + ". Metadata size " + entry.getValue().getLen() + ", FS size "
-                + metaFileStatusMap.get(entry.getKey()).getLen());
-          } else {
-            LOG.info("  Metadata File " + entry.getKey() + ", size equality "
-                + (entry.getValue().getLen() == fileStatusMap.get(entry.getKey()).getLen())
-                + ". Metadata size " + entry.getValue().getLen() + ", FS size "
-                + metaFileStatusMap.get(entry.getKey()).getLen());
+                + metadataFileStatusMap.get(entry.getKey()).getLen());
           }
         }
       }
     }
-
-    if (verbose) {
-      TableHeader header = new TableHeader().addTableHeaderField("Partition")
-          .addTableHeaderField("File Name")
-          .addTableHeaderField(" isPresent FS ")
-          .addTableHeaderField(" IsPresent Metadata")
-          .addTableHeaderField(" FS size")
-          .addTableHeaderField(" Metadata size");
-      return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
-    }
-    return "Validation completed!";
+    TableHeader header = new TableHeader().addTableHeaderField("Partition")
+        .addTableHeaderField("File Name")
+        .addTableHeaderField(" IsPresent in FS ")
+        .addTableHeaderField(" IsPresent in Metadata")
+        .addTableHeaderField(" FS size")
+        .addTableHeaderField(" Metadata size");
+    return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
   }
 
   private HoodieWriteConfig getWriteConfig() {
