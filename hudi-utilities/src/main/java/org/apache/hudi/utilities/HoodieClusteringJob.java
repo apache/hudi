@@ -66,7 +66,7 @@ public class HoodieClusteringJob {
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
     this.cfg = cfg;
     this.jsc = jsc;
-    this.props = cfg.propsFilePath == null
+    this.props = StringUtils.isNullOrEmpty(cfg.propsFilePath)
         ? UtilHelpers.buildProperties(cfg.configs)
         : readConfigFromFileSystem(jsc, cfg);
     this.metaClient = UtilHelpers.createMetaClient(jsc, cfg.basePath, true);
