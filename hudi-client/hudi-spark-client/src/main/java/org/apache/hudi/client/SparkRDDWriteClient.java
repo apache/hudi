@@ -424,12 +424,12 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieTableMetaClient metaClient = createMetaClient(true);
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
         metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
-    if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
-      try {
+    try {
+      this.txnManager.beginTransaction();
+      if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
         // Lock the upgrade step and the follow-on metadata table creation
         // and the initial bootstrapping so that concurrent writers if any
         // are blocked from racing with these one time operations.
-        this.txnManager.beginTransaction();
         if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
           // Ensure no in-flight commits by setting EAGER policy and explicitly cleaning all failed commits
           this.rollbackFailedWrites(getInstantsToRollback(metaClient,
@@ -441,10 +441,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         }
         metaClient.reloadActiveTimeline();
         initializeMetadataTable(Option.of(instantTime));
-      } finally {
-        // Release the lock
-        this.txnManager.endTransaction();
       }
+    } finally {
+      // Release the lock
+      this.txnManager.endTransaction();
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
