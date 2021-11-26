@@ -55,7 +55,7 @@ import scala.util.control.NonFatal
 /**
  * Test suite for SparkSqlWriter class.
  */
-class HoodieSparkSqlWriterSuite {
+class TestHoodieSparkSqlWriter {
   var spark: SparkSession = _
   var sqlContext: SQLContext = _
   var sc: SparkContext = _

@@ -25,7 +25,7 @@ import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-class HoodieSparkSqlWriterSuite2 {
+class TestHoodieSparkSqlWriter2 {
 
   @Test
   def testGetOriginKeyGenerator(): Unit = {
