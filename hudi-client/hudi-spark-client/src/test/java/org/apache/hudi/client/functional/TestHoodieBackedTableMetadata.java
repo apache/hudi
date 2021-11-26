@@ -18,9 +18,11 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.metadata.BaseTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -109,4 +111,17 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         tableMetadata.getMetadataMetaClient().getTableConfig().getKeyGeneratorClassName());
   }
 
+  /**
+   * [HUDI-2852] Table metadata returns empty for non-exist partition.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testNotExistPartition(final HoodieTableType tableType) throws Exception {
+    init(tableType);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+    FileStatus[] allFilesInPartition =
+        tableMetadata.getAllFilesInPartition(new Path(writeConfig.getBasePath() + "dummy"));
+    assertEquals(allFilesInPartition.length, 0);
+  }
 }
