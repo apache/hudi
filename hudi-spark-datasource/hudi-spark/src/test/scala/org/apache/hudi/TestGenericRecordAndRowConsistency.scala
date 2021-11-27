@@ -18,17 +18,15 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.spark.sql.DataFrame
+import org.junit.jupiter.api.Test
+
 import java.sql.{Date, Timestamp}
 
-import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.spark.sql.{DataFrame,  SparkSession}
+class TestGenericRecordAndRowConsistency extends SparkClientFunctionalTestHarness {
 
-import org.junit.jupiter.api.{BeforeEach, Test}
-
-class TestGenericRecordAndRowConsistency extends HoodieClientTestBase {
-
-  var spark: SparkSession = _
   val commonOpts = Map(
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_type_consistency_tbl",
     "hoodie.insert.shuffle.parallelism" -> "1",
@@ -40,16 +38,6 @@ class TestGenericRecordAndRowConsistency extends HoodieClientTestBase {
     DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.ComplexKeyGenerator"
   )
 
-  /**
-   * Setup method running before each test.
-   */
-  @BeforeEach override def setUp() {
-    setTableName("hoodie_type_consistency_tbl")
-    initPath()
-    initSparkContexts()
-    spark = sqlContext.sparkSession
-  }
-
   @Test
   def testTimestampTypeConsistency(): Unit = {
     val _spark = spark
@@ -60,7 +48,7 @@ class TestGenericRecordAndRowConsistency extends HoodieClientTestBase {
       (1, Timestamp.valueOf("2014-11-30 12:40:32"), "abc"),
       (2, Timestamp.valueOf("2016-12-29 09:54:00"), "def"),
       (2, Timestamp.valueOf("2016-05-09 10:12:43"), "def")
-    ).toDF("typeId","eventTime", "str")
+    ).toDF("typeId", "eventTime", "str")
 
     testConsistencyBetweenGenericRecordAndRow(df)
   }
@@ -75,7 +63,7 @@ class TestGenericRecordAndRowConsistency extends HoodieClientTestBase {
       (1, Date.valueOf("2014-11-30"), "abc"),
       (2, Date.valueOf("2016-12-29"), "def"),
       (2, Date.valueOf("2016-05-09"), "def")
-    ).toDF("typeId","eventTime", "str")
+    ).toDF("typeId", "eventTime", "str")
 
     testConsistencyBetweenGenericRecordAndRow(df)
   }
