@@ -439,28 +439,22 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieTableMetaClient metaClient = createMetaClient(true);
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
         metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
-    if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
-      if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-        this.txnManager.beginTransaction();
-        try {
-          // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
-          List<String> instantsToRollback = getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime));
-          Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
-          instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
-          this.rollbackFailedWrites(pendingRollbacks, true);
-          new UpgradeDowngrade(
-              metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
-              .run(HoodieTableVersion.current(), instantTime);
-        } finally {
-          this.txnManager.endTransaction();
-        }
-      } else {
-        upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
+    try {
+      this.txnManager.beginTransaction();
+      if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
+        // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
+        List<String> instantsToRollback = getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime));
+        Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
+        instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+        this.rollbackFailedWrites(pendingRollbacks, true);
+        new UpgradeDowngrade(
+            metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+            .run(HoodieTableVersion.current(), instantTime);
+        metaClient.reloadActiveTimeline();
+        initializeMetadataTable(Option.of(instantTime));
       }
-      metaClient.reloadActiveTimeline();
-
-      // re-bootstrap metadata table if required
-      initializeMetadataTable(Option.of(instantTime));
+    } finally {
+      this.txnManager.endTransaction();
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
