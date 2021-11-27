@@ -41,7 +41,7 @@ public class HilbertCurveUtils {
       System.arraycopy(a, 0, result, 0, paddingNum);
       return result;
     }
-    int paddingSize = 8 - a.length;
+    int paddingSize = paddingNum - a.length;
     byte[] result = new byte[paddingNum];
     for (int i = 0; i < paddingSize; i++) {
       result[i] = 0;
