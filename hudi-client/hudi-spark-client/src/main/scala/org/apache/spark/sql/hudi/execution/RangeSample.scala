@@ -30,7 +30,6 @@ import org.apache.spark.util.MutablePair
 import org.apache.spark.util.random.SamplingUtils
 import org.davidmoten.hilbert.HilbertCurve
 
-import java.util
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.{ClassTag, classTag}
@@ -517,7 +516,7 @@ object RangeSampleSort {
             }
           }.filter(v => v != -1)
           val mapValues = if (hilbertCurve.isDefined) {
-            HilbertCurveUtils.indexBytes(hilbertCurve.get, values.map(_.toLong).toArray)
+            HilbertCurveUtils.indexBytes(hilbertCurve.get, values.map(_.toLong).toArray, 32)
           } else {
             ZOrderingUtil.interleaving(values.map(ZOrderingUtil.intTo8Byte(_)).toArray, 8)
           }

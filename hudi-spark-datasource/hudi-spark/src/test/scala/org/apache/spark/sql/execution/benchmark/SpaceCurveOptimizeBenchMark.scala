@@ -96,7 +96,7 @@ object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
 
   def prepareInterTypeTable(tablePath: Path, numRows: Int, col1Range: Int = 1000000, col2Range: Int = 1000000, skewed: Boolean = false): Unit = {
     import spark.implicits._
-    val df = spark.range(numRows).map(_ => (Random.nextInt(1000000), Random.nextInt(1000000))).toDF("c1_int", "c2_int")
+    val df = spark.range(numRows).map(_ => (Random.nextInt(col1Range), Random.nextInt(col2Range))).toDF("c1_int", "c2_int")
     val dfOptimizeByMap = OrderingIndexHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "z-order")
     val dfOptimizeBySample = OrderingIndexHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "z-order")
 

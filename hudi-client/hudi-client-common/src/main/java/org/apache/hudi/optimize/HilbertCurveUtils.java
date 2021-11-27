@@ -27,8 +27,26 @@ import java.math.BigInteger;
  * Utils for Hilbert Curve.
  */
 public class HilbertCurveUtils {
-  public static byte[] indexBytes(HilbertCurve hilbertCurve, long[] points) {
+  public static byte[] indexBytes(HilbertCurve hilbertCurve, long[] points, int paddingNum) {
     BigInteger index = hilbertCurve.index(points);
-    return index.toByteArray();
+    return paddingToNByte(index.toByteArray(), paddingNum);
+  }
+
+  public static byte[] paddingToNByte(byte[] a, int paddingNum) {
+    if (a.length == paddingNum) {
+      return a;
+    }
+    if (a.length > paddingNum) {
+      byte[] result = new byte[paddingNum];
+      System.arraycopy(a, 0, result, 0, paddingNum);
+      return result;
+    }
+    int paddingSize = 8 - a.length;
+    byte[] result = new byte[paddingNum];
+    for (int i = 0; i < paddingSize; i++) {
+      result[i] = 0;
+    }
+    System.arraycopy(a, 0, result, paddingSize, a.length);
+    return result;
   }
 }

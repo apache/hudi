@@ -217,7 +217,7 @@ public class OrderingIndexHelper {
           }).filter(f -> f != null).collect(Collectors.toList());
 
           byte[] hilbertValue = HilbertCurveUtils.indexBytes(
-              hilbertCurve, longList.stream().mapToLong(l -> l).toArray());
+              hilbertCurve, longList.stream().mapToLong(l -> l).toArray(), 63);
           List<Object> values = new ArrayList<>();
           values.addAll(scala.collection.JavaConverters.bufferAsJavaListConverter(row.toSeq().toBuffer()).asJava());
           values.add(hilbertValue);
