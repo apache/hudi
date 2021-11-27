@@ -908,6 +908,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
+    //LOG.warn("Staring testCleaningArchivingAndCompaction ------------------------");
     final int maxDeltaCommitsBeforeCompaction = 3;
     HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
@@ -938,11 +939,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // deltacommits (1 will be due to bootstrap)
       HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
 
-      LOG.warn("111 DT all commits timeline ");
-      datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("111 DT all commits timeline ");
+      //datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
-      LOG.warn("111 MTD all commits timeline ");
-      metadataTimeline.getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("111 MTD all commits timeline ");
+      //metadataTimeline.getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 0);
       assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), maxDeltaCommitsBeforeCompaction - 1);
@@ -958,11 +959,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), maxDeltaCommitsBeforeCompaction + 1);
       assertEquals(datasetMetaClient.getArchivedTimeline().reload().countInstants(), 0);
 
-      LOG.warn("222 DT all commits timeline After compaction in DT");
-      datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("222 DT all commits timeline After compaction in DT");
+      //datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
-      LOG.warn("222 MTD all commits timeline after compaction in DT");
-      metadataMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("222 MTD all commits timeline after compaction in DT");
+      //metadataMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
       // More than maxDeltaCommitsBeforeCompaction commits
       String inflightCommitTime = newCommitTime;
@@ -979,11 +980,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         }
       }
 
-      LOG.warn("333 DT all commits timeline");
-      datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("333 DT all commits timeline");
+      //datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
-      LOG.warn("333 MTD all commits timeline");
-      metadataMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("333 MTD all commits timeline");
+      //metadataMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
       // Ensure no more compactions took place due to the leftover inflight commit
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
@@ -994,11 +995,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Complete commit
       FileCreateUtils.createCommit(basePath, inflightCommitTime);
 
-      LOG.warn("444 DT all commits timeline");
-      datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("444 DT all commits timeline");
+      //datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
-      LOG.warn("444 MTD all commits timeline");
-      metadataMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("444 MTD all commits timeline");
+      //metadataMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
       // Next commit should lead to compaction
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -1006,11 +1007,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.startCommitWithTime(newCommitTime);
       client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
 
-      LOG.warn("555 DT all commits timeline");
-      datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("555 DT all commits timeline");
+      //datasetMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
-      LOG.warn("555 MTD all commits timeline");
-      metadataMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
+      //LOG.warn("555 MTD all commits timeline");
+      //metadataMetaClient.reloadActiveTimeline().getAllCommitsTimeline().getInstants().forEach(entry -> LOG.warn(" " + entry.toString()));
 
       // Ensure compactions took place
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
@@ -1019,6 +1020,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           ((2 * maxDeltaCommitsBeforeCompaction) + (maxDeltaCommitsBeforeCompaction + 1 /* clean from dataset */) + 2 /* clean in metadata table */));
       assertTrue(datasetMetaClient.getArchivedTimeline().reload().countInstants() > 0);
       validateMetadata(client);
+      //LOG.warn("Completing testCleaningArchivingAndCompaction ------------------------");
     }
   }
 
