@@ -18,7 +18,6 @@
 
 package org.apache.spark;
 
-import org.apache.hudi.HoodieSparkUtils$;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -27,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
 import org.apache.hudi.optimize.HilbertCurveUtils;
 import org.apache.hudi.optimize.ZOrderingUtil;
 
@@ -419,8 +419,7 @@ public class OrderingIndexHelper {
         statisticsDF.registerTempTable(updateTable);
         // update table by full out join
         List columns = Arrays.asList(statisticsDF.schema().fieldNames());
-        spark.sql(HoodieSparkUtils$
-            .MODULE$.createMergeSql(originalTable, updateTable, JavaConversions.asScalaBuffer(columns))).repartition(1).write().save(savePath.toString());
+        spark.sql(ZOrderingIndexHelper.createIndexMergeSql(originalTable, updateTable, columns)).repartition(1).write().save(savePath.toString());
       } else {
         statisticsDF.repartition(1).write().mode("overwrite").save(savePath.toString());
       }

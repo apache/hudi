@@ -47,6 +47,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
@@ -79,7 +80,6 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.OrderingIndexHelper;
 import org.apache.spark.api.java.JavaRDD;
 
 import javax.annotation.Nonnull;
@@ -215,7 +215,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
             new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
         );
 
-    OrderingIndexHelper.updateZIndexFor(
+    ZOrderingIndexHelper.updateZIndexFor(
         sparkEngineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(tableWriteSchema),
         touchedFiles,

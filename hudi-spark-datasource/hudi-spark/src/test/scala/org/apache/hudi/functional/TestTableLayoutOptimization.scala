@@ -184,7 +184,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
       inputFiles.zipWithIndex.foreach { case (f, index) =>
         val fileUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).asInstanceOf[ParquetUtils]
         val res = fileUtils.readRangeFromParquetMetadata(conf, new Path(f), cols).iterator().next()
-        realResult(index) = (res.getMinValueAsString, res.getMaxValueAsString)
+        realResult(index) = (res.getMinValue.toString, res.getMaxValue.toString)
       }
 
       // multi thread read with no lock
@@ -192,7 +192,7 @@ class TestTableLayoutOptimization extends HoodieClientTestBase {
       inputFiles.zipWithIndex.par.foreach { case (f, index) =>
         val fileUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET).asInstanceOf[ParquetUtils]
         val res = fileUtils.readRangeFromParquetMetadata(conf, new Path(f), cols).iterator().next()
-        resUseLock(index) = (res.getMinValueAsString, res.getMaxValueAsString)
+        resUseLock(index) = (res.getMinValue.toString, res.getMaxValue.toString)
       }
 
       // check resUseNoLock,
