@@ -135,6 +135,14 @@ public class TestZOrderingUtil {
     }
   }
 
+  @Test
+  public void testConvertBytesToLongWithPadding() {
+    byte[] bytes = new byte[2];
+    bytes[0] = 2;
+    bytes[1] = 127;
+    assertEquals(ZOrderingUtil.convertBytesToLong(bytes), 2 * 256 + 127);
+  }
+
   private byte[] convertLongToBytes(long num) {
     byte[] byteNum = new byte[8];
     for (int i = 0; i < 8; i++) {
