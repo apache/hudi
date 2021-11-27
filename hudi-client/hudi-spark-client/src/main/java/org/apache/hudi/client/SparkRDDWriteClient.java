@@ -96,21 +96,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-    initializeMetadataTable(Option.empty());
-  }
-
-  private void initializeMetadataTable(Option<String> inflightInstantTimestamp) {
-    if (config.isMetadataTableEnabled()) {
-      // Defer bootstrap if upgrade / downgrade is pending
-      HoodieTableMetaClient metaClient = createMetaClient(true);
-      UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
-          metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
-      if (!upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
-        // TODO: Check if we can remove this requirement - auto bootstrap on commit
-        SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context, Option.empty(),
-                                                    inflightInstantTimestamp);
-      }
-    }
   }
 
   /**
@@ -431,7 +416,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     boolean isTableServiceAction = table.isTableServiceAction(hoodieInstant.getAction());
     // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
     // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-    table.getMetadataWriter().ifPresent(w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
+    table.getMetadataWriter(hoodieInstant.getTimestamp()).ifPresent(
+        w -> w.update(commitMetadata, hoodieInstant.getTimestamp(), isTableServiceAction));
   }
 
   @Override
@@ -439,37 +425,45 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieTableMetaClient metaClient = createMetaClient(true);
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
         metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
-    if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
-      if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
-        this.txnManager.beginTransaction();
-        try {
-          // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
-          List<String> instantsToRollback = getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime));
-          Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
-          instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
-          this.rollbackFailedWrites(pendingRollbacks, true);
-          new UpgradeDowngrade(
-              metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
-              .run(HoodieTableVersion.current(), instantTime);
-        } finally {
-          this.txnManager.endTransaction();
-        }
-      } else {
-        upgradeDowngrade.run(HoodieTableVersion.current(), instantTime);
+    try {
+      this.txnManager.beginTransaction();
+      if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
+        // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
+        List<String> instantsToRollback = getInstantsToRollback(
+            metaClient, HoodieFailedWritesCleaningPolicy.EAGER, Option.of(instantTime));
+        Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(metaClient);
+        instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+        this.rollbackFailedWrites(pendingRollbacks, true);
+        new UpgradeDowngrade(
+            metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+            .run(HoodieTableVersion.current(), instantTime);
+        metaClient.reloadActiveTimeline();
+        initializeMetadataTable(Option.of(instantTime));
       }
-      metaClient.reloadActiveTimeline();
-
-      // re-bootstrap metadata table if required
-      initializeMetadataTable(Option.of(instantTime));
+    } finally {
+      this.txnManager.endTransaction();
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
   }
 
+  /**
+   * Initialize the metadata table if needed. Creating the metadata table writer
+   * will trigger the initial bootstrapping from the data table.
+   *
+   * @param inFlightInstantTimestamp - The in-flight action responsible for the metadata table initialization
+   */
+  private void initializeMetadataTable(Option<String> inFlightInstantTimestamp) {
+    if (config.isMetadataTableEnabled()) {
+      SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config,
+          context, Option.empty(), inFlightInstantTimestamp);
+    }
+  }
+
   // TODO : To enforce priority between table service and ingestion writer, use transactions here and invoke strategy
   private void completeTableService(TableServiceType tableServiceType, HoodieCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
-                                      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
-                                      String commitInstant) {
+                                    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
+                                    String commitInstant) {
 
     switch (tableServiceType) {
       case CLUSTER:

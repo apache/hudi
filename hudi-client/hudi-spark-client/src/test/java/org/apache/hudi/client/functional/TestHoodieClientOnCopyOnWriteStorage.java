@@ -2148,14 +2148,20 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @MethodSource("rollbackFailedCommitsParams")
   public void testRollbackFailedCommits(HoodieFailedWritesCleaningPolicy cleaningPolicy, boolean populateMetaFields) throws Exception {
     HoodieTestUtils.init(hadoopConf, basePath);
-    // Perform 2 failed writes to table
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
+
+    // perform 1 successfull commit
     writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
+        100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
+        0, true);
+
+    // Perform 2 failed writes to table
+    writeBatch(client, "200", "100", Option.of(Arrays.asList("200")), "100",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, false);
     client.close();
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    writeBatch(client, "200", "100", Option.of(Arrays.asList("200")), "200",
+    writeBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, false);
     client.close();
@@ -2163,7 +2169,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     dataGen = new HoodieTestDataGenerator();
     // Perform 1 successful write
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    writeBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
+    writeBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, true);
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
@@ -2171,16 +2177,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertTrue(metaClient.getActiveTimeline().getTimelineOfActions(
             CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 0);
     assertTrue(metaClient.getActiveTimeline().filterInflights().countInstants() == 2);
-    assertTrue(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 1);
+    assertTrue(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 2);
     // Await till enough time passes such that the first 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("200");
+      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
       Thread.sleep(2000);
     }
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     // Perform 1 successful write
-    writeBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
+    writeBatch(client, "500", "400", Option.of(Arrays.asList("500")), "500",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, true);
     client.clean();
@@ -2197,7 +2203,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
                   .getTimelineOfActions(CollectionUtils.createSet(CLEAN_ACTION))
                   .countInstants()
               == 0);
-      assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 2);
+      assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 3);
     } else if (cleaningPolicy.isNever()) {
       assertTrue(
               timeline
@@ -2210,7 +2216,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
                       .getTimelineOfActions(CollectionUtils.createSet(CLEAN_ACTION))
                       .countInstants()
                       == 0);
-      assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 2);
+      assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 3);
     }
   }
 
@@ -2220,8 +2226,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTestUtils.init(hadoopConf, basePath);
     HoodieFailedWritesCleaningPolicy cleaningPolicy = EAGER;
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    // Perform 1 failed writes to table
+    // Perform 1 successful writes to table
     writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
+        100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
+        0, true);
+
+    // Perform 1 failed writes to table
+    writeBatch(client, "200", "100", Option.of(Arrays.asList("200")), "200",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, false);
     client.close();
@@ -2229,19 +2240,19 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     cleaningPolicy = HoodieFailedWritesCleaningPolicy.LAZY;
     // Perform 2 failed writes to table
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    writeBatch(client, "200", "100", Option.of(Arrays.asList("200")), "200",
-            100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
-            0, false);
-    client.close();
-    client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
     writeBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, false);
     client.close();
-    // Await till enough time passes such that the first 2 failed commits heartbeats are expired
+    client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
+    writeBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
+            100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
+            0, false);
+    client.close();
+    // Await till enough time passes such that the 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
+      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("400");
       Thread.sleep(2000);
     }
     client.clean();
@@ -2250,12 +2261,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 3);
     // Perform 2 failed commits
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    writeBatch(client, "400", "300", Option.of(Arrays.asList("400")), "400",
+    writeBatch(client, "500", "400", Option.of(Arrays.asList("300")), "300",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, false);
     client.close();
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
-    writeBatch(client, "500", "400", Option.of(Arrays.asList("500")), "500",
+    writeBatch(client, "600", "500", Option.of(Arrays.asList("400")), "400",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 300,
             0, false);
     client.close();
@@ -2266,7 +2277,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     timeline = metaClient.getActiveTimeline().reload();
     assertTrue(timeline.getTimelineOfActions(
             CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 5);
-    assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 0);
+    assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 1);
   }
 
   @Test
@@ -2274,14 +2285,19 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieFailedWritesCleaningPolicy cleaningPolicy = HoodieFailedWritesCleaningPolicy.LAZY;
     ExecutorService service = Executors.newFixedThreadPool(2);
     HoodieTestUtils.init(hadoopConf, basePath);
-    // Perform 2 failed writes to table
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
+    // perform 1 successfull write
     writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
+        100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 100,
+        0, true);
+
+    // Perform 2 failed writes to table
+    writeBatch(client, "200", "100", Option.of(Arrays.asList("200")), "200",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 100,
             0, false);
     client.close();
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
-    writeBatch(client, "200", "200", Option.of(Arrays.asList("200")), "200",
+    writeBatch(client, "300", "200", Option.of(Arrays.asList("300")), "300",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 100,
             0, false);
     client.close();
@@ -2289,7 +2305,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     dataGen = new HoodieTestDataGenerator();
     // Create a succesful commit
     Future<JavaRDD<WriteStatus>> commit3 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
-            "300", "200", Option.of(Arrays.asList("300")), "200", 100, dataGen::generateInserts,
+            "400", "300", Option.of(Arrays.asList("400")), "300", 100, dataGen::generateInserts,
             SparkRDDWriteClient::bulkInsert, false, 100, 100, 0, true));
     commit3.get();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
@@ -2297,16 +2313,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertTrue(metaClient.getActiveTimeline().getTimelineOfActions(
         CollectionUtils.createSet(ROLLBACK_ACTION)).countInstants() == 0);
     assertTrue(metaClient.getActiveTimeline().filterInflights().countInstants() == 2);
-    assertTrue(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 1);
+    assertTrue(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 2);
     client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
     // Await till enough time passes such that the first 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
-      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("200");
+      conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
       Thread.sleep(2000);
     }
     Future<JavaRDD<WriteStatus>> commit4 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
-            "400", "300", Option.of(Arrays.asList("400")), "400", 100, dataGen::generateInserts,
+            "500", "400", Option.of(Arrays.asList("500")), "500", 100, dataGen::generateInserts,
             SparkRDDWriteClient::bulkInsert, false, 100, 100, 0, true));
     Future<HoodieCleanMetadata> clean1 = service.submit(() -> new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)).clean());
     commit4.get();
@@ -2317,7 +2333,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Since we write rollbacks not clean, there should be no clean action on the timeline
     assertTrue(timeline.getTimelineOfActions(
         CollectionUtils.createSet(CLEAN_ACTION)).countInstants() == 0);
-    assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 2);
+    assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 3);
   }
 
   private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String instantTime, boolean enableOptimisticConsistencyGuard)

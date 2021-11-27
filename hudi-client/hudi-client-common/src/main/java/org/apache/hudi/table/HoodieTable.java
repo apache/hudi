@@ -737,10 +737,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Get Table metadata writer.
    *
+   * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
    * @return instance of {@link HoodieTableMetadataWriter
    */
-  public final Option<HoodieTableMetadataWriter> getMetadataWriter() {
-    return getMetadataWriter(Option.empty());
+  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
+    return getMetadataWriter(triggeringInstantTimestamp, Option.empty());
   }
 
   /**
@@ -752,10 +753,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   /**
    * Get Table metadata writer.
+   * <p>
+   * Note:
+   * Get the metadata writer for the conf. If the metadata table doesn't exist,
+   * this wil trigger the creation of the table and the initial bootstrapping.
+   * Since this call is under the transaction lock, other concurrent writers
+   * are blocked from doing the similar initial metadata table creation and
+   * the bootstrapping.
    *
+   * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
    * @return instance of {@link HoodieTableMetadataWriter}
    */
-  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(Option<T> actionMetadata) {
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
