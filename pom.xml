@@ -1511,7 +1511,7 @@
       <id>spark3.0.x</id>
 <!--      for spark 3.0.x we need override the follow propeprties to package and run test-->
       <properties>
-        <spark3.version>3.0.0</spark3.version>
+        <spark3.version>3.0.3</spark3.version>
         <spark.version>${spark3.version}</spark.version>
         <scalatest.version>3.0.1</scalatest.version>
       </properties>
