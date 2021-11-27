@@ -62,8 +62,8 @@ This new feature will implement the [AbstractSyncTool](https://github.com/apache
 1. Generate manifests of a Hudi table using Spark Runtime
 2. Configure Snowflake to read the generated manifests
 3. Update manifests
-1. Update explicitly: After all the data updates, you can run the generate operation to update the manifests.
-2. Update automatically: You can configure a Hudi table so that all write operations on the table automatically update the manifests. To enable this automatic mode, set the corresponding hoodie property.
+   1. Update explicitly: After all the data updates, you can run the generate operation to update the manifests.
+   2. Update automatically: You can configure a Hudi table so that all write operations on the table automatically update the manifests. To enable this automatic mode, set the corresponding hoodie property.
 
 ## Rollout/Adoption Plan
 
