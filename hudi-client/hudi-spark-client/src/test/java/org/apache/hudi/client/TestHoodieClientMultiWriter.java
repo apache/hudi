@@ -151,8 +151,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
-    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "5000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "10");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "3000");
 
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -168,6 +168,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withProperties(properties)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.REMOTE_FIRST)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
         .build();
 
     // Create the first commit
