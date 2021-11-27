@@ -18,17 +18,19 @@
 
 package org.apache.hudi.index.zorder;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.optimize.ZOrderingUtil;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.io.api.Binary;
@@ -62,10 +64,10 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.util.SerializableConfiguration;
-import scala.collection.JavaConversions;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -76,6 +78,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
+import scala.collection.JavaConversions;
 
 import static org.apache.hudi.util.DataTypeUtils.areCompatible;
 
@@ -189,7 +193,8 @@ public class ZOrderingIndexHelper {
   }
 
   public static Dataset<Row> createZIndexedDataFrameBySample(Dataset<Row> df, List<String> zCols, int fileNum) {
-    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, JavaConversions.asScalaBuffer(zCols), fileNum);
+    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, JavaConversions.asScalaBuffer(zCols), fileNum,
+        HoodieClusteringConfig.BuildLayoutOptimizationStrategy.ZORDER.toCustomString());
   }
 
   public static Dataset<Row> createZIndexedDataFrameBySample(Dataset<Row> df, String zCols, int fileNum) {
@@ -584,7 +589,7 @@ public class ZOrderingIndexHelper {
    * @VisibleForTesting
    */
   @Nonnull
-  static String createIndexMergeSql(
+  public static String createIndexMergeSql(
       @Nonnull String originalIndexTable,
       @Nonnull String newIndexTable,
       @Nonnull List<String> columns

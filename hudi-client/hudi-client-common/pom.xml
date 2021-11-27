@@ -64,6 +64,13 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- Hilbert Curve -->
+    <dependency>
+      <groupId>com.github.davidmoten</groupId>
+      <artifactId>hilbert-curve</artifactId>
+      <version>0.2.2</version>
+    </dependency>
+
     <!-- Dropwizard Metrics -->
     <dependency>
       <groupId>io.dropwizard.metrics</groupId>

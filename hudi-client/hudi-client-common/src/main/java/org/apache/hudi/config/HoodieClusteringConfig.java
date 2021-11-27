@@ -542,4 +542,32 @@ public class HoodieClusteringConfig extends HoodieConfig {
       }
     }
   }
+
+  /**
+   * strategy types for optimize layout for hudi data.
+   */
+  public enum BuildLayoutOptimizationStrategy {
+    ZORDER("z-order"),
+    HILBERT("hilbert");
+    private final String value;
+
+    BuildLayoutOptimizationStrategy(String value) {
+      this.value = value;
+    }
+
+    public String toCustomString() {
+      return value;
+    }
+
+    public static BuildLayoutOptimizationStrategy fromValue(String value) {
+      switch (value.toLowerCase(Locale.ROOT)) {
+        case "z-order":
+          return ZORDER;
+        case "hilbert":
+          return HILBERT;
+        default:
+          throw new HoodieException("Invalid value of Type.");
+      }
+    }
+  }
 }

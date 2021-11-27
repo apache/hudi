@@ -33,7 +33,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
+import org.apache.spark.OrderingIndexHelper;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -79,10 +79,12 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
 
     switch (config.getLayoutOptimizationCurveBuildMethod()) {
       case DIRECT:
-        zDataFrame = ZOrderingIndexHelper.createZIndexedDataFrameByMapValue(originDF, config.getClusteringSortColumns(), numOutputGroups);
+        zDataFrame = OrderingIndexHelper
+            .createOptimizedDataFrameByMapValue(originDF, config.getClusteringSortColumns(), numOutputGroups, config.getLayoutOptimizationStrategy());
         break;
       case SAMPLE:
-        zDataFrame = ZOrderingIndexHelper.createZIndexedDataFrameBySample(originDF, config.getClusteringSortColumns(), numOutputGroups);
+        zDataFrame = OrderingIndexHelper
+            .createOptimizeDataFrameBySample(originDF, config.getClusteringSortColumns(), numOutputGroups, config.getLayoutOptimizationStrategy());
         break;
       default:
         throw new HoodieException("Not a valid build curve method for doWriteOperation: ");

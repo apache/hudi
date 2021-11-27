@@ -89,6 +89,8 @@
                                     <include>org.apache.flink:flink-core</include>
                                     <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
 
+                                    <include>com.github.davidmoten:guava-mini</include>
+                                    <include>com.github.davidmoten:hilbert-curve</include>
                                     <include>com.yammer.metrics:metrics-core</include>
                                     <include>com.beust:jcommander</include>
                                     <include>io.javalin:javalin</include>

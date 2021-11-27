@@ -107,6 +107,8 @@
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.core:jackson-core</include>
 
+                  <include>com.github.davidmoten:guava-mini</include>
+                  <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
