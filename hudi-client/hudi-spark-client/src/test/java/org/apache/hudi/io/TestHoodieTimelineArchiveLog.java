@@ -57,6 +57,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -385,7 +386,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @ValueSource(booleans = {true})
   public void testArchiveTableWithCleanCommits(boolean enableMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 4, 2);
 
@@ -411,35 +412,13 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       if (i < 6) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else if (i == 6) {
-        if (!enableMetadata) {
-          // 1,2,3,4,5,6 : after archival -> 1,5,6 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
-          List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
-          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001")));
-          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
-          verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
-        } else {
-          // with metadata enabled, archival in data table is fenced based on compaction in metadata table. Clean commits in data table will not trigger compaction in
-          // metadata table.
-          List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
-          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001")));
-          expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000002", "00000003", "00000004", "00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
-          verifyArchival(getAllArchivedCommitInstants(Collections.emptyList(), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
-        }
+        // 1,2,3,4,5,6 : after archival -> 1,5,6 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
+        List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
+        expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001")));
+        expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
+        verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
       } else {
-        if (!enableMetadata) {
-          assertEquals(originalCommits, commitsAfterArchival);
-        } else {
-          if (i == 7) {
-            // when i == 7 compaction in metadata table will be triggered and hence archival in datatable will kick in.
-            // 1,2,3,4,5,6 : after archival -> 1,5,6 (bcoz, 2,3,4,5 and 6 are clean commits and are eligible for archival)
-            List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
-            expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000001", "00000007")));
-            expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000005", "00000006"), HoodieTimeline.CLEAN_ACTION));
-            verifyArchival(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003", "00000004"), HoodieTimeline.CLEAN_ACTION), expectedActiveInstants, commitsAfterArchival);
-          } else {
-            assertEquals(originalCommits, commitsAfterArchival);
-          }
-        }
+        assertEquals(originalCommits, commitsAfterArchival);
       }
     }
   }
@@ -551,7 +530,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     assertEquals(notArchivedInstants, Arrays.asList(notArchivedInstant1, notArchivedInstant2, notArchivedInstant3), "");
   }
 
-  @Test
+  @Disabled
   public void testArchiveTableWithMetadataTableCompaction() throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 2, 4, 7);
 

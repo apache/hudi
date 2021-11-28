@@ -364,7 +364,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testManualRollbacks(final boolean populateMateFields) throws Exception {
+  public void testManualRollbacks(boolean populateMateFields) throws Exception {
     HoodieTableType tableType = COPY_ON_WRITE;
     init(tableType, false);
     // Setting to archive more aggressively on the Metadata Table than the Dataset
@@ -390,26 +390,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     validateMetadata(testTable);
 
-    // We can only rollback those commits whose deltacommit have not been archived yet.
-    int numRollbacks = 0;
-    boolean exceptionRaised = false;
     List<HoodieInstant> allInstants = metaClient.reloadActiveTimeline().getCommitsTimeline().getReverseOrderedInstants().collect(Collectors.toList());
     for (HoodieInstant instantToRollback : allInstants) {
-      try {
-        testTable.doRollback(instantToRollback.getTimestamp(), String.valueOf(Time.now()));
-        validateMetadata(testTable);
-        ++numRollbacks;
-      } catch (HoodieMetadataException e) {
-        exceptionRaised = true;
-        break;
-      }
+      testTable.doRollback(instantToRollback.getTimestamp(), String.valueOf(Time.now()));
+      validateMetadata(testTable);
     }
-
-    assertTrue(exceptionRaised, "Rollback of archived instants should fail");
-    // Since each rollback also creates a deltacommit, we can only support rolling back of half of the original
-    // instants present before rollback started.
-    assertTrue(numRollbacks >= Math.max(minArchiveCommitsDataset, minArchiveCommitsMetadata) / 2,
-        "Rollbacks of non archived instants should work");
   }
 
   /**
