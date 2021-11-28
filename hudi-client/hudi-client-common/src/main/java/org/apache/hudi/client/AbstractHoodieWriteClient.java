@@ -865,7 +865,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   /**
    * Fetch map of pending commits to be rolledback to {@link HoodiePendingRollbackInfo}.
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
-   * @return map of pending commits to be rolledback instants to Rollback Instnat and Rollback plan Pair.
+   * @return map of pending commits to be rolledback instants to Rollback Instant and Rollback plan Pair.
    */
   protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInfos(HoodieTableMetaClient metaClient) {
     return metaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants().map(
