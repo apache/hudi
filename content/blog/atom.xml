@@ -29,18 +29,18 @@
         <summary type="html"><![CDATA[In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.]]></summary>
     </entry>
     <entry>
-        <title type="html"><![CDATA[Adding support for Virtual Keys in Hudi]]></title>
-        <id>Adding support for Virtual Keys in Hudi</id>
-        <link href="https://hudi.apache.org/blog/2021/08/18/virtual-keys"/>
-        <updated>2021-08-18T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Apache Hudi helps you build and manage data lakes with different table types, config knobs to cater to everyone's need.]]></summary>
-    </entry>
-    <entry>
         <title type="html"><![CDATA[Improving Marker Mechanism in Apache Hudi]]></title>
         <id>Improving Marker Mechanism in Apache Hudi</id>
         <link href="https://hudi.apache.org/blog/2021/08/18/improving-marker-mechanism"/>
         <updated>2021-08-18T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[Hudi supports fully automatic cleanup of uncommitted data on storage during its write operations. Write operations in an Apache Hudi table use markers to efficiently track the data files written to storage. In this blog, we dive into the design of the existing direct marker file mechanism and explain its performance problems on cloud storage like AWS S3 for]]></summary>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Adding support for Virtual Keys in Hudi]]></title>
+        <id>Adding support for Virtual Keys in Hudi</id>
+        <link href="https://hudi.apache.org/blog/2021/08/18/virtual-keys"/>
+        <updated>2021-08-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Apache Hudi helps you build and manage data lakes with different table types, config knobs to cater to everyone's need.]]></summary>
     </entry>
     <entry>
         <title type="html"><![CDATA[Schema evolution with DeltaStreamer using KafkaSource]]></title>
