@@ -69,6 +69,6 @@ public class PartialUpdateWithLatestAvroPayload extends DefaultHoodieRecordPaylo
       }
     });
 
-    return Option.of(currentValue);
+    return Option.of(currentRecord);
   }
 }
