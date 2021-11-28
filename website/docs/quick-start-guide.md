@@ -328,12 +328,12 @@ Hudi support time travel query since 0.9.0. Currently three query time formats a
 ```scala
 spark.read.
   format("hudi").
-  option("as.of.instant", "20210728141108").
+  option("as.of.instant", "20210728141108100").
   load(basePath)
 
 spark.read.
   format("hudi").
-  option("as.of.instant", "2021-07-28 14:11:08").
+  option("as.of.instant", "2021-07-28 14:11:08.200").
   load(basePath)
 
 // It is equal to "as.of.instant = 2021-07-28 00:00:00"
