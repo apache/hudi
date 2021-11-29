@@ -29,6 +29,8 @@
 
   <properties>
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
+    <maven.compiler.source>8</maven.compiler.source>
+    <maven.compiler.target>8</maven.compiler.target>
   </properties>
 
   <build>
@@ -185,6 +187,11 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark3-common</artifactId>
       <version>${project.version}</version>
     </dependency>
 
