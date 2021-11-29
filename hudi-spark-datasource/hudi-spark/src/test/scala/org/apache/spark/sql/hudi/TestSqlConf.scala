@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -60,20 +61,21 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
            | )
        """.stripMargin)
 
-      // First merge with a extra input field 'flag' (insert a new record)
-      spark.sql(
-        s"""
-           | merge into $tableName
-           | using (
-           |  select 1 as id, 'a1' as name, 10 as price, 1000 as ts, '1' as flag, $partitionVal as year
-           | ) s0
-           | on s0.id = $tableName.id
-           | when matched and flag = '1' then update set
-           | id = s0.id, name = s0.name, price = s0.price, ts = s0.ts, year = s0.year
-           | when not matched and flag = '1' then insert *
-       """.stripMargin)
+      // First insert a new record
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, $partitionVal)")
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+
+      // Then insert another new record
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, $partitionVal)")
+
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
-        Seq(1, "a1", 10.0, 1000, partitionVal)
+        Seq(1, "a1", 10.0, 1000, partitionVal),
+        Seq(2, "a2", 10.0, 1000, partitionVal)
       )
 
       // By default, Spark DML would set table type to COW and use Hive style partitioning, here we
@@ -84,6 +86,15 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
         new Path(tablePath).getFileSystem(new Configuration),
         s"$tablePath/" + HoodieTableMetaClient.METAFOLDER_NAME,
         HoodieTableConfig.PAYLOAD_CLASS_NAME.defaultValue).getTableType)
+
+      // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
+      // global configs
+      DFSPropertiesConfiguration.addToGlobalProps(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      DFSPropertiesConfiguration.addToGlobalProps(BEGIN_INSTANTTIME.key, firstCommit)
+      spark.catalog.refreshTable(tableName)
+      checkAnswer(s"select id, name, price, ts, year from $tableName")(
+        Seq(2, "a2", 10.0, 1000, partitionVal)
+      )
 
       // delete the record
       spark.sql(s"delete from $tableName where year = $partitionVal")
