@@ -853,7 +853,7 @@ class TestHoodieSparkSqlWriter {
       .setConf(spark.sparkContext.hadoopConfiguration)
       .setBasePath(tablePath1).build().getTableConfig
     assert(tableConfig1.getHiveStylePartitioningEnable == "true")
-    assert(tableConfig1.getUrlEncodePartitoning == "false")
+    assert(tableConfig1.getUrlEncodePartitioning == "false")
     assert(tableConfig1.getKeyGeneratorClassName == classOf[ComplexKeyGenerator].getName)
     df.write.format("hudi")
       .options(options)
@@ -874,7 +874,7 @@ class TestHoodieSparkSqlWriter {
       .setConf(spark.sparkContext.hadoopConfiguration)
       .setBasePath(tablePath2).build().getTableConfig
     assert(tableConfig2.getHiveStylePartitioningEnable == "false")
-    assert(tableConfig2.getUrlEncodePartitoning == "true")
+    assert(tableConfig2.getUrlEncodePartitioning == "true")
     assert(tableConfig2.getKeyGeneratorClassName == classOf[SimpleKeyGenerator].getName)
 
     val df2 = Seq((2, "a2", 20, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
