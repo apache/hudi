@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.zorder;
+package org.apache.hudi.index.columnstats;
 
 import org.junit.jupiter.api.Test;
 
