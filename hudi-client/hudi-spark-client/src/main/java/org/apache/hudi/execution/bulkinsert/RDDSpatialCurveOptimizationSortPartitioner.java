@@ -38,6 +38,12 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+
 /**
  * A partitioner that does spatial curve optimization sorting based on specified column values for each RDD partition.
  * support z-curve optimization, hilbert will come soon.
@@ -74,23 +80,40 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
   private JavaRDD<GenericRecord> prepareGenericRecord(JavaRDD<HoodieRecord<T>> inputRecords, final int numOutputGroups, final Schema schema) {
     SerializableSchema serializableSchema = new SerializableSchema(schema);
     JavaRDD<GenericRecord> genericRecordJavaRDD =  inputRecords.map(f -> (GenericRecord) f.getData().getInsertValue(serializableSchema.get()).get());
-    Dataset<Row> originDF =  AvroConversionUtils.createDataFrame(genericRecordJavaRDD.rdd(), schema.toString(), sparkEngineContext.getSqlContext().sparkSession());
-    Dataset<Row> zDataFrame;
+    Dataset<Row> originDF =
+        AvroConversionUtils.createDataFrame(
+            genericRecordJavaRDD.rdd(),
+            schema.toString(),
+            sparkEngineContext.getSqlContext().sparkSession()
+        );
+
+    Dataset<Row> sortedDF = reorder(originDF, numOutputGroups);
+
+    return HoodieSparkUtils.createRdd(sortedDF, schema.getName(),
+        schema.getNamespace(), false, org.apache.hudi.common.util.Option.empty()).toJavaRDD();
+  }
+
+  private Dataset<Row> reorder(Dataset<Row> sourceDF, int numOutputGroups) {
+    String orderedColumnsListConfig = config.getClusteringSortColumns();
+
+    if (isNullOrEmpty(orderedColumnsListConfig) || numOutputGroups <= 0) {
+      // No-op
+      return sourceDF;
+    }
+
+    List<String> orderedCols =
+        Arrays.stream(orderedColumnsListConfig.split(","))
+            .map(String::trim)
+            .collect(Collectors.toList());
 
     switch (config.getLayoutOptimizationCurveBuildMethod()) {
       case DIRECT:
-        zDataFrame = SpaceCurveSortingHelper
-            .createOptimizedDataFrameByMapValue(originDF, config.getClusteringSortColumns(), numOutputGroups, config.getLayoutOptimizationStrategy());
-        break;
+        return SpaceCurveSortingHelper.createOptimizedDataFrameByMapValue(sourceDF, orderedCols, numOutputGroups, config.getLayoutOptimizationStrategy());
       case SAMPLE:
-        zDataFrame = SpaceCurveSortingHelper
-            .createOptimizeDataFrameBySample(originDF, config.getClusteringSortColumns(), numOutputGroups, config.getLayoutOptimizationStrategy());
-        break;
+        return SpaceCurveSortingHelper.createOptimizeDataFrameBySample(sourceDF, orderedCols, numOutputGroups, config.getLayoutOptimizationStrategy());
       default:
         throw new HoodieException("Not a valid build curve method for doWriteOperation: ");
     }
-    return HoodieSparkUtils.createRdd(zDataFrame, schema.getName(),
-        schema.getNamespace(), false, org.apache.hudi.common.util.Option.empty()).toJavaRDD();
   }
 
   @Override

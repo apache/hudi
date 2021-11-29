@@ -106,11 +106,11 @@ object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
   def prepareInterTypeTable(tablePath: Path, numRows: Int, col1Range: Int = 1000000, col2Range: Int = 1000000, skewed: Boolean = false): Unit = {
     import spark.implicits._
     val df = spark.range(numRows).map(_ => (Random.nextInt(col1Range), Random.nextInt(col2Range))).toDF("c1_int", "c2_int")
-    val dfOptimizeByMap = SpaceCurveSortingHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "z-order")
-    val dfOptimizeBySample = SpaceCurveSortingHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "z-order")
+    val dfOptimizeByMap = SpaceCurveSortingHelper.createOptimizedDataFrameByMapValue(df, Seq("c1_int", "c2_int"), 200, "z-order")
+    val dfOptimizeBySample = SpaceCurveSortingHelper.createOptimizeDataFrameBySample(df, Seq("c1_int", "c2_int"), 200, "z-order")
 
-    val dfHilbertOptimizeByMap = SpaceCurveSortingHelper.createOptimizedDataFrameByMapValue(df, "c1_int, c2_int", 200, "hilbert")
-    val dfHilbertOptimizeBySample = SpaceCurveSortingHelper.createOptimizeDataFrameBySample(df, "c1_int, c2_int", 200, "hilbert")
+    val dfHilbertOptimizeByMap = SpaceCurveSortingHelper.createOptimizedDataFrameByMapValue(df, Seq("c1_int", "c2_int"), 200, "hilbert")
+    val dfHilbertOptimizeBySample = SpaceCurveSortingHelper.createOptimizeDataFrameBySample(df, Seq("c1_int", "c2_int"), 200, "hilbert")
 
     saveAsTable(dfOptimizeByMap, tablePath, if (skewed) "z_sort_byMap_skew" else "z_sort_byMap")
     saveAsTable(dfOptimizeBySample, tablePath, if (skewed) "z_sort_bySample_skew" else "z_sort_bySample")
