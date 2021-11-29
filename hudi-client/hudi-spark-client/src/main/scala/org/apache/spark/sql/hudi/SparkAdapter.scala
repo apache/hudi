@@ -20,15 +20,18 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
+import org.apache.spark.sql.execution.datasources.{LogicalRelation, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Row, SparkSession}
+
+import java.util.Locale
 
 /**
  * An interface to adapter the difference between spark2 and spark3
@@ -92,4 +95,31 @@ trait SparkAdapter extends Serializable {
    * ParserInterface#parseMultipartIdentifier is supported since spark3, for spark2 this should not be called.
    */
   def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String]
+
+  def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
+    tripAlias(table) match {
+      case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
+      case relation: UnresolvedRelation =>
+        isHoodieTable(toTableIdentify(relation), spark)
+      case _=> false
+    }
+  }
+
+  def tripAlias(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case SubqueryAlias(_, relation: LogicalPlan) =>
+        tripAlias(relation)
+      case other =>
+        other
+    }
+  }
+
+  def isHoodieTable(table: CatalogTable): Boolean = {
+    table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
+  }
+
+  def isHoodieTable(tableId: TableIdentifier, spark: SparkSession): Boolean = {
+    val table = spark.sessionState.catalog.getTableMetadata(tableId)
+    isHoodieTable(table)
+  }
 }

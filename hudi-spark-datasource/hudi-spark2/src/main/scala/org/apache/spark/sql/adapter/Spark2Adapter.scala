@@ -19,7 +19,6 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark2RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
@@ -31,6 +30,7 @@ import org.apache.spark.sql.execution.datasources.{Spark2ParsePartitionUtil, Spa
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.{Row, SparkSession}
 
 /**
  * The adapter for spark2.

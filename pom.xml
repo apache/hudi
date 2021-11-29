@@ -123,6 +123,7 @@
     <spark2bundle.version></spark2bundle.version>
     <spark3bundle.version>3</spark3bundle.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
+    <hudi.spark.extensions.module>hudi-spark2-extensions</hudi.spark.extensions.module>
     <avro.version>1.8.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
@@ -1577,6 +1578,7 @@
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <hudi.spark.module>hudi-spark3</hudi.spark.module>
+        <hudi.spark.extensions.module>hudi-spark3-extensions</hudi.spark.extensions.module>
         <scalatest.version>3.1.0</scalatest.version>
         <kafka.version>2.4.1</kafka.version>
         <parquet.version>${parquet.spark3.version}</parquet.version>
@@ -1621,7 +1623,7 @@
 
     <profile>
       <id>spark3.0.x</id>
-<!--      for spark 3.0.x we need override the follow propeprties to package and run test-->
+<!--      for spark 3.0.x we need override the follow properties to package and run test-->
       <properties>
         <spark3.version>3.0.3</spark3.version>
         <spark.version>${spark3.version}</spark.version>

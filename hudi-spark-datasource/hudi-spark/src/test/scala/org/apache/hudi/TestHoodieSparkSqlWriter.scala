@@ -770,7 +770,7 @@ class TestHoodieSparkSqlWriter {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
+    val snapshotDF1 = spark.read.format("hudi")
       .load(tempBasePath + "/*/*/*/*")
     assertEquals(10, snapshotDF1.count())
     // remove metadata columns so that expected and actual DFs can be compared as is

@@ -22,11 +22,10 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, LogicalPlan}
-import org.apache.spark.sql.hudi.HoodieSqlUtils._
+import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.StructType
 
 case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends HoodieLeafRunnableCommand

@@ -288,6 +288,16 @@ class TestInsertTable extends TestHoodieSqlBase {
     }
   }
 
+  def moreColsMessage(): String = {
+    "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
+      " count: 5，columns: (1,a1,10,2021-06-20,dt)"
+  }
+
+  def lessColsMessage(): String = {
+    "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
+      " count: 3，columns: (1,a1,10)"
+  }
+
   test("Test Insert Exception") {
     val tableName = generateTableName
     spark.sql(
@@ -301,15 +311,9 @@ class TestInsertTable extends TestHoodieSqlBase {
          | tblproperties (primaryKey = 'id')
          | partitioned by (dt)
        """.stripMargin)
-    checkException(s"insert into $tableName partition(dt = '2021-06-20')" +
-      s" select 1, 'a1', 10, '2021-06-20'") (
-      "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
-        " count: 5，columns: (1,a1,10,2021-06-20,dt)"
-    )
-    checkException(s"insert into $tableName select 1, 'a1', 10")(
-      "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
-        " count: 3，columns: (1,a1,10)"
-    )
+    checkExceptionContain(s"insert into $tableName partition(dt = '2021-06-20')" +
+      s" select 1, 'a1', 10, '2021-06-20'") (moreColsMessage())
+    checkExceptionContain(s"insert into $tableName select 1, 'a1', 10")(lessColsMessage())
     spark.sql("set hoodie.sql.bulk.insert.enable = true")
     spark.sql("set hoodie.sql.insert.mode = strict")
 

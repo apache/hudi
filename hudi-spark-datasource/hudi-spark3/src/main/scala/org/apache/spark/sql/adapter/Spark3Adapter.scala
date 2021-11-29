@@ -20,8 +20,6 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.spark3.internal.ReflectUtil
-
-import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Expression, Like}
@@ -30,9 +28,12 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
-import org.apache.spark.sql.execution.datasources.{Spark3ParsePartitionUtil, SparkParsePartitionUtil}
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.datasources.{LogicalRelation, Spark3ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.hudi.catalog.HoodieInternalTableV2
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.{Row, SparkSession}
 
 /**
  * The adapter for spark3.
@@ -46,7 +47,7 @@ class Spark3Adapter extends SparkAdapter {
   override def toTableIdentify(aliasId: AliasIdentifier): TableIdentifier = {
     aliasId match {
       case AliasIdentifier(name, Seq(database)) =>
-         TableIdentifier(name, Some(database))
+        TableIdentifier(name, Some(database))
       case AliasIdentifier(name, Seq(_, database)) =>
         TableIdentifier(name, Some(database))
       case AliasIdentifier(name, Seq()) =>
@@ -68,7 +69,7 @@ class Spark3Adapter extends SparkAdapter {
   }
 
   override def getInsertIntoChildren(plan: LogicalPlan):
-    Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+  Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case insert: InsertIntoStatement =>
         Some((insert.table, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
@@ -92,5 +93,15 @@ class Spark3Adapter extends SparkAdapter {
 
   override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
     parser.parseMultipartIdentifier(sqlText)
+  }
+
+  override def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
+    tripAlias(table) match {
+      case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
+      case relation: UnresolvedRelation =>
+        isHoodieTable(toTableIdentify(relation), spark)
+      case DataSourceV2Relation(table, _, _, _, _) => table.isInstanceOf[HoodieInternalTableV2]
+      case _=> false
+    }
   }
 }

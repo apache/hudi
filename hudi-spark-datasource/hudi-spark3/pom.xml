@@ -29,6 +29,8 @@
 
   <properties>
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
+    <maven.compiler.source>8</maven.compiler.source>
+    <maven.compiler.target>8</maven.compiler.target>
   </properties>
 
   <build>
@@ -97,6 +99,10 @@
             </goals>
           </execution>
         </executions>
+        <configuration>
+          <source>1.8</source>
+          <target>1.8</target>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -109,6 +115,10 @@
             </goals>
           </execution>
         </executions>
+        <configuration>
+          <source>1.8</source>
+          <target>1.8</target>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

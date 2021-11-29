@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.log4j.Level
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
@@ -49,9 +50,12 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.delete.shuffle.parallelism", "4")
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .config("spark.sql.session.timeZone", "CTT")
+    .config(sparkConf())
     .getOrCreate()
 
   private var tableId = 0
+
+  def sparkConf(): SparkConf = new SparkConf()
 
   protected def withTempDir(f: File => Unit): Unit = {
     val tempDir = Utils.createTempDir()

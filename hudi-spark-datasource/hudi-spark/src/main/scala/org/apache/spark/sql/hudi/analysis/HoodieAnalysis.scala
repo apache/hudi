@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
-
+import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedStar}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.Inner
@@ -29,9 +29,10 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
-import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
+import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
@@ -42,12 +43,39 @@ object HoodieAnalysis {
     Seq(
       session => HoodieResolveReferences(session),
       session => HoodieAnalysis(session)
-    )
+    ) ++ extraResolutionRules()
 
   def customPostHocResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
     Seq(
       session => HoodiePostAnalysisRule(session)
-    )
+    ) ++ extraPostHocResolutionRules()
+
+  def extraResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] = {
+    if (HoodieSparkUtils.isSpark3) {
+      val spark3AnalysisClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis"
+      val spark3Analysis: SparkSession => Rule[LogicalPlan] =
+        session => ReflectionUtils.loadClass(spark3AnalysisClass, session).asInstanceOf[Rule[LogicalPlan]]
+
+      val spark3ResolveReferences = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
+      val spark3References: SparkSession => Rule[LogicalPlan] =
+        session => ReflectionUtils.loadClass(spark3ResolveReferences, session).asInstanceOf[Rule[LogicalPlan]]
+
+      Seq(spark3Analysis, spark3References)
+    } else {
+      Seq.empty
+    }
+  }
+
+  def extraPostHocResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
+    if (HoodieSparkUtils.isSpark3) {
+      val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
+      val spark3PostHocResolution: SparkSession => Rule[LogicalPlan] =
+        session => ReflectionUtils.loadClass(spark3PostHocResolutionClass, session).asInstanceOf[Rule[LogicalPlan]]
+
+      Seq(spark3PostHocResolution)
+    } else {
+      Seq.empty
+    }
 }
 
 /**
@@ -61,7 +89,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
     plan match {
       // Convert to MergeIntoHoodieTableCommand
       case m @ MergeIntoTable(target, _, _, _, _)
-        if m.resolved && isHoodieTable(target, sparkSession) =>
+        if m.resolved && sparkAdapter.isHoodieTable(target, sparkSession) =>
           MergeIntoHoodieTableCommand(m)
 
       // Convert to UpdateHoodieTableCommand
@@ -122,7 +150,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp  {
     // Resolve merge into
     case mergeInto @ MergeIntoTable(target, source, mergeCondition, matchedActions, notMatchedActions)
-      if isHoodieTable(target, sparkSession) && target.resolved =>
+      if sparkAdapter.isHoodieTable(target, sparkSession) && target.resolved =>
 
       val resolver = sparkSession.sessionState.conf.resolver
       val resolvedSource = analyzer.execute(source)
@@ -161,8 +189,8 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         val resolvedCondition = condition.map(resolveExpressionFrom(resolvedSource)(_))
         val resolvedAssignments = if (isInsertOrUpdateStar(assignments)) {
           // assignments is empty means insert * or update set *
-          val resolvedSourceOutput = resolvedSource.output.filter(attr => !HoodieSqlUtils.isMetaField(attr.name))
-          val targetOutput = target.output.filter(attr => !HoodieSqlUtils.isMetaField(attr.name))
+          val resolvedSourceOutput = resolvedSource.output.filter(attr => !HoodieSqlCommonUtils.isMetaField(attr.name))
+          val targetOutput = target.output.filter(attr => !HoodieSqlCommonUtils.isMetaField(attr.name))
           val resolvedSourceColumnNames = resolvedSourceOutput.map(_.name)
 
           if(targetOutput.filter(attr => resolvedSourceColumnNames.exists(resolver(_, attr.name))).equals(targetOutput)){
@@ -182,7 +210,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           // For Spark3.2, InsertStarAction/UpdateStarAction's assignments will contain the meta fields.
           val withoutMetaAttrs = assignments.filterNot{ assignment =>
             if (assignment.key.isInstanceOf[Attribute]) {
-              HoodieSqlUtils.isMetaField(assignment.key.asInstanceOf[Attribute].name)
+              HoodieSqlCommonUtils.isMetaField(assignment.key.asInstanceOf[Attribute].name)
             } else {
               false
             }
@@ -303,7 +331,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
       val (table, partition, query, overwrite, ifPartitionNotExists) =
         sparkAdapter.getInsertIntoChildren(l).get
 
-      if (isHoodieTable(table, sparkSession) && query.resolved &&
+      if (sparkAdapter.isHoodieTable(table, sparkSession) && query.resolved &&
         !containUnResolvedStar(query) &&
         !checkAlreadyAppendMetaField(query)) {
         val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.map(
@@ -333,7 +361,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
             .setBasePath(tablePath)
             .setConf(sparkSession.sessionState.newHadoopConf())
             .build()
-          val tableSchema = HoodieSqlUtils.getTableSqlSchema(metaClient)
+          val tableSchema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient)
           if (tableSchema.isDefined && tableDesc.schema.isEmpty) {
             // Fill the schema with the schema from the table
             c.copy(tableDesc.copy(schema = tableSchema.get))
