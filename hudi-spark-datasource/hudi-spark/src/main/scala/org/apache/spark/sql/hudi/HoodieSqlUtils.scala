@@ -307,7 +307,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       HoodieActiveTimeline.formatDate(defaultDateFormat.get().parse(queryInstant))
     } else {
       throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
-        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss' or 'yyyy-MM-dd' or 'yyyyMMddHHmmss'")
+        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss.SSS' or 'yyyy-MM-dd' or 'yyyyMMddHHmmssSSS'")
     }
   }
 
