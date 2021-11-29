@@ -27,16 +27,17 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Tag}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.sql.{Date, Timestamp}
 import scala.collection.JavaConversions._
 import scala.util.Random
 
 @Tag("functional")
-class TestZOrderLayoutOptimization extends HoodieClientTestBase {
+class TestSpaceCurveLayoutOptimization extends HoodieClientTestBase {
   var spark: SparkSession = _
 
   val sourceTableSchema =
@@ -77,7 +78,7 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  @MethodSource(Array("testLayoutOptimizationParameters"))
   def testZOrderingLayoutClustering(tableType: String): Unit = {
     val targetRecordsCount = 10000
     // Bulk Insert Operation
@@ -160,3 +161,15 @@ class TestZOrderLayoutOptimization extends HoodieClientTestBase {
     spark.createDataFrame(rdd, sourceTableSchema)
   }
 }
+
+object TestSpaceCurveLayoutOptimization {
+  def testLayoutOptimizationParameters(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments("COPY_ON_WRITE", "hilbert"),
+      arguments("COPY_ON_WRITE", "z-order"),
+      arguments("MERGE_ON_READ", "hilbert"),
+      arguments("MERGE_ON_READ", "z-order")
+    )
+  }
+}
+

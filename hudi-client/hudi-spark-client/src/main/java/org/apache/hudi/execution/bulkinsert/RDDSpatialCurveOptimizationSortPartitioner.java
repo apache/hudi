@@ -33,8 +33,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.index.zorder.ZOrderCurveHelper;
-import org.apache.spark.OrderingIndexHelper;
+import org.apache.hudi.sort.SpaceCurveSortingHelper;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -80,11 +79,11 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
 
     switch (config.getLayoutOptimizationCurveBuildMethod()) {
       case DIRECT:
-        zDataFrame = OrderingIndexHelper
+        zDataFrame = SpaceCurveSortingHelper
             .createOptimizedDataFrameByMapValue(originDF, config.getClusteringSortColumns(), numOutputGroups, config.getLayoutOptimizationStrategy());
         break;
       case SAMPLE:
-        zDataFrame = OrderingIndexHelper
+        zDataFrame = SpaceCurveSortingHelper
             .createOptimizeDataFrameBySample(originDF, config.getClusteringSortColumns(), numOutputGroups, config.getLayoutOptimizationStrategy());
         break;
       default:

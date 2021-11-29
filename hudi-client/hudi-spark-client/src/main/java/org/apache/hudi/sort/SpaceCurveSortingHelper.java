@@ -16,30 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.spark;
+package org.apache.hudi.sort;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
 import org.apache.hudi.optimize.HilbertCurveUtils;
 import org.apache.hudi.optimize.ZOrderingUtil;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.io.api.Binary;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.Row$;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.hudi.execution.RangeSampleSort$;
 import org.apache.spark.sql.hudi.execution.ZorderingBinarySort;
 import org.apache.spark.sql.types.BinaryType;
@@ -53,32 +38,23 @@ import org.apache.spark.sql.types.DoubleType;
 import org.apache.spark.sql.types.FloatType;
 import org.apache.spark.sql.types.IntegerType;
 import org.apache.spark.sql.types.LongType;
-import org.apache.spark.sql.types.LongType$;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.ShortType;
 import org.apache.spark.sql.types.StringType;
-import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
-import org.apache.spark.util.SerializableConfiguration;
 import org.davidmoten.hilbert.HilbertCurve;
+import scala.collection.JavaConversions;
 
-import java.io.IOException;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import scala.collection.JavaConversions;
-
-public class OrderingIndexHelper {
-
-  private static final String SPARK_JOB_DESCRIPTION = "spark.job.description";
+public class SpaceCurveSortingHelper {
 
   /**
    * Create optimized DataFrame directly
@@ -244,187 +220,5 @@ public class OrderingIndexHelper {
       return df;
     }
     return createOptimizeDataFrameBySample(df, Arrays.stream(zCols.split(",")).map(f -> f.trim()).collect(Collectors.toList()), fileNum, sortMode);
-  }
-
-  /**
-   * Parse min/max statistics stored in parquet footers for z-sort cols.
-   * no support collect statistics from timeStampType, since parquet file has not collect the statistics for timeStampType.
-   * to do adapt for rfc-27
-   *
-   * @param df a spark DataFrame holds parquet files to be read.
-   * @param cols z-sort cols
-   * @return a dataFrame holds all statistics info.
-   */
-  public static Dataset<Row> getMinMaxValue(Dataset<Row> df, List<String> cols) {
-    Map<String, DataType> columnsMap = Arrays.stream(df.schema().fields()).collect(Collectors.toMap(e -> e.name(), e -> e.dataType()));
-
-    List<String> scanFiles = Arrays.asList(df.inputFiles());
-    SparkContext sc = df.sparkSession().sparkContext();
-    JavaSparkContext jsc = new JavaSparkContext(sc);
-
-    SerializableConfiguration serializableConfiguration = new SerializableConfiguration(sc.hadoopConfiguration());
-    int numParallelism = (scanFiles.size() / 3 + 1);
-    List<HoodieColumnRangeMetadata<Comparable>> colMinMaxInfos;
-    String previousJobDescription = sc.getLocalProperty(SPARK_JOB_DESCRIPTION);
-    try {
-      jsc.setJobDescription("Listing parquet column statistics");
-      colMinMaxInfos = jsc.parallelize(scanFiles, numParallelism).mapPartitions(paths -> {
-        Configuration conf = serializableConfiguration.value();
-        ParquetUtils parquetUtils = (ParquetUtils) BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
-        List<Collection<HoodieColumnRangeMetadata<Comparable>>> results = new ArrayList<>();
-        while (paths.hasNext()) {
-          String path = paths.next();
-          results.add(parquetUtils.readRangeFromParquetMetadata(conf, new Path(path), cols));
-        }
-        return results.stream().flatMap(f -> f.stream()).iterator();
-      }).collect();
-    } finally {
-      jsc.setJobDescription(previousJobDescription);
-    }
-
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> fileToStatsListMap = colMinMaxInfos.stream().collect(Collectors.groupingBy(e -> e.getFilePath()));
-    JavaRDD<Row> allMetaDataRDD = jsc.parallelize(new ArrayList<>(fileToStatsListMap.values()), 1).map(f -> {
-      int colSize = f.size();
-      if (colSize == 0) {
-        return null;
-      } else {
-        List<Object> rows = new ArrayList<>();
-        rows.add(f.get(0).getFilePath());
-        cols.stream().forEach(col -> {
-          HoodieColumnRangeMetadata<Comparable> currentColRangeMetaData =
-              f.stream().filter(s -> s.getColumnName().trim().equalsIgnoreCase(col)).findFirst().orElse(null);
-          DataType colType = columnsMap.get(col);
-          if (currentColRangeMetaData == null || colType == null) {
-            throw new HoodieException(String.format("cannot collect min/max statistics for col: %s", col));
-          }
-          if (colType instanceof IntegerType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof DoubleType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof StringType) {
-            rows.add(currentColRangeMetaData.getMinValue().toString());
-            rows.add(currentColRangeMetaData.getMaxValue().toString());
-          } else if (colType instanceof DecimalType) {
-            rows.add(new BigDecimal(currentColRangeMetaData.getMinValue().toString()));
-            rows.add(new BigDecimal(currentColRangeMetaData.getMaxValue().toString()));
-          } else if (colType instanceof DateType) {
-            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMinValue().toString()));
-            rows.add(java.sql.Date.valueOf(currentColRangeMetaData.getMaxValue().toString()));
-          } else if (colType instanceof LongType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof ShortType) {
-            rows.add(Short.parseShort(currentColRangeMetaData.getMinValue().toString()));
-            rows.add(Short.parseShort(currentColRangeMetaData.getMaxValue().toString()));
-          } else if (colType instanceof FloatType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof BinaryType) {
-            rows.add(((Binary)currentColRangeMetaData.getMinValue()).getBytes());
-            rows.add(((Binary)currentColRangeMetaData.getMaxValue()).getBytes());
-          } else if (colType instanceof BooleanType) {
-            rows.add(currentColRangeMetaData.getMinValue());
-            rows.add(currentColRangeMetaData.getMaxValue());
-          } else if (colType instanceof ByteType) {
-            rows.add(Byte.valueOf(currentColRangeMetaData.getMinValue().toString()));
-            rows.add(Byte.valueOf(currentColRangeMetaData.getMaxValue().toString()));
-          }  else {
-            throw new HoodieException(String.format("Not support type:  %s", colType));
-          }
-          rows.add(currentColRangeMetaData.getNumNulls());
-        });
-        return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(rows));
-      }
-    }).filter(f -> f != null);
-    List<StructField> allMetaDataSchema = new ArrayList<>();
-    allMetaDataSchema.add(new StructField("file", StringType$.MODULE$, true, Metadata.empty()));
-    cols.forEach(col -> {
-      allMetaDataSchema.add(new StructField(col + "_minValue", columnsMap.get(col), true, Metadata.empty()));
-      allMetaDataSchema.add(new StructField(col + "_maxValue", columnsMap.get(col), true, Metadata.empty()));
-      allMetaDataSchema.add(new StructField(col + "_num_nulls", LongType$.MODULE$, true, Metadata.empty()));
-    });
-    return df.sparkSession().createDataFrame(allMetaDataRDD, StructType$.MODULE$.apply(allMetaDataSchema));
-  }
-
-  public static Dataset<Row> getMinMaxValue(Dataset<Row> df, String cols) {
-    List<String> rawCols = Arrays.asList(cols.split(",")).stream().map(f -> f.trim()).collect(Collectors.toList());
-    return getMinMaxValue(df, rawCols);
-  }
-
-  /**
-   * Update statistics info.
-   * this method will update old index table by full out join,
-   * and save the updated table into a new index table based on commitTime.
-   * old index table will be cleaned also.
-   *
-   * @param df a spark DataFrame holds parquet files to be read.
-   * @param cols z-sort cols.
-   * @param indexPath index store path.
-   * @param commitTime current operation commitTime.
-   * @param validateCommits all validate commits for current table.
-   * @return
-   */
-  public static void saveStatisticsInfo(Dataset<Row> df, String cols, String indexPath, String commitTime, List<String> validateCommits) {
-    Path savePath = new Path(indexPath, commitTime);
-    SparkSession spark = df.sparkSession();
-    FileSystem fs = FSUtils.getFs(indexPath, spark.sparkContext().hadoopConfiguration());
-    Dataset<Row> statisticsDF = OrderingIndexHelper.getMinMaxValue(df, cols);
-    // try to find last validate index table from index path
-    try {
-      // If there's currently no index, create one
-      if (!fs.exists(new Path(indexPath))) {
-        statisticsDF.repartition(1).write().mode("overwrite").save(savePath.toString());
-        return;
-      }
-
-      // Otherwise, clean up all indexes but the most recent one
-
-      List<String> allIndexTables = Arrays
-          .stream(fs.listStatus(new Path(indexPath))).filter(f -> f.isDirectory()).map(f -> f.getPath().getName()).collect(Collectors.toList());
-      List<String> candidateIndexTables = allIndexTables.stream().filter(f -> validateCommits.contains(f)).sorted().collect(Collectors.toList());
-      List<String> residualTables = allIndexTables.stream().filter(f -> !validateCommits.contains(f)).collect(Collectors.toList());
-      Option<Dataset> latestIndexData = Option.empty();
-      if (!candidateIndexTables.isEmpty()) {
-        latestIndexData = Option.of(spark.read().load(new Path(indexPath, candidateIndexTables.get(candidateIndexTables.size() - 1)).toString()));
-        // clean old index table, keep at most 1 index table.
-        candidateIndexTables.remove(candidateIndexTables.size() - 1);
-        candidateIndexTables.forEach(f -> {
-          try {
-            fs.delete(new Path(indexPath, f));
-          } catch (IOException ie) {
-            throw new HoodieException(ie);
-          }
-        });
-      }
-
-      // clean residualTables
-      // retried cluster operations at the same instant time is also considered,
-      // the residual files produced by retried are cleaned up before save statistics
-      // save statistics info to index table which named commitTime
-      residualTables.forEach(f -> {
-        try {
-          fs.delete(new Path(indexPath, f));
-        } catch (IOException ie) {
-          throw new HoodieException(ie);
-        }
-      });
-
-      if (latestIndexData.isPresent() && latestIndexData.get().schema().equals(statisticsDF.schema())) {
-        // update the statistics info
-        String originalTable = "indexTable_" + java.util.UUID.randomUUID().toString().replace("-", "");
-        String updateTable = "updateTable_" + java.util.UUID.randomUUID().toString().replace("-", "");
-        latestIndexData.get().registerTempTable(originalTable);
-        statisticsDF.registerTempTable(updateTable);
-        // update table by full out join
-        List columns = Arrays.asList(statisticsDF.schema().fieldNames());
-        spark.sql(ZOrderingIndexHelper.createIndexMergeSql(originalTable, updateTable, columns)).repartition(1).write().save(savePath.toString());
-      } else {
-        statisticsDF.repartition(1).write().mode("overwrite").save(savePath.toString());
-      }
-    } catch (IOException e) {
-      throw new HoodieException(e);
-    }
   }
 }
