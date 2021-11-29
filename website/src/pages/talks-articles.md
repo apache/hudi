@@ -123,5 +123,6 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 27. ["Baixin bank’s real-time data lake evolution scheme based on Apache Hudi"](https://developpaper.com/baixin-banks-real-time-data-lake-evolution-scheme-based-on-apache-hudi/) July, 2021
 28. ["MLOps Wars: Versioned Feature Data with a Lakehouse"](https://www.logicalclocks.com/blog/mlops-wars-versioned-feature-data-with-a-lakehouse) - By David Bzhalava and Jim Dowling. Aug, 2021
 29. ["Cost-Efficient Open Source Big Data Platform at Uber"](https://eng.uber.com/cost-efficient-big-data-platform/) - By Zheng Shao and Mohammad Islam. Aug, 2021
-30. ["How Amazon Transportation Service enabled near-real-time event analytics at petabyte scale using AWS Glue with Apache Hudi"](
+30. ["Data Platform 2.0 - Part I"](https://blogs.halodoc.io/data-platform-2-0-part-1/) - By Jitendra Shah. Oct 5, 2021    
+31. ["How Amazon Transportation Service enabled near-real-time event analytics at petabyte scale using AWS Glue with Apache Hudi"](
     https://aws.amazon.com/blogs/big-data/how-amazon-transportation-service-enabled-near-real-time-event-analytics-at-petabyte-scale-using-aws-glue-with-apache-hudi/) - Madhavan Sriram, Diego Menin, Gabriele Cacciola, and Kunal Gautam. Oct 14, 2021
