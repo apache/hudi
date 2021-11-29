@@ -166,6 +166,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. "
           + "This value helps bound ingestion latency while compaction is run inline mode.");
 
+  public static final ConfigProperty<Long> COMPACTION_LOG_FILE_SIZE_THRESHOLD = ConfigProperty
+      .key("hoodie.compaction.logfile.size.threshold")
+      .defaultValue(1024 * 1024 * 1024L)
+      .withDocumentation("Only if the log file size is greater than the threshold, the file group will be compacted.");
+
   public static final ConfigProperty<String> COMPACTION_STRATEGY = ConfigProperty
       .key("hoodie.compaction.strategy")
       .defaultValue(LogFileSizeBasedCompactionStrategy.class.getName())
@@ -585,6 +590,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withTargetPartitionsPerDayBasedCompaction(int targetPartitionsPerCompaction) {
       compactionConfig.setValue(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION, String.valueOf(targetPartitionsPerCompaction));
+      return this;
+    }
+
+    public Builder withLogFileSizeThresholdBasedCompaction(long logFileSizeThreshold) {
+      compactionConfig.setValue(COMPACTION_LOG_FILE_SIZE_THRESHOLD, String.valueOf(logFileSizeThreshold));
       return this;
     }
 

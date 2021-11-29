@@ -111,7 +111,30 @@ public class TestHoodieCompactionStrategy {
     Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
         .map(Double::longValue).reduce(Long::sum).orElse(0L);
     assertEquals(1204, (long) returnedSize,
-        "Should chose the first 2 compactions which should result in a total IO of 690 MB");
+        "Should chose the first 1 compactions which should result in a total IO of 1204 MB");
+  }
+
+  @Test
+  public void testLogFileSizeThresholdCompactionSimple() {
+    Map<Long, List<Long>> sizesMap = new HashMap<>();
+    sizesMap.put(120 * MB, Arrays.asList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, new ArrayList<>());
+    sizesMap.put(100 * MB, Collections.singletonList(MB));
+    sizesMap.put(90 * MB, Collections.singletonList(1024 * MB));
+    LogFileSizeThresholdBasedCompactionStrategy strategy = new LogFileSizeThresholdBasedCompactionStrategy();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+            HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(1205)
+                .withLogFileSizeThresholdBasedCompaction(100 * 1024 * 1024).build())
+        .build();
+    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
+    List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
+
+    assertEquals(2, returned.size(), "LogFileSizeThresholdBasedCompactionStrategy should have resulted in 2 compaction");
+    // Total size of all the log files
+    Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
+        .map(Double::longValue).reduce(Long::sum).orElse(0L);
+    assertEquals(1594, (long) returnedSize,
+        "Should chose the first 2 compactions which should result in a total IO of 1594 MB");
   }
 
   @Test
