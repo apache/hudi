@@ -171,7 +171,7 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
    * @return schema, table parameters in which all parameters aren't sql-styled.
    */
   private def parseSchemaAndConfigs(): (StructType, Map[String, String]) = {
-    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
+    val globalProps = DFSPropertiesConfiguration.getCopiedGlobalProps.asScala.toMap
     val globalTableConfigs = mappingSparkDatasourceConfigsToTableConfigs(globalProps)
     val globalSqlOptions = HoodieOptionConfig.mappingTableConfigToSqlOption(globalTableConfigs)
 

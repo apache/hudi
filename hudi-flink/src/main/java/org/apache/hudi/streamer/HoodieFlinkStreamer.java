@@ -65,7 +65,7 @@ public class HoodieFlinkStreamer {
       env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
     }
 
-    TypedProperties kafkaProps = DFSPropertiesConfiguration.getGlobalProps();
+    TypedProperties kafkaProps = DFSPropertiesConfiguration.getCopiedGlobalProps();
     kafkaProps.putAll(StreamerUtil.appendKafkaProps(cfg));
 
     // Read from kafka source

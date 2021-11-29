@@ -180,7 +180,7 @@ public class HoodieConfig implements Serializable {
 
   public TypedProperties getProps(boolean includeGlobalProps) {
     if (includeGlobalProps) {
-      TypedProperties mergedProps = DFSPropertiesConfiguration.getGlobalProps();
+      TypedProperties mergedProps = DFSPropertiesConfiguration.getCopiedGlobalProps();
       mergedProps.putAll(props);
       return mergedProps;
     } else {

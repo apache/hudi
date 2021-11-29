@@ -187,7 +187,7 @@ public class UtilHelpers {
   }
 
   public static TypedProperties buildProperties(List<String> props) {
-    TypedProperties properties = DFSPropertiesConfiguration.getGlobalProps();
+    TypedProperties properties = DFSPropertiesConfiguration.getCopiedGlobalProps();
     props.forEach(x -> {
       String[] kv = x.split("=");
       ValidationUtils.checkArgument(kv.length == 2);

@@ -47,7 +47,7 @@ object HoodieWriterUtils {
     * @return
     */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
-    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
+    val globalProps = DFSPropertiesConfiguration.getCopiedGlobalProps.asScala
     val props = new Properties()
     props.putAll(parameters)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)

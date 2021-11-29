@@ -165,10 +165,17 @@ public class DFSPropertiesConfiguration {
     }
   }
 
-  public static TypedProperties getGlobalProps() {
+  /**
+   * Returns a deep copy of global props
+   */
+  public static TypedProperties getCopiedGlobalProps() {
     final TypedProperties globalProps = new TypedProperties();
     globalProps.putAll(GLOBAL_PROPS);
     return globalProps;
+  }
+
+  public static TypedProperties getGlobalProps() {
+    return GLOBAL_PROPS;
   }
 
   public TypedProperties getProps() {
