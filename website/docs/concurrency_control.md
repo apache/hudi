@@ -47,7 +47,7 @@ hoodie.cleaner.policy.failed.writes=LAZY
 hoodie.write.lock.provider=<lock-provider-classname>
 ```
 
-There are 2 different server based lock providers that require different configuration to be set.
+There are 3 different server based lock providers that require different configuration to be set.
 
 **`Zookeeper`** based lock provider
 
@@ -68,6 +68,24 @@ hoodie.write.lock.hivemetastore.table
 ```
 
 `The HiveMetastore URI's are picked up from the hadoop configuration file loaded during runtime.`
+
+**`Amazon DynamoDB`** based lock provider
+
+Amazon DynamoDB based lock provides a simple way to support multi writing across different clusters
+
+```
+hoodie.write.lock.provider=org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider
+hoodie.write.lock.dynamodb.table
+hoodie.write.lock.dynamodb.partition_key
+hoodie.write.lock.dynamodb.region
+```
+Also, to set up the credentials for accessing AWS resources, customers can pass the following props to Hudi jobs:
+```
+hoodie.aws.access.key
+hoodie.aws.secret.key
+hoodie.aws.session.token
+```
+If not configured, Hudi falls back to use [DefaultAWSCredentialsProviderChain](https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/DefaultAWSCredentialsProviderChain.html).
 
 ## Datasource Writer
 
