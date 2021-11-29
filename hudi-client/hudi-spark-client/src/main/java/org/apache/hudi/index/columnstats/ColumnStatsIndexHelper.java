@@ -120,14 +120,14 @@ public class ColumnStatsIndexHelper {
    *
    * @param sparkSession encompassing Spark session
    * @param baseFilesPaths list of base-files paths to be sourced for column-stats index
-   * @param zorderedColumnSchemas target Z-ordered columns
+   * @param orderedColumnSchemas target ordered columns
    * @return Spark's {@link Dataset} holding an index table
    */
   @Nonnull
   public static Dataset<Row> buildColumnStatsTableFor(
       @Nonnull SparkSession sparkSession,
       @Nonnull List<String> baseFilesPaths,
-      @Nonnull List<StructField> zorderedColumnSchemas
+      @Nonnull List<StructField> orderedColumnSchemas
   ) {
     SparkContext sc = sparkSession.sparkContext();
     JavaSparkContext jsc = new JavaSparkContext(sc);
@@ -148,7 +148,7 @@ public class ColumnStatsIndexHelper {
                         utils.readRangeFromParquetMetadata(
                                 serializableConfiguration.value(),
                                 new Path(path),
-                                zorderedColumnSchemas.stream()
+                                orderedColumnSchemas.stream()
                                     .map(StructField::name)
                                     .collect(Collectors.toList())
                             )
@@ -182,7 +182,7 @@ public class ColumnStatsIndexHelper {
               indexRow.add(filePath);
 
               // For each column
-              zorderedColumnSchemas.forEach(colSchema -> {
+              orderedColumnSchemas.forEach(colSchema -> {
                 String colName = colSchema.name();
 
                 HoodieColumnRangeMetadata<Comparable> colMetadata =
@@ -207,7 +207,7 @@ public class ColumnStatsIndexHelper {
             })
             .filter(Objects::nonNull);
 
-    StructType indexSchema = composeIndexSchema(zorderedColumnSchemas);
+    StructType indexSchema = composeIndexSchema(orderedColumnSchemas);
 
     return sparkSession.createDataFrame(allMetaDataRDD, indexSchema);
   }
