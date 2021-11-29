@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.index.zorder.ColumnStatsIndexHelper
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}

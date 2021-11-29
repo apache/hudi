@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.zorder;
+package org.apache.hudi.index.columnstats;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;

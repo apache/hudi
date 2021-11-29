@@ -19,7 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.{LocatedFileStatus, Path}
-import org.apache.hudi.index.zorder.ColumnStatsIndexHelper
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
