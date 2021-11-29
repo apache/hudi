@@ -14,7 +14,7 @@ return (
       <div className="container">
        <div className="wrapper">
       <br/>
-      <p className="hero__subtitle"><i>Participate in the Apache Hudi 0.10 release that is being voted <a href="https://lists.apache.org/thread/jtotwt6g0v8d4ssx6cozntqg461lsfp4">here</a>,
+      <p className="hero__subtitle"><i>Participate in the Apache Hudi 0.10.0 release that is being voted <a href="https://lists.apache.org/thread/jtotwt6g0v8d4ssx6cozntqg461lsfp4">here</a>,
       which adds <a href="http://tinyurl.com/3mbcx9es">cool features</a> like Kafka Connect sink, <br/>
       z-ordering/ hilbert curves, dbt & more</i></p>
     </div></div>
