@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -74,6 +75,7 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
 
       // Create the write client to write some records in
       writeConfig = HoodieWriteConfig.newBuilder()
+          .withEngineType(EngineType.JAVA)
           .withProperties(connectConfigs.getProps())
           .withFileIdPrefixProviderClassName(KafkaConnectFileIdPrefixProvider.class.getName())
           .withProps(Collections.singletonMap(
