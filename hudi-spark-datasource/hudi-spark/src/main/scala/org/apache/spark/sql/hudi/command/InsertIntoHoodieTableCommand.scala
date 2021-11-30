@@ -19,19 +19,17 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.exception.HoodieDuplicateKeyException
-import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
+import org.apache.hudi.sync.common.MultiPartKeysValueExtractor
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
@@ -43,7 +41,6 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 
 import java.util.Properties
-
 import scala.collection.JavaConverters._
 
 /**

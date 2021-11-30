@@ -23,9 +23,9 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hive.MultiPartKeysValueExtractor;
-import org.apache.hudi.hive.NonPartitionedExtractor;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.sync.common.MultiPartKeysValueExtractor;
+import org.apache.hudi.sync.common.NonPartitionedExtractor;
+import org.apache.hudi.sync.common.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 

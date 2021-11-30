@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.sync.common.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 

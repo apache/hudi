@@ -23,22 +23,11 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import com.beust.jcommander.Parameter;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Configs needed to sync data into Hive.
  */
 public class HiveSyncConfig implements Serializable {
-
-  @Parameter(names = {"--database"}, description = "name of the target database in Hive", required = true)
-  public String databaseName;
-
-  @Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true)
-  public String tableName;
-
-  @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
-  public String baseFileFormat = "PARQUET";
 
   @Parameter(names = {"--user"}, description = "Hive username")
   public String hiveUser;
@@ -49,19 +38,6 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url")
   public String jdbcUrl;
 
-  @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
-  public String basePath;
-
-  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
-  public List<String> partitionFields = new ArrayList<>();
-
-  @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
-      + "to extract the partition values from HDFS path")
-  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getName();
-
-  @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-      + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
-  public Boolean assumeDatePartitioning = false;
 
   @Parameter(names = {"--use-pre-apache-input-format"},
       description = "Use InputFormat under com.uber.hoodie package "

@@ -16,35 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive;
+package org.apache.hudi.sync.common;
 
-import java.util.Collections;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.sync.common.PartitionValueExtractor;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
- * Partition Key extractor treating each value delimited by slash as separate key.
+ * Extractor for Non-partitioned hive tables.
  */
-public class MultiPartKeysValueExtractor implements PartitionValueExtractor {
+public class NonPartitionedExtractor implements PartitionValueExtractor {
 
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
-    // If the partitionPath is empty string( which means none-partition table), the partition values
-    // should be empty list.
-    if (partitionPath.isEmpty()) {
-      return Collections.emptyList();
-    }
-    String[] splits = partitionPath.split("/");
-    return Arrays.stream(splits).map(s -> {
-      if (s.contains("=")) {
-        String[] moreSplit = s.split("=");
-        ValidationUtils.checkArgument(moreSplit.length == 2, "Partition Field (" + s + ") not in expected format");
-        return moreSplit[1];
-      }
-      return s;
-    }).collect(Collectors.toList());
+    return new ArrayList<>();
   }
 }

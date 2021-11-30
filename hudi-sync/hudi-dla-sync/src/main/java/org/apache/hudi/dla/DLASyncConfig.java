@@ -19,7 +19,7 @@
 package org.apache.hudi.dla;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.sync.common.SlashEncodedDayPartitionValueExtractor;
 
 import com.beust.jcommander.Parameter;
 

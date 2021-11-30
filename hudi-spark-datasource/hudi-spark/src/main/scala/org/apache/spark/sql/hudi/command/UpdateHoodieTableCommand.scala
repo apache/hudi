@@ -22,9 +22,8 @@ import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
-
+import org.apache.hudi.sync.common.MultiPartKeysValueExtractor
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}

@@ -25,9 +25,10 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.util.ConfigUtils
-import org.apache.hudi.hive.{HiveStylePartitionValueExtractor, HiveSyncTool, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
+import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.sync.common.{HiveStylePartitionValueExtractor, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
@@ -240,7 +241,7 @@ object DataSourceWriteOptions {
   }
 
   val TABLE_NAME: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.write.table.name")
+    .key(HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY)
     .noDefaultValue()
     .withDocumentation("Table name for the datasource write. Also used to register the table into meta stores.")
 
