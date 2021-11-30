@@ -2,6 +2,7 @@ package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -12,9 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Configs needed to sync data into Hive.
+ * Configs needed to sync data into external meta stores, catalogs, etc.
  */
 public class HoodieSyncConfig extends HoodieConfig {
+
+  public static final String META_SYNC_BASE_PATH = "meta.sync.base.path";
 
   @Parameter(names = {"--database"}, description = "name of the target database in Hive", required = true)
   public String databaseName;
@@ -26,23 +29,21 @@ public class HoodieSyncConfig extends HoodieConfig {
   public String basePath;
 
   @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
-  public String baseFileFormat = "PARQUET";
+  public String baseFileFormat;
 
   @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
-  public List<String> partitionFields = new ArrayList<>();
+  public List<String> partitionFields;
 
   @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
       + "to extract the partition values from HDFS path")
-  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getName();
+  public String partitionValueExtractorClass;
 
   @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
       + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
-  public Boolean assumeDatePartitioning = false;
+  public Boolean assumeDatePartitioning;
 
-  public static final ConfigProperty<String> HIVE_SYNC_ENABLED = ConfigProperty
-      .key("hoodie.datasource.hive_sync.enable")
-      .defaultValue("false")
-      .withDocumentation("When set to true, register/sync the table to Apache Hive metastore.");
+  @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
+  public Boolean decodePartition;
 
   public static final ConfigProperty<String> META_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.meta.sync.enable")
@@ -95,7 +96,7 @@ public class HoodieSyncConfig extends HoodieConfig {
         if (!cfg.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
           return Option.of(NonPartitionedExtractor.class.getName());
         } else {
-          int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length
+          int numOfPartFields = cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME).split(",").length;
           if (numOfPartFields == 1
               && cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE)
               && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
@@ -112,4 +113,17 @@ public class HoodieSyncConfig extends HoodieConfig {
       .key("hoodie.datasource.hive_sync.assume_date_partitioning")
       .defaultValue("false")
       .withDocumentation("Assume partitioning is yyyy/mm/dd");
+
+  public HoodieSyncConfig(TypedProperties props) {
+    super(props);
+
+    this.basePath = props.getString(META_SYNC_BASE_PATH, "");
+    this.databaseName = getStringOrDefault(META_SYNC_DATABASE);
+    this.tableName = getStringOrDefault(META_SYNC_TABLE);
+    this.baseFileFormat = getStringOrDefault(META_SYNC_BASE_FILE_FORMAT);
+    this.partitionFields = props.getStringList(META_SYNC_PARTITION_FIELDS.key(), ",", new ArrayList<>());
+    this.partitionValueExtractorClass = getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS);
+    this.assumeDatePartitioning = getBooleanOrDefault(META_SYNC_ASSUME_DATE_PARTITION);
+    this.decodePartition = getBooleanOrDefault(KeyGeneratorOptions.URL_ENCODE_PARTITIONING);
+  }
 }
