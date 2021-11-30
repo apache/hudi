@@ -137,6 +137,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline filterPendingCompactionAndClusteringTimeline() {
+    return new HoodieDefaultTimeline(
+        instants.stream()
+            .filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION) || (s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && !s.isCompleted())),
+        details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsInRange(String startTs, String endTs) {
     return new HoodieDefaultTimeline(
         instants.stream().filter(s -> HoodieTimeline.isInRange(s.getTimestamp(), startTs, endTs)), details);

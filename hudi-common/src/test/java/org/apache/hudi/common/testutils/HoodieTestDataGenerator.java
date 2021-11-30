@@ -388,6 +388,17 @@ public class HoodieTestDataGenerator {
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
+  public static void createPendingReplaceFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(HoodieTimeline.makeInflightReplaceFileName(instantTime),
+        HoodieTimeline.makeRequestedReplaceFileName(instantTime))
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
+  }
+
+  public static void createPendingReplaceFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createPendingReplaceFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
   public static void createEmptyCleanRequestedFile(String basePath, String instantTime, Configuration configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
