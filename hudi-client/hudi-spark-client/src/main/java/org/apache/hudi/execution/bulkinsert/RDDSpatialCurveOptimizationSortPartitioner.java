@@ -108,7 +108,7 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
 
     switch (config.getLayoutOptimizationCurveBuildMethod()) {
       case DIRECT:
-        return SpaceCurveSortingHelper.createOptimizedDataFrameByMapValue(sourceDF, orderedCols, numOutputGroups, config.getLayoutOptimizationStrategy());
+        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(sourceDF, orderedCols, numOutputGroups, config.getLayoutOptimizationStrategy());
       case SAMPLE:
         return SpaceCurveSortingHelper.createOptimizeDataFrameBySample(sourceDF, orderedCols, numOutputGroups, config.getLayoutOptimizationStrategy());
       default:

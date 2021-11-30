@@ -18,10 +18,14 @@
 
 package org.apache.hudi.sort;
 
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.optimize.HilbertCurveUtils;
 import org.apache.hudi.optimize.ZOrderingUtil;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.Row$;
@@ -42,6 +46,7 @@ import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.ShortType;
 import org.apache.spark.sql.types.StringType;
 import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.davidmoten.hilbert.HilbertCurve;
@@ -52,53 +57,88 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class SpaceCurveSortingHelper {
 
+  private static final Logger LOG = LogManager.getLogger(SpaceCurveSortingHelper.class);
+
   /**
-   * Create optimized DataFrame directly
-   * only support base type data. long,int,short,double,float,string,timestamp,decimal,date,byte
-   * this method is more effective than createOptimizeDataFrameBySample
+   * Orders provided {@link Dataset} by mapping values of the provided list of columns
+   * {@code orderByCols} onto a specified space curve (Z-curve, Hilbert, etc)
    *
-   * @param df       a spark DataFrame holds parquet files to be read.
-   * @param sortCols ordering columns for the curve
-   * @param fileNum  spark partition num
-   * @param sortMode layout optimization strategy
-   * @return a dataFrame ordered by the curve.
+   * <p/>
+   * NOTE: Only support base data-types: long,int,short,double,float,string,timestamp,decimal,date,byte.
+   *       This method is more effective than {@link #createOptimizeDataFrameBySample} leveraging
+   *       data sampling instead of direct mapping
+   *
+   * @param df Spark {@link Dataset} holding data to be ordered
+   * @param orderByCols list of columns to be ordered by
+   * @param targetPartitionCount target number of output partitions
+   * @param sortMode target space-curve to map onto
+   * @return a {@link Dataset} holding data ordered by mapping tuple of values from provided columns
+   *         onto a specified space-curve
    */
-  public static Dataset<Row> createOptimizedDataFrameByMapValue(Dataset<Row> df, List<String> sortCols, int fileNum, String sortMode) {
-    Map<String, StructField> columnsMap = Arrays.stream(df.schema().fields()).collect(Collectors.toMap(e -> e.name(), e -> e));
-    int fieldNum = df.schema().fields().length;
-    List<String> checkCols = sortCols.stream().filter(f -> columnsMap.containsKey(f)).collect(Collectors.toList());
-    if (sortCols.size() != checkCols.size()) {
+  public static Dataset<Row> orderDataFrameByMappingValues(Dataset<Row> df, List<String> orderByCols, int targetPartitionCount, String sortMode) {
+    Map<String, StructField> columnsMap =
+        Arrays.stream(df.schema().fields())
+            .collect(Collectors.toMap(StructField::name, Function.identity()));
+
+    List<String> checkCols =
+        orderByCols.stream()
+            .filter(columnsMap::containsKey)
+            .collect(Collectors.toList());
+
+    if (orderByCols.size() != checkCols.size()) {
+      LOG.error(String.format("Trying to ordering over a column(s) not present in the schema (%s); skipping", CollectionUtils.diff(orderByCols, checkCols)));
       return df;
     }
-    // only one col to sort, no need to use z-order
-    if (sortCols.size() == 1) {
-      return df.repartitionByRange(fileNum, org.apache.spark.sql.functions.col(sortCols.get(0)));
+
+    // In case when there's just one column to be ordered by, we can skip space-curve
+    // ordering altogether (since it will match linear ordering anyway)
+    if (orderByCols.size() == 1) {
+      String orderByColName = orderByCols.get(0);
+      LOG.debug(String.format("Single column to order by (%s), skipping space-curve ordering", orderByColName));
+
+      // TODO validate if we need Spark to re-partition
+      return df.repartitionByRange(targetPartitionCount, new Column(orderByColName));
     }
-    Map<Integer, StructField> fieldMap = sortCols
-        .stream().collect(Collectors.toMap(e -> Arrays.asList(df.schema().fields()).indexOf(columnsMap.get(e)), e -> columnsMap.get(e)));
-    // do optimize
-    JavaRDD<Row> sortedRDD = null;
+
+    int fieldNum = df.schema().fields().length;
+
+    Map<Integer, StructField> fieldMap =
+        orderByCols.stream()
+            .collect(
+                Collectors.toMap(e -> Arrays.asList(df.schema().fields()).indexOf(columnsMap.get(e)), columnsMap::get));
+
+    JavaRDD<Row> sortedRDD;
     switch (HoodieClusteringConfig.BuildLayoutOptimizationStrategy.fromValue(sortMode)) {
       case ZORDER:
-        sortedRDD = createZCurveSortedRDD(df.toJavaRDD(), fieldMap, fieldNum, fileNum);
+        sortedRDD = createZCurveSortedRDD(df.toJavaRDD(), fieldMap, fieldNum, targetPartitionCount);
         break;
       case HILBERT:
-        sortedRDD = createHilbertSortedRDD(df.toJavaRDD(), fieldMap, fieldNum, fileNum);
+        sortedRDD = createHilbertSortedRDD(df.toJavaRDD(), fieldMap, fieldNum, targetPartitionCount);
         break;
       default:
         throw new IllegalArgumentException(String.format("new only support z-order/hilbert optimize but find: %s", sortMode));
     }
-    // create new StructType
-    List<StructField> newFields = new ArrayList<>();
-    newFields.addAll(Arrays.asList(df.schema().fields()));
-    newFields.add(new StructField("Index", BinaryType$.MODULE$, true, Metadata.empty()));
 
-    // create new DataFrame
-    return df.sparkSession().createDataFrame(sortedRDD, StructType$.MODULE$.apply(newFields)).drop("Index");
+    // Compose new {@code StructType} for ordered RDDs
+    StructType newStructType = composeOrderedRDDStructType(df.schema());
+
+    return df.sparkSession()
+        .createDataFrame(sortedRDD, newStructType)
+        .drop("Index");
+  }
+
+  private static StructType composeOrderedRDDStructType(StructType schema) {
+    return StructType$.MODULE$.apply(
+        CollectionUtils.combine(
+            Arrays.asList(schema.fields()),
+            Arrays.asList(new StructField("Index", BinaryType$.MODULE$, true, Metadata.empty()))
+        )
+    );
   }
 
   private static JavaRDD<Row> createZCurveSortedRDD(JavaRDD<Row> originRDD, Map<Integer, StructField> fieldMap, int fieldNum, int fileNum) {
@@ -203,11 +243,11 @@ public class SpaceCurveSortingHelper {
     }).sortBy(f -> new ZorderingBinarySort((byte[]) f.get(fieldNum)), true, fileNum);
   }
 
-  public static Dataset<Row> createOptimizedDataFrameByMapValue(Dataset<Row> df, String sortCols, int fileNum, String sortMode) {
+  public static Dataset<Row> orderDataFrameByMappingValues(Dataset<Row> df, String sortCols, int fileNum, String sortMode) {
     if (sortCols == null || sortCols.isEmpty() || fileNum <= 0) {
       return df;
     }
-    return createOptimizedDataFrameByMapValue(df,
+    return orderDataFrameByMappingValues(df,
         Arrays.stream(sortCols.split(",")).map(f -> f.trim()).collect(Collectors.toList()), fileNum, sortMode);
   }
 
