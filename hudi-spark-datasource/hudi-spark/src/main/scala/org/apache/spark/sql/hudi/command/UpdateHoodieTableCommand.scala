@@ -51,7 +51,10 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
     }.toMap
 
     val updateExpressions = table.output
-      .map(attr => name2UpdateValue.getOrElse(attr.name, attr))
+      .map(attr => {
+        val UpdateValueOption = name2UpdateValue.find(f => sparkSession.sessionState.conf.resolver(f._1, attr.name))
+        if(UpdateValueOption.isEmpty) attr else UpdateValueOption.get._2
+      })
       .filter { // filter the meta columns
         case attr: AttributeReference =>
           !HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet.contains(attr.name)
