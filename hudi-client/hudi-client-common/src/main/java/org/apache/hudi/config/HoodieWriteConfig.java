@@ -52,6 +52,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
+import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
@@ -1093,6 +1094,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getCleanerParallelism() {
     return getInt(HoodieCompactionConfig.CLEANER_PARALLELISM_VALUE);
+  }
+
+  public int getInlineCleaningMaxCommits() {
+    return getInt(HoodieCompactionConfig.INLINE_CLEAN_NUM_COMMITS);
+  }
+
+  public CleaningTriggerStrategy getInlineCleaningTriggerStrategy() {
+    return CleaningTriggerStrategy.valueOf(getString(HoodieCompactionConfig.INLINE_CLEAN_TRIGGER_STRATEGY));
   }
 
   public boolean isAutoClean() {

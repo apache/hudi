@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -98,6 +99,17 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue(CompactionTriggerStrategy.NUM_COMMITS.name())
       .withDocumentation("Controls how compaction scheduling is triggered, by time or num delta commits or combination of both. "
           + "Valid options: " + Arrays.stream(CompactionTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+
+  public static final ConfigProperty<String> INLINE_CLEAN_TRIGGER_STRATEGY = ConfigProperty
+          .key("hoodie.clean.inline.trigger.strategy")
+          .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
+          .withDocumentation("Controls how cleaning is scheduled. Valid options: " +
+                  Arrays.stream(CleaningTriggerStrategy.values()).map(Enum::name).collect(Collectors.joining(",")));
+
+  public static final ConfigProperty<String> INLINE_CLEAN_NUM_COMMITS = ConfigProperty
+          .key("hoodie.clean.inline.max.commits")
+          .defaultValue("1")
+          .withDocumentation("Number of commits after the last clean operation, before scheduling of a new clean is attempted.");
 
   public static final ConfigProperty<String> CLEANER_FILE_VERSIONS_RETAINED = ConfigProperty
       .key("hoodie.cleaner.fileversions.retained")
@@ -497,6 +509,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withInlineCleaningTriggerStrategy(String cleaningTriggerStrategy) {
+      compactionConfig.setValue(INLINE_CLEAN_TRIGGER_STRATEGY, cleaningTriggerStrategy);
+      return this;
+    }
+
+    public Builder withMaxCommitsBeforeInlineCleaning(int commitsBeforeInlineCleaning) {
+      compactionConfig.setValue(INLINE_CLEAN_NUM_COMMITS, String.valueOf(commitsBeforeInlineCleaning));
+      return this;
+    }
+
     public Builder withCleanerPolicy(HoodieCleaningPolicy policy) {
       compactionConfig.setValue(CLEANER_POLICY, policy.name());
       return this;
@@ -523,11 +545,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder compactionRecordSizeEstimateThreshold(double threshold) {
-      compactionConfig.setValue(RECORD_SIZE_ESTIMATION_THRESHOLD, String.valueOf(threshold));
-      return this;
-    }
-
     public Builder insertSplitSize(int insertSplitSize) {
       compactionConfig.setValue(COPY_ON_WRITE_INSERT_SPLIT_SIZE, String.valueOf(insertSplitSize));
       return this;
@@ -535,11 +552,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder autoTuneInsertSplits(boolean autoTuneInsertSplits) {
       compactionConfig.setValue(COPY_ON_WRITE_AUTO_SPLIT_INSERTS, String.valueOf(autoTuneInsertSplits));
-      return this;
-    }
-
-    public Builder approxRecordSize(int recordSizeEstimate) {
-      compactionConfig.setValue(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE, String.valueOf(recordSizeEstimate));
       return this;
     }
 
@@ -573,23 +585,8 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withCompactionLazyBlockReadEnabled(Boolean compactionLazyBlockReadEnabled) {
-      compactionConfig.setValue(COMPACTION_LAZY_BLOCK_READ_ENABLE, String.valueOf(compactionLazyBlockReadEnabled));
-      return this;
-    }
-
-    public Builder withCompactionReverseLogReadEnabled(Boolean compactionReverseLogReadEnabled) {
-      compactionConfig.setValue(COMPACTION_REVERSE_LOG_READ_ENABLE, String.valueOf(compactionReverseLogReadEnabled));
-      return this;
-    }
-
     public Builder withTargetPartitionsPerDayBasedCompaction(int targetPartitionsPerCompaction) {
       compactionConfig.setValue(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION, String.valueOf(targetPartitionsPerCompaction));
-      return this;
-    }
-
-    public Builder withCommitsArchivalBatchSize(int batchSize) {
-      compactionConfig.setValue(COMMITS_ARCHIVAL_BATCH_SIZE, String.valueOf(batchSize));
       return this;
     }
 

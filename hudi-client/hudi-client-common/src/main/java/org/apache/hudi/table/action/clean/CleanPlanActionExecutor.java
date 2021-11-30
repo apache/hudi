@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -58,8 +59,34 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
     this.extraMetadata = extraMetadata;
   }
 
-  protected Option<HoodieCleanerPlan> createCleanerPlan() {
-    return execute();
+  private int getCommitInfo() {
+    Option<HoodieInstant> lastCleanInstant = table.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
+    HoodieTimeline commitTimeline = table.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+
+    String latestCleanTs;
+    int commitsSinceLastCleaning = 0;
+    if (lastCleanInstant.isPresent()) {
+      latestCleanTs = lastCleanInstant.get().getTimestamp();
+      commitsSinceLastCleaning = commitTimeline.findInstantsAfter(latestCleanTs).countInstants();
+    } else {
+      String firstCommitTs = commitTimeline.firstInstant().get().getTimestamp();
+      commitsSinceLastCleaning = commitTimeline.findInstantsAfterOrEquals(firstCommitTs, Integer.MAX_VALUE).countInstants();
+    }
+
+    return commitsSinceLastCleaning;
+  }
+
+  private boolean needCleaning(CleaningTriggerStrategy strategy) {
+    boolean cleaningNeeded = false;
+    if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
+      int numberOfCommits = getCommitInfo();
+      int maxInlineCommitsForNextClean = config.getInlineCleaningMaxCommits();
+      cleaningNeeded = numberOfCommits >= maxInlineCommitsForNextClean;
+    } else {
+      throw new HoodieException("Unsupported cleaning trigger strategy: " + config.getInlineCleaningTriggerStrategy());
+    }
+
+    return cleaningNeeded;
   }
 
   /**
@@ -127,6 +154,9 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
 
   @Override
   public Option<HoodieCleanerPlan> execute() {
+    if (!needCleaning(config.getInlineCleaningTriggerStrategy())) {
+      return Option.empty();
+    }
     // Plan a new clean action
     return requestClean(instantTime);
   }
