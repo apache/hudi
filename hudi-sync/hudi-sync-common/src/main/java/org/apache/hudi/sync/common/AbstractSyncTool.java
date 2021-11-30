@@ -17,17 +17,21 @@
 
 package org.apache.hudi.sync.common;
 
+import org.apache.hudi.common.config.TypedProperties;
+
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.Properties;
 
 public abstract class AbstractSyncTool {
+  protected final FileSystem fileSystem;
+  protected final HoodieSyncConfig syncConfig;
   protected Properties props;
-  protected FileSystem fileSystem;
 
-  public AbstractSyncTool(Properties props, FileSystem fileSystem) {
+  public AbstractSyncTool(TypedProperties props, FileSystem fileSystem) {
     this.props = props;
     this.fileSystem = fileSystem;
+    this.syncConfig = new HoodieSyncConfig(props);
   }
 
   public abstract void syncHoodieTable();

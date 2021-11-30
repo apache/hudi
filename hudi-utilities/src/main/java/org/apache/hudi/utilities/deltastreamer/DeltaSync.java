@@ -51,12 +51,12 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
@@ -77,7 +77,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -95,7 +94,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -174,7 +172,7 @@ public class DeltaSync implements Serializable {
 
   /**
    * Bag of properties with source, hoodie client, key generator etc.
-   *
+   * <p>
    * NOTE: These properties are already consolidated w/ CLI provided config-overrides
    */
   private final TypedProperties props;
@@ -268,7 +266,7 @@ public class DeltaSync implements Serializable {
               SimpleKeyGenerator.class.getName()))
           .setPreCombineField(cfg.sourceOrderingField)
           .initTable(new Configuration(jssc.hadoopConfiguration()),
-            cfg.targetBasePath);
+              cfg.targetBasePath);
     }
   }
 
@@ -320,7 +318,7 @@ public class DeltaSync implements Serializable {
    * Read from Upstream Source and apply transformation if needed.
    *
    * @param commitTimelineOpt Timeline with completed commits
-   * @return Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> Input data read from upstream source, consists
+   * @return Pair<SchemaProvider, Pair < String, JavaRDD < HoodieRecord>>> Input data read from upstream source, consists
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
@@ -333,7 +331,7 @@ public class DeltaSync implements Serializable {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
         if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
-                || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
+            || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
           resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
@@ -418,7 +416,8 @@ public class DeltaSync implements Serializable {
                     targetSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc);
                   }
                   return (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
-                    dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
+                      dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider);
+                })
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
@@ -437,7 +436,7 @@ public class DeltaSync implements Serializable {
 
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
       LOG.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=("
-           + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
+          + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
       return null;
     }
 
@@ -615,38 +614,17 @@ public class DeltaSync implements Serializable {
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         impl = impl.trim();
-        switch (impl) {
-          case "org.apache.hudi.hive.HiveSyncTool":
-            syncHive();
-            break;
-          default:
-            FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
-            Properties properties = new Properties();
-            properties.putAll(props);
-            properties.put("basePath", cfg.targetBasePath);
-            properties.put("baseFileFormat", cfg.baseFileFormat);
-            AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[]{Properties.class, FileSystem.class}, properties, fs);
-            syncTool.syncHoodieTable();
-        }
+        FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
+        TypedProperties properties = new TypedProperties();
+        properties.putAll(props);
+        properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
+        properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
+        AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {TypedProperties.class, FileSystem.class}, properties, fs);
+        syncTool.syncHoodieTable();
         long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
         metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
       }
     }
-  }
-
-  public void syncHive() {
-    HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-    LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-        + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
-    HiveConf hiveConf = new HiveConf(conf, HiveConf.class);
-    LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
-    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
-  }
-
-  public void syncHive(HiveConf conf) {
-    this.conf = conf;
-    syncHive();
   }
 
   /**

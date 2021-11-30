@@ -41,6 +41,7 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.sync.common.AbstractSyncTool;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -168,37 +169,13 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     if (connectConfigs.isMetaSyncEnabled()) {
       for (String impl : syncClientToolClasses) {
         impl = impl.trim();
-        switch (impl) {
-          case "org.apache.hudi.hive.HiveSyncTool":
-            syncHive();
-            break;
-          default:
-            FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
-            Properties properties = new Properties();
-            properties.putAll(connectConfigs.getProps());
-            properties.put("basePath", tableBasePath);
-            AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {Properties.class, FileSystem.class}, properties, fs);
-            syncTool.syncHoodieTable();
-        }
+        FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
+        TypedProperties properties = new TypedProperties();
+        properties.putAll(connectConfigs.getProps());
+        properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, tableBasePath);
+        AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {TypedProperties.class, FileSystem.class}, properties, fs);
+        syncTool.syncHoodieTable();
       }
     }
-  }
-
-  private void syncHive() {
-    HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(
-        new TypedProperties(connectConfigs.getProps()),
-        tableBasePath,
-        "PARQUET");
-    LOG.info("Syncing target hoodie table with hive table("
-        + hiveSyncConfig.tableName
-        + "). Hive metastore URL :"
-        + hiveSyncConfig.jdbcUrl
-        + ", basePath :" + tableBasePath);
-    LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
-    FileSystem fs = FSUtils.getFs(tableBasePath, hadoopConf);
-    HiveConf hiveConf = new HiveConf();
-    hiveConf.addResource(fs.getConf());
-    LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
   }
 }

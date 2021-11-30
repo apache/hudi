@@ -211,29 +211,6 @@ public class TestDataSourceUtils {
     assertThat(partitioner.isPresent(), is(true));
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testBuildHiveSyncConfig(boolean useSyncMode) {
-    TypedProperties props = new TypedProperties();
-    if (useSyncMode) {
-      props.setProperty(DataSourceWriteOptions.HIVE_SYNC_MODE().key(), HMS.name());
-      props.setProperty(DataSourceWriteOptions.HIVE_USE_JDBC().key(), String.valueOf(false));
-    }
-    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE().key(), HIVE_DATABASE);
-    props.setProperty(DataSourceWriteOptions.HIVE_TABLE().key(), HIVE_TABLE);
-    HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, config.getBasePath(), PARQUET.name());
-
-    if (useSyncMode) {
-      assertFalse(hiveSyncConfig.useJdbc);
-      assertEquals(HMS.name(), hiveSyncConfig.syncMode);
-    } else {
-      assertTrue(hiveSyncConfig.useJdbc);
-      assertNull(hiveSyncConfig.syncMode);
-    }
-    assertEquals(HIVE_DATABASE, hiveSyncConfig.databaseName);
-    assertEquals(HIVE_TABLE, hiveSyncConfig.tableName);
-  }
-
   private void setAndVerifyHoodieWriteClientWith(final String partitionerClassName) {
     config = HoodieWriteConfig.newBuilder().withPath(config.getBasePath())
         .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)

@@ -23,6 +23,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
+
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
@@ -41,7 +43,6 @@ import org.apache.parquet.schema.MessageType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
@@ -63,7 +64,7 @@ public class DLASyncTool extends AbstractSyncTool {
   private final String snapshotTableName;
   private final Option<String> roTableTableName;
 
-  public DLASyncTool(Properties properties, FileSystem fs) {
+  public DLASyncTool(TypedProperties properties, FileSystem fs) {
     super(properties, fs);
     this.hoodieDLAClient = new HoodieDLAClient(Utils.propertiesToConfig(properties), fs);
     this.cfg = Utils.propertiesToConfig(properties);

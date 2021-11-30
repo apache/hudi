@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.ConfigProperty;
@@ -50,13 +68,14 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("false")
       .withDocumentation("Enable Syncing the Hudi Table with an external meta store or data catalog.");
 
-  public static final ConfigProperty<String> META_SYNC_DATABASE = ConfigProperty
+  // ToDo change the prefix of the following configs from hive_sync to meta_sync
+  public static final ConfigProperty<String> META_SYNC_DATABASE_NAME = ConfigProperty
       .key("hoodie.datasource.hive_sync.database")
       .defaultValue("default")
       .withDocumentation("The name of the destination database that we should sync the hudi table to.");
 
   // If the table name for the metastore destination is not provided, pick it up from write or table configs.
-  public static final ConfigProperty<String> META_SYNC_TABLE = ConfigProperty
+  public static final ConfigProperty<String> META_SYNC_TABLE_NAME = ConfigProperty
       .key("hoodie.datasource.hive_sync.table")
       .defaultValue("unknown")
       .withInferFunction(cfg -> {
@@ -118,8 +137,8 @@ public class HoodieSyncConfig extends HoodieConfig {
     super(props);
 
     this.basePath = props.getString(META_SYNC_BASE_PATH, "");
-    this.databaseName = getStringOrDefault(META_SYNC_DATABASE);
-    this.tableName = getStringOrDefault(META_SYNC_TABLE);
+    this.databaseName = getStringOrDefault(META_SYNC_DATABASE_NAME);
+    this.tableName = getStringOrDefault(META_SYNC_TABLE_NAME);
     this.baseFileFormat = getStringOrDefault(META_SYNC_BASE_FILE_FORMAT);
     this.partitionFields = props.getStringList(META_SYNC_PARTITION_FIELDS.key(), ",", new ArrayList<>());
     this.partitionValueExtractorClass = getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS);

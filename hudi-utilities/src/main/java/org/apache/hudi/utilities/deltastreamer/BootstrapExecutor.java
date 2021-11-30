@@ -34,6 +34,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
@@ -160,10 +161,9 @@ public class BootstrapExecutor  implements Serializable {
    */
   private void syncHive() {
     if (cfg.enableHiveSync) {
-      HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-      LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-          + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
-      new HiveSyncTool(hiveSyncConfig, new HiveConf(configuration, HiveConf.class), fs).syncHoodieTable();
+      props.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
+      props.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
+      new HiveSyncTool(props, new HiveConf(configuration, HiveConf.class), fs).syncHoodieTable();
     }
   }
 
