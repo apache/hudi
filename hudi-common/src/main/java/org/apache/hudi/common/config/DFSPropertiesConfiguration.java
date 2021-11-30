@@ -18,18 +18,21 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -77,7 +80,7 @@ public class DFSPropertiesConfiguration {
     this.currentFilePath = filePath;
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
-    addPropsFromFile(filePath);
+    addPropsFromFile(filePath, false);
   }
 
   public DFSPropertiesConfiguration() {
@@ -95,13 +98,9 @@ public class DFSPropertiesConfiguration {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration();
     Option<Path> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent()) {
-      conf.addPropsFromFile(defaultConfPath.get());
+      conf.addPropsFromFile(defaultConfPath.get(), false);
     } else {
-      try {
-        conf.addPropsFromFile(new Path(DEFAULT_CONF_FILE_DIR));
-      } catch (Exception ignored) {
-        LOG.warn("Didn't find config file under default conf file dir: " + DEFAULT_CONF_FILE_DIR);
-      }
+      conf.addPropsFromFile(new Path(DEFAULT_CONF_FILE_DIR + "/" + DEFAULT_PROPERTIES_FILE), true);
     }
     return conf.getProps();
   }
@@ -119,7 +118,7 @@ public class DFSPropertiesConfiguration {
    *
    * @param filePath File path for configuration file
    */
-  public void addPropsFromFile(Path filePath) {
+  public void addPropsFromFile(Path filePath, boolean isDefaultDirectory) {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
@@ -128,14 +127,19 @@ public class DFSPropertiesConfiguration {
         filePath.toString(),
         Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
     );
+    try {
+      if (isDefaultDirectory && !fs.exists(filePath)) {
+        LOG.warn("Properties file " + filePath + " not found. Ignoring to load props file");
+        return;
+      }
 
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)))) {
+      BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)));
       visitedFilePaths.add(filePath.toString());
       currentFilePath = filePath;
       addPropsFromStream(reader);
     } catch (IOException ioe) {
-      LOG.error("Error reading in properties from dfs");
-      throw new IllegalArgumentException("Cannot read properties from dfs", ioe);
+      LOG.error("Error reading in properties from dfs from file " + filePath);
+      throw new HoodieIOException("Cannot read properties from dfs from file " + filePath, ioe);
     }
   }
 
@@ -154,7 +158,7 @@ public class DFSPropertiesConfiguration {
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
           Path includeFilePath = new Path(currentFilePath.getParent(), split[1]);
-          addPropsFromFile(includeFilePath);
+          addPropsFromFile(includeFilePath, false);
         } else {
           hoodieConfig.setValue(split[0], split[1]);
         }
@@ -192,7 +196,7 @@ public class DFSPropertiesConfiguration {
   }
 
   private String[] splitProperty(String line) {
-    line = line.replaceAll("\\s+"," ");
+    line = line.replaceAll("\\s+", " ");
     String delimiter = line.contains("=") ? "=" : " ";
     int ind = line.indexOf(delimiter);
     String k = line.substring(0, ind).trim();
