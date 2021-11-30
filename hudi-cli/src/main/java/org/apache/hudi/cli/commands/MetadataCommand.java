@@ -62,7 +62,7 @@ import java.util.Set;
  * Example:
  * The default spark.master conf is set to yarn. If you are running on a local deployment,
  * we can set the spark master to local using set conf command.
- * > set --conf SPARK_MASTER=local
+ * > set --conf SPARK_MASTER=local[2]
  * <p>
  * Connect to the table
  * > connect --path {path to hudi table}
@@ -297,12 +297,20 @@ public class MetadataCommand implements CommandMarker {
         row[0] = partition;
         FileStatus fsFileStatus = fileStatusMap.get(file);
         FileStatus metaFileStatus = metadataFileStatusMap.get(file);
+        boolean doesFsFileExists = fsFileStatus != null;
+        boolean doesMetadataFileExists = metaFileStatus != null;
+        long fsFileLength = doesFsFileExists ? fsFileStatus.getLen() : 0;
+        long metadataFileLength = doesMetadataFileExists ? metaFileStatus.getLen() : 0;
         row[1] = file;
-        row[2] = fsFileStatus != null;
-        row[3] = metaFileStatus != null;
-        row[4] = (fsFileStatus != null) ? fsFileStatus.getLen() : 0;
-        row[5] = (metaFileStatus != null) ? metaFileStatus.getLen() : 0;
-        rows.add(row);
+        row[2] = doesFsFileExists;
+        row[3] = doesMetadataFileExists;
+        row[4] = fsFileLength;
+        row[5] = metadataFileLength;
+        if (verbose) { // if verbose print all files
+          rows.add(row);
+        } else if ((doesFsFileExists != doesMetadataFileExists) || (fsFileLength != metadataFileLength)) { // if non verbose, print only non matching files
+          rows.add(row);
+        }
       }
 
       if (metadataStatuses.length != fsStatuses.length) {
@@ -337,8 +345,8 @@ public class MetadataCommand implements CommandMarker {
     }
     TableHeader header = new TableHeader().addTableHeaderField("Partition")
         .addTableHeaderField("File Name")
-        .addTableHeaderField(" IsPresent in FS ")
-        .addTableHeaderField(" IsPresent in Metadata")
+        .addTableHeaderField(" Is Present in FS ")
+        .addTableHeaderField(" Is Present in Metadata")
         .addTableHeaderField(" FS size")
         .addTableHeaderField(" Metadata size");
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
