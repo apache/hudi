@@ -27,7 +27,6 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Collections;
-import java.util.List;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -38,20 +37,14 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   public SimpleKeyGenerator(TypedProperties props) {
     this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
-        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()),
-        props.getString(KeyGeneratorOptions.INDEX_KEY_FILED_NAME.key(),
-            KeyGeneratorOptions.INDEX_KEY_FILED_NAME.defaultValue()));
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
   SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
-    this(props, null, partitionPathField, null);
+    this(props, null, partitionPathField);
   }
 
   SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
-    this(props, recordKeyField, partitionPathField, null);
-  }
-
-  SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField, String indexKeyField) {
     super(props);
     this.recordKeyFields = recordKeyField == null
         ? Collections.emptyList() : Collections.singletonList(recordKeyField);
@@ -68,11 +61,6 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getPartitionPath(GenericRecord record) {
     return simpleAvroKeyGenerator.getPartitionPath(record);
-  }
-
-  @Override
-  public List<Object> getIndexKey(GenericRecord record) {
-    return simpleAvroKeyGenerator.getIndexKey(record);
   }
 
   @Override

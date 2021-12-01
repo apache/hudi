@@ -455,12 +455,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateInserts(instantTime, n, false);
   }
 
-  public List<HoodieRecord> generateInserts(boolean reuseRecordKey, String instantTime, Integer n) {
-    return generateInsertsStream(instantTime, n, false, TRIP_EXAMPLE_SCHEMA, true,
-        () -> partitionPaths[RAND.nextInt(partitionPaths.length)],
-        () -> UUID.randomUUID().toString(), null, true).collect(Collectors.toList());
-  }
-
   /**
    * Generates new inserts, uniformly across the partition paths above.
    * It also updates the list of existing keys.
@@ -489,37 +483,27 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> UUID.randomUUID().toString(), null, false)
-        .collect(Collectors.toList());
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> UUID.randomUUID().toString()).collect(Collectors.toList());
   }
 
   public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
     return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
         () -> partitionPaths[RAND.nextInt(partitionPaths.length)],
-        () -> UUID.randomUUID().toString(), null, false);
+        () -> UUID.randomUUID().toString());
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
   public Stream<HoodieRecord> generateInsertsStream(String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions,
-                                                    Supplier<String> partitionPathSupplier, Supplier<String> recordKeySupplier,
-                                                    Supplier<List<Object>> indexKeySupplier, boolean reuseRecordKey) {
+                                                    Supplier<String> partitionPathSupplier, Supplier<String> recordKeySupplier) {
     int currSize = getNumExistingKeys(schemaStr);
     return IntStream.range(0, n).boxed().map(i -> {
       String partitionPath = partitionPathSupplier.get();
       if (containsAllPartitions && i < partitionPaths.length) {
         partitionPath = partitionPaths[i];
       }
-      HoodieKey key;
-      if (reuseRecordKey) {
-        String recordKey = recordKeySupplier.get();
-        key = new HoodieKey(recordKey, partitionPath, Collections.singletonList(recordKey));
-      } else if (indexKeySupplier != null) {
-        key = new HoodieKey(recordKeySupplier.get(), partitionPath, indexKeySupplier.get());
-      } else {
-        key = new HoodieKey(recordKeySupplier.get(), partitionPath);
-      }
+      HoodieKey key = new HoodieKey(recordKeySupplier.get(), partitionPath);
       KeyPartition kp = new KeyPartition();
       kp.key = key;
       kp.partitionPath = partitionPath;

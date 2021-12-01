@@ -41,7 +41,6 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
     super(config);
     this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
     globalAvroDeleteKeyGenerator = new GlobalAvroDeleteKeyGenerator(config);
-    this.indexKeyFields = globalAvroDeleteKeyGenerator.indexKeyFields;
   }
 
   @Override
@@ -52,11 +51,6 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getPartitionPath(GenericRecord record) {
     return globalAvroDeleteKeyGenerator.getPartitionPath(record);
-  }
-
-  @Override
-  public List<Object> getIndexKey(GenericRecord record) {
-    return globalAvroDeleteKeyGenerator.getIndexKey(record);
   }
 
   @Override
