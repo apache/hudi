@@ -58,6 +58,7 @@ import java.util.Map;
 
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.fileSystem;
+import static org.apache.hudi.hive.testutils.HiveTestUtil.getHiveConf;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncConfig;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -1032,10 +1033,14 @@ public class TestHiveSyncTool {
   @ParameterizedTest
   @MethodSource("syncMode")
   public void testSyncWithoutDiffs(String syncMode) throws Exception {
-    hiveSyncConfig.syncMode = syncMode;
-    hiveSyncConfig.isConditionalSync = true;
-    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
-    String tableName = HiveTestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+
+    TypedProperties localHiveSyncProps = hiveSyncProps;
+    localHiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), syncMode);
+    localHiveSyncProps.setProperty(HiveSyncConfig.HIVE_BATCH_SYNC_PARTITION_NUM.key(), "2");
+
+    HiveSyncConfig localHiveSyncConfig = new HiveSyncConfig(localHiveSyncProps);
+    localHiveSyncConfig.isConditionalSync = true;
+    String tableName = localHiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
 
     String commitTime0 = "100";
     String commitTime1 = "101";
@@ -1043,9 +1048,9 @@ public class TestHiveSyncTool {
     HiveTestUtil.createMORTable(commitTime0, commitTime1, 2, true, true);
 
     HoodieHiveClient hiveClient =
-        new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+        new HoodieHiveClient(localHiveSyncConfig, getHiveConf(), HiveTestUtil.fileSystem);
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(localHiveSyncConfig, getHiveConf(), fileSystem);
     tool.syncHoodieTable();
 
     assertTrue(hiveClient.doesTableExist(tableName));
@@ -1053,9 +1058,9 @@ public class TestHiveSyncTool {
 
     HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime1, commitTime2);
 
-    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
+    tool = new HiveSyncTool(localHiveSyncConfig, getHiveConf(), fileSystem);
     tool.syncHoodieTable();
-    hiveClient = new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    hiveClient = new HoodieHiveClient(localHiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());
   }
 
