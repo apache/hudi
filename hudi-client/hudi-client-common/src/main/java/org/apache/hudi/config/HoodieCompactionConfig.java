@@ -168,7 +168,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<Long> COMPACTION_LOG_FILE_SIZE_THRESHOLD = ConfigProperty
       .key("hoodie.compaction.logfile.size.threshold")
-      .defaultValue(1024 * 1024 * 1024L)
+      .defaultValue(0L)
       .withDocumentation("Only if the log file size is greater than the threshold in bytes,"
           + " the file group will be compacted.");
 
