@@ -93,9 +93,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   @Parameter(names = {"--with-operation-field"}, description = "Whether to include the '_hoodie_operation' field in the metadata fields")
   public Boolean withOperationField = false;
 
-  @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
-  public Boolean isConditionalSync = false;
-
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset
@@ -212,7 +209,6 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.useFileListingFromMetadata = getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
     this.tableProperties = getString(HIVE_TABLE_PROPERTIES);
     this.serdeProperties = getString(HIVE_TABLE_SERDE_PROPERTIES);
-
     this.supportTimestamp = getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE);
     this.batchSyncNum = getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);
     this.syncAsSparkDataSourceTable = getBooleanOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE);

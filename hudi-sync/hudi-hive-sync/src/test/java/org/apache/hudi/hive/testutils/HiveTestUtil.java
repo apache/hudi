@@ -86,20 +86,21 @@ import static org.junit.jupiter.api.Assertions.fail;
 @SuppressWarnings("SameParameterValue")
 public class HiveTestUtil {
 
-  private static final String DB_NAME = "testdb";
-  private static final String TABLE_NAME = "test1";
+  public static final String DB_NAME = "testdb";
+  public static String TABLE_NAME = "test1";
+  public static String basePath;
+  public static TypedProperties hiveSyncProps;
+  public static HiveTestService hiveTestService;
+  public static FileSystem fileSystem;
+  public static QueryBasedDDLExecutor ddlExecutor;
+
   private static ZooKeeperServer zkServer;
   private static HiveServer2 hiveServer;
-  public static HiveTestService hiveTestService;
   private static ZookeeperTestService zkService;
   private static Configuration configuration;
-  public static HiveSyncConfig hiveSyncConfig;
-  public static TypedProperties hiveSyncProps;
+  private static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
-  public static FileSystem fileSystem;
   private static Set<String> createdTablesSet = new HashSet<>();
-  public static QueryBasedDDLExecutor ddlExecutor;
-  private static String basePath;
 
   public static void setUp() throws IOException, InterruptedException, HiveException, MetaException {
     configuration = new Configuration();
@@ -125,6 +126,7 @@ public class HiveTestUtil {
     hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
     hiveSyncProps.setProperty(HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
     hiveSyncProps.setProperty(HiveSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
+    hiveSyncProps.setProperty(HiveSyncConfig.HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
 
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps);
 

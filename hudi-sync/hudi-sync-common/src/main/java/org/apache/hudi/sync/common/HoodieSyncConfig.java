@@ -63,6 +63,9 @@ public class HoodieSyncConfig extends HoodieConfig {
   @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
   public Boolean decodePartition;
 
+  @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
+  public Boolean isConditionalSync;
+
   public static final ConfigProperty<String> META_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.meta.sync.enable")
       .defaultValue("false")
@@ -133,6 +136,11 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("false")
       .withDocumentation("Assume partitioning is yyyy/mm/dd");
 
+  public static final ConfigProperty<Boolean> META_SYNC_CONDITIONAL_SYNC = ConfigProperty
+      .key("hoodie.datasource.meta_sync.condition.sync")
+      .defaultValue(false)
+      .withDocumentation("If true, only sync on conditions like schema change or partition change.");
+
   public HoodieSyncConfig(TypedProperties props) {
     super(props);
 
@@ -144,5 +152,6 @@ public class HoodieSyncConfig extends HoodieConfig {
     this.partitionValueExtractorClass = getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS);
     this.assumeDatePartitioning = getBooleanOrDefault(META_SYNC_ASSUME_DATE_PARTITION);
     this.decodePartition = getBooleanOrDefault(KeyGeneratorOptions.URL_ENCODE_PARTITIONING);
+    this.isConditionalSync = getBooleanOrDefault(META_SYNC_CONDITIONAL_SYNC);
   }
 }

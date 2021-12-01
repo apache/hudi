@@ -79,7 +79,6 @@ public class HiveSyncTool extends AbstractSyncTool {
     this(new HiveSyncConfig(props), new HiveConf(fs.getConf(), HiveConf.class),fs);
   }
 
-  @Deprecated
   public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf configuration, FileSystem fs) {
     super(new TypedProperties(configuration.getAllProperties()), fs);
 
@@ -153,7 +152,8 @@ public class HiveSyncTool extends AbstractSyncTool {
 
   protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
                                boolean readAsOptimized) {
-    LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
+    LOG.info("Trying to sync hoodie db " + hiveSyncConfig.databaseName
+        + " and table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
 
     // check if the database exists else create it
@@ -168,6 +168,7 @@ public class HiveSyncTool extends AbstractSyncTool {
       }
     } else {
       if (!hoodieHiveClient.doesDataBaseExist(hiveSyncConfig.databaseName)) {
+        LOG.error("Hive database does not exist " + hiveSyncConfig.databaseName);
         throw new HoodieHiveSyncException("hive database does not exist " + hiveSyncConfig.databaseName);
       }
     }
