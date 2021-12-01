@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -408,10 +409,16 @@ public class TestHiveSyncTool {
 
     hiveSyncConfig.syncMode = syncMode;
     hiveSyncConfig.createManagedTable = isManagedTable;
+
+    // Update existing config
+    TypedProperties localHiveSyncProps = hiveSyncProps;
+    localHiveSyncProps.setProperty(HiveSyncConfig.HIVE_SYNC_MODE.key(), syncMode);
+    localHiveSyncProps.setProperty(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.key(), String.valueOf(isManagedTable));
+
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(localHiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     SessionState.start(HiveTestUtil.getHiveConf());
