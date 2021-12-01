@@ -34,19 +34,22 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveOptimizationSortPartitioner;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
@@ -68,6 +71,9 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.log.HoodieFileSliceReader.getFileSliceReader;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
 /**
  * Clustering strategy to submit multiple spark jobs and union the results.
@@ -102,13 +108,42 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
 
 
   /**
-   * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters. The number of new
-   * file groups created is bounded by numOutputGroups.
+   * Execute clustering to write inputRecords into new files as defined by rules in strategy parameters.
+   * The number of new file groups created is bounded by numOutputGroups.
    * Note that commit is not done as part of strategy. commit is callers responsibility.
+   *
+   * @param inputRecords           RDD of {@link HoodieRecord}.
+   * @param numOutputGroups        Number of output file groups.
+   * @param instantTime            Clustering (replace commit) instant time.
+   * @param strategyParams         Strategy parameters containing columns to sort the data by when clustering.
+   * @param schema                 Schema of the data including metadata fields.
+   * @param fileGroupIdList        File group id corresponding to each out group.
+   * @param preserveHoodieMetadata Whether to preserve commit metadata while clustering.
+   * @return RDD of {@link WriteStatus}.
    */
   public abstract JavaRDD<WriteStatus> performClusteringWithRecordsRDD(final JavaRDD<HoodieRecord<T>> inputRecords, final int numOutputGroups, final String instantTime,
                                                                        final Map<String, String> strategyParams, final Schema schema,
                                                                        final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
+
+  /**
+   * Create {@link BulkInsertPartitioner} based on strategy params.
+   *
+   * @param strategyParams Strategy parameters containing columns to sort the data by when clustering.
+   * @param schema         Schema of the data including metadata fields.
+   * @return {@link RDDCustomColumnsSortPartitioner} if sort columns are provided, otherwise empty.
+   */
+  protected Option<BulkInsertPartitioner<T>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+    if (getWriteConfig().isLayoutOptimizationEnabled()) {
+      // sort input records by z-order/hilbert
+      return Option.of(new RDDSpatialCurveOptimizationSortPartitioner((HoodieSparkEngineContext) getEngineContext(),
+          getWriteConfig(), HoodieAvroUtils.addMetadataFields(schema)));
+    } else if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
+      return Option.of(new RDDCustomColumnsSortPartitioner(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
+          HoodieAvroUtils.addMetadataFields(schema)));
+    } else {
+      return Option.empty();
+    }
+  }
 
 
   /**
@@ -116,7 +151,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    */
   private CompletableFuture<JavaRDD<WriteStatus>> runClusteringForGroupAsync(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
                                                                              boolean preserveHoodieMetadata, String instantTime) {
-    CompletableFuture<JavaRDD<WriteStatus>> writeStatusesFuture = CompletableFuture.supplyAsync(() -> {
+    return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
       JavaRDD<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime);
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
@@ -125,8 +160,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
           .collect(Collectors.toList());
       return performClusteringWithRecordsRDD(inputRecords, clusteringGroup.getNumOutputFileGroups(), instantTime, strategyParams, readerSchema, inputFileIds, preserveHoodieMetadata);
     });
-
-    return writeStatusesFuture;
   }
 
   /**
@@ -134,7 +167,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
    */
   private JavaRDD<HoodieRecord<T>> readRecordsForGroup(JavaSparkContext jsc, HoodieClusteringGroup clusteringGroup, String instantTime) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream().map(ClusteringOperation::create).collect(Collectors.toList());
-    boolean hasLogFiles = clusteringOps.stream().filter(op -> op.getDeltaFilePaths().size() > 0).findAny().isPresent();
+    boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
     if (hasLogFiles) {
       // if there are log files, we read all records into memory for a file group and apply updates.
       return readRecordsForGroupWithLogs(jsc, clusteringOps, instantTime);
@@ -159,7 +192,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-          HoodieFileReader<? extends IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
           HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
               .withFileSystem(table.getMetaClient().getFs())
               .withBasePath(table.getMetaClient().getBasePath())
@@ -171,10 +203,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
               .withReverseReader(config.getCompactionReverseLogReadEnabled())
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
+              .withPartition(clusteringOp.getPartitionPath())
               .build();
 
+          Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
+              ? Option.empty()
+              : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
           HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-          recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
+          recordIterators.add(getFileSliceReader(baseFileReader, scanner, readerSchema,
               tableConfig.getPayloadClass(),
               tableConfig.getPreCombineField(),
               tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),

@@ -567,7 +567,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
          BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
       final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
 
-      Long rollbackTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime();
+      Long rollbackTime = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
       Long currentTime = new Date().getTime();
       Scan scan = new Scan();
       scan.addFamily(SYSTEM_COLUMN_FAMILY);

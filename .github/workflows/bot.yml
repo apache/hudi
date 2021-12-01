@@ -18,8 +18,16 @@ jobs:
         include:
           - scala: "scala-2.11"
             spark: "spark2"
+          - scala: "scala-2.11"
+            spark: "spark2,spark-shade-unbundle-avro"
+          - scala: "scala-2.12"
+            spark: "spark3,spark3.0.x"
+          - scala: "scala-2.12"
+            spark: "spark3,spark3.0.x,spark-shade-unbundle-avro"
           - scala: "scala-2.12"
             spark: "spark3"
+          - scala: "scala-2.12"
+            spark: "spark3,spark-shade-unbundle-avro"
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8

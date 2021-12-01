@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.MetricRegistry;
@@ -57,7 +58,7 @@ public class TestMetricsReporterFactory {
   public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
     when(config.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
 
-    Properties props = new Properties();
+    TypedProperties props = new TypedProperties();
     props.setProperty("testKey", "testValue");
 
     when(config.getProps()).thenReturn(props);
@@ -70,7 +71,7 @@ public class TestMetricsReporterFactory {
   @Test
   public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
     when(config.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
-    when(config.getProps()).thenReturn(new Properties());
+    when(config.getProps()).thenReturn(new TypedProperties());
     assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(config, registry));
   }
 

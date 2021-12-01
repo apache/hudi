@@ -176,9 +176,14 @@ public class ZOrderingUtil {
 
   public static Long convertStringToLong(String a) {
     byte[] bytes = utf8To8Byte(a);
+    return convertBytesToLong(bytes);
+  }
+
+  public static long convertBytesToLong(byte[] bytes) {
+    byte[] paddedBytes = paddingTo8Byte(bytes);
     long temp = 0L;
     for (int i = 7; i >= 0; i--) {
-      temp = temp | (((long)bytes[i] & 0xff) << (7 - i) * 8);
+      temp = temp | (((long) paddedBytes[i] & 0xff) << (7 - i) * 8);
     }
     return temp;
   }

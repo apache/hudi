@@ -44,6 +44,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -79,16 +80,20 @@ public class IncrementalInputSplits implements Serializable {
   private final long maxCompactionMemoryInBytes;
   // for partition pruning
   private final Set<String> requiredPartitions;
+  // skip compaction
+  private final boolean skipCompaction;
 
   private IncrementalInputSplits(
       Configuration conf,
       Path path,
       long maxCompactionMemoryInBytes,
-      @Nullable Set<String> requiredPartitions) {
+      @Nullable Set<String> requiredPartitions,
+      boolean skipCompaction) {
     this.conf = conf;
     this.path = path;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.requiredPartitions = requiredPartitions;
+    this.skipCompaction = skipCompaction;
   }
 
   /**
@@ -156,28 +161,52 @@ public class IncrementalInputSplits implements Serializable {
     }
 
     String tableName = conf.getString(FlinkOptions.TABLE_NAME);
-    List<HoodieCommitMetadata> activeMetadataList = instants.stream()
-        .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
-    List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
-    if (archivedMetadataList.size() > 0) {
-      LOG.warn("\n"
-          + "--------------------------------------------------------------------------------\n"
-          + "---------- caution: the reader has fall behind too much from the writer,\n"
-          + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
-          + "--------------------------------------------------------------------------------");
-    }
-    List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
-        // IMPORTANT: the merged metadata list must be in ascending order by instant time
-        ? mergeList(archivedMetadataList, activeMetadataList)
-        : activeMetadataList;
 
-    Set<String> writePartitions = HoodieInputFormatUtils.getWritePartitionPaths(metadataList);
-    // apply partition push down
-    if (this.requiredPartitions != null) {
-      writePartitions = writePartitions.stream()
-          .filter(this.requiredPartitions::contains).collect(Collectors.toSet());
+    Set<String> writePartitions;
+    final FileStatus[] fileStatuses;
+
+    if (instantRange == null) {
+      // reading from the earliest, scans the partitions and files directly.
+      FileIndex fileIndex = FileIndex.instance(new org.apache.hadoop.fs.Path(path.toUri()), conf);
+      if (this.requiredPartitions != null) {
+        // apply partition push down
+        fileIndex.setPartitionPaths(this.requiredPartitions);
+      }
+      writePartitions = new HashSet<>(fileIndex.getOrBuildPartitionPaths());
+      if (writePartitions.size() == 0) {
+        LOG.warn("No partitions found for reading in user provided path.");
+        return Result.EMPTY;
+      }
+      fileStatuses = fileIndex.getFilesInPartitions();
+    } else {
+      List<HoodieCommitMetadata> activeMetadataList = instants.stream()
+          .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
+      List<HoodieCommitMetadata> archivedMetadataList = getArchivedMetadata(metaClient, instantRange, commitTimeline, tableName);
+      if (archivedMetadataList.size() > 0) {
+        LOG.warn("\n"
+            + "--------------------------------------------------------------------------------\n"
+            + "---------- caution: the reader has fall behind too much from the writer,\n"
+            + "---------- tweak 'read.tasks' option to add parallelism of read tasks.\n"
+            + "--------------------------------------------------------------------------------");
+      }
+      List<HoodieCommitMetadata> metadataList = archivedMetadataList.size() > 0
+          // IMPORTANT: the merged metadata list must be in ascending order by instant time
+          ? mergeList(archivedMetadataList, activeMetadataList)
+          : activeMetadataList;
+
+      writePartitions = HoodieInputFormatUtils.getWritePartitionPaths(metadataList);
+      // apply partition push down
+      if (this.requiredPartitions != null) {
+        writePartitions = writePartitions.stream()
+            .filter(this.requiredPartitions::contains).collect(Collectors.toSet());
+      }
+      if (writePartitions.size() == 0) {
+        LOG.warn("No partitions found for reading in user provided path.");
+        return Result.EMPTY;
+      }
+      fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
     }
-    FileStatus[] fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList, metaClient.getTableType());
+
     if (fileStatuses.length == 0) {
       LOG.warn("No files found for reading in user provided path.");
       return Result.EMPTY;
@@ -237,7 +266,7 @@ public class IncrementalInputSplits implements Serializable {
           final String startTs = archivedCompleteTimeline.firstInstant().get().getTimestamp();
           archivedTimeline.loadInstantDetailsInMemory(startTs, endTs);
         }
-        return instantStream
+        return maySkipCompaction(instantStream)
             .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, archivedTimeline)).collect(Collectors.toList());
       }
     }
@@ -274,7 +303,13 @@ public class IncrementalInputSplits implements Serializable {
       final String endCommit = this.conf.get(FlinkOptions.READ_END_COMMIT);
       instantStream = instantStream.filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), LESSER_THAN_OR_EQUALS, endCommit));
     }
-    return instantStream.collect(Collectors.toList());
+    return maySkipCompaction(instantStream).collect(Collectors.toList());
+  }
+
+  private Stream<HoodieInstant> maySkipCompaction(Stream<HoodieInstant> instants) {
+    return this.skipCompaction
+        ? instants.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
+        : instants;
   }
 
   private static <T> List<T> mergeList(List<T> list1, List<T> list2) {
@@ -327,6 +362,8 @@ public class IncrementalInputSplits implements Serializable {
     private long maxCompactionMemoryInBytes;
     // for partition pruning
     private Set<String> requiredPartitions;
+    // skip compaction
+    private boolean skipCompaction = false;
 
     public Builder() {
     }
@@ -351,9 +388,14 @@ public class IncrementalInputSplits implements Serializable {
       return this;
     }
 
+    public Builder skipCompaction(boolean skipCompaction) {
+      this.skipCompaction = skipCompaction;
+      return this;
+    }
+
     public IncrementalInputSplits build() {
       return new IncrementalInputSplits(Objects.requireNonNull(this.conf), Objects.requireNonNull(this.path),
-          this.maxCompactionMemoryInBytes, this.requiredPartitions);
+          this.maxCompactionMemoryInBytes, this.requiredPartitions, this.skipCompaction);
     }
   }
 }

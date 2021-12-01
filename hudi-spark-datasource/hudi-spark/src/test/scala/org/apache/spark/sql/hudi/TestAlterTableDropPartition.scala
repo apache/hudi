@@ -38,7 +38,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
          |  dt string
          | )
          | using hudi
-         | options (
+         | tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts'
          | )
@@ -47,7 +47,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
     spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
 
     checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01')")(
-      s"dt is not a valid partition column in table `default`.`$tableName`.")
+      s"dt is not a valid partition column in table")
   }
 
   Seq(false, true).foreach { urlencode =>
@@ -77,7 +77,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             | options (
+             |tblproperties (
              | primaryKey = 'id',
              | preCombineField = 'ts'
              |)
@@ -105,7 +105,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
          |  dt string
          | )
          | using hudi
-         | options (
+         | tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts'
          | )
@@ -151,7 +151,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             | options (
+             |tblproperties (
              | primaryKey = 'id',
              | preCombineField = 'ts'
              |)

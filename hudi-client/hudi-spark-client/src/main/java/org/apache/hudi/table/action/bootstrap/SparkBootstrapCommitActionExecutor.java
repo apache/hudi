@@ -100,6 +100,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.table.action.bootstrap.MetadataBootstrapHandlerFactory.getMetadataHandler;
+
 public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieBootstrapWriteMetadata> {
 
@@ -246,7 +248,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
     metadata.setOperationType(operationType);
 
-    writeTableMetadata(metadata);
+    writeTableMetadata(metadata, actionType);
 
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
@@ -398,8 +400,8 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         .collect(Collectors.toList());
 
     return jsc.parallelize(bootstrapPaths, config.getBootstrapParallelism())
-        .map(partitionFsPair -> handleMetadataBootstrap(partitionFsPair.getLeft(), partitionFsPair.getRight().getLeft(),
-            partitionFsPair.getRight().getRight(), keyGenerator));
+        .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
+                partitionFsPair.getRight().getLeft(), keyGenerator));
   }
 
   @Override

@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 
 import com.codahale.metrics.MetricRegistry;
@@ -76,6 +77,9 @@ public class MetricsReporterFactory {
         break;
       case CONSOLE:
         reporter = new ConsoleMetricsReporter(registry);
+        break;
+      case CLOUDWATCH:
+        reporter = new CloudWatchMetricsReporter(config, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -39,7 +40,6 @@ import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
-import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.hadoop.fs.Path;
@@ -61,10 +61,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
-    FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
-    helper.validate();
-
-    Configuration conf = (Configuration) helper.getOptions();
+    Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
@@ -148,6 +145,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
             + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
       }
+    } else if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PAYLOAD_CLASS_NAME)) {
+      // if precombine field is specified but payload clazz is default,
+      // use DefaultHoodieRecordPayload to make sure the precombine field is always taken for
+      // comparing.
+      conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, EventTimeAvroPayload.class.getName());
     }
   }
 

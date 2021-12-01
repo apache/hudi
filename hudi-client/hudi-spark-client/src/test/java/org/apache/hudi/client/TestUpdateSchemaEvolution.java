@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
@@ -64,6 +65,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
     initSparkContexts("TestUpdateSchemaEvolution");
     initFileSystem();
+    initTimelineService();
   }
 
   @AfterEach
@@ -228,6 +230,9 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
 
   private HoodieWriteConfig makeHoodieClientConfig(String name) {
     Schema schema = getSchemaFromResource(getClass(), name);
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schema.toString()).build();
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
+        .withSchema(schema.toString()).build();
   }
 }

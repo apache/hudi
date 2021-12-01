@@ -102,7 +102,10 @@ class TestDataSourceForBootstrap {
       .save(srcPath)
 
     // Perform bootstrap
-    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+    val commitInstantTime1 = runMetadataBootstrapAndVerifyCommit(
+      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+      extraOpts = Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+    )
 
     // Read bootstrapped table and verify count
     var hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")

@@ -24,7 +24,6 @@ import org.apache.flink.formats.parquet.vector.reader.ByteColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.BytesColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.DoubleColumnReader;
-import org.apache.flink.formats.parquet.vector.reader.FixedLenBytesColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.FloatColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.IntColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.LongColumnReader;
@@ -366,7 +365,9 @@ public class ParquetSplitReaderUtil {
             "TIME_MICROS original type is not ");
         return new HeapTimestampVector(batchSize);
       case DECIMAL:
-        checkArgument(typeName == PrimitiveType.PrimitiveTypeName.BINARY
+        checkArgument(
+            (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+                || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
                 && primitiveType.getOriginalType() == OriginalType.DECIMAL,
             "Unexpected type: %s", typeName);
         return new HeapBytesVector(batchSize);

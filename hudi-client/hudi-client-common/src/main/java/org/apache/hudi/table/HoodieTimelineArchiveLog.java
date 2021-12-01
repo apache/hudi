@@ -18,9 +18,11 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -127,7 +129,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         LOG.info("Archiving instants " + instantsToArchive);
         archive(context, instantsToArchive);
         LOG.info("Deleting archived instants " + instantsToArchive);
-        success = deleteArchivedInstants(instantsToArchive);
+        success = deleteArchivedInstants(instantsToArchive, context);
       } else {
         LOG.info("No Instants to archive");
       }
@@ -224,19 +226,34 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
             HoodieInstant.getComparableAction(hoodieInstant.getAction()))).stream());
   }
 
-  private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants) throws IOException {
+  private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
     LOG.info("Deleting instants " + archivedInstants);
     boolean success = true;
-    for (HoodieInstant archivedInstant : archivedInstants) {
-      Path commitFile = new Path(metaClient.getMetaPath(), archivedInstant.getFileName());
-      try {
-        if (metaClient.getFs().exists(commitFile)) {
-          success &= metaClient.getFs().delete(commitFile, false);
-          LOG.info("Archived and deleted instant file " + commitFile);
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to delete archived instant " + archivedInstant, e);
-      }
+    List<String> instantFiles = archivedInstants.stream().map(archivedInstant -> {
+      return new Path(metaClient.getMetaPath(), archivedInstant.getFileName());
+    }).map(Path::toString).collect(Collectors.toList());
+
+    context.setJobStatus(this.getClass().getSimpleName(), "Delete archived instants");
+    Map<String, Boolean> resultDeleteInstantFiles = FSUtils.parallelizeFilesProcess(context,
+        metaClient.getFs(),
+        config.getArchiveDeleteParallelism(),
+        pairOfSubPathAndConf -> {
+          Path commitFile = new Path(pairOfSubPathAndConf.getKey());
+          try {
+            FileSystem fs = commitFile.getFileSystem(pairOfSubPathAndConf.getValue().get());
+            if (fs.exists(commitFile)) {
+              return fs.delete(commitFile, false);
+            }
+            return true;
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to delete archived instant " + commitFile, e);
+          }
+        },
+        instantFiles);
+
+    for (Map.Entry<String, Boolean> result : resultDeleteInstantFiles.entrySet()) {
+      LOG.info("Archived and deleted instant file " + result.getKey() + " : " + result.getValue());
+      success &= result.getValue();
     }
 
     // Remove older meta-data from auxiliary path too
@@ -329,7 +346,8 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     if (records.size() > 0) {
       Map<HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);
+      final String keyField = table.getMetaClient().getTableConfig().getRecordKeyFieldProp();
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header, keyField);
       writer.appendBlock(block);
       records.clear();
     }

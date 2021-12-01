@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -221,8 +222,9 @@ public class TestInputFormat {
     assertThat(actual2, is(expected2));
   }
 
-  @Test
-  void testReadBaseAndLogFilesWithDisorderUpdateDelete() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testReadBaseAndLogFilesWithDisorderUpdateDelete(boolean compact) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
@@ -233,7 +235,7 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_SINGLE_INSERT, conf);
 
     // write another commit using logs and read again.
-    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, compact);
     TestData.writeData(TestData.DATA_SET_DISORDER_UPDATE_DELETE, conf);
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
@@ -242,9 +244,11 @@ public class TestInputFormat {
     // when isEmitDelete is false.
     List<RowData> result1 = readData(inputFormat);
 
+    final String rowKind = compact ? "I" : "U";
+    final String expected = "[+" + rowKind + "[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
+
     final String actual1 = TestData.rowDataToString(result1);
-    final String expected1 = "[+U[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
-    assertThat(actual1, is(expected1));
+    assertThat(actual1, is(expected));
 
     // refresh the input format and set isEmitDelete to true.
     this.tableSource.reset();
@@ -254,8 +258,7 @@ public class TestInputFormat {
     List<RowData> result2 = readData(inputFormat);
 
     final String actual2 = TestData.rowDataToString(result2);
-    final String expected2 = "[+U[id1, Danny, 22, 1970-01-01T00:00:00.004, par1]]";
-    assertThat(actual2, is(expected2));
+    assertThat(actual2, is(expected));
   }
 
   @Test
@@ -458,6 +461,32 @@ public class TestInputFormat {
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     List<RowData> result = readData(inputFormat);
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
+  }
+
+  /**
+   * Test reading file groups with compaction plan scheduled and delta logs.
+   * File-slice after pending compaction-requested instant-time should also be considered valid.
+   */
+  @Test
+  void testReadMORWithCompactionPlanScheduled() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    // compact for each commit
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write three commits
+    for (int i = 0; i < 6; i += 2) {
+      List<RowData> dataset = TestData.dataSetInsert(i + 1, i + 2);
+      TestData.writeData(dataset, conf);
+    }
+
+    InputFormat<RowData, ?> inputFormat1 = this.tableSource.getInputFormat();
+    assertThat(inputFormat1, instanceOf(MergeOnReadInputFormat.class));
+
+    List<RowData> actual = readData(inputFormat1);
+    final List<RowData> expected = TestData.dataSetInsert(1, 2, 3, 4, 5, 6);
+    TestData.assertRowDataEquals(actual, expected);
   }
 
   // -------------------------------------------------------------------------

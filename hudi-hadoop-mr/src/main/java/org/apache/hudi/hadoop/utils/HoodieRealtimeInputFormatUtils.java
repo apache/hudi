@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.BaseFileWithLogsSplit;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieVirtualKeyInfo;
@@ -85,18 +86,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
       if (partitionsToParquetSplits.size() > 0) {
         HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionsToParquetSplits.keySet().iterator().next());
-        HoodieTableConfig tableConfig = metaClient.getTableConfig();
-        if (!tableConfig.populateMetaFields()) {
-          TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-          try {
-            MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
-            hoodieVirtualKeyInfo = Option.of(new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(),
-                tableConfig.getPartitionFieldProp(), parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp()),
-                parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
-          } catch (Exception exception) {
-            throw new HoodieException("Fetching table schema failed with exception ", exception);
-          }
-        }
+        hoodieVirtualKeyInfo = getHoodieVirtualKeyInfo(metaClient);
       }
       Option<HoodieVirtualKeyInfo> finalHoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
       partitionsToParquetSplits.keySet().forEach(partitionPath -> {
@@ -121,29 +111,22 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
         // subgroup splits again by file id & match with log files.
         Map<String, List<FileSplit>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
-            .collect(Collectors.groupingBy(split -> FSUtils.getFileId(split.getPath().getName())));
+            .collect(Collectors.groupingBy(split -> FSUtils.getFileIdFromFilePath(split.getPath())));
         // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
         String maxCommitTime = metaClient.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
             .filterCompletedInstants().lastInstant().get().getTimestamp();
         latestFileSlices.forEach(fileSlice -> {
-          List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
+          List<FileSplit> dataFileSplits = groupedInputSplits.getOrDefault(fileSlice.getFileId(), new ArrayList<>());
           dataFileSplits.forEach(split -> {
             try {
-              List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
+              List<HoodieLogFile> logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+                  .collect(Collectors.toList());
               if (split instanceof BootstrapBaseFileSplit) {
                 BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
-                String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
-                    .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
-                String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
-                    .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
-                FileSplit baseSplit = new FileSplit(eSplit.getPath(), eSplit.getStart(), eSplit.getLength(),
-                    hosts, inMemoryHosts);
-                rtSplits.add(new RealtimeBootstrapBaseFileSplit(baseSplit, metaClient.getBasePath(),
-                    logFilePaths, maxCommitTime, eSplit.getBootstrapFileSplit()));
+                rtSplits.add(createRealtimeBoostrapBaseFileSplit(eSplit, metaClient.getBasePath(), logFiles, maxCommitTime));
               } else {
-                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime, finalHoodieVirtualKeyInfo));
+                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFiles, maxCommitTime, finalHoodieVirtualKeyInfo));
               }
             } catch (IOException e) {
               throw new HoodieIOException("Error creating hoodie real time split ", e);
@@ -159,6 +142,82 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     }
     LOG.info("Returning a total splits of " + rtSplits.size());
     return rtSplits.toArray(new InputSplit[0]);
+  }
+
+  // get IncrementalRealtimeSplits
+  public static InputSplit[] getIncrementalRealtimeSplits(Configuration conf, Stream<FileSplit> fileSplits) throws IOException {
+    List<InputSplit> rtSplits = new ArrayList<>();
+    List<FileSplit> fileSplitList = fileSplits.collect(Collectors.toList());
+    Set<Path> partitionSet = fileSplitList.stream().map(f -> f.getPath().getParent()).collect(Collectors.toSet());
+    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionSet);
+    // Pre process tableConfig from first partition to fetch virtual key info
+    Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo = Option.empty();
+    if (partitionSet.size() > 0) {
+      hoodieVirtualKeyInfo = getHoodieVirtualKeyInfo(partitionsToMetaClient.get(partitionSet.iterator().next()));
+    }
+    Option<HoodieVirtualKeyInfo> finalHoodieVirtualKeyInfo = hoodieVirtualKeyInfo;
+    fileSplitList.stream().forEach(s -> {
+      // deal with incremental query.
+      try {
+        if (s instanceof BaseFileWithLogsSplit) {
+          BaseFileWithLogsSplit bs = (BaseFileWithLogsSplit)s;
+          if (bs.getBelongToIncrementalSplit()) {
+            rtSplits.add(new HoodieRealtimeFileSplit(bs, bs.getBasePath(), bs.getDeltaLogFiles(), bs.getMaxCommitTime(), finalHoodieVirtualKeyInfo));
+          }
+        } else if (s instanceof RealtimeBootstrapBaseFileSplit) {
+          rtSplits.add(s);
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Error creating hoodie real time split ", e);
+      }
+    });
+    LOG.info("Returning a total splits of " + rtSplits.size());
+    return rtSplits.toArray(new InputSplit[0]);
+  }
+
+  public static Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfo(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (!tableConfig.populateMetaFields()) {
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+      try {
+        MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
+        return Option.of(new HoodieVirtualKeyInfo(tableConfig.getRecordKeyFieldProp(),
+            tableConfig.getPartitionFieldProp(), parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp()),
+            parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
+      } catch (Exception exception) {
+        throw new HoodieException("Fetching table schema failed with exception ", exception);
+      }
+    }
+    return Option.empty();
+  }
+
+  public static boolean isIncrementalQuerySplits(List<FileSplit> fileSplits) {
+    if (fileSplits == null || fileSplits.size() == 0) {
+      return false;
+    }
+    return fileSplits.stream().anyMatch(s -> {
+      if (s instanceof BaseFileWithLogsSplit) {
+        BaseFileWithLogsSplit bs = (BaseFileWithLogsSplit)s;
+        return bs.getBelongToIncrementalSplit();
+      } else {
+        return s instanceof RealtimeBootstrapBaseFileSplit;
+      }
+    });
+  }
+
+  public static RealtimeBootstrapBaseFileSplit createRealtimeBoostrapBaseFileSplit(
+      BootstrapBaseFileSplit split, String basePath, List<HoodieLogFile> logFiles, String maxInstantTime) {
+    try {
+      String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+          .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
+      String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+          .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
+      FileSplit baseSplit = new FileSplit(split.getPath(), split.getStart(), split.getLength(),
+          hosts, inMemoryHosts);
+      return new RealtimeBootstrapBaseFileSplit(baseSplit, basePath, logFiles, maxInstantTime, split.getBootstrapFileSplit());
+    } catch (IOException e) {
+      throw new HoodieIOException("Error creating hoodie real time split ", e);
+    }
   }
 
   // Return parquet file with a list of log files in the same file group.
@@ -178,7 +237,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       try {
         // Both commit and delta-commits are included - pick the latest completed one
         Option<HoodieInstant> latestCompletedInstant =
-            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+            metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants().lastInstant();
 
         Stream<FileSlice> latestFileSlices = latestCompletedInstant
             .map(instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))

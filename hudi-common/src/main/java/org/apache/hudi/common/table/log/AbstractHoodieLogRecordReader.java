@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -120,28 +121,32 @@ public abstract class AbstractHoodieLogRecordReader {
   private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
+  // Partition name
+  private Option<String> partitionName;
+  // Populate meta fields for the records
+  private boolean populateMetaFields = true;
 
-  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
+                                          Schema readerSchema,
                                           String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
-                                          int bufferSize, Option<InstantRange> instantRange, boolean withOperationField) {
-    this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, instantRange, withOperationField,
-        true);
+                                          int bufferSize, Option<InstantRange> instantRange,
+                                          boolean withOperationField) {
+    this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
+        instantRange, withOperationField, true, Option.empty());
   }
 
-  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                          String latestInstantTime, boolean readBlocksLazily, boolean reverseReader,
-                                          int bufferSize, Option<InstantRange> instantRange, boolean withOperationField,
-                                          boolean enableFullScan) {
+  protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
+                                          Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
+                                          boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
+                                          boolean withOperationField, boolean enableFullScan,
+                                          Option<String> partitionName) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
-    this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
-    this.preCombineField = this.hoodieTableMetaClient.getTableConfig().getPreCombineField();
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
-    if (!tableConfig.populateMetaFields()) {
-      this.simpleKeyGenFields = Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
-    }
+    this.payloadClassFQN = tableConfig.getPayloadClass();
+    this.preCombineField = tableConfig.getPreCombineField();
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
@@ -151,6 +156,22 @@ public abstract class AbstractHoodieLogRecordReader {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.enableFullScan = enableFullScan;
+
+    // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
+    if (!tableConfig.populateMetaFields()) {
+      this.populateMetaFields = false;
+      this.simpleKeyGenFields = Option.of(
+          Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
+    }
+    this.partitionName = partitionName;
+  }
+
+  protected String getKeyField() {
+    if (this.populateMetaFields) {
+      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    }
+    ValidationUtils.checkState(this.simpleKeyGenFields.isPresent());
+    return this.simpleKeyGenFields.get().getKey();
   }
 
   public void scan() {
@@ -170,10 +191,15 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
-      // iterate over the paths
+
+      // Get the key field based on populate meta fields config
+      // and the table type
+      final String keyField = getKeyField();
+
+      // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField);
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
@@ -339,15 +365,34 @@ public abstract class AbstractHoodieLogRecordReader {
     }
     totalLogRecords.addAndGet(recs.size());
     for (IndexedRecord rec : recs) {
-      processNextRecord(createHoodieRecord(rec));
+      processNextRecord(createHoodieRecord(rec, this.hoodieTableMetaClient.getTableConfig(), this.payloadClassFQN,
+          this.preCombineField, this.withOperationField, this.simpleKeyGenFields, this.partitionName));
     }
   }
 
-  protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
-    if (!simpleKeyGenFields.isPresent()) {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.preCombineField, this.withOperationField);
+  /**
+   * Create @{@link HoodieRecord} from the @{@link IndexedRecord}.
+   *
+   * @param rec                - IndexedRecord to create the HoodieRecord from
+   * @param hoodieTableConfig  - Table config
+   * @param payloadClassFQN    - Payload class fully qualified name
+   * @param preCombineField    - PreCombine field
+   * @param withOperationField - Whether operation field is enabled
+   * @param simpleKeyGenFields - Key generator fields when populate meta fields is tuened off
+   * @param partitionName      - Partition name
+   * @return HoodieRecord created from the IndexedRecord
+   */
+  protected HoodieRecord<?> createHoodieRecord(final IndexedRecord rec, final HoodieTableConfig hoodieTableConfig,
+                                               final String payloadClassFQN, final String preCombineField,
+                                               final boolean withOperationField,
+                                               final Option<Pair<String, String>> simpleKeyGenFields,
+                                               final Option<String> partitionName) {
+    if (this.populateMetaFields) {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, payloadClassFQN,
+          preCombineField, withOperationField);
     } else {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.preCombineField, this.simpleKeyGenFields.get(), this.withOperationField);
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, payloadClassFQN,
+          preCombineField, simpleKeyGenFields.get(), withOperationField, partitionName);
     }
   }
 
@@ -418,6 +463,10 @@ public abstract class AbstractHoodieLogRecordReader {
     return payloadClassFQN;
   }
 
+  protected Option<String> getPartitionName() {
+    return partitionName;
+  }
+
   public long getTotalRollbacks() {
     return totalRollbacks.get();
   }
@@ -450,6 +499,10 @@ public abstract class AbstractHoodieLogRecordReader {
     public abstract Builder withReverseReader(boolean reverseReader);
 
     public abstract Builder withBufferSize(int bufferSize);
+
+    public Builder withPartition(String partitionName) {
+      throw new UnsupportedOperationException();
+    }
 
     public Builder withInstantRange(Option<InstantRange> instantRange) {
       throw new UnsupportedOperationException();

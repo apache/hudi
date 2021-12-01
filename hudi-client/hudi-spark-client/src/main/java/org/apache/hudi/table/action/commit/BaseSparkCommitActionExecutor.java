@@ -77,6 +77,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
+
 public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayload> extends
     BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata> {
 
@@ -113,15 +115,31 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   private JavaRDD<HoodieRecord<T>> clusteringHandleUpdate(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
-    if (config.isClusteringEnabled()) {
-      Set<HoodieFileGroupId> fileGroupsInPendingClustering =
-          table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
-      UpdateStrategy updateStrategy = (UpdateStrategy)ReflectionUtils
-          .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
-      return (JavaRDD<HoodieRecord<T>>)updateStrategy.handleUpdate(inputRecordsRDD);
-    } else {
-      return inputRecordsRDD;
+    Set<HoodieFileGroupId> fileGroupsInPendingClustering =
+        table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
+    UpdateStrategy updateStrategy = (UpdateStrategy) ReflectionUtils
+        .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
+    Pair<JavaRDD<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
+        (Pair<JavaRDD<HoodieRecord<T>>, Set<HoodieFileGroupId>>) updateStrategy.handleUpdate(inputRecordsRDD);
+    Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
+    if (fileGroupsWithUpdatesAndPendingClustering.isEmpty()) {
+      return recordsAndPendingClusteringFileGroups.getLeft();
     }
+    // there are filegroups pending clustering and receiving updates, so rollback the pending clustering instants
+    // there could be race condition, for example, if the clustering completes after instants are fetched but before rollback completed
+    if (config.isRollbackPendingClustering()) {
+      Set<HoodieInstant> pendingClusteringInstantsToRollback = getAllFileGroupsInPendingClusteringPlans(table.getMetaClient()).entrySet().stream()
+          .filter(e -> fileGroupsWithUpdatesAndPendingClustering.contains(e.getKey()))
+          .map(Map.Entry::getValue)
+          .collect(Collectors.toSet());
+      pendingClusteringInstantsToRollback.forEach(instant -> {
+        String commitTime = HoodieActiveTimeline.createNewInstantTime();
+        table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers());
+        table.rollback(context, commitTime, instant, true, true);
+      });
+      table.getMetaClient().reloadActiveTimeline();
+    }
+    return recordsAndPendingClusteringFileGroups.getLeft();
   }
 
   @Override
@@ -267,7 +285,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
-      writeTableMetadata(metadata);
+      writeTableMetadata(metadata, actionType);
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       LOG.info("Committed " + instantTime);

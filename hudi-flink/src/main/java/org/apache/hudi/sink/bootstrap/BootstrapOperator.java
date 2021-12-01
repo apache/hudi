@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.FlinkTables;
@@ -48,6 +49,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
@@ -58,6 +60,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
@@ -71,7 +74,7 @@ import static org.apache.hudi.util.StreamerUtil.isValidFile;
  *
  * <p>The output records should then shuffle by the recordKey and thus do scalable write.
  */
-public class BootstrapOperator<I, O extends HoodieRecord>
+public class BootstrapOperator<I, O extends HoodieRecord<?>>
     extends AbstractStreamOperator<O> implements OneInputStreamOperator<I, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(BootstrapOperator.class);
@@ -82,6 +85,8 @@ public class BootstrapOperator<I, O extends HoodieRecord>
 
   protected transient org.apache.hadoop.conf.Configuration hadoopConf;
   protected transient HoodieWriteConfig writeConfig;
+
+  private transient GlobalAggregateManager aggregateManager;
 
   private transient ListState<String> instantState;
   private final Pattern pattern;
@@ -117,6 +122,7 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     this.hadoopConf = StreamerUtil.getHadoopConf();
     this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
+    this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
 
     preLoadIndexRecords();
   }
@@ -135,6 +141,27 @@ public class BootstrapOperator<I, O extends HoodieRecord>
     }
 
     LOG.info("Finish sending index records, taskId = {}.", getRuntimeContext().getIndexOfThisSubtask());
+
+    // wait for the other bootstrap tasks finish bootstrapping.
+    waitForBootstrapReady(getRuntimeContext().getIndexOfThisSubtask());
+  }
+
+  /**
+   * Wait for other bootstrap tasks to finish the index bootstrap.
+   */
+  private void waitForBootstrapReady(int taskID) {
+    int taskNum = getRuntimeContext().getNumberOfParallelSubtasks();
+    int readyTaskNum = 1;
+    while (taskNum != readyTaskNum) {
+      try {
+        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME, taskID, new BootstrapAggFunction());
+        LOG.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
+
+        TimeUnit.SECONDS.sleep(5);
+      } catch (Exception e) {
+        LOG.warn("Update global task bootstrap summary error", e);
+      }
+    }
   }
 
   @Override

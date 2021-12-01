@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.List;
 import java.util.function.Function;
 import java.util.Objects;
 
@@ -93,8 +95,8 @@ public class ConfigProperty<T> implements Serializable {
     return inferFunction;
   }
 
-  public String[] getAlternatives() {
-    return alternatives;
+  public List<String> getAlternatives() {
+    return Arrays.asList(alternatives);
   }
 
   public ConfigProperty<T> withDocumentation(String doc) {

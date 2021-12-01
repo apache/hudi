@@ -247,6 +247,11 @@ public class TestConfigurations {
       return this;
     }
 
+    public Sql option(String key, Object val) {
+      this.options.put(key, val.toString());
+      return this;
+    }
+
     public Sql options(Map<String, String> options) {
       this.options.putAll(options);
       return this;

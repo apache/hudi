@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -125,5 +126,35 @@ public class TestOverwriteNonDefaultsWithLatestAvroPayload {
 
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record2);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
+  }
+  
+  @Test
+  public void testNullColumn() throws IOException {
+    Schema avroSchema = Schema.createRecord(Arrays.asList(
+            new Schema.Field("id", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("name", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("age", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE),
+            new Schema.Field("job", Schema.createUnion(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL)), "", JsonProperties.NULL_VALUE)
+            ));
+    GenericRecord record1 = new GenericData.Record(avroSchema);
+    record1.put("id", "1");
+    record1.put("name", "aa");
+    record1.put("age", "1");
+    record1.put("job", "1");
+
+    GenericRecord record2 = new GenericData.Record(avroSchema);
+    record2.put("id", "1");
+    record2.put("name", "bb");
+    record2.put("age", "2");
+    record2.put("job", null);
+
+    GenericRecord record3 = new GenericData.Record(avroSchema);
+    record3.put("id", "1");
+    record3.put("name", "bb");
+    record3.put("age", "2");
+    record3.put("job", "1");
+
+    OverwriteNonDefaultsWithLatestAvroPayload payload2 = new OverwriteNonDefaultsWithLatestAvroPayload(record2, 1);
+    assertEquals(payload2.combineAndGetUpdateValue(record1, avroSchema).get(), record3);
   }
 }

@@ -125,7 +125,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
-  protected List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
+  public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
@@ -315,13 +315,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @throws IOException
    */
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    // Create the path if it does not exist already
-    if (!metaClient.getFs().exists(partitionPath)) {
-      metaClient.getFs().mkdirs(partitionPath);
-      return new FileStatus[0];
-    } else {
+    try {
       return metaClient.getFs().listStatus(partitionPath);
+    } catch (IOException e) {
+      // Create the path if it does not exist already
+      if (!metaClient.getFs().exists(partitionPath)) {
+        metaClient.getFs().mkdirs(partitionPath);
+        return new FileStatus[0];
+      }
     }
+    throw new HoodieIOException(String.format("Failed to list partition path: %s", partitionPath));
   }
 
   /**
@@ -925,7 +928,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Default implementation for fetching latest base-files for the partition-path.
    */
-  Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
+  public Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath)
         .map(fg -> Pair.of(fg.getFileGroupId(), getLatestBaseFile(fg)))
         .filter(p -> p.getValue().isPresent())

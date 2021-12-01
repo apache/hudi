@@ -19,9 +19,11 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.hudi.index.zorder.ZOrderingIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -29,148 +31,230 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StringType, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters._
 
-object DataSkippingUtils {
+object DataSkippingUtils extends Logging {
 
   /**
-    * create z_index filter and push those filters to index table to filter all candidate scan files.
-    * @param condition  origin filter from query.
-    * @param indexSchema schema from index table.
-    * @return filters for index table.
-    */
-  def createZindexFilter(condition: Expression, indexSchema: StructType): Expression = {
-    def buildExpressionInternal(colName: Seq[String], statisticValue: String): Expression = {
-      val appendColName = UnresolvedAttribute(colName).name + statisticValue
-      col(appendColName).expr
-    }
-
-    def reWriteCondition(colName: Seq[String], conditionExpress: Expression): Expression = {
-      val appendColName = UnresolvedAttribute(colName).name + "_minValue"
-      if (indexSchema.exists(p => p.name == appendColName)) {
-        conditionExpress
-      } else {
-        Literal.TrueLiteral
-      }
-    }
-
-    val minValue = (colName: Seq[String]) => buildExpressionInternal(colName, "_minValue")
-    val maxValue = (colName: Seq[String]) => buildExpressionInternal(colName, "_maxValue")
-    val num_nulls = (colName: Seq[String]) => buildExpressionInternal(colName, "_num_nulls")
-
-    condition match {
-      // query filter "colA = b"  convert it to "colA_minValue <= b and colA_maxValue >= b" for index table
-      case EqualTo(attribute: AttributeReference, value: Literal) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value)))
-      // query filter "b = colA"  convert it to "colA_minValue <= b and colA_maxValue >= b" for index table
-      case EqualTo(value: Literal, attribute: AttributeReference) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value)))
-      // query filter "colA = null"  convert it to "colA_num_nulls = null" for index table
-      case equalNullSafe @ EqualNullSafe(_: AttributeReference, _ @ Literal(null, _)) =>
-        val colName = getTargetColNameParts(equalNullSafe.left)
-        reWriteCondition(colName, EqualTo(num_nulls(colName), equalNullSafe.right))
-      // query filter "colA < b"  convert it to "colA_minValue < b" for index table
-      case LessThan(attribute: AttributeReference, value: Literal) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName,LessThan(minValue(colName), value))
-      // query filter "b < colA"  convert it to "colA_maxValue > b" for index table
-      case LessThan(value: Literal, attribute: AttributeReference) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, GreaterThan(maxValue(colName), value))
-      // query filter "colA > b"  convert it to "colA_maxValue > b" for index table
-      case GreaterThan(attribute: AttributeReference, value: Literal) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, GreaterThan(maxValue(colName), value))
-      // query filter "b > colA"  convert it to "colA_minValue < b" for index table
-      case GreaterThan(value: Literal, attribute: AttributeReference) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, LessThan(minValue(colName), value))
-      // query filter "colA <= b"  convert it to "colA_minValue <= b" for index table
-      case LessThanOrEqual(attribute: AttributeReference, value: Literal) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, LessThanOrEqual(minValue(colName), value))
-      // query filter "b <= colA"  convert it to "colA_maxValue >= b" for index table
-      case LessThanOrEqual(value: Literal, attribute: AttributeReference) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, GreaterThanOrEqual(maxValue(colName), value))
-      // query filter "colA >= b"   convert it to "colA_maxValue >= b" for index table
-      case GreaterThanOrEqual(attribute: AttributeReference, right: Literal) =>
-        val colName = getTargetColNameParts(attribute)
-        GreaterThanOrEqual(maxValue(colName), right)
-      // query filter "b >= colA"   convert it to "colA_minValue <= b" for index table
-      case GreaterThanOrEqual(value: Literal, attribute: AttributeReference) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, LessThanOrEqual(minValue(colName), value))
-      // query filter "colA is null"   convert it to "colA_num_nulls > 0" for index table
-      case IsNull(attribute: AttributeReference) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, GreaterThan(num_nulls(colName), Literal(0)))
-      // query filter "colA is not null"   convert it to "colA_num_nulls = 0" for index table
-      case IsNotNull(attribute: AttributeReference) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, EqualTo(num_nulls(colName), Literal(0)))
-      // query filter "colA in (a,b)"   convert it to " (colA_minValue <= a and colA_maxValue >= a) or (colA_minValue <= b and colA_maxValue >= b) " for index table
-      case In(attribute: AttributeReference, list: Seq[Literal]) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, list.map { lit =>
-          And(LessThanOrEqual(minValue(colName), lit), GreaterThanOrEqual(maxValue(colName), lit))
-        }.reduce(Or))
-      // query filter "colA like xxx"   convert it to "  (colA_minValue <= xxx and colA_maxValue >= xxx) or (colA_min start with xxx or colA_max start with xxx)  " for index table
-      case StartsWith(attribute, v @ Literal(_: UTF8String, _)) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, Or(And(LessThanOrEqual(minValue(colName), v), GreaterThanOrEqual(maxValue(colName), v)) ,
-          Or(StartsWith(minValue(colName), v), StartsWith(maxValue(colName), v))))
-      // query filter "colA not in (a, b)"   convert it to " (not( colA_minValue = a and colA_maxValue = a)) and (not( colA_minValue = b and colA_maxValue = b)) " for index table
-      case Not(In(attribute: AttributeReference, list: Seq[Literal])) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, list.map { lit =>
-          Not(And(EqualTo(minValue(colName), lit), EqualTo(maxValue(colName), lit)))
-        }.reduce(And))
-      // query filter "colA != b"   convert it to "not ( colA_minValue = b and colA_maxValue = b )" for index table
-      case Not(EqualTo(attribute: AttributeReference, value: Literal)) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, Not(And(EqualTo(minValue(colName), value), EqualTo(maxValue(colName), value))))
-      // query filter "b != colA"   convert it to "not ( colA_minValue = b and colA_maxValue = b )" for index table
-      case Not(EqualTo(value: Literal, attribute: AttributeReference)) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, Not(And(EqualTo(minValue(colName), value), EqualTo(maxValue(colName), value))))
-      // query filter "colA not like xxxx"   convert it to "not ( colA_minValue startWith xxx and colA_maxValue startWith xxx)" for index table
-      case Not(StartsWith(attribute, value @ Literal(_: UTF8String, _))) =>
-        val colName = getTargetColNameParts(attribute)
-        reWriteCondition(colName, Not(And(StartsWith(minValue(colName), value), StartsWith(maxValue(colName), value))))
-      case or: Or =>
-        val resLeft = createZindexFilter(or.left, indexSchema)
-        val resRight = createZindexFilter(or.right, indexSchema)
-        Or(resLeft, resRight)
-
-      case and: And =>
-        val resLeft = createZindexFilter(and.left, indexSchema)
-        val resRight = createZindexFilter(and.right, indexSchema)
-        And(resLeft, resRight)
-
-      case expr: Expression =>
-        Literal.TrueLiteral
+   * Translates provided {@link filterExpr} into corresponding filter-expression for Z-index index table
+   * to filter out candidate files that would hold records matching the original filter
+   *
+   * @param sourceFilterExpr  original filter from query
+   * @param indexSchema index table schema
+   * @return filter for Z-index table
+   */
+  def createZIndexLookupFilter(sourceFilterExpr: Expression, indexSchema: StructType): Expression = {
+    // Try to transform original Source Table's filter expression into
+    // Column-Stats Index filter expression
+    tryComposeIndexFilterExpr(sourceFilterExpr, indexSchema) match {
+      case Some(e) => e
+      // NOTE: In case we can't transform source filter expression, we fallback
+      // to {@code TrueLiteral}, to essentially avoid pruning any indexed files from scanning
+      case None => TrueLiteral
     }
   }
 
-  /**
-    * Extracts name from a resolved expression referring to a nested or non-nested column.
-    */
-  def getTargetColNameParts(resolvedTargetCol: Expression): Seq[String] = {
+  private def tryComposeIndexFilterExpr(sourceExpr: Expression, indexSchema: StructType): Option[Expression] = {
+    def minValue(colName: String) = col(getMinColumnNameFor(colName)).expr
+    def maxValue(colName: String) = col(getMaxColumnNameFor(colName)).expr
+    def numNulls(colName: String) = col(getNumNullsColumnNameFor(colName)).expr
+
+    def colContainsValuesEqualToLiteral(colName: String, value: Literal): Expression =
+    // Only case when column C contains value V is when min(C) <= V <= max(c)
+      And(LessThanOrEqual(minValue(colName), value), GreaterThanOrEqual(maxValue(colName), value))
+
+    def colContainsOnlyValuesEqualToLiteral(colName: String, value: Literal) =
+    // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
+      And(EqualTo(minValue(colName), value), EqualTo(maxValue(colName), value))
+
+    sourceExpr match {
+      // Filter "colA = b"
+      // Translates to "colA_minValue <= b AND colA_maxValue >= b" condition for index lookup
+      case EqualTo(attribute: AttributeReference, value: Literal) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => colContainsValuesEqualToLiteral(colName, value))
+
+      // Filter "b = colA"
+      // Translates to "colA_minValue <= b AND colA_maxValue >= b" condition for index lookup
+      case EqualTo(value: Literal, attribute: AttributeReference) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => colContainsValuesEqualToLiteral(colName, value))
+
+      // Filter "colA != b"
+      // Translates to "NOT(colA_minValue = b AND colA_maxValue = b)"
+      // NOTE: This is NOT an inversion of `colA = b`
+      case Not(EqualTo(attribute: AttributeReference, value: Literal)) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => Not(colContainsOnlyValuesEqualToLiteral(colName, value)))
+
+      // Filter "b != colA"
+      // Translates to "NOT(colA_minValue = b AND colA_maxValue = b)"
+      // NOTE: This is NOT an inversion of `colA = b`
+      case Not(EqualTo(value: Literal, attribute: AttributeReference)) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => Not(colContainsOnlyValuesEqualToLiteral(colName, value)))
+
+      // Filter "colA = null"
+      // Translates to "colA_num_nulls = null" for index lookup
+      case equalNullSafe @ EqualNullSafe(_: AttributeReference, _ @ Literal(null, _)) =>
+        getTargetIndexedColName(equalNullSafe.left, indexSchema)
+          .map(colName => EqualTo(numNulls(colName), equalNullSafe.right))
+
+      // Filter "colA < b"
+      // Translates to "colA_minValue < b" for index lookup
+      case LessThan(attribute: AttributeReference, value: Literal) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => LessThan(minValue(colName), value))
+
+      // Filter "b > colA"
+      // Translates to "b > colA_minValue" for index lookup
+      case GreaterThan(value: Literal, attribute: AttributeReference) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => LessThan(minValue(colName), value))
+
+      // Filter "b < colA"
+      // Translates to "b < colA_maxValue" for index lookup
+      case LessThan(value: Literal, attribute: AttributeReference) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => GreaterThan(maxValue(colName), value))
+
+      // Filter "colA > b"
+      // Translates to "colA_maxValue > b" for index lookup
+      case GreaterThan(attribute: AttributeReference, value: Literal) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => GreaterThan(maxValue(colName), value))
+
+      // Filter "colA <= b"
+      // Translates to "colA_minValue <= b" for index lookup
+      case LessThanOrEqual(attribute: AttributeReference, value: Literal) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => LessThanOrEqual(minValue(colName), value))
+
+      // Filter "b >= colA"
+      // Translates to "b >= colA_minValue" for index lookup
+      case GreaterThanOrEqual(value: Literal, attribute: AttributeReference) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => LessThanOrEqual(minValue(colName), value))
+
+      // Filter "b <= colA"
+      // Translates to "b <= colA_maxValue" for index lookup
+      case LessThanOrEqual(value: Literal, attribute: AttributeReference) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => GreaterThanOrEqual(maxValue(colName), value))
+
+      // Filter "colA >= b"
+      // Translates to "colA_maxValue >= b" for index lookup
+      case GreaterThanOrEqual(attribute: AttributeReference, right: Literal) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => GreaterThanOrEqual(maxValue(colName), right))
+
+      // Filter "colA is null"
+      // Translates to "colA_num_nulls > 0" for index lookup
+      case IsNull(attribute: AttributeReference) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => GreaterThan(numNulls(colName), Literal(0)))
+
+      // Filter "colA is not null"
+      // Translates to "colA_num_nulls = 0" for index lookup
+      case IsNotNull(attribute: AttributeReference) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => EqualTo(numNulls(colName), Literal(0)))
+
+      // Filter "colA in (a, b, ...)"
+      // Translates to "(colA_minValue <= a AND colA_maxValue >= a) OR (colA_minValue <= b AND colA_maxValue >= b)" for index lookup
+      // NOTE: This is equivalent to "colA = a OR colA = b OR ..."
+      case In(attribute: AttributeReference, list: Seq[Literal]) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName =>
+            list.map { lit => colContainsValuesEqualToLiteral(colName, lit) }.reduce(Or)
+          )
+
+      // Filter "colA not in (a, b, ...)"
+      // Translates to "NOT((colA_minValue = a AND colA_maxValue = a) OR (colA_minValue = b AND colA_maxValue = b))" for index lookup
+      // NOTE: This is NOT an inversion of `in (a, b, ...)` expr, this is equivalent to "colA != a AND colA != b AND ..."
+      case Not(In(attribute: AttributeReference, list: Seq[Literal])) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName =>
+            Not(
+              list.map { lit => colContainsOnlyValuesEqualToLiteral(colName, lit) }.reduce(Or)
+            )
+          )
+
+      // Filter "colA like 'xxx%'"
+      // Translates to "colA_minValue <= xxx AND colA_maxValue >= xxx" for index lookup
+      // NOTE: That this operator only matches string prefixes, and this is
+      //       essentially equivalent to "colA = b" expression
+      case StartsWith(attribute, v @ Literal(_: UTF8String, _)) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName => colContainsValuesEqualToLiteral(colName, v))
+
+      // Filter "colA not like 'xxx%'"
+      // Translates to "NOT(colA_minValue like 'xxx%' AND colA_maxValue like 'xxx%')" for index lookup
+      // NOTE: This is NOT an inversion of "colA like xxx"
+      case Not(StartsWith(attribute, value @ Literal(_: UTF8String, _))) =>
+        getTargetIndexedColName(attribute, indexSchema)
+          .map(colName =>
+            Not(And(StartsWith(minValue(colName), value), StartsWith(maxValue(colName), value)))
+          )
+
+      case or: Or =>
+        val resLeft = createZIndexLookupFilter(or.left, indexSchema)
+        val resRight = createZIndexLookupFilter(or.right, indexSchema)
+
+        Option(Or(resLeft, resRight))
+
+      case and: And =>
+        val resLeft = createZIndexLookupFilter(and.left, indexSchema)
+        val resRight = createZIndexLookupFilter(and.right, indexSchema)
+
+        Option(And(resLeft, resRight))
+
+      //
+      // Pushing Logical NOT inside the AND/OR expressions
+      // NOTE: This is required to make sure we're properly handling negations in
+      //       cases like {@code NOT(colA = 0)}, {@code NOT(colA in (a, b, ...)}
+      //
+
+      case Not(And(left: Expression, right: Expression)) =>
+        Option(createZIndexLookupFilter(Or(Not(left), Not(right)), indexSchema))
+
+      case Not(Or(left: Expression, right: Expression)) =>
+        Option(createZIndexLookupFilter(And(Not(left), Not(right)), indexSchema))
+
+      case _: Expression => None
+    }
+  }
+
+  private def checkColIsIndexed(colName: String, indexSchema: StructType): Boolean = {
+    Set.apply(
+      getMinColumnNameFor(colName),
+      getMaxColumnNameFor(colName),
+      getNumNullsColumnNameFor(colName)
+    )
+      .forall(stat => indexSchema.exists(_.name == stat))
+  }
+
+  private def getTargetIndexedColName(resolvedExpr: Expression, indexSchema: StructType): Option[String] = {
+    val colName = UnresolvedAttribute(getTargetColNameParts(resolvedExpr)).name
+
+    // Verify that the column is indexed
+    if (checkColIsIndexed(colName, indexSchema)) {
+      Option.apply(colName)
+    } else {
+      None
+    }
+  }
+
+  private def getTargetColNameParts(resolvedTargetCol: Expression): Seq[String] = {
     resolvedTargetCol match {
       case attr: Attribute => Seq(attr.name)
-
       case Alias(c, _) => getTargetColNameParts(c)
-
       case GetStructField(c, _, Some(name)) => getTargetColNameParts(c) :+ name
-
       case ex: ExtractValue =>
         throw new AnalysisException(s"convert reference to name failed, Updating nested fields is only supported for StructType: ${ex}.")
-
       case other =>
         throw new AnalysisException(s"convert reference to name failed,  Found unsupported expression ${other}")
     }
@@ -179,7 +263,7 @@ object DataSkippingUtils {
   def getIndexFiles(conf: Configuration, indexPath: String): Seq[FileStatus] = {
     val basePath = new Path(indexPath)
     basePath.getFileSystem(conf)
-      .listStatus(basePath).filterNot(f => f.getPath.getName.endsWith(".parquet"))
+      .listStatus(basePath).filter(f => f.getPath.getName.endsWith(".parquet"))
   }
 
   /**

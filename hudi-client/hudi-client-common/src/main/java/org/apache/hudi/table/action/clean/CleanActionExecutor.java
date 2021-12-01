@@ -205,31 +205,19 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           Option.of(timer.endTimer()),
           cleanStats
       );
-      writeMetadata(metadata);
+      if (!skipLocking) {
+        this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      }
+      writeTableMetadata(metadata);
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
       return metadata;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to clean up after commit", e);
-    }
-  }
-
-  /**
-   * Update metadata table if available. Any update to metadata table happens within data table lock.
-   * @param cleanMetadata instance of {@link HoodieCleanMetadata} to be applied to metadata.
-   */
-  private void writeMetadata(HoodieCleanMetadata cleanMetadata) {
-    if (config.isMetadataTableEnabled()) {
-      try {
-        if (!skipLocking) {
-          this.txnManager.beginTransaction(Option.empty(), Option.empty());
-        }
-        writeTableMetadata(cleanMetadata);
-      } finally {
-        if (!skipLocking) {
-          this.txnManager.endTransaction();
-        }
+    } finally {
+      if (!skipLocking) {
+        this.txnManager.endTransaction();
       }
     }
   }

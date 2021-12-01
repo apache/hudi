@@ -166,11 +166,6 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
     return new HoodieMetricsPrometheusConfig.Builder();
   }
 
-  @Override
-  public Properties getProps() {
-    return super.getProps();
-  }
-
   public static class Builder {
 
     private HoodieMetricsPrometheusConfig hoodieMetricsPrometheusConfig = new HoodieMetricsPrometheusConfig();

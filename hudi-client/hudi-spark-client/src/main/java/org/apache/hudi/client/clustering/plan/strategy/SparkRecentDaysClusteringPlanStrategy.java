@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkMergeOnReadTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -49,6 +50,7 @@ public class SparkRecentDaysClusteringPlanStrategy<T extends HoodieRecordPayload
     super(table, engineContext, writeConfig);
   }
 
+  @Override
   protected List<String> filterPartitionPaths(List<String> partitionPaths) {
     int targetPartitionsForClustering = getWriteConfig().getTargetPartitionsForClustering();
     int skipPartitionsFromLatestForClustering = getWriteConfig().getSkipPartitionsFromLatestForClustering();

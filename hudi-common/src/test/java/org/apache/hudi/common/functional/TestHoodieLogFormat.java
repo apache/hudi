@@ -1482,7 +1482,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
-    HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
+    HoodieLogFileReader reader = new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
+        fs.getFileStatus(writer.getLogFile().getPath()).getLen()), SchemaTestUtil.getSimpleSchema(),
         bufferSize, readBlocksLazily, true);
 
     assertTrue(reader.hasPrev(), "Last block should be available");
@@ -1560,7 +1561,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // First round of reads - we should be able to read the first block and then EOF
     HoodieLogFileReader reader =
-        new HoodieLogFileReader(fs, writer.getLogFile(), schema, bufferSize, readBlocksLazily, true);
+        new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
+            fs.getFileStatus(writer.getLogFile().getPath()).getLen()), schema, bufferSize, readBlocksLazily, true);
 
     assertTrue(reader.hasPrev(), "Last block should be available");
     HoodieLogBlock block = reader.prev();
@@ -1610,7 +1612,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
-    HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
+    HoodieLogFileReader reader = new HoodieLogFileReader(fs, new HoodieLogFile(writer.getLogFile().getPath(),
+        fs.getFileStatus(writer.getLogFile().getPath()).getLen()), SchemaTestUtil.getSimpleSchema(),
         bufferSize, readBlocksLazily, true);
 
     assertTrue(reader.hasPrev(), "Third block should be available");
@@ -1672,9 +1675,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                        Map<HeaderMetadataType, String> header) {
     switch (dataBlockType) {
       case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(records, header);
+        return new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(records, header);
+        return new HoodieHFileDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }

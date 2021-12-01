@@ -20,7 +20,14 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -35,6 +42,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Random;
 
 public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
@@ -275,6 +285,22 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       Helpers.saveORCToDFS(Helpers.toGenericRecords(
               dataGenerator.generateInserts("000", numRecords)), new Path(path));
     }
+  }
+
+  static void addCommitToTimeline(HoodieTableMetaClient metaCient) throws IOException {
+    addCommitToTimeline(metaCient, Collections.emptyMap());
+  }
+
+  static void addCommitToTimeline(HoodieTableMetaClient metaCient, Map<String, String> extraMetadata) throws IOException {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.UPSERT);
+    extraMetadata.forEach((k,v) -> commitMetadata.getExtraMetadata().put(k, v));
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, commitTime));
+    metaCient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime));
+    metaCient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, commitTime),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 
 }

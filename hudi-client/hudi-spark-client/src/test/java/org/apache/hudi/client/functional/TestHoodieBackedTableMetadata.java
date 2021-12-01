@@ -18,10 +18,12 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
@@ -29,6 +31,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -90,4 +94,33 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     });
   }
 
+  /**
+   * Verify if the Metadata table is constructed with table properties including
+   * the right key generator class name.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testMetadataTableKeyGenerator(final HoodieTableType tableType) throws Exception {
+    init(tableType);
+
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+
+    assertEquals(HoodieTableMetadataKeyGenerator.class.getCanonicalName(),
+        tableMetadata.getMetadataMetaClient().getTableConfig().getKeyGeneratorClassName());
+  }
+
+  /**
+   * [HUDI-2852] Table metadata returns empty for non-exist partition.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testNotExistPartition(final HoodieTableType tableType) throws Exception {
+    init(tableType);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context,
+        writeConfig.getMetadataConfig(), writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(), false);
+    FileStatus[] allFilesInPartition =
+        tableMetadata.getAllFilesInPartition(new Path(writeConfig.getBasePath() + "dummy"));
+    assertEquals(allFilesInPartition.length, 0);
+  }
 }
