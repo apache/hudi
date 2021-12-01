@@ -205,13 +205,13 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     this.jdbcUrl = getStringOrDefault(HIVE_URL);
     this.usePreApacheInputFormat = getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT);
     this.useJdbc = getBooleanOrDefault(HIVE_USE_JDBC);
-    this.syncMode = getStringOrDefault(HIVE_SYNC_MODE);
+    this.syncMode = getString(HIVE_SYNC_MODE);
     this.autoCreateDatabase = getBooleanOrDefault(HIVE_AUTO_CREATE_DATABASE);
     this.ignoreExceptions = getBooleanOrDefault(HIVE_IGNORE_EXCEPTIONS);
     this.skipROSuffix = getBooleanOrDefault(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE);
     this.useFileListingFromMetadata = getBooleanOrDefault(HoodieMetadataConfig.ENABLE);
-    this.tableProperties = getStringOrDefault(HIVE_TABLE_PROPERTIES);
-    this.serdeProperties = getStringOrDefault(HIVE_TABLE_SERDE_PROPERTIES);
+    this.tableProperties = getString(HIVE_TABLE_PROPERTIES);
+    this.serdeProperties = getString(HIVE_TABLE_SERDE_PROPERTIES);
 
     this.supportTimestamp = getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE);
     this.batchSyncNum = getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM);

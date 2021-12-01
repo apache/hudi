@@ -58,6 +58,7 @@ import java.util.Map;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.fileSystem;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncConfig;
+import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -75,6 +76,7 @@ public class TestHiveSyncTool {
     return SYNC_MODES;
   }
 
+  // useSchemaFromCommitMetadata, syncMode
   private static Iterable<Object[]> syncModeAndSchemaFromCommitMetadata() {
     List<Object[]> opts = new ArrayList<>();
     for (Object mode : SYNC_MODES) {
@@ -130,7 +132,7 @@ public class TestHiveSyncTool {
     assertFalse(hiveClient.doesTableExist(hiveSyncConfig.tableName),
         "Table " + hiveSyncConfig.tableName + " should not exist initially");
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     // we need renew the hiveclient after tool.syncHoodieTable(), because it will close hive
     // session, then lead to connection retry, we can see there is a exception at log.
@@ -178,7 +180,7 @@ public class TestHiveSyncTool {
     assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
         "The one partition event must of type UPDATE");
 
-    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     hiveClient =
             new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
@@ -202,7 +204,7 @@ public class TestHiveSyncTool {
     hiveSyncConfig.autoCreateDatabase = false;
     // Lets do the sync
     assertThrows(Exception.class, () -> {
-      new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem).syncHoodieTable();
+      new HiveSyncTool(hiveSyncProps, fileSystem).syncHoodieTable();
     });
 
     // while autoCreateDatabase is true and database not exists;
@@ -210,7 +212,7 @@ public class TestHiveSyncTool {
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
     assertDoesNotThrow(() -> {
-      new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem).syncHoodieTable();
+      new HiveSyncTool(hiveSyncProps, fileSystem).syncHoodieTable();
     });
     assertTrue(hiveClient.doesDataBaseExist(hiveSyncConfig.databaseName),
         "DataBases " + hiveSyncConfig.databaseName + " should exist after sync completes");
@@ -218,7 +220,7 @@ public class TestHiveSyncTool {
     // while autoCreateDatabase is false and database exists;
     hiveSyncConfig.autoCreateDatabase = false;
     assertDoesNotThrow(() -> {
-      new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem).syncHoodieTable();
+      new HiveSyncTool(hiveSyncProps, fileSystem).syncHoodieTable();
     });
     assertTrue(hiveClient.doesDataBaseExist(hiveSyncConfig.databaseName),
         "DataBases " + hiveSyncConfig.databaseName + " should exist after sync completes");
@@ -226,7 +228,7 @@ public class TestHiveSyncTool {
     // while autoCreateDatabase is true and database exists;
     hiveSyncConfig.autoCreateDatabase = true;
     assertDoesNotThrow(() -> {
-      new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem).syncHoodieTable();
+      new HiveSyncTool(hiveSyncProps, fileSystem).syncHoodieTable();
     });
     assertTrue(hiveClient.doesDataBaseExist(hiveSyncConfig.databaseName),
         "DataBases " + hiveSyncConfig.databaseName + " should exist after sync completes");
@@ -259,7 +261,7 @@ public class TestHiveSyncTool {
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     SessionState.start(HiveTestUtil.getHiveConf());
@@ -353,7 +355,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
         useSchemaFromCommitMetadata);
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     String roTableName = hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
@@ -409,7 +411,7 @@ public class TestHiveSyncTool {
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     SessionState.start(HiveTestUtil.getHiveConf());
@@ -436,7 +438,7 @@ public class TestHiveSyncTool {
     String commitTime = "100";
     HiveTestUtil.createCOWTableWithSchema(commitTime, "/complex.schema.avsc");
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
@@ -457,7 +459,7 @@ public class TestHiveSyncTool {
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     assertEquals(5, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -478,7 +480,7 @@ public class TestHiveSyncTool {
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.ADD, partitionEvents.iterator().next().eventType, "The one partition event must of type ADD");
 
-    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     // Sync should add the one partition
     assertEquals(6, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
@@ -497,7 +499,7 @@ public class TestHiveSyncTool {
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     int fields = hiveClient.getTableSchema(hiveSyncConfig.tableName).size();
@@ -508,7 +510,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime2);
 
     // Lets do the sync
-    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     assertEquals(fields + 3, hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
@@ -539,7 +541,7 @@ public class TestHiveSyncTool {
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
     assertFalse(hiveClient.doesTableExist(roTableName), "Table " + hiveSyncConfig.tableName + " should not exist initially");
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     assertTrue(hiveClient.doesTableExist(roTableName), "Table " + roTableName + " should exist after sync completes");
@@ -570,7 +572,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.addMORPartitions(1, true, false,
         useSchemaFromCommitMetadata, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
-    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
 
@@ -609,7 +611,7 @@ public class TestHiveSyncTool {
             + " should not exist initially");
 
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     assertTrue(hiveClientRT.doesTableExist(snapshotTableName),
@@ -641,7 +643,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.addCOWPartitions(1, true, useSchemaFromCommitMetadata, dateTime, commitTime2);
     HiveTestUtil.addMORPartitions(1, true, false, useSchemaFromCommitMetadata, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
-    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     hiveClientRT = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
 
@@ -682,7 +684,7 @@ public class TestHiveSyncTool {
     assertFalse(hiveClient.doesTableExist(hiveSyncConfig.tableName),
         "Table " + hiveSyncConfig.tableName + " should not exist initially");
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
         "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
@@ -708,7 +710,7 @@ public class TestHiveSyncTool {
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.ADD, partitionEvents.iterator().next().eventType, "The one partition event must of type ADD");
 
-    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     // Sync should add the one partition
@@ -724,7 +726,7 @@ public class TestHiveSyncTool {
 
     hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
 
-    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
@@ -759,7 +761,7 @@ public class TestHiveSyncTool {
     assertFalse(hiveClient.doesTableExist(hiveSyncConfig.tableName),
         "Table " + hiveSyncConfig.tableName + " should not exist initially");
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
         "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
@@ -786,7 +788,7 @@ public class TestHiveSyncTool {
         + " should not exist initially");
 
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     assertTrue(hiveClientRT.doesTableExist(snapshotTableName), "Table " + hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
@@ -806,7 +808,7 @@ public class TestHiveSyncTool {
 
     HiveTestUtil.addMORPartitions(1, true, false, true, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
-    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     hiveClientRT = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
 
@@ -838,7 +840,7 @@ public class TestHiveSyncTool {
     syncToolConfig.ignoreExceptions = true;
     syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl
         .replace(String.valueOf(HiveTestUtil.hiveTestService.getHiveServerPort()), String.valueOf(NetworkTestUtils.nextFreePort()));
-    HiveSyncTool tool = new HiveSyncTool(syncToolConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     assertFalse(hiveClient.doesTableExist(hiveSyncConfig.tableName),
@@ -882,7 +884,7 @@ public class TestHiveSyncTool {
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     assertFalse(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),"Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
 
-    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     verifyOldParquetFileTest(hiveClient, emptyCommitTime);
@@ -911,7 +913,7 @@ public class TestHiveSyncTool {
     assertFalse(
         hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),"Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
 
-    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
 
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
@@ -948,7 +950,7 @@ public class TestHiveSyncTool {
     assertFalse(
         hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName), "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
 
-    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     verifyOldParquetFileTest(hiveClient, emptyCommitTime);
@@ -960,7 +962,7 @@ public class TestHiveSyncTool {
     //HiveTestUtil.createCommitFileWithSchema(commitMetadata, "400", false); // create another empty commit
     //HiveTestUtil.createCommitFile(commitMetadata, "400"); // create another empty commit
 
-    tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     HoodieHiveClient hiveClientLatest = new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
@@ -1036,7 +1038,7 @@ public class TestHiveSyncTool {
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
 
-    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
 
     assertTrue(hiveClient.doesTableExist(tableName));
@@ -1044,7 +1046,7 @@ public class TestHiveSyncTool {
 
     HiveTestUtil.addMORPartitions(0, true, true, true, ZonedDateTime.now().plusDays(2), commitTime1, commitTime2);
 
-    tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool = new HiveSyncTool(hiveSyncProps, fileSystem);
     tool.syncHoodieTable();
     hiveClient = new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     assertEquals(commitTime1, hiveClient.getLastCommitTimeSynced(tableName).get());

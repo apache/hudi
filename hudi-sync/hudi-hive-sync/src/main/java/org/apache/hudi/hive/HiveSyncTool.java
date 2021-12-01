@@ -79,6 +79,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     this(new HiveSyncConfig(props), new HiveConf(fs.getConf(), HiveConf.class),fs);
   }
 
+  @Deprecated
   public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf configuration, FileSystem fs) {
     super(new TypedProperties(configuration.getAllProperties()), fs);
 
