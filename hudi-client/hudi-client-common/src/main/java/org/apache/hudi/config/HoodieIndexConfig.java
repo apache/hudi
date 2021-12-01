@@ -24,18 +24,24 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
-
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieHBaseIndexConfig.GET_BATCH_SIZE;
 import static org.apache.hudi.config.HoodieHBaseIndexConfig.PUT_BATCH_SIZE;
@@ -203,7 +209,17 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE + ", but for simple index.");
 
-  // ***** Bucket Index Configs *****
+  /**
+   * ***** Bucket Index Configs *****
+   * Bucket Index is targeted to locate the record fast by hash in big data scenarios.
+   * The current implementation is a basic version, so there are some constraints:
+   * 1. Unsupported operation: bulk insert, cluster and so on.
+   * 2. Bucket num change requires rewriting the partition.
+   * 3. Predict the table size and future data growth well to set a reasonable bucket num.
+   * 4. A bucket size is recommended less than 3GB and avoid bing too small.
+   */
+  // Bucket num equals file groups num in each partition.
+  // Bucket num can be set according to partition size and file group size.
   public static final ConfigProperty<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.num.buckets")
       .defaultValue(256)
@@ -213,8 +229,27 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
       .key("hoodie.bucket.index.hash.field")
       .noDefaultValue()
-      .withAlternatives("hoodie.datasource.write.indexkey.field")
-      .withDocumentation("Index key.It is used to index the record and find its file group");
+      .withDocumentation("Index key. It is used to index the record and find its file group. "
+          + "If not set, use record key field as default");
+
+  public static final ConfigProperty<String> BUCKET_INDEX_HASH_FUNCTION = ConfigProperty
+      .key("hoodie.bucket.index.hash.function")
+      .defaultValue("JVMHash")
+      .withDocumentation("Hash function. It is used to compute the index key hash value "
+          + "Possible options are [JVMHash | HiveHash]. ");
+
+  public static final Set<WriteOperationType> BUCKET_INDEX_SUPPORTED_OPERATIONS = new HashSet<WriteOperationType>() {{
+      add(WriteOperationType.INSERT);
+      add(WriteOperationType.INSERT_PREPPED);
+      add(WriteOperationType.UPSERT);
+      add(WriteOperationType.UPSERT_PREPPED);
+      add(WriteOperationType.INSERT_OVERWRITE);
+      add(WriteOperationType.DELETE);
+      add(WriteOperationType.COMPACT);
+      add(WriteOperationType.DELETE_PARTITION);
+      // TODO: HUDI-2155 bulk insert support bucket index.
+      // TODO: HUDI-2156 cluster the table with bucket index.
+    }};
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
@@ -571,9 +606,21 @@ public class HoodieIndexConfig extends HoodieConfig {
     private void validateBucketIndexConfig() {
       if (hoodieIndexConfig.getString(INDEX_TYPE)
           .equalsIgnoreCase(HoodieIndex.IndexType.BUCKET_INDEX.toString())) {
+        // check the bucket index hash field
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {
-          throw new HoodieIndexException("When using bucket index, hoodie.bucket.index.hash.field cannot be null/empty.");
-        } else if (hoodieIndexConfig.getIntOrDefault(BUCKET_INDEX_NUM_BUCKETS) <= 0) {
+          hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
+              hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME));
+        } else {
+          boolean valid = Arrays
+              .stream(hoodieIndexConfig.getStringOrDefault(KeyGeneratorOptions.RECORDKEY_FIELD_NAME).split(","))
+              .collect(Collectors.toSet())
+              .containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
+          if (!valid) {
+            throw new HoodieException("Bucket index key (if configured) must be subset of record key.");
+          }
+        }
+        // check the bucket num
+        if (hoodieIndexConfig.getIntOrDefault(BUCKET_INDEX_NUM_BUCKETS) <= 0) {
           throw new HoodieIndexException("When using bucket index, hoodie.bucket.index.num.buckets cannot be negative.");
         }
       }

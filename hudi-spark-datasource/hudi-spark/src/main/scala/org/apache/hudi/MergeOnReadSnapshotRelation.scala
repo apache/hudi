@@ -25,10 +25,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.hudi.utils.BucketUtils
-
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
@@ -40,8 +39,9 @@ import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
-
 import scala.collection.JavaConverters._
+
+import org.apache.hudi.index.bucket.BucketIdentifier
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
                                       logPaths: Option[List[String]],
@@ -242,7 +242,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     bucketSpec.fold(fileSplits.map(e => List(e._2))) { spec =>
       val bucketIdSplits = fileSplits.map {
           case (baseFile, split) if baseFile.isPresent() =>
-            (BucketUtils.bucketIdFromFileId(baseFile.get().getFileId), split)
+            (BucketIdentifier.bucketIdFromFileId(baseFile.get().getFileId), split)
           case _ => throw new HoodieException("Table with bucket spec has to have base file.")
         }.groupBy(_._1)
         .map(e => (e._1, e._2.map(_._2)))

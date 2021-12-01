@@ -90,8 +90,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   private static final Schema SCHEMA = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
   private static final Stream<Arguments> indexType() {
     HoodieIndex.IndexType[] data = new HoodieIndex.IndexType[] {
-        HoodieIndex.IndexType.BLOOM,
-        HoodieIndex.IndexType.BUCKET_INDEX
+        HoodieIndex.IndexType.BLOOM
     };
     return Stream.of(data).map(Arguments::of);
   }

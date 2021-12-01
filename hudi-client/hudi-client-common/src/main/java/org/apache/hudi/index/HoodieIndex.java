@@ -145,6 +145,14 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * If the `getCustomizedPartitioner` returns a partitioner, it has to be true.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public boolean needTaggingIfInsert() {
+    return false;
+  }
+
+  /**
    * Each index type should implement it's own logic to release any resources acquired during the process.
    */
   public void close() {

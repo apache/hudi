@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -114,11 +113,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     initFileSystem();
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties()
         : getPropertiesForKeyGen());
-    HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType);
-    if (indexType == IndexType.BUCKET_INDEX) {
-      indexBuilder.withBucketNum("8").withIndexKeyField(getPropertiesForKeyGen()
-          .getProperty(HoodieTableConfig.RECORDKEY_FIELDS.key()));
-    }
+    HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(indexType)
+        .fromProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
+        .withIndexType(indexType);
     config = getConfigBuilder()
         .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
@@ -139,7 +136,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     setUp(indexType, populateMetaFields);
     String newCommitTime = "001";
     int totalRecords = 10 + random.nextInt(20);
-    List<HoodieRecord> records = generateInserts(newCommitTime, totalRecords, indexType);
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -189,7 +186,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     setUp(indexType, populateMetaFields);
     String newCommitTime = "001";
     int totalRecords = 10 + random.nextInt(20);
-    List<HoodieRecord> records = generateInserts(newCommitTime, totalRecords, indexType);
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
@@ -239,7 +236,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     setUp(indexType, populateMetaFields, true, false);
     String newCommitTime = writeClient.startCommit();
     int totalRecords = 20 + random.nextInt(20);
-    List<HoodieRecord> records = generateInserts(newCommitTime, totalRecords, indexType);
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -491,13 +488,5 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
         : Option.empty())
     );
-  }
-
-  private List<HoodieRecord> generateInserts(String instantTime, Integer n, IndexType indexType) {
-    if (indexType == IndexType.BUCKET_INDEX) {
-      return dataGen.generateInserts(true, instantTime, n);
-    } else {
-      return dataGen.generateInserts(instantTime, n);
-    }
   }
 }

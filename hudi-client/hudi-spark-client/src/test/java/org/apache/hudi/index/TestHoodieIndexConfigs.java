@@ -96,8 +96,7 @@ public class TestHoodieIndexConfigs {
         break;
       case BUCKET_INDEX:
         config = clientConfigBuilder.withPath(basePath)
-            .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET_INDEX)
-            .withBucketNum("8").withIndexKeyField("row_key").build()).build();
+            .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET_INDEX).build()).build();
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkBucketIndex);
         break;
       default:

@@ -16,55 +16,41 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utils;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.regex.Pattern;
+package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.utils.HashFunction;
 
-public class BucketUtils {
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+public class BucketIdentifier {
   // compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
 
-  public static int mod(int x, int y) {
-    int r = x % y;
-    if (r < 0) {
-      return (r + y) % y;
+  public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets, String hashFunction) {
+    return getBucketId(record.getKey(), indexKeyFields, numBuckets, hashFunction);
+  }
+
+  public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets, String hashFunction) {
+    List<String> hashKeyFields;
+    if (!hoodieKey.getRecordKey().contains(":")) {
+      hashKeyFields = Arrays.asList(hoodieKey.getRecordKey());
     } else {
-      return r;
+      Map<String, String> recordKeyPairs = Arrays.stream(hoodieKey.getRecordKey().split(","))
+          .map(p -> p.split(":"))
+          .collect(Collectors.toMap(p -> p[0], p -> p[1]));
+      hashKeyFields = Arrays.stream(indexKeyFields.split(","))
+          .map(f -> recordKeyPairs.get(f))
+          .collect(Collectors.toList());
     }
-  }
-
-  public static int bucketId(String key, int numBuckets) {
-    return bucketId(Collections.singletonList(key), numBuckets);
-  }
-
-  public static int bucketId(List<Object> values, int numBuckets) {
-    int hash = 0;
-    for (Object value : values) {
-      hash = 31 * hash;
-      if (value == null) {
-        hash += 0;
-      } else if (value instanceof Boolean) {
-        hash += HiveHasher.hashInt(value.equals(Boolean.TRUE) ? 1 : 0);
-      } else if (value instanceof Integer) {
-        hash += HiveHasher.hashInt((Integer) value);
-      } else if (value instanceof Long) {
-        hash += HiveHasher.hashLong((Long) value);
-      } else if (value instanceof Float) {
-        hash += HiveHasher.hashInt(Float.floatToIntBits((Float) value));
-      } else if (value instanceof Double) {
-        hash += HiveHasher.hashLong(Double.doubleToLongBits((Double) value));
-      } else if (value instanceof String) {
-        byte[] a = value.toString().getBytes();
-        hash += HiveHasher.hashUnsafeBytes(a, HiveHasher.Platform.BYTE_ARRAY_OFFSET, a.length);
-      } else {
-        throw new RuntimeException("Unsupported type " + value.getClass().getName());
-      }
-    }
-    return mod(hash & Integer.MAX_VALUE, numBuckets);
+    return mod(HashFunction.getHashFunction(hashFunction).hash(hashKeyFields)
+        & Integer.MAX_VALUE, numBuckets);
   }
 
   public static int bucketIdFromFileId(String fileId) {
@@ -85,5 +71,14 @@ public class BucketUtils {
 
   public static boolean isBucketFileName(String name) {
     return BUCKET_NAME.matcher(name).matches();
+  }
+
+  private static int mod(int x, int y) {
+    int r = x % y;
+    if (r < 0) {
+      return (r + y) % y;
+    } else {
+      return r;
+    }
   }
 }

@@ -78,13 +78,11 @@ public abstract class AbstractSparkDeltaCommitActionExecutor<T extends HoodieRec
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
       LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
-    } else if (recordItr.hasNext()) {
+    } else {
       HoodieAppendHandle<?,?,?,?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
           partitionPath, fileId, recordItr, taskContextSupplier);
       appendHandle.doAppend();
       return Collections.singletonList(appendHandle.close()).iterator();
-    } else {
-      return super.handleUpdate(partitionPath, fileId, recordItr);
     }
   }
 
@@ -92,7 +90,7 @@ public abstract class AbstractSparkDeltaCommitActionExecutor<T extends HoodieRec
   public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr)
       throws Exception {
     // If canIndexLogFiles, write inserts to log files else write inserts to base files
-    if (table.getIndex().canIndexLogFiles() && recordItr.hasNext()) {
+    if (table.getIndex().canIndexLogFiles()) {
       return new SparkLazyInsertIterable<>(recordItr, true, config, instantTime, table,
           idPfx, taskContextSupplier, new AppendHandleFactory<>());
     } else {

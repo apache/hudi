@@ -18,12 +18,13 @@
 
 package org.apache.hudi.index.bucket;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
+import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.commit.Partitioner;
@@ -33,18 +34,15 @@ import org.apache.log4j.Logger;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.utils.BucketUtils;
 import org.apache.spark.api.java.JavaRDD;
 
 public class SparkBucketIndex<T extends HoodieRecordPayload>
@@ -73,68 +71,63 @@ public class SparkBucketIndex<T extends HoodieRecordPayload>
       HoodieEngineContext context,
       HoodieTable hoodieTable)
       throws HoodieIndexException {
-    List<String> partitions = records.map(HoodieRecord::getPartitionPath)
-        .distinct().collectAsList();
-    Map<String, Map<Integer, List<Triple<String, String, String>>>> partitionPathFileIDList =
-        loadPartitionBucketIdFileIdMapping(
-            context, hoodieTable, partitions);
+    HoodieData<HoodieRecord<T>> taggedRecords = records.mapPartitions(recordIter -> {
+      // partitionPath -> bucketId -> fileInfo
+      Map<String, Map<Integer, Pair<String, String>>> partitionPathFileIDList = new HashMap<>();
+      return new LazyIterableIterator<HoodieRecord<T>, HoodieRecord<T>>(recordIter) {
 
-    if (partitionPathFileIDList.isEmpty()) {
-      // first write
-      return records;
-    }
+        @Override
+        protected void start() {
 
-    HoodieData<HoodieRecord<T>> taggedRecords = records.map(record -> {
-      int bucketId = BucketUtils.bucketId(record.getKey().getIndexKey(), numBuckets);
-      String partitionPath = record.getPartitionPath();
-      if (partitionPathFileIDList.containsKey(partitionPath)) {
-        if (partitionPathFileIDList.get(partitionPath).containsKey(bucketId)) {
-          Triple<String, String, String> triple = partitionPathFileIDList
-              .get(partitionPath)
-              .get(bucketId).get(0);
-          String fileId = triple.getMiddle();
-          String instanceTime = triple.getRight();
-          HoodieRecordLocation loc = new HoodieRecordLocation(instanceTime, fileId);
-          return HoodieIndexUtils.getTaggedRecord(record, Option.of(loc));
         }
-      }
-      return record;
-    });
+
+        @Override
+        protected HoodieRecord<T> computeNext() {
+          HoodieRecord record = recordIter.next();
+          int bucketId = BucketIdentifier.getBucketId(record, config.getBucketIndexHashField(),
+              numBuckets, config.getBucketIndexHashFunction());
+          String partitionPath = record.getPartitionPath();
+          if (!partitionPathFileIDList.containsKey(partitionPath)) {
+            partitionPathFileIDList.put(partitionPath, loadPartitionBucketIdFileIdMapping(hoodieTable, partitionPath));
+          }
+          if (partitionPathFileIDList.get(partitionPath).containsKey(bucketId)) {
+            Pair<String, String> fileInfo = partitionPathFileIDList.get(partitionPath).get(bucketId);
+            return HoodieIndexUtils.getTaggedRecord(record, Option.of(
+                new HoodieRecordLocation(fileInfo.getRight(), fileInfo.getLeft())
+            ));
+          }
+          return record;
+        }
+
+        @Override
+        protected void end() {
+
+        }
+      };
+    }, true);
     return taggedRecords;
   }
 
-  private Map<String, Map<Integer, List<Triple<String, String, String>>>> loadPartitionBucketIdFileIdMapping(
-      HoodieEngineContext context,
+  private Map<Integer, Pair<String, String>> loadPartitionBucketIdFileIdMapping(
       HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable,
-      List<String> partitions) {
-    // partitionPath -> bucketId -> fileIds
-    Map<String, Map<Integer, List<Triple<String, String, String>>>> partitionPathFileIDList = new HashMap<>();
+      String partition) {
+    // bucketId -> fileIds
+    Map<Integer, Pair<String, String>> fileIDList = new HashMap<>();
     HoodieIndexUtils
-        .getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable)
-        .forEach(pair -> {
-          String partitionPath = pair.getLeft();
-          HoodieBaseFile file = pair.getRight();
+        .getLatestBaseFilesForPartition(partition, hoodieTable)
+        .forEach(file -> {
           String fileId = file.getFileId();
           String commitTime = file.getCommitTime();
-          int bucketId = BucketUtils.bucketIdFromFileId(fileId);
-          if (!partitionPathFileIDList.containsKey(partitionPath)) {
-            partitionPathFileIDList.put(partitionPath, new HashMap<>());
+          int bucketId = BucketIdentifier.bucketIdFromFileId(fileId);
+          if (!fileIDList.containsKey(bucketId)) {
+            fileIDList.put(bucketId, Pair.of(fileId, commitTime));
+          } else {
+            // check if bucket data is valid
+            throw new HoodieIOException("Find multiple files at partition path="
+                + partition + " belongs to the same bucket id = " + bucketId);
           }
-          if (!partitionPathFileIDList.get(partitionPath).containsKey(bucketId)) {
-            partitionPathFileIDList.get(partitionPath).put(bucketId, new ArrayList<>());
-          }
-          partitionPathFileIDList.get(partitionPath).get(bucketId)
-              .add(Triple.of(partitionPath, fileId, commitTime));
         });
-    // check if bucket data is valid
-    partitionPathFileIDList
-        .forEach((partitionPath, value) -> value.forEach((bucketId, value1) -> {
-          if (value1.size() > 1) {
-            throw new RuntimeException("find multiple files at partition path="
-                + partitionPath + " belongs to the same bucket id = " + bucketId);
-          }
-        }));
-    return partitionPathFileIDList;
+    return fileIDList;
   }
 
   @Override
@@ -167,6 +160,11 @@ public class SparkBucketIndex<T extends HoodieRecordPayload>
 
   @Override
   public boolean needCustomizedPartitioner() {
+    return true;
+  }
+
+  @Override
+  public boolean needTaggingIfInsert() {
     return true;
   }
 

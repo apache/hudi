@@ -47,7 +47,7 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET_INDEX.name,
     HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "8",
-    KeyGeneratorOptions.INDEX_KEY_FILED_NAME.key -> "_row_key"
+    KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> "_row_key"
   )
   private val bucketSpec = "8\t_row_key"
 
@@ -63,6 +63,33 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
     cleanupSparkContexts()
     cleanupTestDataGenerator()
     cleanupFileSystem()
+  }
+
+  @Test def testDoubleInsert(): Unit = {
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    val records2 = recordsToStrings(dataGen.generateInserts("002", 100)).toList
+    val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option("hoodie.compact.inline", "false")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option("bucketSpec", bucketSpec)
+      .load(basePath + "/*/*/*/*")
+    assertEquals(200, hudiSnapshotDF1.count())
   }
 
   @Test def testCountWithBucketIndex(): Unit = {

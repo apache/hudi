@@ -46,7 +46,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
 
       Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
-      if (performTagging) {
+      if (performTagging || table.getIndex().needTaggingIfInsert()) {
         // perform index loop up to get existing location of records
         context.setJobStatus(this.getClass().getSimpleName(), "Tagging");
         taggedRecords = tag(dedupedRecords, context, table);

@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import org.apache.hudi.index.bucket.BucketIdentifier;
 import scala.Tuple2;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -41,17 +42,13 @@ import org.apache.hudi.index.bucket.SparkBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
-import org.apache.hudi.utils.BucketUtils;
 
-/**
- * TODO: pruning empty task partitions.
- *
- * @param <T>
- */
 public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> extends
     SparkHoodiePartitioner<T> {
 
   private final int numBuckets;
+  private final String hashFunction;
+  private final String indexKeyField;
   private final int totalPartitionPaths;
   private final List<String> partitionPaths;
   private final Map<String, Integer> partitionPathOffset;
@@ -68,6 +65,8 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
               + table.getIndex().getClass().getSimpleName());
     }
     this.numBuckets = ((SparkBucketIndex<T>) table.getIndex()).getNumBuckets();
+    this.hashFunction = config.getBucketIndexHashFunction();
+    this.indexKeyField = config.getBucketIndexHashField();
     this.totalPartitionPaths = profile.getPartitionPaths().size();
     partitionPaths = new ArrayList<>(profile.getPartitionPaths());
     partitionPathOffset = new HashMap<>();
@@ -98,7 +97,7 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
   @Override
   public BucketInfo getBucketInfo(int bucketNumber) {
     String partitionPath = partitionPaths.get(bucketNumber / numBuckets);
-    String bucketId = BucketUtils.bucketIdStr(bucketNumber % numBuckets);
+    String bucketId = BucketIdentifier.bucketIdStr(bucketNumber % numBuckets);
     Option<String> fileIdOption = Option.fromJavaOptional(updatePartitionPathFileIds
         .getOrDefault(partitionPath, Collections.emptySet()).stream()
         .filter(e -> e.startsWith(bucketId))
@@ -106,7 +105,7 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
     if (fileIdOption.isPresent()) {
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
-      return new BucketInfo(BucketType.INSERT, BucketUtils.newBucketFileIdPrefix(bucketId), partitionPath);
+      return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
     }
   }
 
@@ -120,7 +119,10 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
     Tuple2<HoodieKey, Option<HoodieRecordLocation>> keyLocation =
         (Tuple2<HoodieKey, Option<HoodieRecordLocation>>) key;
     String partitionPath = keyLocation._1.getPartitionPath();
-    int p = BucketUtils.bucketId(keyLocation._1.getIndexKey(), numBuckets);
-    return partitionPathOffset.get(partitionPath) + p;
+    Option<HoodieRecordLocation> location = keyLocation._2;
+    int bucketId = location.isPresent()
+        ? BucketIdentifier.bucketIdFromFileId(location.get().getFileId())
+        : BucketIdentifier.getBucketId(keyLocation._1, indexKeyField, numBuckets, hashFunction);
+    return partitionPathOffset.get(partitionPath) + bucketId;
   }
 }
