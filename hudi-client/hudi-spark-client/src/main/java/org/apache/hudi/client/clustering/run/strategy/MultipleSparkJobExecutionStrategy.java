@@ -95,8 +95,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
         .map(inputGroup -> runClusteringForGroupAsync(inputGroup,
             clusteringPlan.getStrategy().getStrategyParams(),
             Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
-            instantTime))
-        .map(CompletableFuture::join);
+            instantTime)).collect(Collectors.toList()).stream().map(CompletableFuture::join);
 
     JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusRDDStream);
     JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
