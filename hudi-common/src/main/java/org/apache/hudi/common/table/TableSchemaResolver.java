@@ -83,16 +83,15 @@ public class TableSchemaResolver {
         case COPY_ON_WRITE:
           // If this is COW, get the last commit and read the schema from a file written in the
           // last commit
-          HoodieInstant lastCommit =
-              activeTimeline.getCommitsTimeline().filterCompletedInstantsWithCommitMetadata()
-                      .lastInstant().orElseThrow(() -> new InvalidTableException(metaClient.getBasePath()));
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(activeTimeline.getInstantDetails(lastCommit).get(), HoodieCommitMetadata.class);
-          String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
-              .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for commit "
-                  + lastCommit + ", could not get schema for table " + metaClient.getBasePath() + ", Metadata :"
-                  + commitMetadata));
-          return readSchemaFromBaseFile(new Path(filePath));
+          Option<Pair<HoodieInstant, HoodieCommitMetadata>> ret = activeTimeline.getLastCommitMetadataToWrite();
+          if (ret.isPresent()) {
+            HoodieCommitMetadata commitMetadata = ret.get().getRight();
+            String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny().get();
+            return readSchemaFromBaseFile(new Path(filePath));
+          } else {
+            throw new IllegalArgumentException("Could not find any data file written for commit, "
+                + "so could not get schema for table " + metaClient.getBasePath());
+          }
         case MERGE_ON_READ:
           // If this is MOR, depending on whether the latest commit is a delta commit or
           // compaction commit
@@ -114,7 +113,7 @@ public class TableSchemaResolver {
           if (lastDeltaCommit.isPresent()) {
             HoodieInstant lastDeltaInstant = lastDeltaCommit.get();
             // read from the log file wrote
-            commitMetadata = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(lastDeltaInstant).get(),
+            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(lastDeltaInstant).get(),
                 HoodieCommitMetadata.class);
             Pair<String, HoodieFileFormat> filePathWithFormat =
                 commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream()
@@ -138,7 +137,15 @@ public class TableSchemaResolver {
                     + " for file " + filePathWithFormat.getLeft());
             }
           } else {
-            return readSchemaFromLastCompaction(lastCompactionCommit);
+            Option<Pair<HoodieInstant, HoodieCommitMetadata>> morRet = activeTimeline.getLastCommitMetadataToWrite();
+            if (morRet.isPresent()) {
+              HoodieCommitMetadata commitMetadata = morRet.get().getRight();
+              String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny().get();
+              return readSchemaFromBaseFile(new Path(filePath));
+            } else {
+              throw new IllegalArgumentException("Could not find any data file written for commit, "
+                  + "so could not get schema for table " + metaClient.getBasePath());
+            }
           }
         default:
           LOG.error("Unknown table type " + metaClient.getTableType());
