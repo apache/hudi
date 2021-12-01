@@ -140,7 +140,7 @@ public class TestDFSPropertiesConfiguration {
     assertEquals("t3.value", props.getString("string.prop"));
     assertEquals(1354354354, props.getLong("long.prop"));
     assertThrows(IllegalStateException.class, () -> {
-      cfg.addPropsFromFile(new Path(dfsBasePath + "/t4.props"), false);
+      cfg.addPropsFromFile(new Path(dfsBasePath + "/t4.props"));
     }, "Should error out on a self-included file.");
   }
 
@@ -156,7 +156,7 @@ public class TestDFSPropertiesConfiguration {
                     .getResource("props/test.properties")
                     .getPath()
             )
-        ), false);
+        ));
 
     TypedProperties props = cfg.getProps();
 

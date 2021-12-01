@@ -56,10 +56,9 @@ public class DFSPropertiesConfiguration {
   private static final Logger LOG = LogManager.getLogger(DFSPropertiesConfiguration.class);
 
   public static final String DEFAULT_PROPERTIES_FILE = "hudi-defaults.conf";
-
   public static final String CONF_FILE_DIR_ENV_NAME = "HUDI_CONF_DIR";
-
   public static final String DEFAULT_CONF_FILE_DIR = "file:/etc/hudi/conf";
+  public static final Path DEFAULT_PATH = new Path(DEFAULT_CONF_FILE_DIR + "/" + DEFAULT_PROPERTIES_FILE);
 
   // props read from hudi-defaults.conf
   private static TypedProperties GLOBAL_PROPS = loadGlobalProps();
@@ -80,7 +79,7 @@ public class DFSPropertiesConfiguration {
     this.currentFilePath = filePath;
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
-    addPropsFromFile(filePath, false);
+    addPropsFromFile(filePath);
   }
 
   public DFSPropertiesConfiguration() {
@@ -98,9 +97,9 @@ public class DFSPropertiesConfiguration {
     DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration();
     Option<Path> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent()) {
-      conf.addPropsFromFile(defaultConfPath.get(), false);
+      conf.addPropsFromFile(defaultConfPath.get());
     } else {
-      conf.addPropsFromFile(new Path(DEFAULT_CONF_FILE_DIR + "/" + DEFAULT_PROPERTIES_FILE), true);
+      conf.addPropsFromFile(DEFAULT_PATH);
     }
     return conf.getProps();
   }
@@ -118,7 +117,7 @@ public class DFSPropertiesConfiguration {
    *
    * @param filePath File path for configuration file
    */
-  public void addPropsFromFile(Path filePath, boolean isDefaultDirectory) {
+  public void addPropsFromFile(Path filePath) {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
@@ -128,7 +127,7 @@ public class DFSPropertiesConfiguration {
         Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
     );
     try {
-      if (isDefaultDirectory && !fs.exists(filePath)) {
+      if (filePath.equals(DEFAULT_PATH) && !fs.exists(filePath)) {
         LOG.warn("Properties file " + filePath + " not found. Ignoring to load props file");
         return;
       }
@@ -158,7 +157,7 @@ public class DFSPropertiesConfiguration {
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
           Path includeFilePath = new Path(currentFilePath.getParent(), split[1]);
-          addPropsFromFile(includeFilePath, false);
+          addPropsFromFile(includeFilePath);
         } else {
           hoodieConfig.setValue(split[0], split[1]);
         }
