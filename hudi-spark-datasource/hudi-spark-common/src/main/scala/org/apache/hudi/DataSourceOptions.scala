@@ -25,10 +25,10 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.util.ConfigUtils
-import org.apache.hudi.hive.HiveSyncTool
+import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
-import org.apache.hudi.sync.common.{HiveStylePartitionValueExtractor, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
+import org.apache.hudi.sync.common.{HiveStylePartitionValueExtractor, HoodieSyncConfig, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
@@ -402,19 +402,19 @@ object DataSourceWriteOptions {
 
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
-  val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = HIVE_ASSUME_DATE_PARTITION.key()
+  val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.key()
   /** @deprecated Use {@link HIVE_USE_PRE_APACHE_INPUT_FORMAT} and its methods instead */
   @Deprecated
-  val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = HIVE_USE_PRE_APACHE_INPUT_FORMAT.key()
+  val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = HiveSyncConfig.HIVE_USE_PRE_APACHE_INPUT_FORMAT.key()
   /** @deprecated Use {@link HIVE_USE_JDBC} and its methods instead */
   @Deprecated
-  val HIVE_USE_JDBC_OPT_KEY = HIVE_USE_JDBC.key()
+  val HIVE_USE_JDBC_OPT_KEY = HiveSyncConfig.HIVE_USE_JDBC.key()
   /** @deprecated Use {@link HIVE_AUTO_CREATE_DATABASE} and its methods instead */
   @Deprecated
-  val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = HIVE_AUTO_CREATE_DATABASE.key()
+  val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = HiveSyncConfig.HIVE_AUTO_CREATE_DATABASE.key()
   /** @deprecated Use {@link HIVE_IGNORE_EXCEPTIONS} and its methods instead */
   @Deprecated
-  val HIVE_IGNORE_EXCEPTIONS_OPT_KEY = HIVE_IGNORE_EXCEPTIONS.key()
+  val HIVE_IGNORE_EXCEPTIONS_OPT_KEY = HiveSyncConfig.HIVE_IGNORE_EXCEPTIONS.key()
   /** @deprecated Use {@link STREAMING_IGNORE_FAILED_BATCH} and its methods instead */
   @Deprecated
   val STREAMING_IGNORE_FAILED_BATCH_OPT_KEY = STREAMING_IGNORE_FAILED_BATCH.key()
@@ -429,34 +429,34 @@ object DataSourceWriteOptions {
   val DEFAULT_META_SYNC_CLIENT_TOOL_CLASS = META_SYNC_CLIENT_TOOL_CLASS_NAME.defaultValue()
   /** @deprecated Use {@link HIVE_SYNC_ENABLED} and its methods instead */
   @Deprecated
-  val HIVE_SYNC_ENABLED_OPT_KEY = HIVE_SYNC_ENABLED.key()
+  val HIVE_SYNC_ENABLED_OPT_KEY = HiveSyncConfig.HIVE_SYNC_ENABLED.key()
   /** @deprecated Use {@link META_SYNC_ENABLED} and its methods instead */
   @Deprecated
-  val META_SYNC_ENABLED_OPT_KEY = META_SYNC_ENABLED.key()
+  val META_SYNC_ENABLED_OPT_KEY = HoodieSyncConfig.META_SYNC_ENABLED.key()
   /** @deprecated Use {@link HIVE_DATABASE} and its methods instead */
   @Deprecated
-  val HIVE_DATABASE_OPT_KEY = HIVE_DATABASE.key()
+  val HIVE_DATABASE_OPT_KEY = HoodieSyncConfig.META_SYNC_DATABASE_NAME.key()
   /** @deprecated Use {@link HIVE_TABLE} and its methods instead */
   @Deprecated
-  val HIVE_TABLE_OPT_KEY = HIVE_TABLE.key()
+  val HIVE_TABLE_OPT_KEY = HoodieSyncConfig.META_SYNC_DATABASE_NAME.key()
   /** @deprecated Use {@link HIVE_BASE_FILE_FORMAT} and its methods instead */
   @Deprecated
-  val HIVE_BASE_FILE_FORMAT_OPT_KEY = HIVE_BASE_FILE_FORMAT.key()
+  val HIVE_BASE_FILE_FORMAT_OPT_KEY = HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key()
   /** @deprecated Use {@link HIVE_USER} and its methods instead */
   @Deprecated
-  val HIVE_USER_OPT_KEY = HIVE_USER.key()
+  val HIVE_USER_OPT_KEY = HiveSyncConfig.HIVE_USER.key()
   /** @deprecated Use {@link HIVE_PASS} and its methods instead */
   @Deprecated
-  val HIVE_PASS_OPT_KEY = HIVE_PASS.key()
+  val HIVE_PASS_OPT_KEY = HiveSyncConfig.HIVE_PASS.key()
   /** @deprecated Use {@link HIVE_URL} and its methods instead */
   @Deprecated
-  val HIVE_URL_OPT_KEY = HIVE_URL.key()
+  val HIVE_URL_OPT_KEY = HiveSyncConfig.HIVE_URL.key()
   /** @deprecated Use {@link HIVE_PARTITION_FIELDS} and its methods instead */
   @Deprecated
-  val HIVE_PARTITION_FIELDS_OPT_KEY = HIVE_PARTITION_FIELDS.key()
+  val HIVE_PARTITION_FIELDS_OPT_KEY = HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key()
   /** @deprecated Use {@link HIVE_PARTITION_EXTRACTOR_CLASS} and its methods instead */
   @Deprecated
-  val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = HIVE_PARTITION_EXTRACTOR_CLASS.key()
+  val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()
 
   /** @deprecated Use {@link KEYGENERATOR_CLASS} and its methods instead */
   @Deprecated
@@ -566,60 +566,60 @@ object DataSourceWriteOptions {
 
   /** @deprecated Use {@link HIVE_SYNC_ENABLED} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = HIVE_SYNC_ENABLED.defaultValue()
+  val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = HiveSyncConfig.HIVE_SYNC_ENABLED.defaultValue()
   /** @deprecated Use {@link META_SYNC_ENABLED} and its methods instead */
   @Deprecated
-  val DEFAULT_META_SYNC_ENABLED_OPT_VAL = META_SYNC_ENABLED.defaultValue()
+  val DEFAULT_META_SYNC_ENABLED_OPT_VAL = HoodieSyncConfig.META_SYNC_ENABLED.defaultValue()
   /** @deprecated Use {@link HIVE_DATABASE} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_DATABASE_OPT_VAL = HIVE_DATABASE.defaultValue()
+  val DEFAULT_HIVE_DATABASE_OPT_VAL = HoodieSyncConfig.META_SYNC_DATABASE_NAME.defaultValue()
   /** @deprecated Use {@link HIVE_TABLE} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_TABLE_OPT_VAL = HIVE_TABLE.defaultValue()
+  val DEFAULT_HIVE_TABLE_OPT_VAL = HoodieSyncConfig.META_SYNC_TABLE_NAME.defaultValue()
   /** @deprecated Use {@link HIVE_BASE_FILE_FORMAT} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_BASE_FILE_FORMAT_OPT_VAL = HIVE_BASE_FILE_FORMAT.defaultValue()
+  val DEFAULT_HIVE_BASE_FILE_FORMAT_OPT_VAL = HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue()
   /** @deprecated Use {@link HIVE_USER} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_USER_OPT_VAL = HIVE_USER.defaultValue()
+  val DEFAULT_HIVE_USER_OPT_VAL = HiveSyncConfig.HIVE_USER.defaultValue()
   /** @deprecated Use {@link HIVE_PASS} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_PASS_OPT_VAL = HIVE_PASS.defaultValue()
+  val DEFAULT_HIVE_PASS_OPT_VAL = HiveSyncConfig.HIVE_PASS.defaultValue()
   /** @deprecated Use {@link HIVE_URL} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_URL_OPT_VAL = HIVE_URL.defaultValue()
+  val DEFAULT_HIVE_URL_OPT_VAL = HiveSyncConfig.HIVE_URL.defaultValue()
   /** @deprecated Use {@link HIVE_PARTITION_FIELDS} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL = HIVE_PARTITION_FIELDS.defaultValue()
+  val DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL = HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.defaultValue()
   /** @deprecated Use {@link HIVE_PARTITION_EXTRACTOR_CLASS} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL = HIVE_PARTITION_EXTRACTOR_CLASS.defaultValue()
+  val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue()
   /** @deprecated Use {@link HIVE_ASSUME_DATE_PARTITION} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = HIVE_ASSUME_DATE_PARTITION.defaultValue()
+  val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION.defaultValue()
   @Deprecated
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   /** @deprecated Use {@link HIVE_USE_JDBC} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_USE_JDBC_OPT_VAL = HIVE_USE_JDBC.defaultValue()
+  val DEFAULT_HIVE_USE_JDBC_OPT_VAL = HiveSyncConfig.HIVE_USE_JDBC.defaultValue()
   /** @deprecated Use {@link HIVE_AUTO_CREATE_DATABASE} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = HIVE_AUTO_CREATE_DATABASE.defaultValue()
+  val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = HiveSyncConfig.HIVE_AUTO_CREATE_DATABASE.defaultValue()
   /** @deprecated Use {@link HIVE_IGNORE_EXCEPTIONS} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_IGNORE_EXCEPTIONS_OPT_KEY = HIVE_IGNORE_EXCEPTIONS.defaultValue()
+  val DEFAULT_HIVE_IGNORE_EXCEPTIONS_OPT_KEY = HiveSyncConfig.HIVE_IGNORE_EXCEPTIONS.defaultValue()
   /** @deprecated Use {@link HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE} and its methods instead */
   @Deprecated
-  val HIVE_SKIP_RO_SUFFIX = HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key()
+  val HIVE_SKIP_RO_SUFFIX = HiveSyncConfig.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key()
   /** @deprecated Use {@link HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.defaultValue()
+  val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = HiveSyncConfig.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.defaultValue()
   /** @deprecated Use {@link HIVE_SUPPORT_TIMESTAMP_TYPE} and its methods instead */
   @Deprecated
-  val HIVE_SUPPORT_TIMESTAMP = HIVE_SUPPORT_TIMESTAMP_TYPE.key()
+  val HIVE_SUPPORT_TIMESTAMP = HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.key()
   /** @deprecated Use {@link HIVE_SUPPORT_TIMESTAMP_TYPE} and its methods instead */
   @Deprecated
-  val DEFAULT_HIVE_SUPPORT_TIMESTAMP = HIVE_SUPPORT_TIMESTAMP_TYPE.defaultValue()
+  val DEFAULT_HIVE_SUPPORT_TIMESTAMP = HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.defaultValue()
   /** @deprecated Use {@link ASYNC_COMPACT_ENABLE} and its methods instead */
   @Deprecated
   val ASYNC_COMPACT_ENABLE_OPT_KEY = ASYNC_COMPACT_ENABLE.key()

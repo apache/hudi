@@ -42,8 +42,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.sync.common.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.log4j.LogManager;
@@ -54,8 +52,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

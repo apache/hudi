@@ -20,9 +20,9 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, _}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable
@@ -77,8 +77,8 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
-        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
-        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
+        HiveSyncConfig.HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
+        HiveSyncConfig.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
         HoodieWriteConfig.DELETE_PARALLELISM_VALUE.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL
       )

@@ -32,6 +32,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
@@ -657,9 +658,9 @@ class TestHoodieSparkSqlWriter {
     val params = Map(
       "path" -> tempBasePath,
       DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition",
-      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key -> "true",
-      DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> "true"
+      HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> "partition",
+      HiveSyncConfig.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key -> "true",
+      HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.key -> "true"
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
@@ -685,7 +686,7 @@ class TestHoodieSparkSqlWriter {
     val params = Map(
       "path" -> tempBasePath,
       DataSourceWriteOptions.TABLE_NAME.key -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS.key -> "partition"
+      HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> "partition"
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)

@@ -46,12 +46,12 @@ public class HiveServiceProvider {
   }
 
   public void syncToLocalHiveIfNeeded(HoodieTestSuiteWriter writer) {
-    if (this.config.isHiveLocal()) {
+    /*if (this.config.isHiveLocal()) {
       writer.getDeltaStreamerWrapper().getDeltaSyncService().getDeltaSync()
           .syncHive(getLocalHiveServer().getHiveConf());
     } else {
       writer.getDeltaStreamerWrapper().getDeltaSyncService().getDeltaSync().syncHive();
-    }
+    }*/
   }
 
   public void stopLocalHiveServiceIfNeeded() throws IOException {

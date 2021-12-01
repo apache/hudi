@@ -18,8 +18,6 @@
 
 package org.apache.hudi.sync.common;
 
-import org.apache.hudi.sync.common.PartitionValueExtractor;
-
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;

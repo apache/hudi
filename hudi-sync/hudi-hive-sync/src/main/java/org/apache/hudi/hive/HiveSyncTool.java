@@ -51,7 +51,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.parquet.schema.OriginalType.UTF8;
@@ -77,13 +76,10 @@ public class HiveSyncTool extends AbstractSyncTool {
   protected Option<String> roTableName = null;
 
   public HiveSyncTool(TypedProperties props, FileSystem fs) {
-    this(props, new HiveConf(fs.getConf(), HiveConf.class),fs);
+    this(new HiveSyncConfig(props), new HiveConf(fs.getConf(), HiveConf.class),fs);
   }
 
-  public HiveSyncTool(TypedProperties props, HiveConf configuration, FileSystem fs) {
-    this(new HiveSyncConfig(props), configuration,fs);
-  }
-
+  @Deprecated
   public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf configuration, FileSystem fs) {
     super(new TypedProperties(configuration.getAllProperties()), fs);
 

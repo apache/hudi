@@ -20,7 +20,6 @@ package org.apache.hudi.sync.common;
 
 import java.util.Collections;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.sync.common.PartitionValueExtractor;
 
 import java.util.Arrays;
 import java.util.List;

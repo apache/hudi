@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
@@ -108,8 +109,8 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     }
 
     if (config.isValidateHive()) {
-      String database = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_DATABASE().key());
-      String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE().key());
+      String database = context.getWriterContext().getProps().getString(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key());
+      String tableName = context.getWriterContext().getProps().getString(HoodieSyncConfig.META_SYNC_TABLE_NAME.key());
       log.warn("Validating hive table with db : " + database + " and table : " + tableName);
       Dataset<Row> cowDf = session.sql("SELECT * FROM " + database + "." + tableName);
       Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)

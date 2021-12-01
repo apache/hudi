@@ -525,8 +525,9 @@ object HoodieSparkSqlWriter {
     var syncClientToolClassSet = scala.collection.mutable.Set[String]()
     hoodieConfig.getString(META_SYNC_CLIENT_TOOL_CLASS_NAME).split(",").foreach(syncClass => syncClientToolClassSet += syncClass)
 
+    var metaSyncSuccess = false
     if (!hiveSyncEnabled && !metaSyncEnabled) {
-      return true
+      metaSyncSuccess = true
     }
 
     // for backward compatibility
@@ -539,14 +540,14 @@ object HoodieSparkSqlWriter {
       val properties = new TypedProperties()
       properties.putAll(hoodieConfig.getProps)
       properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, basePath.toString)
-      properties.put(HiveSyncConfig.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD))
+      properties.put(HiveSyncConfig.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
       syncClientToolClassSet.foreach(impl => {
         val syncHoodie = ReflectionUtils.loadClass(impl.trim, Array[Class[_]](classOf[TypedProperties], classOf[FileSystem]), properties, fs).asInstanceOf[AbstractSyncTool]
         syncHoodie.syncHoodieTable()
       })
-      return true
+      metaSyncSuccess = true
     }
-    false
+    metaSyncSuccess
   }
 
 /**
