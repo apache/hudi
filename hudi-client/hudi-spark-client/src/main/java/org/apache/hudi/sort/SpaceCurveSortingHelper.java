@@ -149,18 +149,18 @@ public class SpaceCurveSortingHelper {
 
   private static JavaRDD<Row> createZCurveSortedRDD(JavaRDD<Row> originRDD, Map<Integer, StructField> fieldMap, int fieldNum, int fileNum) {
     return originRDD.map(row -> {
-        byte[][] zBytes = fieldMap.entrySet().stream()
-          .map(entry -> {
-            int index = entry.getKey();
-            StructField field = entry.getValue();
-            return mapColumnValueTo8Bytes(row, index, field.dataType());
-          })
-          .toArray(byte[][]::new);
+      byte[][] zBytes = fieldMap.entrySet().stream()
+        .map(entry -> {
+          int index = entry.getKey();
+          StructField field = entry.getValue();
+          return mapColumnValueTo8Bytes(row, index, field.dataType());
+        })
+        .toArray(byte[][]::new);
 
-        // Interleave received bytes to produce Z-curve ordinal
-        byte[] zOrdinalBytes = ZOrderingUtil.interleaving(zBytes, 8);
-        return appendToRow(row, zOrdinalBytes);
-      })
+      // Interleave received bytes to produce Z-curve ordinal
+      byte[] zOrdinalBytes = ZOrderingUtil.interleaving(zBytes, 8);
+      return appendToRow(row, zOrdinalBytes);
+    })
       .sortBy(f -> new ZorderingBinarySort((byte[]) f.get(fieldNum)), true, fileNum);
   }
 
@@ -197,7 +197,7 @@ public class SpaceCurveSortingHelper {
   }
 
   private static Row appendToRow(Row row, Object value) {
-    Object[] currentValues = row.toSeq().toArray(ClassTag.Object());
+    Object[] currentValues = (Object[]) row.toSeq().toArray(ClassTag.Object());
     return RowFactory.create(CollectionUtils.append(currentValues, value));
   }
 
