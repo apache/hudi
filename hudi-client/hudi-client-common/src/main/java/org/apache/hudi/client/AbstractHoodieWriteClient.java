@@ -756,6 +756,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     }
   }
 
+  /**
+   * Trigger archival for the table. This ensures that the number of commits do not explode
+   * and keep increasing unbounded over time.
+   */
   public void archive() {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);

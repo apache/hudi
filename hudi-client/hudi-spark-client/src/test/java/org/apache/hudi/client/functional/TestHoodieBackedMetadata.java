@@ -252,22 +252,40 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
-  public void testMetadataConcurrentWriters() throws Exception {
-    init(HoodieTableType.MERGE_ON_READ);
-    doWriteOperation(testTable, "0000001", INSERT);
-    AtomicInteger commitTime = new AtomicInteger(2);
+  public void testMetadataTableArchival() throws Exception {
+    init(COPY_ON_WRITE, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableFullScan(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .archiveCommitsWith(3, 4)
+            .retainCommits(1)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3).retainCommits(1).build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    AtomicInteger commitTime = new AtomicInteger(1);
+    // trigger 2 regular writes(1 bootstrap commit). just 1 before archival can get triggered.
     int i = 1;
-    for (; i <= 50; i++) {
+    for (; i <= 2; i++) {
       doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
-      Executors.newSingleThreadExecutor().execute(() -> {
-        try {
-          doCluster(testTable, "000000" + (commitTime.getAndIncrement()));
-        } catch (Exception exception) {
-          exception.printStackTrace();
-        }
-      });
     }
-    assertEquals(51, i);
+    // expected num commits = 1 (bootstrap) + 2 (writes) + 1 compaction.
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
+    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 4);
+
+    // trigger a async table service, archival should not kick in, even though conditions are met.
+    doCluster(testTable, "000000" + commitTime.getAndIncrement());
+    metadataTimeline = metadataMetaClient.reloadActiveTimeline();
+    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 5);
+
+    // trigger a regular write operation. archival should kick in.
+    doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+    metadataTimeline = metadataMetaClient.reloadActiveTimeline();
+    assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), 3);
   }
 
   @ParameterizedTest

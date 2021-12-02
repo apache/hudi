@@ -144,9 +144,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         metadataMetaClient.reloadActiveTimeline();
       }
       List<WriteStatus> statuses = writeClient.upsertPreppedRecords(recordRDD, instantTime).collect();
-      if (canTriggerTableService) {
-        writeClient.archive();
-      }
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
@@ -158,6 +155,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       if (canTriggerTableService) {
         compactIfNecessary(writeClient, instantTime);
         doClean(writeClient, instantTime);
+        writeClient.archive();
       }
     }
 
