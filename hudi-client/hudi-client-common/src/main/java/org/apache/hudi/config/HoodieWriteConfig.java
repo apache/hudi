@@ -1101,6 +1101,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
   }
 
+  public boolean isAutoArchive() {
+    return getBoolean(HoodieCompactionConfig.AUTO_ARCHIVE);
+  }
+
   public boolean isAsyncClean() {
     return getBoolean(HoodieCompactionConfig.ASYNC_CLEAN);
   }

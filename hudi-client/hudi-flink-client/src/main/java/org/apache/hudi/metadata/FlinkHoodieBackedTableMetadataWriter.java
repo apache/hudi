@@ -140,6 +140,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       if (canTriggerTableService) {
         compactIfNecessary(writeClient, instantTime);
         doClean(writeClient, instantTime);
+        writeClient.archive();
       }
     }
 
