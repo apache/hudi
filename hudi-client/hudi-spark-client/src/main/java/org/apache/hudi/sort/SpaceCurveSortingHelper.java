@@ -168,6 +168,8 @@ public class SpaceCurveSortingHelper {
   }
 
   private static JavaRDD<Row> createHilbertSortedRDD(JavaRDD<Row> originRDD, Map<Integer, StructField> fieldMap, int fieldNum, int fileNum) {
+    // NOTE: Here {@code mapPartitions} is used to make sure Hilbert curve instance is initialized
+    //       only once per partition
     return originRDD.mapPartitions(rows -> {
       HilbertCurve hilbertCurve = HilbertCurve.bits(63).dimensions(fieldMap.size());
       return new Iterator<Row>() {
