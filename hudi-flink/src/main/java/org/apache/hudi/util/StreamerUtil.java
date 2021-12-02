@@ -160,6 +160,14 @@ public class StreamerUtil {
       Configuration conf,
       boolean enableEmbeddedTimelineService,
       boolean loadFsViewStorageConfig) {
+    return getHoodieClientConfig(conf, enableEmbeddedTimelineService, loadFsViewStorageConfig, false);
+  }
+
+  public static HoodieWriteConfig getHoodieClientConfig(
+      Configuration conf,
+      boolean enableEmbeddedTimelineService,
+      boolean loadFsViewStorageConfig,
+      boolean autoClean) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
@@ -175,6 +183,7 @@ public class StreamerUtil {
                     .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
                     .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
                     .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
+                    .withAutoClean(autoClean)
                     .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
                     // override and hardcode to 20,
                     // actually Flink cleaning is always with parallelism 1 now
@@ -366,12 +375,16 @@ public class StreamerUtil {
    * <p>This expects to be used by client, the driver should start an embedded timeline server.
    */
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext) {
+    return createWriteClient(conf, runtimeContext, false);
+  }
+
+  public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext, boolean autoClean) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
             new SerializableConfiguration(getHadoopConf()),
             new FlinkTaskContextSupplier(runtimeContext));
 
-    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true);
+    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, false, true, autoClean);
     return new HoodieFlinkWriteClient<>(context, writeConfig);
   }
 

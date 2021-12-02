@@ -60,7 +60,7 @@ public class CleanFunction<T> extends AbstractRichFunction
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
-      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext(), true);
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
   }
