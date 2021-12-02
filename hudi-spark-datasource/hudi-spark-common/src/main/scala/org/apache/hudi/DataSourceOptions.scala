@@ -676,7 +676,7 @@ object DataSourceWriteOptions {
   val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()
   /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
   @Deprecated
-  val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = PARTITIONPATH_FIELD.defaultValue()
+  val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = null
 
   /** @deprecated Use {@link TABLE_NAME} and its methods instead */
   @Deprecated
