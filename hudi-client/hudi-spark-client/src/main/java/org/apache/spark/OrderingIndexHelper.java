@@ -100,7 +100,7 @@ public class OrderingIndexHelper {
     }
     // only one col to sort, no need to use z-order
     if (sortCols.size() == 1) {
-      return df.repartitionByRange(fieldNum, org.apache.spark.sql.functions.col(sortCols.get(0)));
+      return df.repartitionByRange(fileNum, org.apache.spark.sql.functions.col(sortCols.get(0)));
     }
     Map<Integer, StructField> fieldMap = sortCols
         .stream().collect(Collectors.toMap(e -> Arrays.asList(df.schema().fields()).indexOf(columnsMap.get(e)), e -> columnsMap.get(e)));
