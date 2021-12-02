@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{ExceptionUtil, HoodieException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hive.HiveSyncConfig
@@ -48,6 +48,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.Matchers.{assertResult, be, convertToAnyShouldWrapper, intercept}
 
+import java.io.IOException
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConversions._
@@ -392,11 +393,12 @@ class TestHoodieSparkSqlWriter {
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
 
     // try write to Hudi
-    val t = assertThrows(classOf[IllegalArgumentException], () => {
+    val t = assertThrows(classOf[IOException], () => {
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD.key, df)
     })
 
-    assertEquals("Property hoodie.datasource.write.partitionpath.field not found", t.getMessage)
+    assertEquals("Could not load key generator class org.apache.hudi.keygen.SimpleKeyGenerator", t.getMessage)
+    assertEquals("Property hoodie.datasource.write.partitionpath.field not found", ExceptionUtil.getRootCause(t).getMessage)
   }
 
   /**
