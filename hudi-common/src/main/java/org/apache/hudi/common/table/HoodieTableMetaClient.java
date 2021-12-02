@@ -317,8 +317,19 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * Get the archived instants as a timeline with all instant details.
+   * This is costly operation, as all data from the archived files are read.
+   *
+   * @return archived instant timeline
+   */
+  public synchronized HoodieArchivedTimeline getArchivedTimelineWithInstantDetails() {
+    return new HoodieArchivedTimeline(this, true);
+  }
+
+  /**
    * Validate table properties.
-   * @param properties Properties from writeConfig.
+   *
+   * @param properties    Properties from writeConfig.
    * @param operationType operation type to be executed.
    */
   public void validateTableProperties(Properties properties, WriteOperationType operationType) {
