@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
@@ -39,7 +40,7 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
@@ -346,7 +347,6 @@ class TestHoodieSparkSqlWriter {
   @Test
   def testInsertDatasetWithoutPrecombineField(): Unit = {
 
-    //create a new table
     val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
 
@@ -373,6 +373,30 @@ class TestHoodieSparkSqlWriter {
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf = dropMetaFields(actualDf)
     assert(df.except(trimmedDf).count() == 0)
+  }
+
+  /**
+   * Test case for insert dataset without partitioning field
+   */
+  @Test
+  def testInsertDatasetWithoutPartitionField(): Unit = {
+    val tableOpts =
+      commonTableModifier
+        .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+
+    // generate the inserts
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val records = DataSourceTestUtils.generateRandomRows(1)
+    val recordsSeq = convertRowListToSeq(records)
+    val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+
+    // try write to Hudi
+    val t = assertThrows(classOf[IllegalArgumentException], () => {
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD.key, df)
+    })
+
+    assertEquals("Property hoodie.datasource.write.partitionpath.field not found", t.getMessage)
   }
 
   /**
