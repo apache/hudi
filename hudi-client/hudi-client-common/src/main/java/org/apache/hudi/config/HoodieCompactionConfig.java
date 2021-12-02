@@ -62,7 +62,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue("true")
       .withDocumentation("When enabled, the archival table service is invoked immediately after each commit,"
           + " to archive commits if we cross a maximum value of commits."
-          + " It's recommended to enable this, to ensure commit file growth is bounded.");
+          + " It's recommended to enable this, to ensure number of active commits is bounded.");
 
   public static final ConfigProperty<String> ASYNC_CLEAN = ConfigProperty
       .key("hoodie.clean.async")
