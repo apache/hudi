@@ -189,8 +189,10 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
 
   @Override
   public void close() throws IOException {
-    ((ExternalSpillableMap) deltaRecordMap).close();
     parquetReader.close();
+    // need clean the tmp file which created by logScanner
+    // Otherwise, for resident process such as presto, the /tmp directory will overflow
+    ((ExternalSpillableMap) deltaRecordMap).close();
   }
 
   @Override
