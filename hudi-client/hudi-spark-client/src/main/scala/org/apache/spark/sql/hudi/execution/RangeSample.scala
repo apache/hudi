@@ -19,6 +19,7 @@
 package org.apache.spark.sql.hudi.execution
 
 import org.apache.hudi.config.HoodieClusteringConfig
+import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
 import org.apache.hudi.optimize.{HilbertCurveUtils, ZOrderingUtil}
 import org.apache.spark.rdd.{PartitionPruningRDD, RDD}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -341,21 +342,16 @@ object RangeSampleSort {
     * support all type data.
     * this method need more resource and cost more time than createOptimizedDataFrameByMapValue
     */
-  def sortDataFrameBySample(df: DataFrame, zCols: Seq[String], fileNum: Int, sortMode: String): DataFrame = {
+  def sortDataFrameBySample(df: DataFrame, layoutOptStrategy: LayoutOptimizationStrategy, orderByCols: Seq[String], targetPartitionsCount: Int): DataFrame = {
     val spark = df.sparkSession
     val columnsMap = df.schema.fields.map(item => (item.name, item)).toMap
     val fieldNum = df.schema.fields.length
-    val checkCols = zCols.filter(col => columnsMap(col) != null)
-    val useHilbert = sortMode match {
-      case "hilbert" => true
-      case "z-order" => false
-      case other => throw new IllegalArgumentException(s"new only support z-order/hilbert optimize but find: ${other}")
-    }
+    val checkCols = orderByCols.filter(col => columnsMap(col) != null)
 
-    if (zCols.isEmpty || checkCols.isEmpty) {
+    if (orderByCols.isEmpty || checkCols.isEmpty) {
       df
     } else {
-      val zFields = zCols.map { col =>
+      val zFields = orderByCols.map { col =>
         val newCol = columnsMap(col)
         if (newCol == null) {
           (-1, null)
@@ -371,8 +367,8 @@ object RangeSampleSort {
         }
       }.filter(_._1 != -1)
       // Complex type found, use createZIndexedDataFrameByRange
-      if (zFields.length != zCols.length) {
-        return sortDataFrameBySampleSupportAllTypes(df, zCols, fileNum)
+      if (zFields.length != orderByCols.length) {
+        return sortDataFrameBySampleSupportAllTypes(df, orderByCols, targetPartitionsCount)
       }
 
       val rawRdd = df.rdd
@@ -447,7 +443,6 @@ object RangeSampleSort {
       val boundBroadCast = spark.sparkContext.broadcast(expandSampleBoundsWithFactor)
 
       val indexRdd = rawRdd.mapPartitions { iter =>
-        val hilbertCurve = if (useHilbert) Some(HilbertCurve.bits(32).dimensions(zFields.length)) else None
         val expandBoundsWithFactor = boundBroadCast.value
         val maxBoundNum = expandBoundsWithFactor.map(_._1.length).max
         val longDecisionBound = new RawDecisionBound(Ordering[Long])
@@ -468,6 +463,11 @@ object RangeSampleSort {
             }
           }
         }
+
+        val hilbertCurve = if (layoutOptStrategy == LayoutOptimizationStrategy.HILBERT)
+          Some(HilbertCurve.bits(32).dimensions(zFields.length))
+        else
+          None
 
         iter.map { row =>
           val values = zFields.zipWithIndex.map { case ((index, field), rawIndex) =>
@@ -515,14 +515,17 @@ object RangeSampleSort {
                 -1
             }
           }.filter(v => v != -1)
-          val mapValues = if (hilbertCurve.isDefined) {
-            HilbertCurveUtils.indexBytes(hilbertCurve.get, values.map(_.toLong).toArray, 32)
-          } else {
-            ZOrderingUtil.interleaving(values.map(ZOrderingUtil.intTo8Byte(_)).toArray, 8)
+
+          val mapValues = layoutOptStrategy match {
+            case LayoutOptimizationStrategy.HILBERT =>
+              HilbertCurveUtils.indexBytes(hilbertCurve.get, values.map(_.toLong).toArray, 32)
+            case LayoutOptimizationStrategy.ZORDER =>
+              ZOrderingUtil.interleaving(values.map(ZOrderingUtil.intTo8Byte(_)).toArray, 8)
           }
+
           Row.fromSeq(row.toSeq ++ Seq(mapValues))
         }
-      }.sortBy(x => ZorderingBinarySort(x.getAs[Array[Byte]](fieldNum)), numPartitions = fileNum)
+      }.sortBy(x => ZorderingBinarySort(x.getAs[Array[Byte]](fieldNum)), numPartitions = targetPartitionsCount)
       val newDF = df.sparkSession.createDataFrame(indexRdd, StructType(
         df.schema.fields ++ Seq(
           StructField(s"index",

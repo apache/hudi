@@ -19,6 +19,7 @@
 package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
 import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.sort.SpaceCurveSortingHelper
 import org.apache.spark.sql.DataFrame
@@ -106,11 +107,11 @@ object SpaceCurveOptimizeBenchMark extends TestHoodieSqlBase {
   def prepareInterTypeTable(tablePath: Path, numRows: Int, col1Range: Int = 1000000, col2Range: Int = 1000000, skewed: Boolean = false): Unit = {
     import spark.implicits._
     val df = spark.range(numRows).map(_ => (Random.nextInt(col1Range), Random.nextInt(col2Range))).toDF("c1_int", "c2_int")
-    val dfOptimizeByMap = SpaceCurveSortingHelper.orderDataFrameByMappingValues(df, Seq("c1_int", "c2_int"), 200, "z-order")
-    val dfOptimizeBySample = SpaceCurveSortingHelper.createOptimizeDataFrameBySample(df, Seq("c1_int", "c2_int"), 200, "z-order")
+    val dfOptimizeByMap = SpaceCurveSortingHelper.orderDataFrameByMappingValues(df, LayoutOptimizationStrategy.ZORDER, Seq("c1_int", "c2_int"), 200)
+    val dfOptimizeBySample = SpaceCurveSortingHelper.orderDataFrameBySamplingValues(df, LayoutOptimizationStrategy.ZORDER, Seq("c1_int", "c2_int"), 200)
 
-    val dfHilbertOptimizeByMap = SpaceCurveSortingHelper.orderDataFrameByMappingValues(df, Seq("c1_int", "c2_int"), 200, "hilbert")
-    val dfHilbertOptimizeBySample = SpaceCurveSortingHelper.createOptimizeDataFrameBySample(df, Seq("c1_int", "c2_int"), 200, "hilbert")
+    val dfHilbertOptimizeByMap = SpaceCurveSortingHelper.orderDataFrameByMappingValues(df, LayoutOptimizationStrategy.HILBERT, Seq("c1_int", "c2_int"), 200)
+    val dfHilbertOptimizeBySample = SpaceCurveSortingHelper.orderDataFrameBySamplingValues(df, LayoutOptimizationStrategy.HILBERT, Seq("c1_int", "c2_int"), 200)
 
     saveAsTable(dfOptimizeByMap, tablePath, if (skewed) "z_sort_byMap_skew" else "z_sort_byMap")
     saveAsTable(dfOptimizeBySample, tablePath, if (skewed) "z_sort_bySample_skew" else "z_sort_bySample")

@@ -27,13 +27,14 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sort.SpaceCurveSortingHelper;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.sort.SpaceCurveSortingHelper;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -106,11 +107,14 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
             .map(String::trim)
             .collect(Collectors.toList());
 
+    HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy =
+        HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(config.getLayoutOptimizationStrategy());
+
     switch (config.getLayoutOptimizationCurveBuildMethod()) {
       case DIRECT:
-        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(sourceDF, orderedCols, numOutputGroups, config.getLayoutOptimizationStrategy());
+        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(sourceDF, layoutOptStrategy, orderedCols, numOutputGroups);
       case SAMPLE:
-        return SpaceCurveSortingHelper.createOptimizeDataFrameBySample(sourceDF, orderedCols, numOutputGroups, config.getLayoutOptimizationStrategy());
+        return SpaceCurveSortingHelper.orderDataFrameBySamplingValues(sourceDF, layoutOptStrategy, orderedCols, numOutputGroups);
       default:
         throw new HoodieException("Not a valid build curve method for doWriteOperation: ");
     }

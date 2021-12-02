@@ -30,8 +30,12 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Clustering specific configs.
@@ -544,30 +548,27 @@ public class HoodieClusteringConfig extends HoodieConfig {
   }
 
   /**
-   * strategy types for optimize layout for hudi data.
+   * Layout optimization strategies such us Z-order, Hilbert space curves, etc
    */
-  public enum BuildLayoutOptimizationStrategy {
+  public enum LayoutOptimizationStrategy {
     ZORDER("z-order"),
     HILBERT("hilbert");
+
+    private static final Map<String, LayoutOptimizationStrategy> valueToEnumMap = createValueToEnumMap();
+
     private final String value;
 
-    BuildLayoutOptimizationStrategy(String value) {
+    LayoutOptimizationStrategy(String value) {
       this.value = value;
     }
 
-    public String toCustomString() {
-      return value;
+    public static LayoutOptimizationStrategy fromValue(String value) {
+      return valueToEnumMap.get(value);
     }
 
-    public static BuildLayoutOptimizationStrategy fromValue(String value) {
-      switch (value.toLowerCase(Locale.ROOT)) {
-        case "z-order":
-          return ZORDER;
-        case "hilbert":
-          return HILBERT;
-        default:
-          throw new HoodieException("Invalid value of Type.");
-      }
+    private static Map<String, LayoutOptimizationStrategy> createValueToEnumMap() {
+      return Arrays.stream(LayoutOptimizationStrategy.values())
+          .collect(Collectors.toMap(e -> e.value, Function.identity()));
     }
   }
 }

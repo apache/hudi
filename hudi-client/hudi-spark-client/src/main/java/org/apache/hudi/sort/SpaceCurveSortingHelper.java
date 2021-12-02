@@ -70,17 +70,22 @@ public class SpaceCurveSortingHelper {
    *
    * <p/>
    * NOTE: Only support base data-types: long,int,short,double,float,string,timestamp,decimal,date,byte.
-   *       This method is more effective than {@link #createOptimizeDataFrameBySample} leveraging
+   *       This method is more effective than {@link #orderDataFrameBySamplingValues} leveraging
    *       data sampling instead of direct mapping
    *
    * @param df Spark {@link Dataset} holding data to be ordered
    * @param orderByCols list of columns to be ordered by
    * @param targetPartitionCount target number of output partitions
-   * @param sortMode target space-curve to map onto
+   * @param layoutOptStrategy target layout optimization strategy
    * @return a {@link Dataset} holding data ordered by mapping tuple of values from provided columns
    *         onto a specified space-curve
    */
-  public static Dataset<Row> orderDataFrameByMappingValues(Dataset<Row> df, List<String> orderByCols, int targetPartitionCount, String sortMode) {
+  public static Dataset<Row> orderDataFrameByMappingValues(
+      Dataset<Row> df,
+      HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
+      List<String> orderByCols,
+      int targetPartitionCount
+  ) {
     Map<String, StructField> columnsMap =
         Arrays.stream(df.schema().fields())
             .collect(Collectors.toMap(StructField::name, Function.identity()));
@@ -113,7 +118,7 @@ public class SpaceCurveSortingHelper {
                 Collectors.toMap(e -> Arrays.asList(df.schema().fields()).indexOf(columnsMap.get(e)), columnsMap::get));
 
     JavaRDD<Row> sortedRDD;
-    switch (HoodieClusteringConfig.BuildLayoutOptimizationStrategy.fromValue(sortMode)) {
+    switch (layoutOptStrategy) {
       case ZORDER:
         sortedRDD = createZCurveSortedRDD(df.toJavaRDD(), fieldMap, fieldNum, targetPartitionCount);
         break;
@@ -121,7 +126,7 @@ public class SpaceCurveSortingHelper {
         sortedRDD = createHilbertSortedRDD(df.toJavaRDD(), fieldMap, fieldNum, targetPartitionCount);
         break;
       default:
-        throw new IllegalArgumentException(String.format("new only support z-order/hilbert optimize but find: %s", sortMode));
+        throw new IllegalArgumentException(String.format("new only support z-order/hilbert optimize but find: %s", layoutOptStrategy));
     }
 
     // Compose new {@code StructType} for ordered RDDs
@@ -183,7 +188,8 @@ public class SpaceCurveSortingHelper {
       zVaules.addAll(scala.collection.JavaConverters.bufferAsJavaListConverter(row.toSeq().toBuffer()).asJava());
       zVaules.add(ZOrderingUtil.interleaving(zBytes, 8));
       return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(zVaules));
-    }).sortBy(f -> new ZorderingBinarySort((byte[]) f.get(fieldNum)), true, fileNum);
+    })
+        .sortBy(f -> new ZorderingBinarySort((byte[]) f.get(fieldNum)), true, fileNum);
   }
 
   private static JavaRDD<Row> createHilbertSortedRDD(JavaRDD<Row> originRDD, Map<Integer, StructField> fieldMap, int fieldNum, int fileNum) {
@@ -243,22 +249,12 @@ public class SpaceCurveSortingHelper {
     }).sortBy(f -> new ZorderingBinarySort((byte[]) f.get(fieldNum)), true, fileNum);
   }
 
-  public static Dataset<Row> orderDataFrameByMappingValues(Dataset<Row> df, String sortCols, int fileNum, String sortMode) {
-    if (sortCols == null || sortCols.isEmpty() || fileNum <= 0) {
-      return df;
-    }
-    return orderDataFrameByMappingValues(df,
-        Arrays.stream(sortCols.split(",")).map(f -> f.trim()).collect(Collectors.toList()), fileNum, sortMode);
-  }
-
-  public static Dataset<Row> createOptimizeDataFrameBySample(Dataset<Row> df, List<String> zCols, int fileNum, String sortMode) {
-    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, JavaConversions.asScalaBuffer(zCols), fileNum, sortMode);
-  }
-
-  public static Dataset<Row> createOptimizeDataFrameBySample(Dataset<Row> df, String zCols, int fileNum, String sortMode) {
-    if (zCols == null || zCols.isEmpty() || fileNum <= 0) {
-      return df;
-    }
-    return createOptimizeDataFrameBySample(df, Arrays.stream(zCols.split(",")).map(f -> f.trim()).collect(Collectors.toList()), fileNum, sortMode);
+  public static Dataset<Row> orderDataFrameBySamplingValues(
+      Dataset<Row> df,
+      HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,
+      List<String> orderByCols,
+      int targetPartitionCount
+  ) {
+    return RangeSampleSort$.MODULE$.sortDataFrameBySample(df, layoutOptStrategy, JavaConversions.asScalaBuffer(orderByCols), targetPartitionCount);
   }
 }
