@@ -41,6 +41,7 @@ import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
@@ -395,7 +396,7 @@ class TestHoodieSparkSqlWriter {
     // try write to Hudi
     val t = assertThrows(classOf[IOException], () => {
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD.key, df)
-    })
+    }.asInstanceOf[Executable])
 
     assertEquals("Could not load key generator class org.apache.hudi.keygen.SimpleKeyGenerator", t.getMessage)
     assertEquals("Property hoodie.datasource.write.partitionpath.field not found", ExceptionUtil.getRootCause(t).getMessage)
