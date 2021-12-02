@@ -449,11 +449,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       autoCleanOnCommit();
-      // We cannot have unbounded commit files. Archive commits if we have to archive
-      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
-      archiveLog.archiveIfRequired(context);
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
+      if (config.isAutoArchive()) {
+        archive(table);
+      }
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
@@ -741,6 +739,31 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public HoodieCleanMetadata clean(boolean skipLocking) {
     return clean(HoodieActiveTimeline.createNewInstantTime(), skipLocking);
+  }
+
+  /**
+   * Trigger archival for the table. This ensures that the number of commits do not explode
+   * and keep increasing unbounded over time.
+   * @param table table to commit on.
+   */
+  protected void archive(HoodieTable<T, I, K, O> table) {
+    try {
+      // We cannot have unbounded commit files. Archive commits if we have to archive
+      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
+      archiveLog.archiveIfRequired(context);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to archive", ioe);
+    }
+  }
+
+  /**
+   * Trigger archival for the table. This ensures that the number of commits do not explode
+   * and keep increasing unbounded over time.
+   */
+  public void archive() {
+    // Create a Hoodie table which encapsulated the commits and files visible
+    HoodieTable table = createTable(config, hadoopConf);
+    archive(table);
   }
 
   /**

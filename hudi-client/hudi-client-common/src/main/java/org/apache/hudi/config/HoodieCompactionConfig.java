@@ -57,6 +57,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " to delete older file slices. It's recommended to enable this, to ensure metadata and data storage"
           + " growth is bounded.");
 
+  public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
+      .key("hoodie.archive.automatic")
+      .defaultValue("true")
+      .withDocumentation("When enabled, the archival table service is invoked immediately after each commit,"
+          + " to archive commits if we cross a maximum value of commits."
+          + " It's recommended to enable this, to ensure number of active commits is bounded.");
+
   public static final ConfigProperty<String> ASYNC_CLEAN = ConfigProperty
       .key("hoodie.clean.async")
       .defaultValue("false")
@@ -490,6 +497,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withAsyncClean(Boolean asyncClean) {
       compactionConfig.setValue(ASYNC_CLEAN, String.valueOf(asyncClean));
+      return this;
+    }
+
+    public Builder withAutoArchive(Boolean autoArchive) {
+      compactionConfig.setValue(AUTO_ARCHIVE, String.valueOf(autoArchive));
       return this;
     }
 
