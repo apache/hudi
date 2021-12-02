@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -36,6 +37,29 @@ import java.util.stream.Stream;
 public class CollectionUtils {
 
   public static final Properties EMPTY_PROPERTIES = new Properties();
+
+  /**
+   * Combines provided arrays into one
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T[] combine(T[] one, T[] another) {
+    T[] combined = (T[]) Array.newInstance(one.getClass().getComponentType(), one.length + another.length);
+    System.arraycopy(one, 0, combined, 0, one.length);
+    System.arraycopy(another, 0, combined, one.length, another.length);
+    return combined;
+  }
+
+  /**
+   * Combines provided array and an element into a new array
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T[] combine(T[] array, T elem) {
+    T[] combined = (T[]) Array.newInstance(array.getClass().getComponentType(), array.length + 1);
+    System.arraycopy(array, 0, combined, 0, array.length);
+    combined[array.length] = elem;
+    return combined;
+  }
+
 
   /**
    * Combines provided {@link List}s into one

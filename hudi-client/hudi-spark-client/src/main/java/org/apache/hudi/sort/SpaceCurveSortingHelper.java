@@ -28,7 +28,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.Row$;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.hudi.execution.RangeSampleSort$;
 import org.apache.spark.sql.hudi.execution.ZorderingBinarySort;
 import org.apache.spark.sql.types.BinaryType;
@@ -51,16 +51,13 @@ import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.davidmoten.hilbert.HilbertCurve;
 import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
+import scala.reflect.ClassTag;
 
 import javax.annotation.Nonnull;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -200,12 +197,9 @@ public class SpaceCurveSortingHelper {
   }
 
   private static Row appendToRow(Row row, Object value) {
-    List<Object> combinedRowValues = CollectionUtils.combine(
-        JavaConverters.seqAsJavaList(row.toSeq()),
-        Collections.singletonList(value)
+    return RowFactory.create(
+        CollectionUtils.combine(row.toSeq().toArray(ClassTag.Object()), value)
     );
-
-    return Row$.MODULE$.apply(JavaConverters.asScalaBuffer(combinedRowValues));
   }
 
   @Nonnull
