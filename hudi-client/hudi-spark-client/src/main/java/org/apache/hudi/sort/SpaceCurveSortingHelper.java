@@ -197,9 +197,8 @@ public class SpaceCurveSortingHelper {
   }
 
   private static Row appendToRow(Row row, Object value) {
-    return RowFactory.create(
-        CollectionUtils.combine(row.toSeq().toArray(ClassTag.Object()), value)
-    );
+    Object[] currentValues = row.toSeq().toArray(ClassTag.Object());
+    return RowFactory.create(CollectionUtils.append(currentValues, value));
   }
 
   @Nonnull

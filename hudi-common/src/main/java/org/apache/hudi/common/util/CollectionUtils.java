@@ -53,7 +53,7 @@ public class CollectionUtils {
    * Combines provided array and an element into a new array
    */
   @SuppressWarnings("unchecked")
-  public static <T> T[] combine(T[] array, T elem) {
+  public static <T> T[] append(T[] array, T elem) {
     T[] combined = (T[]) Array.newInstance(array.getClass().getComponentType(), array.length + 1);
     System.arraycopy(array, 0, combined, 0, array.length);
     combined[array.length] = elem;
