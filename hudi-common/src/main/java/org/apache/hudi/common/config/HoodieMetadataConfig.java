@@ -74,20 +74,20 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Maximum delta commits before compaction occurs
   public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.commits")
-      .defaultValue(10)
+      .defaultValue(2)
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
   // Archival settings
   public static final ConfigProperty<Integer> MIN_COMMITS_TO_KEEP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.min.commits")
-      .defaultValue(20)
+      .defaultValue(2)
       .sinceVersion("0.7.0")
       .withDocumentation("Controls the archival of the metadata table’s timeline.");
 
   public static final ConfigProperty<Integer> MAX_COMMITS_TO_KEEP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.max.commits")
-      .defaultValue(30)
+      .defaultValue(3)
       .sinceVersion("0.7.0")
       .withDocumentation("Controls the archival of the metadata table’s timeline.");
 

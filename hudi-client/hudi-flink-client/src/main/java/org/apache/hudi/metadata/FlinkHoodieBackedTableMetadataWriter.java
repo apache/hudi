@@ -127,6 +127,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       List<WriteStatus> statuses = records.size() > 0
           ? writeClient.upsertPreppedRecords(recordList, instantTime)
           : Collections.emptyList();
+      if (canTriggerTableService) {
+        writeClient.archive();
+      }
       statuses.forEach(writeStatus -> {
         if (writeStatus.hasErrors()) {
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);

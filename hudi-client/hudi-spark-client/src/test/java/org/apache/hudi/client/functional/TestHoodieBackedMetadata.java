@@ -107,6 +107,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -248,6 +249,25 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000007");
     doWriteOperation(testTable, "0000008");
     validateMetadata(testTable, emptyList(), true);
+  }
+
+  @Test
+  public void testMetadataConcurrentWriters() throws Exception {
+    init(HoodieTableType.MERGE_ON_READ);
+    doWriteOperation(testTable, "0000001", INSERT);
+    AtomicInteger commitTime = new AtomicInteger(2);
+    int i = 1;
+    for (; i <= 50; i++) {
+      doWriteOperation(testTable, "000000" + (commitTime.getAndIncrement()), INSERT);
+      Executors.newSingleThreadExecutor().execute(() -> {
+        try {
+          doCluster(testTable, "000000" + (commitTime.getAndIncrement()));
+        } catch (Exception exception) {
+          exception.printStackTrace();
+        }
+      });
+    }
+    assertEquals(51, i);
   }
 
   @ParameterizedTest
