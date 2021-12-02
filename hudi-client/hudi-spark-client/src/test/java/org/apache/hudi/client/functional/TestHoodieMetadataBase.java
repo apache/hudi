@@ -292,7 +292,7 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
             .enable(useFileListingMetadata)
             .enableFullScan(enableFullScan)
             .enableMetrics(enableMetrics)
-            .withPopulateMetaFields(false)
+            .withPopulateMetaFields(HoodieMetadataConfig.POPULATE_META_FIELDS.defaultValue())
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
