@@ -41,7 +41,8 @@ public class CollectionUtils {
    * Combines provided {@link List}s into one
    */
   public static <E> List<E> combine(List<E> one, List<E> another) {
-    ArrayList<E> combined = new ArrayList<>(one);
+    ArrayList<E> combined = new ArrayList<>(one.size() + another.size());
+    combined.addAll(one);
     combined.addAll(another);
     return combined;
   }
