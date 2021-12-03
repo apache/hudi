@@ -49,6 +49,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
@@ -887,6 +888,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getKeyGeneratorClass() {
     return getString(KEYGENERATOR_CLASS_NAME);
+  }
+
+  public boolean isConsistentLogicalTimestampEnabled() {
+    return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
   }
 
   public Boolean shouldAutoCommit() {
