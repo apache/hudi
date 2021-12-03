@@ -30,7 +30,6 @@ module.exports = {
                 'schema_evolution',
                 'key_generation',
                 'concurrency_control',
-                'markers',
             ],
         },
         {
@@ -52,6 +51,7 @@ module.exports = {
                 'compaction',
                 'clustering',
                 'hoodie_cleaner',
+                'markers',
                 'file_sizing',
                 'snapshot_exporter',
                 'precommit_validator'
