@@ -94,6 +94,11 @@ public class WriteProfile {
   private long reloadedCheckpointId;
 
   /**
+   * The file system view cache for one checkpoint interval.
+   */
+  protected SyncableFileSystemView fsView;
+
+  /**
    * Metadata cache to reduce IO of metadata files.
    */
   private final Map<String, HoodieCommitMetadata> metadataCache;
@@ -111,6 +116,7 @@ public class WriteProfile {
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
     this.metaClient = StreamerUtil.createMetaClient(config.getBasePath(), context.getHadoopConf().get());
     this.metadataCache = new HashMap<>();
+    this.fsView = getFileSystemView();
     // profile the record statistics on construction
     recordProfile();
   }
@@ -190,7 +196,7 @@ public class WriteProfile {
 
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-      List<HoodieBaseFile> allFiles = getFileSystemView()
+      List<HoodieBaseFile> allFiles = fsView
           .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
@@ -243,6 +249,7 @@ public class WriteProfile {
       return;
     }
     this.metaClient.reloadActiveTimeline();
+    this.fsView = getFileSystemView();
     recordProfile();
     cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstants());
     this.smallFilesMap.clear();
