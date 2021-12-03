@@ -50,7 +50,7 @@ public class DeltaWriteProfile extends WriteProfile {
     List<SmallFile> smallFileLocations = new ArrayList<>();
 
     // Init here since this class (and member variables) might not have been initialized
-    HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
 
     // Find out all eligible small file slices
     if (!commitTimeline.empty()) {
@@ -90,7 +90,7 @@ public class DeltaWriteProfile extends WriteProfile {
   }
 
   protected SyncableFileSystemView getFileSystemView() {
-    return (SyncableFileSystemView) this.table.getSliceView();
+    return (SyncableFileSystemView) getTable().getSliceView();
   }
 
   private long getTotalFileSize(FileSlice fileSlice) {
