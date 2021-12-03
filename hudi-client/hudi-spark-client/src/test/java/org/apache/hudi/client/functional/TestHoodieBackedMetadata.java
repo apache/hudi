@@ -370,7 +370,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @throws Exception
    */
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
+  @ValueSource(booleans = {true, false})
   public void testVirtualKeysInBaseFiles(boolean populateMetaFields) throws Exception {
     HoodieTableType tableType = MERGE_ON_READ;
     init(tableType, false);
@@ -380,7 +380,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enableFullScan(true)
             .enableMetrics(false)
             .withPopulateMetaFields(populateMetaFields)
-            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
             .build()).build();
     initWriteConfigAndMetatableWriter(writeConfig, true);
 
@@ -395,10 +395,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
     HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
+    metadataMetaClient.reloadActiveTimeline();
 
-    HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient, true);
-    List<HoodieBaseFile> baseFiles = table.getHoodieView().getLatestBaseFiles().collect(Collectors.toList());
-    HoodieBaseFile baseFile = baseFiles.get(0);
+    HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
+    table.getHoodieView().sync();
+    List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
+    HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
         new CacheConfig(context.getHadoopConf().get()));
     List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
