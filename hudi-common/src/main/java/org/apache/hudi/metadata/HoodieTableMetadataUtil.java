@@ -352,7 +352,7 @@ public class HoodieTableMetadataUtil {
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline);
-    return fsView.getLatestFileSlices(partition).sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
+    return fsView.getLatestUnCompactedFileSlices(partition).sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
         .collect(Collectors.toList());
   }
 }

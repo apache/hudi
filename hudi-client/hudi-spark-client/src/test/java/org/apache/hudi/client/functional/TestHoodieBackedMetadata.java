@@ -413,6 +413,58 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     });
   }
 
+
+  /**
+   * Tests that virtual key configs are honored in base files after compaction in metadata table.
+   *
+   * @throws Exception
+   */
+  @Test
+  public void testMetadataTableWithPendingCompaction() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableFullScan(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    doWriteOperation(testTable, "0000001", INSERT);
+    // create an inflight compaction in metadata table.
+    // not easy to create an inflight in metadata table directly, hence letting compaction succeed and then deleting the completed instant.
+    // this new write is expected to trigger metadata table compaction
+    String commitInstant = "0000002";
+    doWriteOperation(testTable, commitInstant, INSERT);
+
+    HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
+    String metadataCompactionInstant = commitInstant + "001";
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+    assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);
+
+    validateMetadata(testTable);
+    // Fetch compaction Commit file and rename to some other file. completed compaction meta file should have some serialized info that table interprets
+    // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
+    java.nio.file.Path parentPath = Paths.get(metadataTableBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    java.nio.file.Path metaFilePath = parentPath.resolve(metadataCompactionInstant + HoodieTimeline.COMMIT_EXTENSION);
+    java.nio.file.Path dummyFilePath = parentPath.resolve(metadataCompactionInstant + "dummy");
+    Files.move(metaFilePath, dummyFilePath);
+    // this validation will exercise the code path where a compaction is inflight in metadata table, but still metadata based file listing should match non
+    // metadata based file listing.
+    validateMetadata(testTable);
+
+    // let the compaction succeed in metadata and validation should succeed.
+    Files.move(dummyFilePath, metaFilePath);
+    validateMetadata(testTable);
+
+    // add few more write and validate
+    doWriteOperation(testTable, "0000003", INSERT);
+    doWriteOperation(testTable, "0000004", UPSERT);
+    validateMetadata(testTable);
+  }
+
   /**
    * Test rollback of various table operations sync to Metadata Table correctly.
    */
