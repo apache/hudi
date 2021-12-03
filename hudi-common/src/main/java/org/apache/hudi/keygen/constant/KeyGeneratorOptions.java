@@ -52,7 +52,7 @@ public class KeyGeneratorOptions extends HoodieConfig {
 
   public static final ConfigProperty<String> PARTITIONPATH_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.field")
-      .defaultValue("partitionpath")
+      .noDefaultValue()
       .withDocumentation("Partition path field. Value to be used at the partitionPath component of HoodieKey. "
           + "Actual value ontained by invoking .toString()");
 
