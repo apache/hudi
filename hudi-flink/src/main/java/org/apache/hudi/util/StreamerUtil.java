@@ -367,12 +367,23 @@ public class StreamerUtil {
    */
   @SuppressWarnings("rawtypes")
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext) {
+    return createWriteClient(conf, runtimeContext, true);
+  }
+
+  /**
+   * Creates the Flink write client.
+   *
+   * <p>This expects to be used by client, set flag {@code loadFsViewStorageConfig} to use
+   * remote filesystem view storage config, or an in-memory filesystem view storage is used.
+   */
+  @SuppressWarnings("rawtypes")
+  public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext, boolean loadFsViewStorageConfig) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
             new SerializableConfiguration(getHadoopConf()),
             new FlinkTaskContextSupplier(runtimeContext));
 
-    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true);
+    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, loadFsViewStorageConfig);
     return new HoodieFlinkWriteClient<>(context, writeConfig);
   }
 
