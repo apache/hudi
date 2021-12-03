@@ -32,6 +32,7 @@ import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SmallFile;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
@@ -67,9 +68,9 @@ public class WriteProfile {
   private final Path basePath;
 
   /**
-   * The hoodie table.
+   * The meta client.
    */
-  protected final HoodieTable<?, ?, ?, ?> table;
+  protected final HoodieTableMetaClient metaClient;
 
   /**
    * The average record size.
@@ -97,12 +98,18 @@ public class WriteProfile {
    */
   private final Map<String, HoodieCommitMetadata> metadataCache;
 
+  /**
+   * The engine context.
+   */
+  private final HoodieFlinkEngineContext context;
+
   public WriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     this.config = config;
+    this.context = context;
     this.basePath = new Path(config.getBasePath());
     this.smallFilesMap = new HashMap<>();
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
-    this.table = HoodieFlinkTable.create(config, context);
+    this.metaClient = StreamerUtil.createMetaClient(config.getBasePath(), context.getHadoopConf().get());
     this.metadataCache = new HashMap<>();
     // profile the record statistics on construction
     recordProfile();
@@ -117,7 +124,11 @@ public class WriteProfile {
   }
 
   public HoodieTableMetaClient getMetaClient() {
-    return this.table.getMetaClient();
+    return this.metaClient;
+  }
+
+  protected HoodieTable<?, ?, ?, ?> getTable() {
+    return HoodieFlinkTable.create(config, context);
   }
 
   /**
@@ -127,7 +138,7 @@ public class WriteProfile {
   private long averageBytesPerRecord() {
     long avgSize = config.getCopyOnWriteRecordSizeEstimate();
     long fileSizeThreshold = (long) (config.getRecordSizeEstimationThreshold() * config.getParquetSmallFileLimit());
-    HoodieTimeline commitTimeline = table.getMetaClient().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     if (!commitTimeline.empty()) {
       // Go over the reverse ordered commits to get a more recent estimate of average record size.
       Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
@@ -175,7 +186,7 @@ public class WriteProfile {
     // smallFiles only for partitionPath
     List<SmallFile> smallFileLocations = new ArrayList<>();
 
-    HoodieTimeline commitTimeline = table.getMetaClient().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
 
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
@@ -198,7 +209,7 @@ public class WriteProfile {
   }
 
   protected SyncableFileSystemView getFileSystemView() {
-    return (SyncableFileSystemView) HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) table.getContext()).getBaseFileOnlyView();
+    return (SyncableFileSystemView) getTable().getBaseFileOnlyView();
   }
 
   /**
@@ -231,9 +242,9 @@ public class WriteProfile {
       // already reloaded
       return;
     }
-    this.table.getMetaClient().reloadActiveTimeline();
+    this.metaClient.reloadActiveTimeline();
     recordProfile();
-    cleanMetadataCache(this.table.getMetaClient().getCommitsTimeline().filterCompletedInstants().getInstants());
+    cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstants());
     this.smallFilesMap.clear();
     this.reloadedCheckpointId = checkpointId;
   }
