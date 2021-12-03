@@ -365,6 +365,7 @@ public class StreamerUtil {
    *
    * <p>This expects to be used by client, the driver should start an embedded timeline server.
    */
+  @SuppressWarnings("rawtypes")
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
@@ -382,17 +383,20 @@ public class StreamerUtil {
    *
    * <p>The task context supplier is a constant: the write token is always '0-1-0'.
    */
+  @SuppressWarnings("rawtypes")
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf) throws IOException {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
+    // build the write client to start the embedded timeline server
+    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, writeConfig);
     // create the filesystem view storage properties for client
-    FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
+    final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
     // rebuild the view storage config with simplified options.
     FileSystemViewStorageConfig rebuilt = FileSystemViewStorageConfig.newBuilder()
         .withStorageType(viewStorageConfig.getStorageType())
         .withRemoteServerHost(viewStorageConfig.getRemoteViewServerHost())
         .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort()).build();
     ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt);
-    return new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, writeConfig);
+    return writeClient;
   }
 
   /**
