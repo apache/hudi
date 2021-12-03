@@ -118,23 +118,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
 
-  public static final ConfigProperty<Boolean> ENABLE_INLINE_READING = ConfigProperty
-      .key(METADATA_PREFIX + ".enable.inline.reading")
-      .defaultValue(true)
-      .sinceVersion("0.10.0")
-      .withDocumentation("Enable inline reading of Log files. By default log block contents are read as byte[] using regular input stream and records "
-          + "are deserialized from it. Enabling this will read each log block as an inline file and read records from the same. For instance, "
-          + "for HFileDataBlock, a inline file will be read using HFileReader.");
-
   public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
       .key(METADATA_PREFIX + ".enable.full.scan.log.files")
       .defaultValue(true)
       .sinceVersion("0.10.0")
       .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
 
-  public static final ConfigProperty<String> POPULATE_META_FIELDS = ConfigProperty
+  public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
-      .defaultValue("false")
+      .defaultValue(true)
       .sinceVersion("0.10.0")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
 
