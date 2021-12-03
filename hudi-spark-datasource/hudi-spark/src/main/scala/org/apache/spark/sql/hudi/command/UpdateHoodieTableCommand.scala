@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateTable}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.types.StructField
 
 import scala.collection.JavaConverters._
 
@@ -89,7 +89,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
     val catalogProperties = hoodieCatalogTable.catalogProperties
     val tableConfig = hoodieCatalogTable.tableConfig
 
-    val preCombineColumn = Option(tableConfig.getPreCombineField).getOrElse("")
+    val preCombineColumn = Option(tableConfig.getPreCombineField).getOrElse(PRECOMBINE_FIELD.defaultValue())
     assert(hoodieCatalogTable.primaryKeys.nonEmpty,
       s"There are no primary key in table $tableId, cannot execute update operator")
     val enableHive = isEnableHive(sparkSession)

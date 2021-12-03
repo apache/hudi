@@ -208,7 +208,7 @@ object InsertIntoHoodieTableCommand extends Logging {
     val options = hoodieCatalogTable.catalogProperties ++ tableConfig.getProps.asScala.toMap ++ extraOptions
     val parameters = withSparkConf(sparkSession, options)()
 
-    val preCombineColumn = hoodieCatalogTable.preCombineKey.getOrElse("")
+    val preCombineColumn = hoodieCatalogTable.preCombineKey.getOrElse(PRECOMBINE_FIELD.defaultValue())
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")

@@ -92,7 +92,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
       .key("hoodie.table.precombine.field")
-      .noDefaultValue()
+      .defaultValue("ts")
       .withDocumentation("Field used in preCombining before actual write. By default, when two records have the same key value, "
           + "the largest value for the precombine field determined by Object.compareTo(..), is picked.");
 

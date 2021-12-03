@@ -239,9 +239,9 @@ object HoodieSparkSqlWriter {
                 HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
             val hoodieAllIncomingRecords = genericRecords.map(gr => {
               val processedRecord = getProcessedRecord(partitionColumns, gr, dropPartitionColumns)
-              val hoodieRecord = if (shouldCombine) {
-                val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD), false)
-                  .asInstanceOf[Comparable[_]]
+              val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD), false)
+                .asInstanceOf[Comparable[_]]
+              val hoodieRecord = if (shouldCombine && orderingVal != null) {
                 DataSourceUtils.createHoodieRecord(processedRecord,
                   orderingVal, keyGenerator.getKey(gr),
                   hoodieConfig.getString(PAYLOAD_CLASS_NAME))

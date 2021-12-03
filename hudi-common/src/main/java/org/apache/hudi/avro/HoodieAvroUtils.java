@@ -50,6 +50,8 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -74,6 +76,7 @@ import java.util.zip.InflaterInputStream;
  * Helper class to do common stuff across Avro.
  */
 public class HoodieAvroUtils {
+  private static final Logger LOG = LogManager.getLogger(HoodieAvroUtils.class);
 
   private static ThreadLocal<BinaryEncoder> reuseEncoder = ThreadLocal.withInitial(() -> null);
 
@@ -480,9 +483,9 @@ public class HoodieAvroUtils {
     if (returnNullIfNotFound) {
       return null;
     } else if (valueNode.getSchema().getField(parts[i]) == null) {
-      throw new HoodieException(
-          fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
-              + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+      LOG.warn(fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+          + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+      return null;
     } else {
       throw new HoodieException("The value of " + parts[i] + " can not be null");
     }

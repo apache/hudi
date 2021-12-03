@@ -70,7 +70,7 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .withDocumentation("Comma separated list of file paths to read within a Hudi table.")
 
-  val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
+  val READ_PRE_COMBINE_FIELD: ConfigProperty[String] = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.file.index.enable")
