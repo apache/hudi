@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.AbstractTableFileSystemView;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.commit.SmallFile;
 
@@ -55,13 +55,11 @@ public class DeltaWriteProfile extends WriteProfile {
     // Find out all eligible small file slices
     if (!commitTimeline.empty()) {
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-      // initialize the filesystem view based on the commit metadata
-      initFileSystemView();
-      // find smallest file in partition and append to it
+      // find the smallest file in partition and append to it
       List<FileSlice> allSmallFileSlices = new ArrayList<>();
       // If we can index log files, we can add more inserts to log files for fileIds including those under
       // pending compaction.
-      List<FileSlice> allFileSlices = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
+      List<FileSlice> allFileSlices = getFileSystemView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
           .collect(Collectors.toList());
       for (FileSlice fileSlice : allFileSlices) {
         if (isSmallFile(fileSlice)) {
@@ -91,8 +89,8 @@ public class DeltaWriteProfile extends WriteProfile {
     return smallFileLocations;
   }
 
-  protected AbstractTableFileSystemView getFileSystemView() {
-    return (AbstractTableFileSystemView) this.table.getSliceView();
+  protected SyncableFileSystemView getFileSystemView() {
+    return (SyncableFileSystemView) this.table.getSliceView();
   }
 
   private long getTotalFileSize(FileSlice fileSlice) {

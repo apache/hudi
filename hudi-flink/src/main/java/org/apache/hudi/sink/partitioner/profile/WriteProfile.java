@@ -23,9 +23,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.AbstractTableFileSystemView;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -92,11 +93,6 @@ public class WriteProfile {
   private long reloadedCheckpointId;
 
   /**
-   * The file system view cache for one checkpoint interval.
-   */
-  protected AbstractTableFileSystemView fsView;
-
-  /**
    * Metadata cache to reduce IO of metadata files.
    */
   private final Map<String, HoodieCommitMetadata> metadataCache;
@@ -120,8 +116,8 @@ public class WriteProfile {
     return recordsPerBucket;
   }
 
-  public HoodieTable<?, ?, ?, ?> getTable() {
-    return table;
+  public HoodieTableMetaClient getMetaClient() {
+    return this.table.getMetaClient();
   }
 
   /**
@@ -183,9 +179,7 @@ public class WriteProfile {
 
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-      // initialize the filesystem view based on the commit metadata
-      initFileSystemView();
-      List<HoodieBaseFile> allFiles = fsView
+      List<HoodieBaseFile> allFiles = getFileSystemView()
           .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
@@ -203,15 +197,8 @@ public class WriteProfile {
     return smallFileLocations;
   }
 
-  @VisibleForTesting
-  public void initFileSystemView() {
-    if (fsView == null) {
-      fsView = getFileSystemView();
-    }
-  }
-
-  protected AbstractTableFileSystemView getFileSystemView() {
-    return (AbstractTableFileSystemView) this.table.getBaseFileOnlyView();
+  protected SyncableFileSystemView getFileSystemView() {
+    return (SyncableFileSystemView) HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) table.getContext()).getBaseFileOnlyView();
   }
 
   /**
@@ -245,9 +232,7 @@ public class WriteProfile {
       return;
     }
     this.table.getMetaClient().reloadActiveTimeline();
-    this.table.getHoodieView().sync();
     recordProfile();
-    this.fsView = null;
     cleanMetadataCache(this.table.getMetaClient().getCommitsTimeline().filterCompletedInstants().getInstants());
     this.smallFilesMap.clear();
     this.reloadedCheckpointId = checkpointId;
