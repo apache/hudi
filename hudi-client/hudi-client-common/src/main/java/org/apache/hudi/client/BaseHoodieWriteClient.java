@@ -767,15 +767,25 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
     if (!tableServicesEnabled(config)) {
       return null;
     }
-    if (scheduleInline) {
-      scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
-    }
     LOG.info("Cleaner started");
     final Timer.Context timerContext = metrics.getCleanCtx();
     LOG.info("Cleaned failed attempts if any");
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.CLEAN_ACTION, () -> rollbackFailedWrites(skipLocking));
-    HoodieCleanMetadata metadata = createTable(config, hadoopConf).clean(context, cleanInstantTime, skipLocking);
+
+    // If there are pending clean operations, attempt them before scheduling the next clean. This prevents the
+    // next clean from deciding to clean the same files which might be under clean from pending operations.
+    HoodieCleanMetadata metadata = null;
+    HoodieTable table = createTable(config, hadoopConf);
+    if (table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent()) {
+      metadata = table.clean(context, cleanInstantTime, skipLocking);
+    }
+    if (scheduleInline) {
+      scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
+      table.getMetaClient().reloadActiveTimeline();
+      metadata = table.clean(context, cleanInstantTime, skipLocking);
+    }
+
     if (timerContext != null && metadata != null) {
       long durationMs = metrics.getDurationInMs(timerContext.stop());
       metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());

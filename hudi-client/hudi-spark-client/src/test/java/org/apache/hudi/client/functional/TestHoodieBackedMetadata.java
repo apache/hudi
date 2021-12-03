@@ -19,6 +19,8 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -1733,6 +1735,58 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
 
       // Post rollback commit and metadata should be valid
+      validateMetadata(client);
+    }
+  }
+
+  /**
+   * Test a single cleaner running previous leftover clean before initiating a new clean.
+   */
+  @Test
+  public void testMultiClean() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false).withEmbeddedTimelineServerEnabled(false).build();
+
+    int index = 0;
+    String cleanInstantTime;
+    final String partition = "2015/03/16";
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Three writes so we can initiate a clean
+      for (; index < 3; ++index) {
+        String newCommitTime = "00" + index;
+        List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
+        client.startCommitWithTime(newCommitTime);
+        client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+      }
+    }
+
+    // mimic failed/leftover clean by scheduling a clean but not performing it
+    cleanInstantTime = "00" + index++;
+    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext);
+    Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, cleanInstantTime, Option.empty());
+    assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size(), 1);
+    assertEquals(metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().countInstants(), 1);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Next commit. This is required so that there is an additional file version to clean.
+      String newCommitTime = "00" + index++;
+      List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
+      client.startCommitWithTime(newCommitTime);
+      client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+
+      // Initiate another clean. The previous leftover clean will be attempted first, followed by another clean
+      // due to the commit above.
+      String newCleanInstantTime = "00" + index++;
+      HoodieCleanMetadata cleanMetadata = client.clean(newCleanInstantTime);
+      // 1 partition should be cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
+      // 1 file cleaned
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 0);
+      assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
+
       validateMetadata(client);
     }
   }

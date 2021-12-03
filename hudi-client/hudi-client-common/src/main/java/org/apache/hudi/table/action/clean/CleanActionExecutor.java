@@ -208,7 +208,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       if (!skipLocking) {
         this.txnManager.beginTransaction(Option.empty(), Option.empty());
       }
-      writeTableMetadata(metadata);
+      writeTableMetadata(metadata, inflightInstant.getTimestamp());
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
@@ -240,9 +240,13 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
             LOG.warn("Failed to perform previous clean operation, instant: " + hoodieInstant, e);
           }
         }
+        table.getMetaClient().reloadActiveTimeline();
+        if (config.isMetadataTableEnabled()) {
+          table.getHoodieView().sync();
+        }
       });
-      table.getMetaClient().reloadActiveTimeline();
     }
+
     // return the last clean metadata for now
     // TODO (NA) : Clean only the earliest pending clean just like how we do for other table services
     // This requires the CleanActionExecutor to be refactored as BaseCommitActionExecutor
