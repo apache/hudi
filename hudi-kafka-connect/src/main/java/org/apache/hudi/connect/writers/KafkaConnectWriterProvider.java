@@ -73,7 +73,7 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
       this.keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(
           new TypedProperties(connectConfigs.getProps()));
 
-      // Create the write client to write some records in
+      // This is the writeConfig for the writers for the individual Transaction Coordinators
       writeConfig = HoodieWriteConfig.newBuilder()
           .withEngineType(EngineType.JAVA)
           .withProperties(connectConfigs.getProps())

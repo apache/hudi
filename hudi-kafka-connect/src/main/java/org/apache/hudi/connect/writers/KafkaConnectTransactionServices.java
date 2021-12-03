@@ -27,11 +27,14 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
@@ -77,9 +80,15 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
   public KafkaConnectTransactionServices(KafkaConnectConfigs connectConfigs) throws HoodieException {
     this.connectConfigs = connectConfigs;
+    // This is the writeConfig for the Transaction Coordinator
     this.writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withProperties(connectConfigs.getProps())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            // we will trigger cleaning manually, to control the instant times
+            .withAutoClean(false)
+            // we will trigger compaction manually, to control the instant times
+            .withInlineCompaction(false).build())
         .build();
 
     tableBasePath = writeConfig.getBasePath();
