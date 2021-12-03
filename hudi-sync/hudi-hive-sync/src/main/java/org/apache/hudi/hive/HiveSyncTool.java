@@ -75,17 +75,13 @@ public class HiveSyncTool extends AbstractSyncTool {
   protected String snapshotTableName = null;
   protected Option<String> roTableName = null;
 
-  public HiveSyncTool(TypedProperties props, FileSystem fs) {
-    this(new HiveSyncConfig(props), new HiveConf(fs.getConf(), HiveConf.class), fs);
-  }
-
-  public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf configuration, FileSystem fs) {
-    super(new TypedProperties(configuration.getAllProperties()), fs);
-
-    LOG.error("WNI VIMP VIMP " + configuration);
+  public HiveSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
+    super(props, conf, fs);
+    LOG.error("WNI VIMP VIMP " + conf);
+    hiveSyncConfig = new HiveSyncConfig(props);
 
     try {
-      this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, configuration, fs);
+      this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, new HiveConf(conf, HiveConf.class), fs);
     } catch (RuntimeException e) {
       if (hiveSyncConfig.ignoreExceptions) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
@@ -94,7 +90,6 @@ public class HiveSyncTool extends AbstractSyncTool {
       }
     }
 
-    this.hiveSyncConfig = hiveSyncConfig;
     // Set partitionFields to empty, when the NonPartitionedExtractor is used
     if (NonPartitionedExtractor.class.getName().equals(hiveSyncConfig.partitionValueExtractorClass)) {
       LOG.warn("Set partitionFields to empty, since the NonPartitionedExtractor is used");

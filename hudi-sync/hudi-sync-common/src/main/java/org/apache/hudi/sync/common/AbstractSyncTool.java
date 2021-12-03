@@ -19,18 +19,19 @@ package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.TypedProperties;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
-import java.util.Properties;
-
 public abstract class AbstractSyncTool {
-  protected final FileSystem fileSystem;
+  protected final Configuration conf;
+  protected final FileSystem fs;
   protected final HoodieSyncConfig syncConfig;
-  protected Properties props;
+  protected TypedProperties props;
 
-  public AbstractSyncTool(TypedProperties props, FileSystem fileSystem) {
+  public AbstractSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
     this.props = props;
-    this.fileSystem = fileSystem;
+    this.conf = conf;
+    this.fs = fs;
     this.syncConfig = new HoodieSyncConfig(props);
   }
 

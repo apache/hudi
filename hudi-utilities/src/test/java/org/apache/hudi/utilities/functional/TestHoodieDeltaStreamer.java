@@ -1079,7 +1079,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testBulkInsertsAndUpsertsWithSQLBasedTransformerFor2StepPipeline() throws Exception {
     String tableBasePath = dfsBasePath + "/test_table2";
     String downstreamTableBasePath = dfsBasePath + "/test_downstream_table2";
-
+    
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
 
     // Initial bulk insert to ingest to first hudi table
