@@ -30,6 +30,7 @@ module.exports = {
                 'schema_evolution',
                 'key_generation',
                 'concurrency_control',
+                'markers',
             ],
         },
         {

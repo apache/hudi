@@ -1152,8 +1152,8 @@ Configurations that control write behavior on Hudi tables. These can be directly
 ---
 
 > #### hoodie.write.markers.type
-> Marker type to use.  Two modes are supported: - DIRECT: individual marker file corresponding to each data file is directly created by the writer. - TIMELINE_SERVER_BASED: marker operations are all handled at the timeline service which serves as a proxy.  New marker entries are batch processed and stored in a limited number of underlying files for efficiency.<br></br>
-> **Default Value**: DIRECT (Optional)<br></br>
+> Marker type to use.  Two modes are supported: - DIRECT: individual marker file corresponding to each data file is directly created by the writer. - TIMELINE_SERVER_BASED: marker operations are all handled at the timeline service which serves as a proxy.  New marker entries are batch processed and stored in a limited number of underlying files for efficiency. Note: timeline based markers are not yet supported for HDFS <br></br>
+> **Default Value**: TIMELINE_SERVER_BASED (Optional)<br></br>
 > `Config Param: MARKERS_TYPE`<br></br>
 > `Since Version: 0.9.0`<br></br>
 
