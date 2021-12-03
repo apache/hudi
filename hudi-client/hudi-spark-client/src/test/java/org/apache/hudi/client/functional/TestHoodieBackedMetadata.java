@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -29,6 +30,8 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -41,6 +44,7 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -60,12 +64,18 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -75,9 +85,13 @@ import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.util.Time;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -120,10 +134,12 @@ import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -317,6 +333,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   /**
    * Tests that table services in data table won't trigger table services in metadata table.
+   *
    * @throws Exception
    */
   @Test
@@ -344,6 +361,56 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
     assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000004001");
+  }
+
+
+  /**
+   * Tests that virtual key configs are honored in base files after compaction in metadata table.
+   *
+   * @throws Exception
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testVirtualKeysInBaseFiles(boolean populateMetaFields) throws Exception {
+    HoodieTableType tableType = MERGE_ON_READ;
+    init(tableType, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableFullScan(true)
+            .enableMetrics(false)
+            .withPopulateMetaFields(populateMetaFields)
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    doWriteOperation(testTable, "0000001", INSERT);
+    doClean(testTable, "0000003", Arrays.asList("0000001"));
+    // this should have triggered compaction in metadata table
+    doWriteOperation(testTable, "0000004", UPSERT);
+
+    HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+    assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000004001");
+
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
+    metadataMetaClient.reloadActiveTimeline();
+
+    HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
+    table.getHoodieView().sync();
+    List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
+    HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
+    HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
+        new CacheConfig(context.getHadoopConf().get()));
+    List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
+    records.forEach(entry -> {
+      if (populateMetaFields) {
+        assertNotNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      } else {
+        assertNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      }
+    });
   }
 
   /**
@@ -586,6 +653,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Tests the metadata payload spurious deletes.
    * Lets say a commit was applied to metadata table, and later was explicitly got rolledback. Due to spark task failures, there could be more files in rollback
    * metadata when compared to the original commit metadata. When payload consistency check is enabled, it will throw exception. If not, it will succeed.
+   *
    * @throws Exception
    */
   @ParameterizedTest
@@ -1306,6 +1374,95 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE));
       assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_LOG_FILE_SIZE));
     }
+  }
+
+  /**
+   * Fetching WriteConfig for metadata table from Data table's writeConfig is not trivial and the method is not public in source code. so, for now,
+   * using this method which mimics source code.
+   * @param writeConfig
+   * @return
+   */
+  private HoodieWriteConfig getMetadataWriteConfig(HoodieWriteConfig writeConfig) {
+    int parallelism = writeConfig.getMetadataInsertParallelism();
+
+    int minCommitsToKeep = Math.max(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMinCommitsToKeep());
+    int maxCommitsToKeep = Math.max(writeConfig.getMetadataMaxCommitsToKeep(), writeConfig.getMaxCommitsToKeep());
+
+    // Create the write config for the metadata table by borrowing options from the main write config.
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
+        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
+            .withConsistencyCheckEnabled(writeConfig.getConsistencyGuardConfig().isConsistencyCheckEnabled())
+            .withInitialConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getInitialConsistencyCheckIntervalMs())
+            .withMaxConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getMaxConsistencyCheckIntervalMs())
+            .withMaxConsistencyChecks(writeConfig.getConsistencyGuardConfig().getMaxConsistencyChecks())
+            .build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
+        .withAutoCommit(true)
+        .withAvroSchemaValidate(true)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withRollbackUsingMarkers(false)
+        .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
+        .withSchema(HoodieMetadataRecord.getClassSchema().toString())
+        .forTable(writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            // we will trigger cleaning manually, to control the instant times
+            .withAutoClean(false)
+            .withCleanerParallelism(parallelism)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
+            // we will trigger compaction manually, to control the instant times
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
+        .withParallelism(parallelism, parallelism)
+        .withDeleteParallelism(parallelism)
+        .withRollbackParallelism(parallelism)
+        .withFinalizeWriteParallelism(parallelism)
+        .withAllowMultiWriteOnSameInstant(true)
+        .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
+        .withPopulateMetaFields(writeConfig.getMetadataConfig().populateMetaFields());
+
+    // RecordKey properties are needed for the metadata table records
+    final Properties properties = new Properties();
+    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+    properties.put("hoodie.datasource.write.recordkey.field", HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+    builder.withProperties(properties);
+
+    if (writeConfig.isMetricsOn()) {
+      builder.withMetricsConfig(HoodieMetricsConfig.newBuilder()
+          .withReporterType(writeConfig.getMetricsReporterType().toString())
+          .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
+          .on(true).build());
+      switch (writeConfig.getMetricsReporterType()) {
+        case GRAPHITE:
+          builder.withMetricsGraphiteConfig(HoodieMetricsGraphiteConfig.newBuilder()
+              .onGraphitePort(writeConfig.getGraphiteServerPort())
+              .toGraphiteHost(writeConfig.getGraphiteServerHost())
+              .usePrefix(writeConfig.getGraphiteMetricPrefix()).build());
+          break;
+        case JMX:
+          builder.withMetricsJmxConfig(HoodieMetricsJmxConfig.newBuilder()
+              .onJmxPort(writeConfig.getJmxPort())
+              .toJmxHost(writeConfig.getJmxHost())
+              .build());
+          break;
+        case DATADOG:
+        case PROMETHEUS:
+        case PROMETHEUS_PUSHGATEWAY:
+        case CONSOLE:
+        case INMEMORY:
+        case CLOUDWATCH:
+          break;
+        default:
+          throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
+      }
+    }
+    return builder.build();
   }
 
   private void doPreBootstrapOperations(HoodieTestTable testTable) throws Exception {
