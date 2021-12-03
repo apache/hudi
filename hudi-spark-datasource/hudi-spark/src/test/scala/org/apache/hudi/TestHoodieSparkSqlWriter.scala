@@ -40,13 +40,14 @@ import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
+import org.scalatest.Assertions.assertThrows
 import org.scalatest.Matchers.{assertResult, be, convertToAnyShouldWrapper, intercept}
 
 import java.io.IOException
@@ -394,12 +395,9 @@ class TestHoodieSparkSqlWriter {
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
 
     // try write to Hudi
-    val t = assertThrows(classOf[IOException], () => {
+    assertThrows[IOException] {
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, tableOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD.key, df)
-    }.asInstanceOf[Executable])
-
-    assertEquals("Could not load key generator class org.apache.hudi.keygen.SimpleKeyGenerator", t.getMessage)
-    assertEquals("Property hoodie.datasource.write.partitionpath.field not found", ExceptionUtil.getRootCause(t).getMessage)
+    }
   }
 
   /**
