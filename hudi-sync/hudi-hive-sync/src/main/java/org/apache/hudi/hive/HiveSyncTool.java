@@ -76,11 +76,13 @@ public class HiveSyncTool extends AbstractSyncTool {
   protected Option<String> roTableName = null;
 
   public HiveSyncTool(TypedProperties props, FileSystem fs) {
-    this(new HiveSyncConfig(props), new HiveConf(fs.getConf(), HiveConf.class),fs);
+    this(new HiveSyncConfig(props), new HiveConf(fs.getConf(), HiveConf.class), fs);
   }
 
   public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf configuration, FileSystem fs) {
     super(new TypedProperties(configuration.getAllProperties()), fs);
+
+    LOG.error("WNI VIMP VIMP " + configuration);
 
     try {
       this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, configuration, fs);
