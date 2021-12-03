@@ -27,14 +27,11 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
@@ -84,11 +81,6 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     this.writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withProperties(connectConfigs.getProps())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            // we will trigger cleaning manually, to control the instant times
-            .withAutoClean(false)
-            // we will trigger compaction manually, to control the instant times
-            .withInlineCompaction(false).build())
         .build();
 
     tableBasePath = writeConfig.getBasePath();
@@ -131,20 +123,23 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
   }
 
   @Override
-  public void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
-    javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
-    LOG.info("Ending Hudi commit " + commitTime);
+  public boolean endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
+    boolean success = javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
+    if (success) {
+      LOG.info("Ending Hudi commit " + commitTime);
 
-    // Schedule clustering and compaction as needed.
-    if (writeConfig.isAsyncClusteringEnabled()) {
-      javaClient.scheduleClustering(Option.empty()).ifPresent(
-          instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
+      // Schedule clustering and compaction as needed.
+      if (writeConfig.isAsyncClusteringEnabled()) {
+        javaClient.scheduleClustering(Option.empty()).ifPresent(
+            instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
+      }
+      if (isAsyncCompactionEnabled()) {
+        javaClient.scheduleCompaction(Option.empty()).ifPresent(
+            instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
+      }
+      syncMeta();
     }
-    if (isAsyncCompactionEnabled()) {
-      javaClient.scheduleCompaction(Option.empty()).ifPresent(
-          instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
-    }
-    syncMeta();
+    return success;
   }
 
   @Override

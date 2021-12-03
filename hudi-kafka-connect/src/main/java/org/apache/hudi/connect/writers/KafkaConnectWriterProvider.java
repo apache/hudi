@@ -27,6 +27,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.KafkaConnectFileIdPrefixProvider;
@@ -84,6 +86,14 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
           .withSchema(schemaProvider.getSourceSchema().toString())
           .withAutoCommit(false)
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+          // participants should not trigger table services, and leave it to the coordinator
+          .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+              .withAutoClean(false)
+              .withAutoArchive(false)
+              .withInlineCompaction(false).build())
+          .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+              .withInlineClustering(false)
+              .build())
           .build();
 
       context = new HoodieJavaEngineContext(hadoopConf);
