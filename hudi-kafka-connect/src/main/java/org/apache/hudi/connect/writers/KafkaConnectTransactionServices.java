@@ -77,6 +77,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
   public KafkaConnectTransactionServices(KafkaConnectConfigs connectConfigs) throws HoodieException {
     this.connectConfigs = connectConfigs;
+    // This is the writeConfig for the Transaction Coordinator
     this.writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withProperties(connectConfigs.getProps())
@@ -122,20 +123,23 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
   }
 
   @Override
-  public void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
-    javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
-    LOG.info("Ending Hudi commit " + commitTime);
+  public boolean endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
+    boolean success = javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
+    if (success) {
+      LOG.info("Ending Hudi commit " + commitTime);
 
-    // Schedule clustering and compaction as needed.
-    if (writeConfig.isAsyncClusteringEnabled()) {
-      javaClient.scheduleClustering(Option.empty()).ifPresent(
-          instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
+      // Schedule clustering and compaction as needed.
+      if (writeConfig.isAsyncClusteringEnabled()) {
+        javaClient.scheduleClustering(Option.empty()).ifPresent(
+            instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
+      }
+      if (isAsyncCompactionEnabled()) {
+        javaClient.scheduleCompaction(Option.empty()).ifPresent(
+            instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
+      }
+      syncMeta();
     }
-    if (isAsyncCompactionEnabled()) {
-      javaClient.scheduleCompaction(Option.empty()).ifPresent(
-          instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
-    }
-    syncMeta();
+    return success;
   }
 
   @Override
