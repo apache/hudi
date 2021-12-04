@@ -336,9 +336,6 @@ public class DeltaSync implements Serializable {
         } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
           resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else if (commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
-          // incase of CLUSTER commit, no checkpoint will be available in metadata.
-          resumeCheckpointStr = Option.empty();
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
