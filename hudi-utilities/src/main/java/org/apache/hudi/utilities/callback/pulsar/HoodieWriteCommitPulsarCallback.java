@@ -151,7 +151,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
   }
 
   /**
-   * Validate whether both {@code ProducerConfig.BOOTSTRAP_SERVERS_CONFIG} and kafka topic are configured.
+   * Validate whether both pulsar's brokerServiceUrl and topic are configured.
    * Exception will be thrown if anyone of them is not configured.
    */
   private void validatePulsarConfig() {
