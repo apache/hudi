@@ -63,10 +63,6 @@ public class TestConnectTransactionCoordinator {
   @BeforeEach
   public void setUp() throws Exception {
     transactionServices = new MockConnectTransactionServices();
-    configs = KafkaConnectConfigs.newBuilder()
-        .withCommitIntervalSecs(1L)
-        .withCoordinatorWriteTimeoutSecs(1L)
-        .build();
     latch = new CountDownLatch(1);
   }
 
@@ -76,6 +72,15 @@ public class TestConnectTransactionCoordinator {
     kafkaControlAgent = new MockKafkaControlAgent();
     participant = new MockParticipant(kafkaControlAgent, latch, scenario, MAX_COMMIT_ROUNDS);
     participant.start();
+
+    KafkaConnectConfigs.Builder configBuilder = KafkaConnectConfigs.newBuilder()
+        .withCommitIntervalSecs(1L)
+        .withCoordinatorWriteTimeoutSecs(1L);
+
+    if (scenario.equals(MockParticipant.TestScenarios.SUBSET_WRITE_STATUS_FAILED)) {
+      configBuilder.withAllowCommitOnErrors(false);
+    }
+    configs = configBuilder.build();
 
     // Test the coordinator using the mock participant
     TransactionCoordinator coordinator = new ConnectTransactionCoordinator(
@@ -179,6 +184,13 @@ public class TestConnectTransactionCoordinator {
               kafkaOffsetsCommitted.putAll(kafkaOffsets);
               expectedMsgType = ControlMessage.EventType.ACK_COMMIT;
               break;
+            case SUBSET_WRITE_STATUS_FAILED_BUT_IGNORED:
+              composeControlEvent(message.getCommitTime(), true, kafkaOffsets, controlEvents);
+              numPartitionsThatReportWriteStatus = TOTAL_KAFKA_PARTITIONS;
+              // Despite error records, this commit round should succeed, and the kafka offsets getting committed
+              kafkaOffsetsCommitted.putAll(kafkaOffsets);
+              expectedMsgType = ControlMessage.EventType.ACK_COMMIT;
+              break;
             case SUBSET_WRITE_STATUS_FAILED:
               composeControlEvent(message.getCommitTime(), true, kafkaOffsets, controlEvents);
               numPartitionsThatReportWriteStatus = TOTAL_KAFKA_PARTITIONS;
@@ -222,6 +234,7 @@ public class TestConnectTransactionCoordinator {
     public enum TestScenarios {
       SUBSET_CONNECT_TASKS_FAILED,
       SUBSET_WRITE_STATUS_FAILED,
+      SUBSET_WRITE_STATUS_FAILED_BUT_IGNORED,
       ALL_CONNECT_TASKS_SUCCESS
     }
 

@@ -294,7 +294,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
         long totalRecords = (long) allWriteStatuses.stream().mapToDouble(WriteStatus::getTotalRecords).sum();
         boolean hasErrors = totalErrorRecords > 0;
 
-        if (!hasErrors && !allWriteStatuses.isEmpty()) {
+        if ((!hasErrors || configs.allowCommitOnErrors()) && !allWriteStatuses.isEmpty()) {
           boolean success = transactionServices.endCommit(currentCommitTime,
               allWriteStatuses,
               transformKafkaOffsets(currentConsumedKafkaOffsets));
