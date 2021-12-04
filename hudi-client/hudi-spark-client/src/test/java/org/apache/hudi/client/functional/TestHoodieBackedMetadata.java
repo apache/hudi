@@ -54,6 +54,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -411,6 +412,91 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         assertNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       }
     });
+  }
+
+
+  /**
+   * Tests that virtual key configs are honored in base files after compaction in metadata table.
+   *
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testMetadataTableWithPendingCompaction(boolean simulateFailedCompaction) throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType, false);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableFullScan(true)
+            .enableMetrics(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .build()).build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    doWriteOperation(testTable, "0000001", INSERT);
+    // create an inflight compaction in metadata table.
+    // not easy to create an inflight in metadata table directly, hence letting compaction succeed and then deleting the completed instant.
+    // this new write is expected to trigger metadata table compaction
+    String commitInstant = "0000002";
+    doWriteOperation(testTable, commitInstant, INSERT);
+
+    HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
+    String metadataCompactionInstant = commitInstant + "001";
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+    assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);
+
+    validateMetadata(testTable);
+    // Fetch compaction Commit file and rename to some other file. completed compaction meta file should have some serialized info that table interprets
+    // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
+    java.nio.file.Path parentPath = Paths.get(metadataTableBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    java.nio.file.Path metaFilePath = parentPath.resolve(metadataCompactionInstant + HoodieTimeline.COMMIT_EXTENSION);
+    java.nio.file.Path tempFilePath = FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant);
+    metaClient.reloadActiveTimeline();
+    testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter);
+    // this validation will exercise the code path where a compaction is inflight in metadata table, but still metadata based file listing should match non
+    // metadata based file listing.
+    validateMetadata(testTable);
+
+    if (simulateFailedCompaction) {
+      // this should retry the compaction in metadata table.
+      doWriteOperation(testTable, "0000003", INSERT);
+    } else {
+      // let the compaction succeed in metadata and validation should succeed.
+      FileCreateUtils.renameTempToMetaFile(tempFilePath, metaFilePath);
+    }
+
+    validateMetadata(testTable);
+
+    // add few more write and validate
+    doWriteOperation(testTable, "0000004", INSERT);
+    doWriteOperation(testTable, "0000005", UPSERT);
+    validateMetadata(testTable);
+
+    if (simulateFailedCompaction) {
+      //trigger another compaction failure.
+      metadataCompactionInstant = "0000005001";
+      tableMetadata = metadata(writeConfig, context);
+      assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
+      assertEquals(tableMetadata.getLatestCompactionTime().get(), metadataCompactionInstant);
+
+      // Fetch compaction Commit file and rename to some other file. completed compaction meta file should have some serialized info that table interprets
+      // for future upserts. so, renaming the file here to some temp name and later renaming it back to same name.
+      parentPath = Paths.get(metadataTableBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
+      metaFilePath = parentPath.resolve(metadataCompactionInstant + HoodieTimeline.COMMIT_EXTENSION);
+      tempFilePath = FileCreateUtils.renameFileToTemp(metaFilePath, metadataCompactionInstant);
+
+      validateMetadata(testTable);
+
+      // this should retry the failed compaction in metadata table.
+      doWriteOperation(testTable, "0000006", INSERT);
+
+      validateMetadata(testTable);
+
+      // add few more write and validate
+      doWriteOperation(testTable, "0000007", INSERT);
+      doWriteOperation(testTable, "0000008", UPSERT);
+      validateMetadata(testTable);
+    }
   }
 
   /**
