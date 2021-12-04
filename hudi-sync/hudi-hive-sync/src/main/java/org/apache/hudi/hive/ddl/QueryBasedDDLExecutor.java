@@ -39,8 +39,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
-/*
-This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
+
+/**
+ * This class adds functionality for all query based DDLExecutors. The classes extending it only have to provide runSQL(sql) functions.
  */
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
