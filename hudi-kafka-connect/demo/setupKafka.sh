@@ -50,7 +50,7 @@ fi
 
 ## defaults
 rawDataFile=${HUDI_DIR}/docker/demo/data/batch_1.json
-kafkaBrokerHostname=kafkabroker
+kafkaBrokerHostname=localhost
 kafkaTopicName=hudi-test-topic
 numKafkaPartitions=4
 recordKey=volume
