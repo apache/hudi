@@ -64,8 +64,8 @@ public class DLASyncTool extends AbstractSyncTool {
   private final String snapshotTableName;
   private final Option<String> roTableTableName;
 
-  public DLASyncTool(TypedProperties properties, FileSystem fs) {
-    super(properties, fs);
+  public DLASyncTool(TypedProperties properties, Configuration conf, FileSystem fs) {
+    super(properties, conf, fs);
     this.hoodieDLAClient = new HoodieDLAClient(Utils.propertiesToConfig(properties), fs);
     this.cfg = Utils.propertiesToConfig(properties);
     switch (hoodieDLAClient.getTableType()) {
@@ -207,6 +207,6 @@ public class DLASyncTool extends AbstractSyncTool {
       System.exit(1);
     }
     FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
-    new DLASyncTool(Utils.configToProperties(cfg), fs).syncHoodieTable();
+    new DLASyncTool(Utils.configToProperties(cfg), new Configuration(), fs).syncHoodieTable();
   }
 }
