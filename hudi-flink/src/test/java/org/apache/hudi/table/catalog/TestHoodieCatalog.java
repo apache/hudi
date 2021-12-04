@@ -38,6 +38,7 @@ import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+import org.apache.flink.table.catalog.exceptions.TableAlreadyExistException;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.junit.jupiter.api.BeforeEach;
@@ -185,6 +186,10 @@ public class TestHoodieCatalog {
 
     // test table exist
     assertTrue(catalog.tableExists(tablePath));
+
+    // test create exist table
+    assertThrows(TableAlreadyExistException.class,
+        () -> catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, false));
   }
 
   @Test
@@ -200,6 +205,10 @@ public class TestHoodieCatalog {
     List<String> tables = catalog.listTables(TEST_DEFAULT_DATABASE);
     assertTrue(tables.contains(tablePath1.getObjectName()));
     assertTrue(tables.contains(tablePath2.getObjectName()));
+
+    // test list non-exist database table
+    assertThrows(DatabaseNotExistException.class,
+        () -> catalog.listTables(NONE_EXIST_DATABASE));
   }
 
   @Test
