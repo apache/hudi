@@ -37,6 +37,8 @@ import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
+import org.apache.flink.table.catalog.exceptions.DatabaseNotExistException;
+import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,22 +66,22 @@ public class TestHoodieCatalog {
 
   private static final String TEST_DEFAULT_DATABASE = "test_db";
   private static final String NONE_EXIST_DATABASE = "none_exist_database";
-  private final List<Column> createColumns = Arrays.asList(
+  private static final List<Column> CREATE_COLUMNS = Arrays.asList(
       Column.physical("uuid", DataTypes.VARCHAR(20)),
       Column.physical("name", DataTypes.VARCHAR(20)),
       Column.physical("age", DataTypes.INT()),
       Column.physical("tss", DataTypes.TIMESTAMP(3)),
       Column.physical("partition", DataTypes.VARCHAR(10))
   );
-  private final UniqueConstraint constraints = UniqueConstraint.primaryKey("uuid", Arrays.asList("uuid"));
-  private final ResolvedSchema createTableSchema =
+  private static final UniqueConstraint CONSTRAINTS = UniqueConstraint.primaryKey("uuid", Arrays.asList("uuid"));
+  private static final ResolvedSchema CREATE_TABLE_SCHEMA =
       new ResolvedSchema(
-          createColumns,
+          CREATE_COLUMNS,
           Collections.emptyList(),
-          constraints);
+          CONSTRAINTS);
 
-  private final List<Column> expectedTableColumns =
-      createColumns.stream()
+  private static final List<Column> EXPECTED_TABLE_COLUMNS =
+      CREATE_COLUMNS.stream()
           .map(
               col -> {
                 // Flink char/varchar is transform to string in avro.
@@ -93,8 +95,24 @@ public class TestHoodieCatalog {
                 }
               })
           .collect(Collectors.toList());
-  private final ResolvedSchema expectedTableSchema =
-      new ResolvedSchema(expectedTableColumns, Collections.emptyList(), constraints);
+  private static final ResolvedSchema EXPECTED_TABLE_SCHEMA =
+      new ResolvedSchema(EXPECTED_TABLE_COLUMNS, Collections.emptyList(), CONSTRAINTS);
+
+  private static final Map<String, String> EXPECTED_OPTIONS = new HashMap<>();
+  static {
+    EXPECTED_OPTIONS.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    EXPECTED_OPTIONS.put(FlinkOptions.INDEX_GLOBAL_ENABLED.key(), "false");
+    EXPECTED_OPTIONS.put(FlinkOptions.PRE_COMBINE.key(), "true");
+  }
+
+  private static final ResolvedCatalogTable EXPECTED_CATALOG_TABLE = new ResolvedCatalogTable(
+      CatalogTable.of(
+          Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
+          "test",
+          Arrays.asList("partition"),
+          EXPECTED_OPTIONS),
+      CREATE_TABLE_SCHEMA
+  );
 
   private TableEnvironment streamTableEnv;
   private HoodieCatalog catalog;
@@ -108,8 +126,8 @@ public class TestHoodieCatalog {
     streamTableEnv = TableEnvironmentImpl.create(settings);
     streamTableEnv.getConfig().getConfiguration()
         .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 2);
-    File db1 = new File(tempFile, TEST_DEFAULT_DATABASE);
-    db1.mkdir();
+    File testDb = new File(tempFile, TEST_DEFAULT_DATABASE);
+    testDb.mkdir();
     Map<String, String> catalogOptions = new HashMap<>();
     catalogOptions.put(CATALOG_PATH.key(), tempFile.getAbsolutePath());
     catalogOptions.put(DEFAULT_DATABASE.key(), TEST_DEFAULT_DATABASE);
@@ -139,8 +157,13 @@ public class TestHoodieCatalog {
     assertTrue(catalog.listDatabases().contains("db1"));
     assertEquals(expected.getProperties(), actual.getProperties());
 
+    // drop exist database
     catalog.dropDatabase("db1", true);
     assertFalse(catalog.listDatabases().contains("db1"));
+
+    // drop non-exist database
+    assertThrows(DatabaseNotExistException.class,
+        () -> catalog.dropDatabase(NONE_EXIST_DATABASE, false));
   }
 
   @Test
@@ -151,57 +174,76 @@ public class TestHoodieCatalog {
 
     assertThrows(
         CatalogException.class,
-        () -> catalog.createDatabase("db1", new CatalogDatabaseImpl(options, null), true),
-        "Hudi catalog doesn't support to create database with options."
-    );
+        () -> catalog.createDatabase("db1", new CatalogDatabaseImpl(options, null), true));
   }
 
   @Test
-  public void testTableRelatedMethod() throws Exception {
-    Map<String, String> expectedOptions = new HashMap<>();
-    expectedOptions.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-    expectedOptions.put(FlinkOptions.INDEX_GLOBAL_ENABLED.key(), "false");
-    expectedOptions.put(FlinkOptions.PRE_COMBINE.key(), "true");
-
-    ResolvedCatalogTable expectedCatalogTable = new ResolvedCatalogTable(
-        CatalogTable.of(
-            Schema.newBuilder().fromResolvedSchema(createTableSchema).build(),
-            "test",
-            Arrays.asList("partition"),
-            expectedOptions),
-        createTableSchema
-    );
-
+  public void testCreateTable() throws Exception {
     ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
     // test create table
-    catalog.createTable(tablePath, expectedCatalogTable, true);
+    catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true);
 
     // test table exist
     assertTrue(catalog.tableExists(tablePath));
+  }
+
+  @Test
+  public void testListTable() throws Exception {
+    ObjectPath tablePath1 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
+    ObjectPath tablePath2 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb2");
+
+    // create table
+    catalog.createTable(tablePath1, EXPECTED_CATALOG_TABLE, true);
+    catalog.createTable(tablePath2, EXPECTED_CATALOG_TABLE, true);
 
     // test list table
-    assertTrue(catalog.listTables(TEST_DEFAULT_DATABASE).contains(tablePath.getObjectName()));
+    List<String> tables = catalog.listTables(TEST_DEFAULT_DATABASE);
+    assertTrue(tables.contains(tablePath1.getObjectName()));
+    assertTrue(tables.contains(tablePath2.getObjectName()));
+  }
+
+  @Test
+  public void testGetTable() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
+    // create table
+    catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true);
+
+    Map<String, String> expectedOptions = new HashMap<>(EXPECTED_OPTIONS);
+    expectedOptions.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    expectedOptions.put(FlinkOptions.INDEX_GLOBAL_ENABLED.key(), "false");
+    expectedOptions.put(FlinkOptions.PRE_COMBINE.key(), "true");
+    expectedOptions.put("connector", "hudi");
+    expectedOptions.put(
+        FlinkOptions.PATH.key(),
+        String.format("%s/%s/%s", tempFile.getAbsolutePath(), tablePath.getDatabaseName(), tablePath.getObjectName()));
 
     // test get table
     CatalogBaseTable actualTable = catalog.getTable(tablePath);
     // validate schema
     Schema actualSchema = actualTable.getUnresolvedSchema();
-    Schema expectedSchema = Schema.newBuilder().fromResolvedSchema(expectedTableSchema).build();
+    Schema expectedSchema = Schema.newBuilder().fromResolvedSchema(EXPECTED_TABLE_SCHEMA).build();
     assertEquals(expectedSchema, actualSchema);
     // validate options
-    expectedOptions.put("connector", "hudi");
-    expectedOptions.put(
-        FlinkOptions.PATH.key(),
-        String.format("%s/%s/%s", tempFile.getAbsolutePath(), tablePath.getDatabaseName(), tablePath.getObjectName()));
     Map<String, String> actualOptions = actualTable.getOptions();
     assertEquals(expectedOptions, actualOptions);
     // validate comment
-    assertEquals(expectedCatalogTable.getComment(), actualTable.getComment());
+    assertEquals(EXPECTED_CATALOG_TABLE.getComment(), actualTable.getComment());
     // validate partition key
-    assertEquals(expectedCatalogTable.getPartitionKeys(),((CatalogTable) actualTable).getPartitionKeys());
+    assertEquals(EXPECTED_CATALOG_TABLE.getPartitionKeys(),((CatalogTable) actualTable).getPartitionKeys());
+  }
+
+  @Test
+  public void dropTable() throws Exception {
+    ObjectPath tablePath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb1");
+    // create table
+    catalog.createTable(tablePath, EXPECTED_CATALOG_TABLE, true);
 
     // test drop table
     catalog.dropTable(tablePath, true);
     assertFalse(catalog.tableExists(tablePath));
+
+    // drop non-exist table
+    assertThrows(TableNotExistException.class,
+        () -> catalog.dropTable(new ObjectPath(TEST_DEFAULT_DATABASE, "non_exist"), false));
   }
 }

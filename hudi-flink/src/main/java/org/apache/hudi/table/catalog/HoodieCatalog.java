@@ -103,10 +103,10 @@ public class HoodieCatalog extends AbstractCatalog {
     catalogPath = new Path(catalogPathStr);
     try {
       if (!fs.exists(catalogPath)) {
-        throw new CatalogException(String.format("Catalog %s path %s is not exists.", getName(), catalogPathStr));
+        throw new CatalogException(String.format("Catalog %s path %s does not exists.", getName(), catalogPathStr));
       }
     } catch (IOException e) {
-      throw new CatalogException(String.format("Check catalog path %s exists occur error.", catalogPathStr), e);
+      throw new CatalogException(String.format("Check catalog path %s exists occur exception.", catalogPathStr), e);
     }
   }
 
@@ -115,7 +115,7 @@ public class HoodieCatalog extends AbstractCatalog {
     try {
       fs.close();
     } catch (IOException e) {
-      throw new CatalogException("Close FileSystem occur error.", e);
+      throw new CatalogException("Close FileSystem occur exception.", e);
     }
   }
 
@@ -130,7 +130,7 @@ public class HoodieCatalog extends AbstractCatalog {
           .map(fileStatus -> fileStatus.getPath().getName())
           .collect(Collectors.toList());
     } catch (IOException e) {
-      throw new CatalogException("List databases occur error.", e);
+      throw new CatalogException("List databases occur exception.", e);
     }
   }
 
@@ -205,7 +205,7 @@ public class HoodieCatalog extends AbstractCatalog {
   @Override
   public void alterDatabase(String databaseName, CatalogDatabase catalogDatabase, boolean ignoreIfNotExists)
       throws DatabaseNotExistException, CatalogException {
-    throw new UnsupportedOperationException("alterDatabase is not implemented.");
+    throw new UnsupportedOperationException("Altering database is not implemented.");
   }
 
   // ------ tables ------
@@ -223,7 +223,7 @@ public class HoodieCatalog extends AbstractCatalog {
           .map(fileStatus -> fileStatus.getPath().getName())
           .collect(Collectors.toList());
     } catch (IOException e) {
-      throw new CatalogException(String.format("Listing table in database %s occur error.", dbPath), e);
+      throw new CatalogException(String.format("Listing table in database %s occur exception.", dbPath), e);
     }
   }
 
@@ -308,7 +308,7 @@ public class HoodieCatalog extends AbstractCatalog {
       options.put(TableOptionProperties.COMMENT, resolvedTable.getComment());
       TableOptionProperties.createProperties(tablePathStr, hadoopConf, options);
     } catch (IOException e) {
-      throw new CatalogException(String.format("Initialize table path %s occur error."));
+      throw new CatalogException(String.format("Initialize table path %s occur exception.", tablePathStr), e);
     }
   }
 
@@ -332,7 +332,7 @@ public class HoodieCatalog extends AbstractCatalog {
     try {
       this.fs.delete(path, true);
     } catch (IOException e) {
-      throw new CatalogException(String.format("Drop table %s occur error.", tablePath), e);
+      throw new CatalogException(String.format("Drop table %s occur exception.", tablePath), e);
     }
   }
 
@@ -487,7 +487,7 @@ public class HoodieCatalog extends AbstractCatalog {
         HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(path, hadoopConf);
         return new TableSchemaResolver(metaClient).getTableAvroSchema(false); // change log mode is not supported now
       } catch (Throwable throwable) {
-        LOG.warn("Error while resolving the latest table schema", throwable);
+        LOG.warn("Error while resolving the latest table schema.", throwable);
         // ignored
       }
     }
