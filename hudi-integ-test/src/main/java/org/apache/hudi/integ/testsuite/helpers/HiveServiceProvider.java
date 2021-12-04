@@ -49,15 +49,18 @@ public class HiveServiceProvider {
   }
 
   public void syncToLocalHiveIfNeeded(HoodieTestSuiteWriter writer) {
-    HiveSyncTool hiveSyncTool;
+    //HiveSyncTool hiveSyncTool;
     if (this.config.isHiveLocal()) {
-      hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
-          FSUtils.getFs(writer.getWriteConfig().getBasePath(), getLocalHiveServer().getHiveConf()));
+      writer.getDeltaStreamerWrapper().getDeltaSyncService().getDeltaSync()
+          .syncHive(getLocalHiveServer().getHiveConf());
+      //hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
+        //  FSUtils.getFs(writer.getWriteConfig().getBasePath(), getLocalHiveServer().getHiveConf()));
     } else {
-      hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
-          FSUtils.getFs(writer.getWriteConfig().getBasePath(), writer.getConfiguration()));
+      writer.getDeltaStreamerWrapper().getDeltaSyncService().getDeltaSync().syncHive();
+      //hiveSyncTool = new HiveSyncTool(writer.getWriteConfig().getProps(),
+        //  FSUtils.getFs(writer.getWriteConfig().getBasePath(), writer.getConfiguration()));
     }
-    hiveSyncTool.syncHoodieTable();
+    //hiveSyncTool.syncHoodieTable();
   }
 
   public void stopLocalHiveServiceIfNeeded() throws IOException {

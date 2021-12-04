@@ -57,10 +57,12 @@ import java.util.Map;
 
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.fileSystem;
+import static org.apache.hudi.hive.testutils.HiveTestUtil.getHiveConf;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -509,8 +511,7 @@ public class TestHiveSyncTool {
     reinitHiveSyncClient();
     assertFalse(hiveClient.doesTableExist(roTableName), "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
-    tool.syncHoodieTable();
+    reSyncHiveTable();
 
     assertTrue(hiveClient.doesTableExist(roTableName), "Table " + roTableName + " should exist after sync completes");
 
@@ -575,8 +576,7 @@ public class TestHiveSyncTool {
             + " should not exist initially");
 
     // Lets do the sync
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
-    tool.syncHoodieTable();
+    reSyncHiveTable();
 
     assertTrue(hiveClient.doesTableExist(snapshotTableName),
         "Table " + HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE
@@ -771,20 +771,20 @@ public class TestHiveSyncTool {
   public void testConnectExceptionIgnoreConfigSet() throws IOException, URISyntaxException, HiveException, MetaException {
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, false);
-    HiveSyncTool syncTool1 = new HiveSyncTool(hiveSyncProps, fileSystem);
-
-    assertFalse(syncTool1.hoodieHiveClient.doesTableExist(HiveTestUtil.TABLE_NAME),
+    reinitHiveSyncClient();
+    HoodieHiveClient prevHiveClient = hiveClient;
+    assertFalse(hiveClient.doesTableExist(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
 
     // Lets do the sync
     hiveSyncProps.setProperty(HiveSyncConfig.HIVE_IGNORE_EXCEPTIONS.key(), "true");
     hiveSyncProps.setProperty(HiveSyncConfig.HIVE_URL.key(), hiveSyncProps.getString(HiveSyncConfig.HIVE_URL.key())
         .replace(String.valueOf(HiveTestUtil.hiveTestService.getHiveServerPort()), String.valueOf(NetworkTestUtils.nextFreePort())));
-    HiveSyncTool syncTool2 = new HiveSyncTool(hiveSyncProps, fileSystem);
-    //HiveSyncTool tool = new HiveSyncTool(syncToolConfig, getHiveConf(), fileSystem);
-    syncTool2.syncHoodieTable();
+    reinitHiveSyncClient();
+    reSyncHiveTable();
 
-    assertFalse(syncTool1.hoodieHiveClient.doesTableExist(HiveTestUtil.TABLE_NAME),
+    assertNull(hiveClient);
+    assertFalse(prevHiveClient.doesTableExist(HiveTestUtil.TABLE_NAME),
         "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
   }
 
@@ -823,8 +823,8 @@ public class TestHiveSyncTool {
     reinitHiveSyncClient();
     assertFalse(hiveClient.doesTableExist(HiveTestUtil.TABLE_NAME), "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
-    tool.syncHoodieTable();
+    reinitHiveSyncClient();
+    reSyncHiveTable();
 
     verifyOldParquetFileTest(hiveClient, emptyCommitTime);
   }
@@ -850,8 +850,7 @@ public class TestHiveSyncTool {
     assertFalse(
         hiveClient.doesTableExist(HiveTestUtil.TABLE_NAME), "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
 
-    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, fileSystem);
-
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, getHiveConf(), fileSystem);
     // now delete the evolved commit instant
     Path fullPath = new Path(HiveTestUtil.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
         + hiveClient.getActiveTimeline().getInstants()
@@ -866,8 +865,7 @@ public class TestHiveSyncTool {
     }
 
     // table should not be synced yet
-    assertFalse(
-        hiveClient.doesTableExist(HiveTestUtil.TABLE_NAME), "Table " + HiveTestUtil.TABLE_NAME + " should not exist at all");
+    assertFalse(hiveClient.doesTableExist(HiveTestUtil.TABLE_NAME), "Table " + HiveTestUtil.TABLE_NAME + " should not exist at all");
   }
 
   @ParameterizedTest
@@ -987,7 +985,7 @@ public class TestHiveSyncTool {
   }
 
   private void reinitHiveSyncClient() {
-    hiveSyncTool = new HiveSyncTool(hiveSyncProps, fileSystem);
+    hiveSyncTool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf(), fileSystem);
     hiveClient = hiveSyncTool.hoodieHiveClient;
   }
 

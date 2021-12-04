@@ -160,7 +160,7 @@ public class BootstrapExecutor  implements Serializable {
     if (cfg.enableHiveSync) {
       props.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
       props.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
-      new HiveSyncTool(props, fs).syncHoodieTable();
+      new HiveSyncTool(props, configuration, fs).syncHoodieTable();
     }
   }
 

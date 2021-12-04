@@ -51,6 +51,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -77,6 +78,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -619,12 +621,27 @@ public class DeltaSync implements Serializable {
         properties.putAll(props);
         properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
         properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
-        AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {TypedProperties.class, FileSystem.class}, properties, fs);
+        AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {TypedProperties.class, Configuration.class, FileSystem.class}, properties, conf, fs);
         syncTool.syncHoodieTable();
         long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
         metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
       }
     }
+  }
+
+  public void syncHive() {
+    //HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
+    //LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
+    //    + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+    HiveConf hiveConf = new HiveConf(conf, HiveConf.class);
+    LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
+    //LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
+    new HiveSyncTool(props, hiveConf, fs).syncHoodieTable();
+  }
+
+  public void syncHive(HiveConf conf) {
+    this.conf = conf;
+    syncHive();
   }
 
   /**

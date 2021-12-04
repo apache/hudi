@@ -70,17 +70,24 @@ public class HiveSyncTool extends AbstractSyncTool {
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
-  protected final HiveSyncConfig hiveSyncConfig;
+  protected HiveSyncConfig hiveSyncConfig;
   protected HoodieHiveClient hoodieHiveClient = null;
   protected String snapshotTableName = null;
   protected Option<String> roTableName = null;
 
   public HiveSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
     super(props, conf, fs);
-    LOG.error("WNI VIMP VIMP " + conf);
-    hiveSyncConfig = new HiveSyncConfig(props);
+    init(new HiveSyncConfig(props), conf, fs);
+  }
 
+  public HiveSyncTool(HiveSyncConfig hiveSyncConfig, Configuration conf, FileSystem fs) {
+    super(hiveSyncConfig.getProps(), conf, fs);
+    init(hiveSyncConfig, conf, fs);
+  }
+
+  private void init(HiveSyncConfig hiveSyncConfig, Configuration conf, FileSystem fs) {
     try {
+      this.hiveSyncConfig = hiveSyncConfig;
       this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, new HiveConf(conf, HiveConf.class), fs);
     } catch (RuntimeException e) {
       if (hiveSyncConfig.ignoreExceptions) {
@@ -148,7 +155,7 @@ public class HiveSyncTool extends AbstractSyncTool {
   }
 
   protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
-                               boolean readAsOptimized) {
+                                 boolean readAsOptimized) {
     LOG.info("Trying to sync hoodie db " + hiveSyncConfig.databaseName
         + " and table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
@@ -181,8 +188,8 @@ public class HiveSyncTool extends AbstractSyncTool {
     // by the data source way (which will use the HoodieBootstrapRelation).
     // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
     if (hoodieHiveClient.isBootstrap()
-            && hoodieHiveClient.getTableType() == HoodieTableType.MERGE_ON_READ
-            && !readAsOptimized) {
+        && hoodieHiveClient.getTableType() == HoodieTableType.MERGE_ON_READ
+        && !readAsOptimized) {
       hiveSyncConfig.syncAsSparkDataSourceTable = false;
     }
     // Sync schema if needed
@@ -212,10 +219,10 @@ public class HiveSyncTool extends AbstractSyncTool {
    * table schema.
    *
    * @param tableExists - does table exist
-   * @param schema - extracted schema
+   * @param schema      - extracted schema
    */
   private boolean syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
-                          boolean readAsOptimized, MessageType schema) {
+                             boolean readAsOptimized, MessageType schema) {
     // Append spark table properties & serde properties
     Map<String, String> tableProperties = ConfigUtils.toMap(hiveSyncConfig.tableProperties);
     Map<String, String> serdeProperties = ConfigUtils.toMap(hiveSyncConfig.serdeProperties);
@@ -270,10 +277,11 @@ public class HiveSyncTool extends AbstractSyncTool {
 
   /**
    * Get Spark Sql related table properties. This is used for spark datasource table.
-   * @param schema  The schema to write to the table.
+   *
+   * @param schema The schema to write to the table.
    * @return A new parameters added the spark's table properties.
    */
-  private Map<String, String> getSparkTableProperties(int schemaLengthThreshold, MessageType schema)  {
+  private Map<String, String> getSparkTableProperties(int schemaLengthThreshold, MessageType schema) {
     // Convert the schema and partition info used by spark sql to hive table properties.
     // The following code refers to the spark code in
     // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
@@ -291,7 +299,7 @@ public class HiveSyncTool extends AbstractSyncTool {
       // Default the unknown partition fields to be String.
       // Keep the same logical with HiveSchemaUtil#getPartitionKeyType.
       partitionCols.add(column2Field.getOrDefault(partitionName,
-              new PrimitiveType(Type.Repetition.REQUIRED, BINARY, partitionName, UTF8)));
+          new PrimitiveType(Type.Repetition.REQUIRED, BINARY, partitionName, UTF8)));
     }
 
     for (Type field : originGroupType.getFields()) {
