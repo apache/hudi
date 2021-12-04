@@ -119,7 +119,11 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
 
   @AfterAll
   public static void clean() throws Exception {
-    utility.shutdownMiniCluster();
+    utility.shutdownMiniHBaseCluster();
+    utility.shutdownMiniDFSCluster();
+    utility.shutdownMiniMapReduceCluster();
+    // skip shutdownZkCluster due to localhost connection refused issue
+    utility = null;
   }
 
   @BeforeEach
