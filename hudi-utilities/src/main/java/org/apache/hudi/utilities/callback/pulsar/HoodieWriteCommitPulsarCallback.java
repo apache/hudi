@@ -32,16 +32,17 @@ import org.apache.pulsar.client.api.MessageRoutingMode;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
+import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.impl.PulsarClientImpl;
 import org.apache.pulsar.client.impl.conf.ClientConfigurationData;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.util.DateTimeUtils.parseDuration;
+import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.BROKER_SERVICE_URL;
 import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.CONNECTION_TIMEOUT;
 import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.KEEPALIVE_INTERVAL;
 import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.OPERATION_TIMEOUT;
@@ -51,7 +52,6 @@ import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarC
 import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.PRODUCER_ROUTE_MODE;
 import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.PRODUCER_SEND_TIMEOUT;
 import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.REQUEST_TIMEOUT;
-import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.BROKER_SERVICE_URL;
 import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.TOPIC;
 
 /**
@@ -72,7 +72,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
   /**
    * The pulsar producer.
    */
-  private final transient Producer<byte[]> producer;
+  private final transient Producer<String> producer;
 
   public HoodieWriteCommitPulsarCallback(HoodieWriteConfig config) throws PulsarClientException {
     this.serviceUrl = config.getString(BROKER_SERVICE_URL);
@@ -86,7 +86,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
   public void call(HoodieWriteCommitCallbackMessage callbackMessage) {
     String callbackMsg = HoodieWriteCommitCallbackUtil.convertToJsonString(callbackMessage);
     try {
-      producer.send(callbackMsg.getBytes(StandardCharsets.UTF_8));
+      producer.send(callbackMsg);
       LOG.info("Send callback message succeed");
     } catch (Exception e) {
       LOG.error("Send kafka callback msg failed : ", e);
@@ -100,7 +100,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
    * @param hoodieConfig Kafka configs
    * @return A {@link KafkaProducer}
    */
-  public Producer<byte[]> createProducer(HoodieConfig hoodieConfig) throws PulsarClientException {
+  public Producer<String> createProducer(HoodieConfig hoodieConfig) throws PulsarClientException {
     MessageRoutingMode routeMode = Enum.valueOf(MessageRoutingMode.class,
         PRODUCER_ROUTE_MODE.defaultValue());
     Duration sendTimeout =
@@ -113,7 +113,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
         hoodieConfig.getBoolean(PRODUCER_BLOCK_QUEUE_FULL);
 
     return client
-        .newProducer()
+        .newProducer(Schema.STRING)
         .topic(topic)
         .messageRoutingMode(routeMode)
         .sendTimeout((int) sendTimeout.toMillis(), TimeUnit.MILLISECONDS)
