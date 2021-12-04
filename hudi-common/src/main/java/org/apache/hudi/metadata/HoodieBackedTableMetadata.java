@@ -245,7 +245,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
         // Metadata is in sync till the latest completed instant on the dataset
         HoodieTimer timer = new HoodieTimer().startTimer();
-        List<FileSlice> latestFileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
+        List<FileSlice> latestFileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName, true);
         if (latestFileSlices.size() == 0) {
           // empty partition
           return Pair.of(null, null);

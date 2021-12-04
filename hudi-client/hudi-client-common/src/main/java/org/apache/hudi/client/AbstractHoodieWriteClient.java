@@ -520,6 +520,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   /**
+   * Run any pending compactions.
+   */
+  public void runAnyPendingCompactions() {
+    runAnyPendingCompactions(createTable(config, hadoopConf, config.isMetadataTableEnabled()));
+  }
+
+  /**
    * Create a savepoint based on the latest commit action on the timeline.
    *
    * @param user - User creating the savepoint
