@@ -500,14 +500,14 @@ public class RequestHandler {
 
         if (refreshCheck) {
           long beginFinalCheck = System.currentTimeMillis();
-          String errMsg =
-              "Last known instant from client was "
-                  + context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
-                      HoodieTimeline.INVALID_INSTANT_TS)
-                  + " but server has the following timeline "
-                  + viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM))
-                      .getTimeline().getInstants().collect(Collectors.toList());
           if (isLocalViewBehind(context)) {
+            String errMsg =
+                "Last known instant from client was "
+                    + context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
+                        HoodieTimeline.INVALID_INSTANT_TS)
+                    + " but server has the following timeline "
+                    + viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM))
+                        .getTimeline().getInstants().collect(Collectors.toList());
             throw new BadRequestResponse(errMsg);
           }
           long endFinalCheck = System.currentTimeMillis();
