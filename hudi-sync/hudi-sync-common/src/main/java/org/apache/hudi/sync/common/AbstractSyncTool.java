@@ -32,6 +32,7 @@ public abstract class AbstractSyncTool {
     this.props = props;
     this.conf = conf;
     this.fs = fs;
+    
     this.syncConfig = new HoodieSyncConfig(props);
   }
 
