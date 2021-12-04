@@ -71,23 +71,23 @@ public class HoodieWriteCommitPulsarCallbackConfig extends HoodieConfig {
       .withDocumentation("The timeout in each sending to pulsar.");
 
   public static final ConfigProperty<String> OPERATION_TIMEOUT = ConfigProperty
-      .key("operation-timeout")
+      .key("Pulsar.operation-timeout")
       .defaultValue("30s")
       .withDocumentation("Duration of waiting for completing an operation.");
 
   public static final ConfigProperty<String> CONNECTION_TIMEOUT = ConfigProperty
-      .key("connection-timeout")
+      .key("Pulsar.connection-timeout")
       .defaultValue("10s")
       .withDocumentation("Duration of waiting for a connection to a "
           + "broker to be established.");
 
   public static final ConfigProperty<String> REQUEST_TIMEOUT = ConfigProperty
-      .key("request-timeout")
+      .key("Pulsar.request-timeout")
       .defaultValue("60s")
       .withDocumentation("Duration of waiting for completing a request.");
 
   public static final ConfigProperty<String> KEEPALIVE_INTERVAL = ConfigProperty
-      .key("keepalive-interval")
+      .key("Pulsar.keepalive-interval")
       .defaultValue("30s")
       .withDocumentation("Duration of keeping alive interval for each "
           + "client broker connection.");
