@@ -168,7 +168,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
         TypedProperties properties = new TypedProperties();
         properties.putAll(connectConfigs.getProps());
         properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, tableBasePath);
-        AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {TypedProperties.class, FileSystem.class}, properties, fs);
+        AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {TypedProperties.class, Configuration.class, FileSystem.class}, properties, hadoopConf, fs);
         syncTool.syncHoodieTable();
       }
     }

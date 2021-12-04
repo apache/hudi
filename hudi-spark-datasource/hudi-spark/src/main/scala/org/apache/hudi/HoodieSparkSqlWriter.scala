@@ -542,7 +542,7 @@ object HoodieSparkSqlWriter {
       properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, basePath.toString)
       properties.put(HiveSyncConfig.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
       syncClientToolClassSet.foreach(impl => {
-        val syncHoodie = ReflectionUtils.loadClass(impl.trim, Array[Class[_]](classOf[TypedProperties], classOf[FileSystem]), properties, fs).asInstanceOf[AbstractSyncTool]
+        val syncHoodie = ReflectionUtils.loadClass(impl.trim, Array[Class[_]](classOf[TypedProperties], classOf[Configuration], classOf[FileSystem]), properties, fs.getConf(), fs).asInstanceOf[AbstractSyncTool]
         syncHoodie.syncHoodieTable()
       })
       metaSyncSuccess = true
