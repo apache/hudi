@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.pulsar.client.api.MessageRoutingMode;
@@ -55,7 +54,7 @@ import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarC
 import static org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig.TOPIC;
 
 /**
- * Kafka implementation of {@link HoodieWriteCommitCallback}.
+ * Pulsar implementation of {@link HoodieWriteCommitCallback}.
  */
 public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallback, Closeable {
 
@@ -89,16 +88,15 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
       producer.send(callbackMsg);
       LOG.info("Send callback message succeed");
     } catch (Exception e) {
-      LOG.error("Send kafka callback msg failed : ", e);
+      LOG.error("Send pulsar callback msg failed : ", e);
     }
   }
 
   /**
-   * Method helps to create {@link KafkaProducer}. Here we set acks = all and retries = 3 by default to ensure no data
-   * loss.
+   * Method helps to create {@link Producer}.
    *
-   * @param hoodieConfig Kafka configs
-   * @return A {@link KafkaProducer}
+   * @param hoodieConfig Pulsar configs
+   * @return A {@link Producer}
    */
   public Producer<String> createProducer(HoodieConfig hoodieConfig) throws PulsarClientException {
     MessageRoutingMode routeMode = Enum.valueOf(MessageRoutingMode.class,
