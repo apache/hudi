@@ -60,6 +60,8 @@ import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
+import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
+import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
@@ -726,9 +728,16 @@ public class DeltaSync implements Serializable {
 
     HoodieWriteConfig config = builder.build();
 
-    // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
-    if (config.writeCommitCallbackOn() && HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
-      HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
+    if (config.writeCommitCallbackOn()) {
+      // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
+      if (HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
+        HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
+      }
+
+      // set default value for {@link HoodieWriteCommitPulsarCallbackConfig} if needed.
+      if (HoodieWriteCommitPulsarCallback.class.getName().equals(config.getCallbackClass())) {
+        HoodieWriteCommitPulsarCallbackConfig.setCallbackPulsarConfigIfNeeded(config);
+      }
     }
 
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.from(props);
