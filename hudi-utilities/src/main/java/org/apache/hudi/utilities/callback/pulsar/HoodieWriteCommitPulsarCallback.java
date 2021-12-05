@@ -84,7 +84,7 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
   public void call(HoodieWriteCommitCallbackMessage callbackMessage) {
     String callbackMsg = HoodieWriteCommitCallbackUtil.convertToJsonString(callbackMessage);
     try {
-      producer.send(callbackMsg);
+      producer.newMessage().key(callbackMessage.getTableName()).value(callbackMsg).send();
       LOG.info("Send callback message succeed");
     } catch (Exception e) {
       LOG.error("Send pulsar callback msg failed : ", e);
