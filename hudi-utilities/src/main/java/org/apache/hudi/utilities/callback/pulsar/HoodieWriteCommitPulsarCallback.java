@@ -78,7 +78,6 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
     this.topic = config.getString(TOPIC);
     this.client = createClient(config);
     this.producer = createProducer(config);
-    validatePulsarConfig();
   }
 
   @Override
@@ -121,8 +120,9 @@ public class HoodieWriteCommitPulsarCallback implements HoodieWriteCommitCallbac
         .create();
   }
 
-  public static PulsarClient createClient(HoodieConfig hoodieConfig) throws PulsarClientException {
-    String serviceUrl = hoodieConfig.getString(BROKER_SERVICE_URL);
+  public PulsarClient createClient(HoodieConfig hoodieConfig) throws PulsarClientException {
+    validatePulsarConfig();
+
     Duration operationTimeout =
         parseDuration(hoodieConfig.getString(OPERATION_TIMEOUT));
     Duration connectionTimeout =

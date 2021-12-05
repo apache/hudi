@@ -100,4 +100,19 @@ public class HoodieWriteCommitPulsarCallbackConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Duration of keeping alive interval for each "
           + "client broker connection.");
+
+  /**
+   * Set default value for {@link HoodieWriteCommitPulsarCallbackConfig} if needed.
+   */
+  public static void setCallbackPulsarConfigIfNeeded(HoodieConfig config) {
+    config.setDefaultValue(PRODUCER_ROUTE_MODE);
+    config.setDefaultValue(OPERATION_TIMEOUT);
+    config.setDefaultValue(CONNECTION_TIMEOUT);
+    config.setDefaultValue(REQUEST_TIMEOUT);
+    config.setDefaultValue(KEEPALIVE_INTERVAL);
+    config.setDefaultValue(PRODUCER_SEND_TIMEOUT);
+    config.setDefaultValue(PRODUCER_PENDING_QUEUE_SIZE);
+    config.setDefaultValue(PRODUCER_PENDING_SIZE);
+    config.setDefaultValue(PRODUCER_BLOCK_QUEUE_FULL);
+  }
 }
