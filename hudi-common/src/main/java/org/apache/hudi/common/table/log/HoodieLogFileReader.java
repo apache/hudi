@@ -284,7 +284,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     long contentPosition = inputStream.getPos();
     byte[] corruptedBytes = HoodieLogBlock.readOrSkipContent(inputStream, corruptedBlockSize, readBlockLazily);
     return HoodieCorruptBlock.getBlock(logFile, inputStream, Option.ofNullable(corruptedBytes), readBlockLazily,
-        contentPosition, corruptedBlockSize, corruptedBlockSize, new HashMap<>(), new HashMap<>());
+        contentPosition, corruptedBlockSize, nextBlockOffset, new HashMap<>(), new HashMap<>());
   }
 
   private boolean isBlockCorrupt(int blocksize) throws IOException {
