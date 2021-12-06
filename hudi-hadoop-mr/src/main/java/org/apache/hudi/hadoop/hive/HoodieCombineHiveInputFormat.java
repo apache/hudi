@@ -183,7 +183,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         deserializerClassName = part.getDeserializer(job).getClass().getName();
       } catch (Exception e) {
         // ignore
-        LOG.error("can not get deserializerClassName, occur exception ", e);
+        LOG.error("Getting deserializer class name error ", e);
       }
 
       // don't combine if inputformat is a SymlinkTextInputFormat
