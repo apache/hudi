@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Maven: org.junit.platform:junit-platform-engine:1.7.0-M1">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/junit/platform/junit-platform-engine/1.7.0-M1/junit-platform-engine-1.7.0-M1.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/org/junit/platform/junit-platform-engine/1.7.0-M1/junit-platform-engine-1.7.0-M1-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/junit/platform/junit-platform-engine/1.7.0-M1/junit-platform-engine-1.7.0-M1-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
