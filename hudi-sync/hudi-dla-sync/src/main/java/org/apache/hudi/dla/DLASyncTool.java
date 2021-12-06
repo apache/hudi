@@ -206,7 +206,8 @@ public class DLASyncTool extends AbstractSyncTool {
       cmd.usage();
       System.exit(1);
     }
-    FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
-    new DLASyncTool(Utils.configToProperties(cfg), new Configuration(), fs).syncHoodieTable();
+    Configuration hadoopConf = new Configuration();
+    FileSystem fs = FSUtils.getFs(cfg.basePath, hadoopConf);
+    new DLASyncTool(Utils.configToProperties(cfg), hadoopConf, fs).syncHoodieTable();
   }
 }
