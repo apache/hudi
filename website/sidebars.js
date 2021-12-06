@@ -53,6 +53,7 @@ module.exports = {
                 'clustering',
                 'hoodie_cleaner',
                 'file_sizing',
+                'metadata',
                 'snapshot_exporter',
                 'precommit_validator'
             ],
