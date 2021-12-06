@@ -183,6 +183,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         deserializerClassName = part.getDeserializer(job).getClass().getName();
       } catch (Exception e) {
         // ignore
+        LOG.error("can not get deserializerClassName, occur exception ", e);
       }
       FileSystem inpFs = path.getFileSystem(job);
 
