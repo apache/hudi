@@ -67,10 +67,10 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   }
 
   public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-      boolean readBlockLazily, long position, long blockSize, long blockEndpos, Map<HeaderMetadataType, String> header,
+      boolean readBlockLazily, long position, long blockSize, long blockEndPos, Map<HeaderMetadataType, String> header,
       Map<HeaderMetadataType, String> footer) {
 
     return new HoodieCommandBlock(content, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), header, footer);
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);
   }
 }
