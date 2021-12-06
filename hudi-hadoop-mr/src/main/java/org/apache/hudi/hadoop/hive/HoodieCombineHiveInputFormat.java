@@ -26,7 +26,6 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.hive.common.StringInternUtils;
@@ -185,7 +184,6 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         // ignore
         LOG.error("can not get deserializerClassName, occur exception ", e);
       }
-      path.getFileSystem(job);
 
       // don't combine if inputformat is a SymlinkTextInputFormat
       if (inputFormat instanceof SymlinkTextInputFormat) {
