@@ -45,6 +45,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -248,14 +249,17 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MARKERS_TYPE = ConfigProperty
       .key("hoodie.write.markers.type")
-      .defaultValue(MarkerType.DIRECT.toString())
+      .defaultValue(MarkerType.TIMELINE_SERVER_BASED.toString())
       .sinceVersion("0.9.0")
       .withDocumentation("Marker type to use.  Two modes are supported: "
           + "- DIRECT: individual marker file corresponding to each data file is directly "
           + "created by the writer. "
           + "- TIMELINE_SERVER_BASED: marker operations are all handled at the timeline service "
           + "which serves as a proxy.  New marker entries are batch processed and stored "
-          + "in a limited number of underlying files for efficiency.");
+          + "in a limited number of underlying files for efficiency.  If HDFS is used or "
+          + "timeline server is disabled, DIRECT markers are used as fallback even if this "
+          + "is configure.  For Spark structured streaming, this configuration does not "
+          + "take effect, i.e., DIRECT markers are always used for Spark structured streaming.");
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
@@ -354,6 +358,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
           + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
 
+  public static final ConfigProperty<Integer> MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT = ConfigProperty
+      .key("hoodie.merge.small.file.group.candidates.limit")
+      .defaultValue(1)
+      .withDocumentation("Limits number of file groups, whose base file satisfies small-file limit, to consider for appending records during upsert operation. "
+          + "Only applicable to MOR tables");
+
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")
       .defaultValue(60 * 1000)
@@ -371,14 +381,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "SINGLE_WRITER: Only one active writer to the table. Maximizes throughput"
           + "OPTIMISTIC_CONCURRENCY_CONTROL: Multiple writers can operate on the table and exactly one of them succeed "
           + "if a conflict (writes affect the same file group) is detected.");
-
-  public static final ConfigProperty<Boolean> WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE = ConfigProperty
-      .key("hoodie.write.concurrency.merge.deltastreamer.state")
-      .defaultValue(false)
-      .withAlternatives("hoodie.write.meta.key.prefixes")
-      .withDocumentation("If enabled, this writer will merge Deltastreamer state from the previous checkpoint in order to allow both realtime "
-          + "and batch writers to ingest into a single table. This should not be enabled on Deltastreamer writers. Enabling this config means,"
-          + "for a spark writer, deltastreamer checkpoint will be copied over from previous commit to the current one.");
 
   /**
    * Currently the  use this to specify the write schema.
@@ -1035,6 +1037,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE);
   }
 
+  public int getSmallFileGroupCandidatesLimit() {
+    return getInt(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT);
+  }
+
   public EngineType getEngineType() {
     return engineType;
   }
@@ -1067,10 +1073,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP);
   }
 
-  public int getArchiveFilesToKeep() {
-    return getInt(HoodieCompactionConfig.ARCHIVE_FILES_TO_KEEP_PROP);
-  }
-
   public int getParquetSmallFileLimit() {
     return getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT);
   }
@@ -1097,10 +1099,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isAutoClean() {
     return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
-  }
-
-  public boolean getCleanArchiveEnable() {
-    return getBoolean(HoodieCompactionConfig.CLEAN_ARCHIVE_FILE_ENABLE_DROP);
   }
 
   public boolean isAutoArchive() {
@@ -1139,6 +1137,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB);
   }
 
+  public Long getCompactionLogFileSizeThreshold() {
+    return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_SIZE_THRESHOLD);
+  }
+
   public Boolean getCompactionLazyBlockReadEnabled() {
     return getBoolean(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLE);
   }
@@ -1166,6 +1168,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public boolean isClusteringEnabled() {
     // TODO: future support async clustering
     return inlineClusteringEnabled() || isAsyncClusteringEnabled();
+  }
+
+  public boolean isRollbackPendingClustering() {
+    return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
   }
 
   public int getInlineClusterMaxCommits() {
@@ -1574,6 +1580,22 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieMetricsDatadogConfig.METRIC_TAG_VALUES, ",").split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
+  public int getCloudWatchReportPeriodSeconds() {
+    return getInt(HoodieMetricsCloudWatchConfig.REPORT_PERIOD_SECONDS);
+  }
+
+  public String getCloudWatchMetricPrefix() {
+    return getString(HoodieMetricsCloudWatchConfig.METRIC_PREFIX);
+  }
+
+  public String getCloudWatchMetricNamespace() {
+    return getString(HoodieMetricsCloudWatchConfig.METRIC_NAMESPACE);
+  }
+
+  public int getCloudWatchMaxDatumsPerRequest() {
+    return getInt(HoodieMetricsCloudWatchConfig.MAX_DATUMS_PER_REQUEST);
+  }
+
   public String getMetricReporterClassName() {
     return getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS_NAME);
   }
@@ -1774,10 +1796,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public WriteConcurrencyMode getWriteConcurrencyMode() {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
-  }
-
-  public Boolean mergeDeltastreamerStateFromPreviousCommit() {
-    return getBoolean(HoodieWriteConfig.WRITE_CONCURRENCY_MERGE_DELTASTREAMER_STATE);
   }
 
   public Boolean inlineTableServices() {
@@ -2128,6 +2146,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withMergeSmallFileGroupCandidatesLimit(int limit) {
+      writeConfig.setValue(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT, String.valueOf(limit));
+      return this;
+    }
+
     public Builder withHeartbeatIntervalInMs(Integer heartbeatIntervalInMs) {
       writeConfig.setValue(CLIENT_HEARTBEAT_INTERVAL_IN_MS, String.valueOf(heartbeatIntervalInMs));
       return this;
@@ -2164,6 +2187,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     protected void setDefaults() {
+      writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Make sure the props is propagated
@@ -2175,7 +2199,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultOnCondition(!isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isClusteringConfigSet,
-          HoodieClusteringConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+          HoodieClusteringConfig.newBuilder().withEngineType(engineType)
+              .fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(
           writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isBootstrapConfigSet,
@@ -2216,6 +2241,19 @@ public class HoodieWriteConfig extends HoodieConfig {
       validate();
       // Build WriteConfig at the end
       return new HoodieWriteConfig(engineType, writeConfig.getProps());
+    }
+
+    private String getDefaultMarkersType(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return MarkerType.TIMELINE_SERVER_BASED.toString();
+        case FLINK:
+        case JAVA:
+          // Timeline-server-based marker is not supported for Flink and Java engines
+          return MarkerType.DIRECT.toString();
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
     }
   }
 }
