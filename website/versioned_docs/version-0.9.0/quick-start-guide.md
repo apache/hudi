@@ -142,7 +142,7 @@ dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 
 :::tip
 The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
-can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)
 :::
 
 ## Create Table
@@ -157,7 +157,7 @@ values={[
 <TabItem value="scala">
 
 ```scala
-# scala
+// scala
  // No separate create table command required in spark. First batch of write to a table will create the table if not exists. 
 ```
 
@@ -166,7 +166,7 @@ values={[
 
 ```python
 # pyspark
- // No separate create table command required in spark. First batch of write to a table will create the table if not exists.
+ # No separate create table command required in spark. First batch of write to a table will create the table if not exists.
 ```
 
 </TabItem>
