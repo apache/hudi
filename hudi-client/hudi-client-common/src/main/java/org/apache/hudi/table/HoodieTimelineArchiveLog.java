@@ -158,7 +158,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     // TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
     // with logic above to avoid Stream.concats
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
-    Option<HoodieInstant> oldestPendingCompactionOrClusteringInstant =
+    Option<HoodieInstant> oldestPendingCompactionAndReplaceInstant =
         table.getActiveTimeline().filterPendingCompactionAndReplaceTimeline().firstInstant();
     Option<HoodieInstant> oldestInflightCommitInstant =
         table.getActiveTimeline()
@@ -176,7 +176,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
             return !(firstSavepoint.isPresent() && HoodieTimeline.compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
           }).filter(s -> {
             // Ensure commits >= oldest pending compaction commit is retained
-            return oldestPendingCompactionOrClusteringInstant
+            return oldestPendingCompactionAndReplaceInstant
                 .map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);
           });
