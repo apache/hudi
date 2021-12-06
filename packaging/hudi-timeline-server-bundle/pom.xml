@@ -144,7 +144,7 @@
         <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-shade-plugin</artifactId>
-            <version>2.4</version>
+            <version>${maven-shade-plugin.version}</version>
             <configuration>
                 <createDependencyReducedPom>true</createDependencyReducedPom>
                 <filters>
