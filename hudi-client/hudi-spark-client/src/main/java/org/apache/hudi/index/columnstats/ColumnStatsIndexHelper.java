@@ -495,5 +495,4 @@ public class ColumnStatsIndexHelper {
         String.format("%s.%s", newIndexTable, columns.get(0))
     );
   }
-
 }

@@ -554,7 +554,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     ZORDER("z-order"),
     HILBERT("hilbert");
 
-    private static final Map<String, LayoutOptimizationStrategy> valueToEnumMap = createValueToEnumMap();
+    private static final Map<String, LayoutOptimizationStrategy> VALUE_ENUM_MAP = createValueToEnumMap();
 
     private final String value;
 
@@ -563,7 +563,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public static LayoutOptimizationStrategy fromValue(String value) {
-      return valueToEnumMap.get(value);
+      return VALUE_ENUM_MAP.get(value);
     }
 
     private static Map<String, LayoutOptimizationStrategy> createValueToEnumMap() {
