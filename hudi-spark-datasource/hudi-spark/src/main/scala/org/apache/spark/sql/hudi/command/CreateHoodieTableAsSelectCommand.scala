@@ -25,11 +25,11 @@ import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.sql.InsertMode
 
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
-import org.apache.spark.sql.hudi.HoodieSqlUtils.getTableLocation
+import org.apache.spark.sql.hudi.HoodieSqlUtils
 
 import scala.collection.JavaConverters._
 
@@ -64,18 +64,23 @@ case class CreateHoodieTableAsSelectCommand(
         // scalastyle:on
       }
     }
-    val tablePath = getTableLocation(table, sparkSession)
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    assert(CreateHoodieTableCommand.isEmptyPath(tablePath, hadoopConf),
-      s"Path '$tablePath' should be empty for CTAS")
 
     // ReOrder the query which move the partition columns to the last of the project list
     val reOrderedQuery = reOrderPartitionColumn(query, table.partitionColumnNames)
     val tableWithSchema = table.copy(schema = reOrderedQuery.schema)
 
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableWithSchema)
+    val tablePath = hoodieCatalogTable.tableLocation
+    val hadoopConf = sparkSession.sessionState.newHadoopConf()
+    assert(HoodieSqlUtils.isEmptyPath(tablePath, hadoopConf),
+      s"Path '$tablePath' should be empty for CTAS")
+
     // Execute the insert query
     try {
-      val tblProperties = table.storage.properties ++ table.properties
+      // init hoodie table
+      hoodieCatalogTable.initHoodieTable()
+
+      val tblProperties = hoodieCatalogTable.catalogProperties
       val options = Map(
         DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> (table.tableType == CatalogTableType.MANAGED).toString,
         DataSourceWriteOptions.HIVE_TABLE_SERDE_PROPERTIES.key -> ConfigUtils.configToString(tblProperties.asJava),
@@ -89,11 +94,8 @@ case class CreateHoodieTableAsSelectCommand(
         // If write success, create the table in catalog if it has not synced to the
         // catalog by the meta sync.
         if (!sparkSession.sessionState.catalog.tableExists(tableIdentWithDB)) {
-          // Create the table
-          val createTableCommand = CreateHoodieTableCommand(tableWithSchema, mode == SaveMode.Ignore)
-          val path = getTableLocation(table, sparkSession)
-          val (finalSchema, _, tableSqlOptions) = createTableCommand.parseSchemaAndConfigs(sparkSession, path, ctas = true)
-          createTableCommand.createTableInCatalog(sparkSession, finalSchema, tableSqlOptions)
+          // create catalog table for this hoodie table
+          CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, mode == SaveMode.Ignore)
         }
       } else { // failed to insert data, clear table path
         clearTablePath(tablePath, hadoopConf)

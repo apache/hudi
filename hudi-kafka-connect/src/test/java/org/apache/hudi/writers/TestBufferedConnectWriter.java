@@ -20,6 +20,7 @@ package org.apache.hudi.writers;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -62,6 +63,7 @@ public class TestBufferedConnectWriter {
     configs = KafkaConnectConfigs.newBuilder().build();
     schemaProvider = new TestAbstractConnectWriter.TestSchemaProvider();
     writeConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
         .withPath("/tmp")
         .withSchema(schemaProvider.getSourceSchema().toString())
         .build();

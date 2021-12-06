@@ -138,7 +138,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     val e2 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions2)
     }
-    assertTrue(e2.getMessage.contains("Can't find primary key"))
+    assertTrue(e2.getMessage.contains("Can't find primaryKey"))
 
     // preCombine field not found
     val sqlOptions3 = baseSqlOptions ++ Map(
@@ -149,7 +149,7 @@ class TestHoodieOptionConfig extends HoodieClientTestBase {
     val e3 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions3)
     }
-    assertTrue(e3.getMessage.contains("Can't find precombine key"))
+    assertTrue(e3.getMessage.contains("Can't find preCombineKey"))
 
     // miss type parameter
     val sqlOptions4 = baseSqlOptions ++ Map(

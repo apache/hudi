@@ -57,6 +57,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " to delete older file slices. It's recommended to enable this, to ensure metadata and data storage"
           + " growth is bounded.");
 
+  public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
+      .key("hoodie.archive.automatic")
+      .defaultValue("true")
+      .withDocumentation("When enabled, the archival table service is invoked immediately after each commit,"
+          + " to archive commits if we cross a maximum value of commits."
+          + " It's recommended to enable this, to ensure number of active commits is bounded.");
+
   public static final ConfigProperty<String> ASYNC_CLEAN = ConfigProperty
       .key("hoodie.clean.async")
       .defaultValue("false")
@@ -170,6 +177,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .defaultValue(String.valueOf(500 * 1024))
       .withDocumentation("Amount of MBs to spend during compaction run for the LogFileSizeBasedCompactionStrategy. "
           + "This value helps bound ingestion latency while compaction is run inline mode.");
+
+  public static final ConfigProperty<Long> COMPACTION_LOG_FILE_SIZE_THRESHOLD = ConfigProperty
+      .key("hoodie.compaction.logfile.size.threshold")
+      .defaultValue(0L)
+      .withDocumentation("Only if the log file size is greater than the threshold in bytes,"
+          + " the file group will be compacted.");
 
   public static final ConfigProperty<String> COMPACTION_STRATEGY = ConfigProperty
       .key("hoodie.compaction.strategy")
@@ -499,6 +512,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withAutoArchive(Boolean autoArchive) {
+      compactionConfig.setValue(AUTO_ARCHIVE, String.valueOf(autoArchive));
+      return this;
+    }
+
     public Builder withIncrementalCleaningMode(Boolean incrementalCleaningMode) {
       compactionConfig.setValue(CLEANER_INCREMENTAL_MODE_ENABLE, String.valueOf(incrementalCleaningMode));
       return this;
@@ -617,6 +635,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withTargetPartitionsPerDayBasedCompaction(int targetPartitionsPerCompaction) {
       compactionConfig.setValue(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION, String.valueOf(targetPartitionsPerCompaction));
+      return this;
+    }
+
+    public Builder withLogFileSizeThresholdBasedCompaction(long logFileSizeThreshold) {
+      compactionConfig.setValue(COMPACTION_LOG_FILE_SIZE_THRESHOLD, String.valueOf(logFileSizeThreshold));
       return this;
     }
 

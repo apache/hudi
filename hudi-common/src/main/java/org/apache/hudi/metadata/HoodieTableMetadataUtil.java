@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
@@ -338,9 +339,10 @@ public class HoodieTableMetadataUtil {
    * The list of file slices returned is sorted in the correct order of file group name.
    * @param metaClient instance of {@link HoodieTableMetaClient}.
    * @param partition The name of the partition whose file groups are to be loaded.
+   * @param isReader true if reader code path, false otherwise.
    * @return List of latest file slices for all file groups in a given partition.
    */
-  public static List<FileSlice> loadPartitionFileGroupsWithLatestFileSlices(HoodieTableMetaClient metaClient, String partition) {
+  public static List<FileSlice> loadPartitionFileGroupsWithLatestFileSlices(HoodieTableMetaClient metaClient, String partition, boolean isReader) {
     LOG.info("Loading file groups for metadata table partition " + partition);
 
     // If there are no commits on the metadata table then the table's default FileSystemView will not return any file
@@ -352,7 +354,9 @@ public class HoodieTableMetadataUtil {
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline);
-    return fsView.getLatestFileSlices(partition).sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
+    Stream<FileSlice> fileSliceStream = isReader ? fsView.getLatestMergedFileSlicesBeforeOrOn(partition, timeline.filterCompletedInstants().lastInstant().get().getTimestamp()) :
+        fsView.getLatestFileSlices(partition);
+    return fileSliceStream.sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
         .collect(Collectors.toList());
   }
 }

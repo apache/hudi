@@ -18,11 +18,8 @@
 
 package org.apache.hudi.client.utils;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConcurrentOperation;
+import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -34,9 +31,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import java.io.IOException;
+import java.util.Map;
 import java.util.stream.Stream;
 
 public class TransactionUtils {
@@ -45,6 +45,7 @@ public class TransactionUtils {
 
   /**
    * Resolve any write conflicts when committing data.
+   *
    * @param table
    * @param currentTxnOwnerInstant
    * @param thisCommitMetadata
@@ -54,11 +55,11 @@ public class TransactionUtils {
    * @throws HoodieWriteConflictException
    */
   public static Option<HoodieCommitMetadata> resolveWriteConflictIfAny(
-          final HoodieTable table,
-          final Option<HoodieInstant> currentTxnOwnerInstant,
-          final Option<HoodieCommitMetadata> thisCommitMetadata,
-          final HoodieWriteConfig config,
-          Option<HoodieInstant> lastCompletedTxnOwnerInstant) throws HoodieWriteConflictException {
+      final HoodieTable table,
+      final Option<HoodieInstant> currentTxnOwnerInstant,
+      final Option<HoodieCommitMetadata> thisCommitMetadata,
+      final HoodieWriteConfig config,
+      Option<HoodieInstant> lastCompletedTxnOwnerInstant) throws HoodieWriteConflictException {
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       Stream<HoodieInstant> instantStream = resolutionStrategy.getCandidateInstants(table.getActiveTimeline(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant);
@@ -68,7 +69,7 @@ public class TransactionUtils {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
           if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
             LOG.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
-                    + otherOperation + ", attempting to resolve it...");
+                + otherOperation + ", attempting to resolve it...");
             resolutionStrategy.resolveConflict(table, thisOperation, otherOperation);
           }
         } catch (IOException io) {
@@ -77,10 +78,6 @@ public class TransactionUtils {
       });
       LOG.info("Successfully resolved conflicts, if any");
 
-      if (config.mergeDeltastreamerStateFromPreviousCommit()) {
-        mergeCheckpointStateFromPreviousCommit(table.getMetaClient(), thisOperation.getCommitMetadataOption());
-      }
-
       return thisOperation.getCommitMetadataOption();
     }
     return thisCommitMetadata;
@@ -88,6 +85,7 @@ public class TransactionUtils {
 
   /**
    * Get the last completed transaction hoodie instant and {@link HoodieCommitMetadata#getExtraMetadata()}.
+   *
    * @param metaClient
    * @return
    */
@@ -115,32 +113,6 @@ public class TransactionUtils {
       }
     } catch (IOException io) {
       throw new HoodieIOException("Unable to read metadata for instant " + hoodieInstantOption.get(), io);
-    }
-  }
-
-  protected static void mergeCheckpointStateFromPreviousCommit(HoodieTableMetaClient metaClient, Option<HoodieCommitMetadata> thisMetadata) {
-    overrideWithLatestCommitMetadata(metaClient, thisMetadata, Collections.singletonList(HoodieWriteConfig.DELTASTREAMER_CHECKPOINT_KEY));
-  }
-
-  /**
-   * Generic method allowing us to override the current metadata with the metadata from
-   * the latest instant for the specified key prefixes.
-   * @param metaClient
-   * @param thisMetadata
-   * @param keyPrefixes The key prefixes to merge from the previous commit
-   */
-  private static void overrideWithLatestCommitMetadata(HoodieTableMetaClient metaClient,
-                                                       Option<HoodieCommitMetadata> thisMetadata,
-                                                       List<String> keyPrefixes) {
-    if (keyPrefixes.size() == 1 && keyPrefixes.get(0).length() < 1) {
-      return;
-    }
-    Option<Pair<HoodieInstant, Map<String, String>>> lastInstant = getLastCompletedTxnInstantAndMetadata(metaClient);
-    if (lastInstant.isPresent() && thisMetadata.isPresent()) {
-      Stream<String> lastCommitMetadataKeys = lastInstant.get().getRight().keySet().stream();
-      keyPrefixes.stream().forEach(keyPrefix -> lastCommitMetadataKeys
-          .filter(key -> key.startsWith(keyPrefix))
-          .forEach(key -> thisMetadata.get().getExtraMetadata().put(key, lastInstant.get().getRight().get(key))));
     }
   }
 }

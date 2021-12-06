@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -157,11 +158,8 @@ public class UtilHelpers {
     }
   }
 
-  /**
-   *
-   */
-  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(fs, cfgPath);
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
@@ -467,6 +465,15 @@ public class UtilHelpers {
         return finalLatestTableSchema;
       }
     };
+  }
+
+  public static HoodieTableMetaClient createMetaClient(
+      JavaSparkContext jsc, String basePath, boolean shouldLoadActiveTimelineOnLoad) {
+    return HoodieTableMetaClient.builder()
+        .setConf(jsc.hadoopConfiguration())
+        .setBasePath(basePath)
+        .setLoadActiveTimelineOnLoad(shouldLoadActiveTimelineOnLoad)
+        .build();
   }
 
   @FunctionalInterface

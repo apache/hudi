@@ -20,7 +20,6 @@ package org.apache.hudi
 
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
-import java.util
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
@@ -318,7 +317,7 @@ object AvroConversionHelper {
           } else {
             val sourceArray = item.asInstanceOf[Seq[Any]]
             val sourceArraySize = sourceArray.size
-            val targetList = new util.ArrayList[Any](sourceArraySize)
+            val targetList = new java.util.ArrayList[Any](sourceArraySize)
             var idx = 0
             while (idx < sourceArraySize) {
               targetList.add(elementConverter(sourceArray(idx)))
@@ -336,7 +335,7 @@ object AvroConversionHelper {
           if (item == null) {
             null
           } else {
-            val javaMap = new util.HashMap[String, Any]()
+            val javaMap = new java.util.HashMap[String, Any]()
             item.asInstanceOf[Map[String, Any]].foreach { case (key, value) =>
               javaMap.put(key, valueConverter(value))
             }

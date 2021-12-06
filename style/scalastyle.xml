@@ -27,7 +27,7 @@
  <check level="error" class="org.scalastyle.file.FileTabChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.file.FileLengthChecker" enabled="true">
   <parameters>
-   <parameter name="maxFileLength"><![CDATA[900]]></parameter>
+   <parameter name="maxFileLength"><![CDATA[1000]]></parameter>
   </parameters>
  </check>
  <check level="error" class="org.scalastyle.scalariform.SpacesAfterPlusChecker" enabled="true"/>

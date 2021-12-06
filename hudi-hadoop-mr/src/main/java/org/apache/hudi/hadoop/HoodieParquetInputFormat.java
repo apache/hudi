@@ -59,7 +59,7 @@ import java.util.stream.IntStream;
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
  * that does not correspond to a hoodie table then they are passed in as is (as what FileInputFormat.listStatus()
- * would do). The JobConf could have paths from multipe Hoodie/Non-Hoodie tables
+ * would do). The JobConf could have paths from multiple Hoodie/Non-Hoodie tables
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat

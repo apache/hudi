@@ -17,37 +17,27 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.{DataSourceWriteOptions, HoodieWriterUtils, SparkAdapterSupport}
-import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.common.config.DFSPropertiesConfiguration
+
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieFileFormat
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
-import org.apache.hudi.keygen.ComplexKeyGenerator
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 
-import org.apache.spark.internal.Logging
-import org.apache.spark.sql.avro.SchemaConverters
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, TableAlreadyExistsException}
-import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStorageFormat, CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
-import org.apache.spark.sql.hudi.HoodieOptionConfig
+import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
-import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand.checkTableConfigEqual
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
-import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 
-import java.util.{Locale, Properties}
-import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.control.NonFatal
@@ -57,10 +47,6 @@ import scala.util.control.NonFatal
  */
 case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean)
   extends RunnableCommand with SparkAdapterSupport {
-
-  val tableName = formatName(table.identifier.table)
-
-  val tblProperties = table.storage.properties ++ table.properties
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableIsExists = sparkSession.sessionState.catalog.tableExists(table.identifier)
@@ -74,94 +60,50 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       }
     }
 
-    // get schema with meta fields, table config if hudi table exists, options including
-    // table configs and properties of the catalog table
-    val path = getTableLocation(table, sparkSession)
-    val (finalSchema, existingTableConfig, tableSqlOptions) = parseSchemaAndConfigs(sparkSession, path)
-
-    // Init the hoodie.properties
-    initTableIfNeed(sparkSession, path, finalSchema, existingTableConfig, tableSqlOptions)
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, table)
+    // check if there are conflict between table configs defined in hoodie table and properties defined in catalog.
+    CreateHoodieTableCommand.validateTblProperties(hoodieCatalogTable)
+    // init hoodie table
+    hoodieCatalogTable.initHoodieTable()
 
     try {
-      // Create table in the catalog
-      createTableInCatalog(sparkSession, finalSchema, tableSqlOptions)
+      // create catalog table for this hoodie table
+      CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists)
     } catch {
       case NonFatal(e) =>
         logWarning(s"Failed to create catalog table in metastore: ${e.getMessage}")
     }
-
     Seq.empty[Row]
   }
+}
 
-  def parseSchemaAndConfigs(sparkSession: SparkSession, path: String, ctas: Boolean = false)
-      : (StructType, Map[String, String], Map[String, String]) = {
-    val resolver = sparkSession.sessionState.conf.resolver
-    val conf = sparkSession.sessionState.newHadoopConf
-    // if CTAS, we treat the table we just created as nonexistent
-    val isTableExists = if (ctas) false else tableExistsInPath(path, conf)
-    var existingTableConfig = Map.empty[String, String]
-    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
-    val globalSqlProps = HoodieOptionConfig.mappingTableConfigToSqlOption(
-      HoodieWriterUtils.mappingSparkDatasourceConfigsToTableConfigs(globalProps))
-    val sqlOptions = HoodieOptionConfig.withDefaultSqlOptions(globalSqlProps ++ tblProperties)
-    val catalogTableProps = HoodieOptionConfig.mappingSqlOptionToTableConfig(tblProperties)
+object CreateHoodieTableCommand {
 
-    // get final schema and parameters
-    val (finalSchema, tableSqlOptions) = (table.tableType, isTableExists) match {
-      case (CatalogTableType.EXTERNAL, true) =>
-        // If this is an external table & the table has already exists in the location,
-        // load the schema from the table meta.
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(path)
-          .setConf(conf)
-          .build()
-        val tableSchema = getTableSqlSchema(metaClient)
-        existingTableConfig = metaClient.getTableConfig.getProps.asScala.toMap
-        validateTableConfig(sparkSession, catalogTableProps, convertMapToHoodieConfig(existingTableConfig))
+  def validateTblProperties(hoodieCatalogTable: HoodieCatalogTable): Unit = {
+    if (hoodieCatalogTable.hoodieTableExists) {
+      val originTableConfig = hoodieCatalogTable.tableConfig.getProps.asScala.toMap
+      val tableOptions = hoodieCatalogTable.catalogProperties
 
-        val options = extraTableConfig(sparkSession, isTableExists, existingTableConfig) ++
-          sqlOptions ++ HoodieOptionConfig.mappingTableConfigToSqlOption(existingTableConfig)
-
-        val userSpecifiedSchema = table.schema
-        val schema = if (userSpecifiedSchema.isEmpty && tableSchema.isDefined) {
-          tableSchema.get
-        } else if (userSpecifiedSchema.nonEmpty) {
-          userSpecifiedSchema
-        } else {
-          throw new IllegalArgumentException(s"Missing schema for Create Table: $tableName")
-        }
-
-        (addMetaFields(schema), options)
-
-      case (_, false) =>
-        assert(table.schema.nonEmpty, s"Missing schema for Create Table: $tableName")
-        val schema = table.schema
-        val options = extraTableConfig(sparkSession, isTableExists = false) ++ sqlOptions
-        (addMetaFields(schema), options)
-
-      case (CatalogTableType.MANAGED, true) =>
-        throw new AnalysisException(s"Can not create the managed table('$tableName')" +
-          s". The associated location('$path') already exists.")
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PRECOMBINE_FIELD.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PARTITION_FIELDS.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.RECORDKEY_FIELDS.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
     }
-    HoodieOptionConfig.validateTable(sparkSession, finalSchema, tableSqlOptions)
-
-    val dataSchema = finalSchema.filterNot { f =>
-      table.partitionColumnNames.exists(resolver(_, f.name))
-    }
-    verifyDataSchema(table.identifier, table.tableType, dataSchema)
-
-    (finalSchema, existingTableConfig, tableSqlOptions)
   }
 
-  def createTableInCatalog(sparkSession: SparkSession, finalSchema: StructType,
-      options: Map[String, String]): Unit = {
+  def createTableInCatalog(sparkSession: SparkSession,
+      hoodieCatalogTable: HoodieCatalogTable, ignoreIfExists: Boolean): Unit = {
+    val table = hoodieCatalogTable.table
     assert(table.tableType != CatalogTableType.VIEW)
-    assert(table.provider.isDefined)
-    val sessionState = sparkSession.sessionState
-    val path = getTableLocation(table, sparkSession)
-    val conf = sparkSession.sessionState.newHadoopConf()
 
-    val tableType = HoodieOptionConfig.getTableType(options)
+    val catalog = sparkSession.sessionState.catalog
+    val path = hoodieCatalogTable.tableLocation
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val properties = tableConfig.getProps.asScala.toMap
+
+    val tableType = tableConfig.getTableType.name()
     val inputFormat = tableType match {
       case DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL =>
         classOf[HoodieParquetInputFormat].getCanonicalName
@@ -173,7 +115,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     val serdeFormat = HoodieInputFormatUtils.getSerDeClassName(HoodieFileFormat.PARQUET)
 
     // only parameters irrelevant to hudi can be set to storage.properties
-    val storageProperties = HoodieOptionConfig.deleteHoodieOptions(options)
+    val storageProperties = HoodieOptionConfig.deleteHoodieOptions(properties)
     val newStorage = new CatalogStorageFormat(
       Some(new Path(path).toUri),
       Some(inputFormat),
@@ -182,17 +124,18 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       table.storage.compressed,
       storageProperties + ("path" -> path))
 
-    val newDatabaseName = formatName(table.identifier.database
-      .getOrElse(sessionState.catalog.getCurrentDatabase))
+    val tablName = HoodieSqlUtils.formatName(sparkSession, table.identifier.table)
+    val newDatabaseName = HoodieSqlUtils.formatName(sparkSession, table.identifier.database
+      .getOrElse(catalog.getCurrentDatabase))
 
     val newTableIdentifier = table.identifier
-      .copy(table = tableName, database = Some(newDatabaseName))
+      .copy(table = tablName, database = Some(newDatabaseName))
 
     // append pk, preCombineKey, type to the properties of table
-    val newTblProperties = table.storage.properties ++ table.properties ++ HoodieOptionConfig.extractSqlOptions(options)
+    val newTblProperties = hoodieCatalogTable.catalogProperties ++ HoodieOptionConfig.extractSqlOptions(properties)
     val newTable = table.copy(
       identifier = newTableIdentifier,
-      schema = finalSchema,
+      schema = hoodieCatalogTable.tableSchema,
       storage = newStorage,
       createVersion = SPARK_VERSION,
       properties = newTblProperties
@@ -201,9 +144,9 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     // Create table in the catalog
     val enableHive = isEnableHive(sparkSession)
     if (enableHive) {
-      createHiveDataSourceTable(newTable, sparkSession)
+      createHiveDataSourceTable(sparkSession, newTable, ignoreIfExists)
     } else {
-      sessionState.catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
+      catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
     }
   }
 
@@ -215,7 +158,8 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     * @param table
     * @param sparkSession
     */
-  private def createHiveDataSourceTable(table: CatalogTable, sparkSession: SparkSession): Unit = {
+  private def createHiveDataSourceTable(sparkSession: SparkSession, table: CatalogTable,
+      ignoreIfExists: Boolean): Unit = {
     val dbName = table.identifier.database.get
     // check database
     val dbExists = sparkSession.sessionState.catalog.databaseExists(dbName)
@@ -235,43 +179,6 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       sparkSession.sessionState.newHadoopConf())
     // create hive table.
     client.createTable(tableWithDataSourceProps, ignoreIfExists)
-  }
-
-  private def formatName(name: String): String = {
-    if (conf.caseSensitiveAnalysis) name else name.toLowerCase(Locale.ROOT)
-  }
-
-  // This code is forked from org.apache.spark.sql.hive.HiveExternalCatalog#verifyDataSchema
-  private def verifyDataSchema(tableName: TableIdentifier, tableType: CatalogTableType,
-      dataSchema: Seq[StructField]): Unit = {
-    if (tableType != CatalogTableType.VIEW) {
-      val invalidChars = Seq(",", ":", ";")
-      def verifyNestedColumnNames(schema: StructType): Unit = schema.foreach { f =>
-        f.dataType match {
-          case st: StructType => verifyNestedColumnNames(st)
-          case _ if invalidChars.exists(f.name.contains) =>
-            val invalidCharsString = invalidChars.map(c => s"'$c'").mkString(", ")
-            val errMsg = "Cannot create a table having a nested column whose name contains " +
-              s"invalid characters ($invalidCharsString) in Hive metastore. Table: $tableName; " +
-              s"Column: ${f.name}"
-            throw new AnalysisException(errMsg)
-          case _ =>
-        }
-      }
-
-      dataSchema.foreach { f =>
-        f.dataType match {
-          // Checks top-level column names
-          case _ if f.name.contains(",") =>
-            throw new AnalysisException("Cannot create a table having a column whose name " +
-              s"contains commas in Hive metastore. Table: $tableName; Column: ${f.name}")
-          // Checks nested column names
-          case st: StructType =>
-            verifyNestedColumnNames(st)
-          case _ =>
-        }
-      }
-    }
   }
 
   // This code is forked from org.apache.spark.sql.hive.HiveExternalCatalog#tableMetaToTableProps
@@ -323,93 +230,15 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     properties.toMap
   }
 
-  def extraTableConfig(sparkSession: SparkSession, isTableExists: Boolean,
-      originTableConfig: Map[String, String] = Map.empty): Map[String, String] = {
-    val extraConfig = mutable.Map.empty[String, String]
-    if (isTableExists) {
-      val allPartitionPaths = getAllPartitionPaths(sparkSession, table)
-      if (originTableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)) {
-        extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) =
-          originTableConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
-      } else {
-        extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) =
-          String.valueOf(isHiveStyledPartitioning(allPartitionPaths, table))
-      }
-      if (originTableConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)) {
-        extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) =
-        originTableConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
-      } else {
-        extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) =
-          String.valueOf(isUrlEncodeEnabled(allPartitionPaths, table))
-      }
-    } else {
-      extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
-      extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue
-    }
-
-    if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
-      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
-        HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
-          originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
-    } else {
-      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = classOf[ComplexKeyGenerator].getCanonicalName
-    }
-    extraConfig.toMap
-  }
-
-  /**
-    * Init the hoodie.properties.
-    */
-  def initTableIfNeed(sparkSession: SparkSession,
-      location: String,
-      schema: StructType,
+  private def checkTableConfigEqual(
       originTableConfig: Map[String, String],
-      sqlOptions: Map[String, String]): Unit = {
-
-    logInfo(s"Init hoodie.properties for $tableName")
-    val conf = sparkSession.sessionState.newHadoopConf()
-
-    val tableOptions = HoodieOptionConfig.mappingSqlOptionToTableConfig(sqlOptions)
-    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PRECOMBINE_FIELD.key)
-    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PARTITION_FIELDS.key)
-    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.RECORDKEY_FIELDS.key)
-    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
-    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
-    checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
-    // Save all the table config to the hoodie.properties.
-    val parameters = HoodieWriterUtils.mappingSparkDatasourceConfigsToTableConfigs(originTableConfig ++ tableOptions)
-    val properties = new Properties()
-    properties.putAll(parameters.asJava)
-    HoodieTableMetaClient.withPropertyBuilder()
-      .fromProperties(properties)
-      .setTableName(tableName)
-      .setTableCreateSchema(SchemaConverters.toAvroType(schema).toString())
-      .setPartitionFields(table.partitionColumnNames.mkString(","))
-      .initTable(conf, location)
-  }
-}
-
-object CreateHoodieTableCommand extends Logging {
-
-  def checkTableConfigEqual(originTableConfig: Map[String, String],
-    newTableConfig: Map[String, String], configKey: String): Unit = {
+      newTableConfig: Map[String, String],
+      configKey: String): Unit = {
     if (originTableConfig.contains(configKey) && newTableConfig.contains(configKey)) {
       assert(originTableConfig(configKey) == newTableConfig(configKey),
         s"Table config: $configKey in the create table is: ${newTableConfig(configKey)}, is not the same with the value in " +
         s"hoodie.properties, which is:  ${originTableConfig(configKey)}. Please keep the same.")
     }
   }
-
-  /**
-   * Check if this is a empty table path.
-   */
-  def isEmptyPath(tablePath: String, conf: Configuration): Boolean = {
-    val basePath = new Path(tablePath)
-    val fs = basePath.getFileSystem(conf)
-    if (fs.exists(basePath)) {
-      fs.listStatus(basePath).isEmpty
-    } else {
-      true
-    }
-  }
 }
+

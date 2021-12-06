@@ -18,14 +18,16 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
+
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.hudi.HoodieSqlUtils.getTableLocation
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import scala.util.control.NonFatal
@@ -34,22 +36,21 @@ import scala.util.control.NonFatal
  * Command for alter hudi table's column type.
  */
 case class AlterHoodieTableChangeColumnCommand(
-    tableName: TableIdentifier,
+    tableIdentifier: TableIdentifier,
     columnName: String,
     newColumn: StructField)
   extends RunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val catalog = sparkSession.sessionState.catalog
-    val table = catalog.getTableMetadata(tableName)
-    val resolver = sparkSession.sessionState.conf.resolver
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
 
+    val resolver = sparkSession.sessionState.conf.resolver
     if (!resolver(columnName, newColumn.name)) {
       throw new AnalysisException(s"Can not support change column name for hudi table currently.")
     }
     // Get the new schema
-    val newSqlSchema = StructType(
-      table.schema.fields.map { field =>
+    val newTableSchema = StructType(
+      hoodieCatalogTable.tableSchema.fields.map { field =>
       if (resolver(field.name, columnName)) {
         newColumn
       } else {
@@ -57,34 +58,30 @@ case class AlterHoodieTableChangeColumnCommand(
       }
     })
     val newDataSchema = StructType(
-      table.dataSchema.fields.map { field =>
+      hoodieCatalogTable.dataSchema.fields.map { field =>
         if (resolver(field.name, columnName)) {
           newColumn
         } else {
           field
         }
       })
-    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName.table)
-    val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
+    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableIdentifier.table)
+    val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newTableSchema, structName, nameSpace)
 
-    val path = getTableLocation(table, sparkSession)
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
-      .setConf(hadoopConf).build()
     // Validate the compatibility between new schema and origin schema.
-    validateSchema(newSchema, metaClient)
+    validateSchema(newSchema, hoodieCatalogTable.metaClient)
     // Commit new schema to change the table schema
-    AlterHoodieTableAddColumnsCommand.commitWithSchema(newSchema, table, sparkSession)
+    AlterHoodieTableAddColumnsCommand.commitWithSchema(newSchema, hoodieCatalogTable, sparkSession)
 
     try {
-      sparkSession.catalog.uncacheTable(tableName.quotedString)
+      sparkSession.catalog.uncacheTable(tableIdentifier.quotedString)
     } catch {
       case NonFatal(e) =>
-        log.warn(s"Exception when attempting to uncache table ${tableName.quotedString}", e)
+        log.warn(s"Exception when attempting to uncache table ${tableIdentifier.quotedString}", e)
     }
-    sparkSession.catalog.refreshTable(tableName.unquotedString)
+    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     // Change the schema in the meta using new data schema.
-    catalog.alterTableDataSchema(tableName, newDataSchema)
+    sparkSession.sessionState.catalog.alterTableDataSchema(tableIdentifier, newDataSchema)
 
     Seq.empty[Row]
   }

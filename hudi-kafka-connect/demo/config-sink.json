@@ -1,7 +1,7 @@
 {
     "name": "hudi-sink",
     "config": {
-		"bootstrap.servers": "localhost:9092",
+		"bootstrap.servers": "kafkabroker:9092",
 		"connector.class": "org.apache.hudi.connect.HoodieSinkConnector",
 		"tasks.max": "4",
 		"key.converter": "org.apache.kafka.connect.storage.StringConverter",
@@ -14,6 +14,7 @@
 		"hoodie.datasource.write.recordkey.field": "volume",
 		"hoodie.datasource.write.partitionpath.field": "date",
 		"hoodie.schemaprovider.class": "org.apache.hudi.schema.SchemaRegistryProvider",
-		"hoodie.deltastreamer.schemaprovider.registry.url": "http://localhost:8081/subjects/hudi-test-topic/versions/latest"
-	}
+		"hoodie.deltastreamer.schemaprovider.registry.url": "http://localhost:8082/subjects/hudi-test-topic/versions/latest",
+		"hoodie.kafka.commit.interval.secs": 60
+      }
 }

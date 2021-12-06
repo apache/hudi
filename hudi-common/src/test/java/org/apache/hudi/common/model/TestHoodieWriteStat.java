@@ -36,7 +36,7 @@ public class TestHoodieWriteStat {
 
   @Test
   public void testSetPaths() {
-    String instantTime = HoodieActiveTimeline.formatInstantTime(new Date());
+    String instantTime = HoodieActiveTimeline.formatDate(new Date());
     String basePathString = "/data/tables/some-hoodie-table";
     String partitionPathString = "2017/12/31";
     String fileName = UUID.randomUUID().toString();

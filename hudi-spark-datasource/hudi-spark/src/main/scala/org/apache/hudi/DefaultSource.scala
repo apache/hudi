@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
+
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION}
@@ -26,8 +27,9 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
+
 import org.apache.log4j.LogManager
-import org.apache.spark.sql.avro.SchemaConverters
+
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -217,8 +219,7 @@ class DefaultSource extends RelationProvider
         // the table schema evolution.
         val tableSchemaResolver = new TableSchemaResolver(metaClient)
         try {
-          Some(SchemaConverters.toSqlType(tableSchemaResolver.getTableAvroSchema)
-            .dataType.asInstanceOf[StructType])
+          Some(AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaResolver.getTableAvroSchema))
         } catch {
           case _: Throwable =>
             None // If there is no commit in the table, we can not get the schema

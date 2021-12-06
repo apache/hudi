@@ -18,14 +18,20 @@
 
 package org.apache.hudi.common.config;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -50,15 +56,15 @@ public class DFSPropertiesConfiguration {
   private static final Logger LOG = LogManager.getLogger(DFSPropertiesConfiguration.class);
 
   public static final String DEFAULT_PROPERTIES_FILE = "hudi-defaults.conf";
-
   public static final String CONF_FILE_DIR_ENV_NAME = "HUDI_CONF_DIR";
-
   public static final String DEFAULT_CONF_FILE_DIR = "file:/etc/hudi/conf";
+  public static final Path DEFAULT_PATH = new Path(DEFAULT_CONF_FILE_DIR + "/" + DEFAULT_PROPERTIES_FILE);
 
   // props read from hudi-defaults.conf
   private static TypedProperties GLOBAL_PROPS = loadGlobalProps();
 
-  private final FileSystem fs;
+  @Nullable
+  private final Configuration hadoopConfig;
 
   private Path currentFilePath;
 
@@ -68,8 +74,8 @@ public class DFSPropertiesConfiguration {
   // Keep track of files visited, to detect loops
   private final Set<String> visitedFilePaths;
 
-  public DFSPropertiesConfiguration(FileSystem fs, Path filePath) {
-    this.fs = fs;
+  public DFSPropertiesConfiguration(@Nonnull Configuration hadoopConf, @Nonnull Path filePath) {
+    this.hadoopConfig = hadoopConf;
     this.currentFilePath = filePath;
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
@@ -77,7 +83,7 @@ public class DFSPropertiesConfiguration {
   }
 
   public DFSPropertiesConfiguration() {
-    this.fs = null;
+    this.hadoopConfig = null;
     this.currentFilePath = null;
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
@@ -93,11 +99,7 @@ public class DFSPropertiesConfiguration {
     if (defaultConfPath.isPresent()) {
       conf.addPropsFromFile(defaultConfPath.get());
     } else {
-      try {
-        conf.addPropsFromFile(new Path(DEFAULT_CONF_FILE_DIR));
-      } catch (Exception ignored) {
-        LOG.warn("Didn't find config file under default conf file dir: " + DEFAULT_CONF_FILE_DIR);
-      }
+      conf.addPropsFromFile(DEFAULT_PATH);
     }
     return conf.getProps();
   }
@@ -119,19 +121,24 @@ public class DFSPropertiesConfiguration {
     if (visitedFilePaths.contains(filePath.toString())) {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
-    FileSystem fileSystem;
+
+    FileSystem fs = FSUtils.getFs(
+        filePath.toString(),
+        Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)
+    );
     try {
-      fileSystem = fs != null ? fs : filePath.getFileSystem(new Configuration());
-    } catch (IOException e) {
-      throw new IllegalArgumentException("Cannot get the file system from file path", e);
-    }
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fileSystem.open(filePath)))) {
+      if (filePath.equals(DEFAULT_PATH) && !fs.exists(filePath)) {
+        LOG.warn("Properties file " + filePath + " not found. Ignoring to load props file");
+        return;
+      }
+
+      BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(filePath)));
       visitedFilePaths.add(filePath.toString());
       currentFilePath = filePath;
       addPropsFromStream(reader);
     } catch (IOException ioe) {
-      LOG.error("Error reading in properties from dfs");
-      throw new IllegalArgumentException("Cannot read properties from dfs", ioe);
+      LOG.error("Error reading in properties from dfs from file " + filePath);
+      throw new HoodieIOException("Cannot read properties from dfs from file " + filePath, ioe);
     }
   }
 
@@ -188,7 +195,7 @@ public class DFSPropertiesConfiguration {
   }
 
   private String[] splitProperty(String line) {
-    line = line.replaceAll("\\s+"," ");
+    line = line.replaceAll("\\s+", " ");
     String delimiter = line.contains("=") ? "=" : " ";
     int ind = line.indexOf(delimiter);
     String k = line.substring(0, ind).trim();

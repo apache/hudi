@@ -32,6 +32,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -67,6 +68,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -80,6 +82,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -218,6 +221,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
     finalizeWrite(table, instantTime, stats);
+    // update Metadata table
+    writeTableMetadata(table, instantTime, commitActionType, metadata);
     activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
         Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
@@ -233,7 +238,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
       if (writeTimer != null) {
         long durationInMs = metrics.getDurationInMs(writeTimer.stop());
-        metrics.updateCommitMetrics(HoodieActiveTimeline.parseInstantTime(instantTime).getTime(), durationInMs,
+        metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime(), durationInMs,
             metadata, actionType);
         writeTimer = null;
       }
@@ -244,16 +249,24 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   /**
-   * Any pre-commit actions like conflict resolution or updating metadata table goes here.
+   * Any pre-commit actions like conflict resolution goes here.
    * @param inflightInstant instant of inflight operation.
    * @param metadata commit metadata for which pre commit is being invoked.
    */
   protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
-    // Create a Hoodie table after starting the transaction which encapsulated the commits and files visible.
-    // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config, hadoopConf);
-    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, inflightInstant.getTimestamp(),
-        table.isTableServiceAction(inflightInstant.getAction())));
+    // To be overridden by specific engines to perform conflict resolution if any.
+  }
+
+  /**
+   * Write the HoodieCommitMetadata to metadata table if available.
+   * @param table {@link HoodieTable} of interest.
+   * @param instantTime instant time of the commit.
+   * @param actionType action type of the commit.
+   * @param metadata instance of {@link HoodieCommitMetadata}.
+   */
+  protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+    table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime,
+        table.isTableServiceAction(actionType)));
   }
 
   /**
@@ -436,11 +449,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       autoCleanOnCommit();
-      // We cannot have unbounded commit files. Archive commits if we have to archive
-      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
-      archiveLog.archiveIfRequired(context);
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
+      if (config.isAutoArchive()) {
+        archive(table);
+      }
     } finally {
       this.heartbeatClient.stop(instantTime);
     }
@@ -509,6 +520,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   /**
+   * Run any pending compactions.
+   */
+  public void runAnyPendingCompactions() {
+    runAnyPendingCompactions(createTable(config, hadoopConf, config.isMetadataTableEnabled()));
+  }
+
+  /**
    * Create a savepoint based on the latest commit action on the timeline.
    *
    * @param user - User creating the savepoint
@@ -574,7 +592,23 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   @Deprecated
   public boolean rollback(final String commitInstantTime) throws HoodieRollbackException {
-    return rollback(commitInstantTime, false);
+    HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
+    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
+    return rollback(commitInstantTime, pendingRollbackInfo, false);
+  }
+
+  /**
+   * @Deprecated
+   * Rollback the inflight record changes with the given commit time. This
+   * will be removed in future in favor of {@link AbstractHoodieWriteClient#restoreToInstant(String)}
+   * Adding this api for backwards compatability.
+   * @param commitInstantTime Instant time of the commit
+   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
+   * @throws HoodieRollbackException if rollback cannot be performed successfully
+   */
+  @Deprecated
+  public boolean rollback(final String commitInstantTime, boolean skipLocking) throws HoodieRollbackException {
+    return rollback(commitInstantTime, Option.empty(), skipLocking);
   }
 
   /**
@@ -583,13 +617,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * will be removed in future in favor of {@link AbstractHoodieWriteClient#restoreToInstant(String)}
    *
    * @param commitInstantTime Instant time of the commit
+   * @param pendingRollbackInfo pending rollback instant and plan if rollback failed from previous attempt.
    * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    * @throws HoodieRollbackException if rollback cannot be performed successfully
    */
   @Deprecated
-  public boolean rollback(final String commitInstantTime, boolean skipLocking) throws HoodieRollbackException {
+  public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, boolean skipLocking) throws HoodieRollbackException {
     LOG.info("Begin rollback of instant " + commitInstantTime);
-    final String rollbackInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    final String rollbackInstantTime = pendingRollbackInfo.map(entry -> entry.getRollbackInstant().getTimestamp()).orElse(HoodieActiveTimeline.createNewInstantTime());
     final Timer.Context timerContext = this.metrics.getRollbackCtx();
     try {
       HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
@@ -598,8 +633,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
           .findFirst());
       if (commitInstantOpt.isPresent()) {
         LOG.info("Scheduling Rollback at instant time :" + rollbackInstantTime);
-        Option<HoodieRollbackPlan> rollbackPlanOption = table.scheduleRollback(context, rollbackInstantTime,
-            commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers());
+        Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan())).orElse(table.scheduleRollback(context, rollbackInstantTime,
+            commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers()));
         if (rollbackPlanOption.isPresent()) {
           // execute rollback
           HoodieRollbackMetadata rollbackMetadata = table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true,
@@ -711,6 +746,31 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public HoodieCleanMetadata clean(boolean skipLocking) {
     return clean(HoodieActiveTimeline.createNewInstantTime(), skipLocking);
+  }
+
+  /**
+   * Trigger archival for the table. This ensures that the number of commits do not explode
+   * and keep increasing unbounded over time.
+   * @param table table to commit on.
+   */
+  protected void archive(HoodieTable<T, I, K, O> table) {
+    try {
+      // We cannot have unbounded commit files. Archive commits if we have to archive
+      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
+      archiveLog.archiveIfRequired(context);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to archive", ioe);
+    }
+  }
+
+  /**
+   * Trigger archival for the table. This ensures that the number of commits do not explode
+   * and keep increasing unbounded over time.
+   */
+  public void archive() {
+    // Create a Hoodie table which encapsulated the commits and files visible
+    HoodieTable table = createTable(config, hadoopConf);
+    archive(table);
   }
 
   /**
@@ -828,6 +888,28 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     return inflightTimelineExcludeClusteringCommit;
   }
 
+  private Option<HoodiePendingRollbackInfo> getPendingRollbackInfo(HoodieTableMetaClient metaClient, String commitToRollback) {
+    return getPendingRollbackInfos(metaClient).getOrDefault(commitToRollback, Option.empty());
+  }
+
+  /**
+   * Fetch map of pending commits to be rolledback to {@link HoodiePendingRollbackInfo}.
+   * @param metaClient instance of {@link HoodieTableMetaClient} to use.
+   * @return map of pending commits to be rolledback instants to Rollback Instant and Rollback plan Pair.
+   */
+  protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInfos(HoodieTableMetaClient metaClient) {
+    return metaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants().map(
+        entry -> {
+          try {
+            HoodieRollbackPlan rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, entry);
+            return Pair.of(rollbackPlan.getInstantToRollback().getCommitTime(), Option.of(new HoodiePendingRollbackInfo(entry, rollbackPlan)));
+          } catch (IOException e) {
+            throw new HoodieIOException("Fetching rollback plan failed for " + entry, e);
+          }
+        }
+    ).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+  }
+
   /**
    * Rollback all failed writes.
    */
@@ -841,22 +923,28 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public Boolean rollbackFailedWrites(boolean skipLocking) {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
-    List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(),
-        Option.empty());
-    rollbackFailedWrites(instantsToRollback, skipLocking);
+    List<String> instantsToRollback = getInstantsToRollback(table.getMetaClient(), config.getFailedWritesCleanPolicy(), Option.empty());
+    Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = getPendingRollbackInfos(table.getMetaClient());
+    instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
+    rollbackFailedWrites(pendingRollbacks, skipLocking);
     return true;
   }
 
-  protected void rollbackFailedWrites(List<String> instantsToRollback, boolean skipLocking) {
-    for (String instant : instantsToRollback) {
-      if (HoodieTimeline.compareTimestamps(instant, HoodieTimeline.LESSER_THAN_OR_EQUALS,
+  protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking) {
+    // sort in reverse order of commit times
+    LinkedHashMap<String, Option<HoodiePendingRollbackInfo>> reverseSortedRollbackInstants = instantsToRollback.entrySet()
+        .stream().sorted((i1, i2) -> i2.getKey().compareTo(i1.getKey()))
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
+    for (Map.Entry<String, Option<HoodiePendingRollbackInfo>> entry : reverseSortedRollbackInstants.entrySet()) {
+      if (HoodieTimeline.compareTimestamps(entry.getKey(), HoodieTimeline.LESSER_THAN_OR_EQUALS,
           HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
+        // do we need to handle failed rollback of a bootstrap
         rollbackFailedBootstrap();
-        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, instant, config);
+        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, entry.getKey(), config);
         break;
       } else {
-        rollback(instant, skipLocking);
-        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, instant, config);
+        rollback(entry.getKey(), entry.getValue(), skipLocking);
+        HeartbeatUtils.deleteHeartbeatFile(fs, basePath, entry.getKey(), config);
       }
     }
   }

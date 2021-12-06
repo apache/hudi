@@ -28,7 +28,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -102,7 +101,7 @@ public class StreamerUtil {
       return new TypedProperties();
     }
     return readConfig(
-        FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
+        getHadoopConf(),
         new Path(cfg.propsFilePath), cfg.configs).getProps();
   }
 
@@ -127,8 +126,8 @@ public class StreamerUtil {
   /**
    * Read config from properties file (`--props` option) and cmd line (`--hoodie-conf` option).
    */
-  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(fs, cfgPath);
+  public static DFSPropertiesConfiguration readConfig(org.apache.hadoop.conf.Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
@@ -233,8 +232,6 @@ public class StreamerUtil {
     Properties properties = new Properties();
     // put all the set options
     flatConf.addAllToProperties(properties);
-    // ugly: table keygen clazz, needed by TwoToThreeUpgradeHandler
-    properties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), conf.getString(FlinkOptions.KEYGEN_CLASS_NAME));
     // put all the default options
     for (ConfigOption<?> option : FlinkOptions.optionalOptions()) {
       if (!flatConf.contains(option) && option.hasDefaultValue()) {
@@ -260,6 +257,7 @@ public class StreamerUtil {
     final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
+          .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
@@ -368,13 +366,25 @@ public class StreamerUtil {
    *
    * <p>This expects to be used by client, the driver should start an embedded timeline server.
    */
+  @SuppressWarnings("rawtypes")
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext) {
+    return createWriteClient(conf, runtimeContext, true);
+  }
+
+  /**
+   * Creates the Flink write client.
+   *
+   * <p>This expects to be used by client, set flag {@code loadFsViewStorageConfig} to use
+   * remote filesystem view storage config, or an in-memory filesystem view storage is used.
+   */
+  @SuppressWarnings("rawtypes")
+  public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext, boolean loadFsViewStorageConfig) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
             new SerializableConfiguration(getHadoopConf()),
             new FlinkTaskContextSupplier(runtimeContext));
 
-    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true);
+    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, loadFsViewStorageConfig);
     return new HoodieFlinkWriteClient<>(context, writeConfig);
   }
 
@@ -385,17 +395,20 @@ public class StreamerUtil {
    *
    * <p>The task context supplier is a constant: the write token is always '0-1-0'.
    */
+  @SuppressWarnings("rawtypes")
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf) throws IOException {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
+    // build the write client to start the embedded timeline server
+    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, writeConfig);
     // create the filesystem view storage properties for client
-    FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
+    final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
     // rebuild the view storage config with simplified options.
     FileSystemViewStorageConfig rebuilt = FileSystemViewStorageConfig.newBuilder()
         .withStorageType(viewStorageConfig.getStorageType())
         .withRemoteServerHost(viewStorageConfig.getRemoteViewServerHost())
         .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort()).build();
     ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt);
-    return new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, writeConfig);
+    return writeClient;
   }
 
   /**
@@ -403,12 +416,12 @@ public class StreamerUtil {
    */
   public static Option<String> medianInstantTime(String highVal, String lowVal) {
     try {
-      long high = HoodieActiveTimeline.parseInstantTime(highVal).getTime();
-      long low = HoodieActiveTimeline.parseInstantTime(lowVal).getTime();
+      long high = HoodieActiveTimeline.parseDateFromInstantTime(highVal).getTime();
+      long low = HoodieActiveTimeline.parseDateFromInstantTime(lowVal).getTime();
       ValidationUtils.checkArgument(high > low,
           "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
       long median = low + (high - low) / 2;
-      final String instantTime = HoodieActiveTimeline.formatInstantTime(new Date(median));
+      final String instantTime = HoodieActiveTimeline.formatDate(new Date(median));
       if (HoodieTimeline.compareTimestamps(lowVal, HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime)
           || HoodieTimeline.compareTimestamps(highVal, HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime)) {
         return Option.empty();
@@ -424,8 +437,8 @@ public class StreamerUtil {
    */
   public static long instantTimeDiffSeconds(String newInstantTime, String oldInstantTime) {
     try {
-      long newTimestamp = HoodieActiveTimeline.parseInstantTime(newInstantTime).getTime();
-      long oldTimestamp = HoodieActiveTimeline.parseInstantTime(oldInstantTime).getTime();
+      long newTimestamp = HoodieActiveTimeline.parseDateFromInstantTime(newInstantTime).getTime();
+      long oldTimestamp = HoodieActiveTimeline.parseDateFromInstantTime(oldInstantTime).getTime();
       return (newTimestamp - oldTimestamp) / 1000;
     } catch (ParseException e) {
       throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);

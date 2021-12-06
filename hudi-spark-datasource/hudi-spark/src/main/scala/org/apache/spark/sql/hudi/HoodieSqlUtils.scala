@@ -20,20 +20,18 @@ package org.apache.spark.sql.hudi
 import scala.collection.JavaConverters._
 import java.net.URI
 import java.util.{Date, Locale, Properties}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.SparkAdapterSupport
+
+import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.spark.SPARK_VERSION
-import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -46,11 +44,16 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 
 import java.text.SimpleDateFormat
+
 import scala.collection.immutable.Map
 
 object HoodieSqlUtils extends SparkAdapterSupport {
-  private val defaultDateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-  private val defaultDateFormat = new SimpleDateFormat("yyyy-MM-dd")
+  // NOTE: {@code SimpleDataFormat} is NOT thread-safe
+  // TODO replace w/ DateTimeFormatter
+  private val defaultDateFormat =
+    ThreadLocal.withInitial(new java.util.function.Supplier[SimpleDateFormat] {
+      override def get() = new SimpleDateFormat("yyyy-MM-dd")
+    })
 
   def isHoodieTable(table: CatalogTable): Boolean = {
     table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
@@ -77,14 +80,14 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     }
   }
 
-  def getTableSqlSchema(metaClient: HoodieTableMetaClient): Option[StructType] = {
+  def getTableSqlSchema(metaClient: HoodieTableMetaClient,
+      includeMetadataFields: Boolean = false): Option[StructType] = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val avroSchema = try Some(schemaResolver.getTableAvroSchema(false))
+    val avroSchema = try Some(schemaResolver.getTableAvroSchema(includeMetadataFields))
     catch {
       case _: Throwable => None
     }
-    avroSchema.map(SchemaConverters.toSqlType(_).dataType
-      .asInstanceOf[StructType]).map(removeMetaFields)
+    avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType)
   }
 
   def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
@@ -293,16 +296,35 @@ object HoodieSqlUtils extends SparkAdapterSupport {
    * 3、yyyyMMddHHmmss
    */
   def formatQueryInstant(queryInstant: String): String = {
-    if (queryInstant.length == 19) { // for yyyy-MM-dd HH:mm:ss
-      HoodieActiveTimeline.formatInstantTime(defaultDateTimeFormat.parse(queryInstant))
-    } else if (queryInstant.length == 14) { // for yyyyMMddHHmmss
-      HoodieActiveTimeline.parseInstantTime(queryInstant) // validate the format
+    val instantLength = queryInstant.length
+    if (instantLength == 19 || instantLength == 23) { // for yyyy-MM-dd HH:mm:ss[.SSS]
+      HoodieInstantTimeGenerator.getInstantForDateString(queryInstant)
+    } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH
+      || instantLength  == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) { // for yyyyMMddHHmmss[SSS]
+      HoodieActiveTimeline.parseDateFromInstantTime(queryInstant) // validate the format
       queryInstant
-    } else if (queryInstant.length == 10) { // for yyyy-MM-dd
-      HoodieActiveTimeline.formatInstantTime(defaultDateFormat.parse(queryInstant))
+    } else if (instantLength == 10) { // for yyyy-MM-dd
+      HoodieActiveTimeline.formatDate(defaultDateFormat.get().parse(queryInstant))
     } else {
       throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
-        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss' or 'yyyy-MM-dd' or 'yyyyMMddHHmmss'")
+        + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss.SSS' or 'yyyy-MM-dd' or 'yyyyMMddHHmmssSSS'")
+    }
+  }
+
+  def formatName(sparkSession: SparkSession, name: String): String = {
+    if (sparkSession.sessionState.conf.caseSensitiveAnalysis) name else name.toLowerCase(Locale.ROOT)
+  }
+
+  /**
+   * Check if this is a empty table path.
+   */
+  def isEmptyPath(tablePath: String, conf: Configuration): Boolean = {
+    val basePath = new Path(tablePath)
+    val fs = basePath.getFileSystem(conf)
+    if (fs.exists(basePath)) {
+      fs.listStatus(basePath).isEmpty
+    } else {
+      true
     }
   }
 }

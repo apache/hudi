@@ -100,6 +100,12 @@ public class HoodieWriteableTestTable extends HoodieMetadataTestTable {
     FileCreateUtils.createPartitionMetaFile(basePath, partition);
     String fileName = baseFileName(currentInstantTime, fileId);
 
+    Path baseFilePath = new Path(Paths.get(basePath, partition, fileName).toString());
+    if (this.fs.exists(baseFilePath)) {
+      LOG.warn("Deleting the existing base file " + baseFilePath);
+      this.fs.delete(baseFilePath, true);
+    }
+
     if (HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().equals(HoodieFileFormat.PARQUET)) {
       HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
           new AvroSchemaConverter().convert(schema), schema, Option.of(filter));
