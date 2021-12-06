@@ -77,18 +77,18 @@ public class HiveSyncTool extends AbstractSyncTool {
 
   public HiveSyncTool(TypedProperties props, Configuration conf, FileSystem fs) {
     super(props, conf, fs);
-    init(new HiveSyncConfig(props), conf, fs);
+    init(new HiveSyncConfig(props), new HiveConf(conf, HiveConf.class), fs);
   }
 
-  public HiveSyncTool(HiveSyncConfig hiveSyncConfig, Configuration conf, FileSystem fs) {
-    super(hiveSyncConfig.getProps(), conf, fs);
-    init(hiveSyncConfig, conf, fs);
+  public HiveSyncTool(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
+    super(hiveSyncConfig.getProps(), hiveConf, fs);
+    init(hiveSyncConfig, hiveConf, fs);
   }
 
-  private void init(HiveSyncConfig hiveSyncConfig, Configuration conf, FileSystem fs) {
+  private void init(HiveSyncConfig hiveSyncConfig, HiveConf hiveConf, FileSystem fs) {
     try {
       this.hiveSyncConfig = hiveSyncConfig;
-      this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, new HiveConf(conf, HiveConf.class), fs);
+      this.hoodieHiveClient = new HoodieHiveClient(hiveSyncConfig, hiveConf, fs);
     } catch (RuntimeException e) {
       if (hiveSyncConfig.ignoreExceptions) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);

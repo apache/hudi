@@ -635,6 +635,10 @@ public class DeltaSync implements Serializable {
     HiveConf hiveConf = new HiveConf(conf, HiveConf.class);
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
     //LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
+
+    props.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
+    props.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
+
     new HiveSyncTool(props, hiveConf, fs).syncHoodieTable();
   }
 
