@@ -159,7 +159,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     // with logic above to avoid Stream.concats
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
     Option<HoodieInstant> oldestPendingCompactionOrClusteringInstant =
-        table.getActiveTimeline().filterPendingCompactionAndClusteringTimeline().firstInstant();
+        table.getActiveTimeline().filterPendingCompactionAndReplaceTimeline().firstInstant();
     Option<HoodieInstant> oldestInflightCommitInstant =
         table.getActiveTimeline()
             .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))

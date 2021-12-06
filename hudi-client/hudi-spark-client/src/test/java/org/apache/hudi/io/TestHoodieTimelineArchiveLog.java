@@ -243,34 +243,23 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         "Archived commits should always be safe");
   }
 
-  @Test
-  public void testPendingClusteringWillBlockArchival() throws Exception {
-    init();
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
-        .build();
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testPendingClusteringWillBlockArchival(boolean enableMetadata) throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 5, 2);
+    HoodieTestDataGenerator.createPendingReplaceFile(basePath, "00000000", wrapperFs.getConf());
+    for (int i = 1; i < 8; i++) {
+      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
+      // archival
+      Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
+      List<HoodieInstant> originalCommits = commitsList.getKey();
+      List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
+      assertEquals(originalCommits, commitsAfterArchival);
+    }
 
-    HoodieTestDataGenerator.createCommitFile(basePath, "100", wrapperFs.getConf());
-    // build a pending clustering instant at 1001
-    HoodieTestDataGenerator.createPendingReplaceFile(basePath, "1001", wrapperFs.getConf());
-    HoodieTestDataGenerator.createCommitFile(basePath, "101", wrapperFs.getConf());
-    HoodieTestDataGenerator.createCommitFile(basePath, "102", wrapperFs.getConf());
-    HoodieTestDataGenerator.createCommitFile(basePath, "103", wrapperFs.getConf());
-    HoodieTestDataGenerator.createCommitFile(basePath, "104", wrapperFs.getConf());
-    HoodieTestDataGenerator.createCommitFile(basePath, "105", wrapperFs.getConf());
-    HoodieTable table = HoodieSparkTable.create(cfg, context);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
-    assertTrue(archiveLog.archiveIfRequired(context));
-    timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    assertEquals(5, timeline.countInstants(),
-        "Since we have a pending clustering instant at 1001, we should never archive any commit after 1001 (we only archive 100)");
+    HoodieTimeline timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    assertEquals(7, timeline.countInstants(),
+        "Since we have a pending clustering instant at 00000000, we should never archive any commit after 00000000");
   }
 
   @ParameterizedTest
