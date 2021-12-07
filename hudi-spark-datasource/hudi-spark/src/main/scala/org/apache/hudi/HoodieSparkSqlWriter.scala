@@ -50,7 +50,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkContext}
 
-import java.util.Properties
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -548,137 +547,137 @@ object HoodieSparkSqlWriter {
     metaSyncSuccess
   }
 
-/**
- * Group all table/action specific information into a case class.
- */
-case class TableInstantInfo(basePath: Path, instantTime: String, commitActionType: String, operation: WriteOperationType)
+  /**
+   * Group all table/action specific information into a case class.
+   */
+  case class TableInstantInfo(basePath: Path, instantTime: String, commitActionType: String, operation: WriteOperationType)
 
-private def commitAndPerformPostOperations (spark: SparkSession,
-schema: StructType,
-writeResult: HoodieWriteResult,
-parameters: Map[String, String],
-client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
-tableConfig: HoodieTableConfig,
-jsc: JavaSparkContext,
-tableInstantInfo: TableInstantInfo
-): (Boolean, common.util.Option[java.lang.String], common.util.Option[java.lang.String] ) = {
-  if (writeResult.getWriteStatuses.rdd.filter (ws => ws.hasErrors).isEmpty () ) {
-  log.info ("Proceeding to commit the write.")
-  val metaMap = parameters.filter (kv =>
-  kv._1.startsWith (parameters (COMMIT_METADATA_KEYPREFIX.key) ) )
-  val commitSuccess =
-  client.commit (tableInstantInfo.instantTime, writeResult.getWriteStatuses,
-  common.util.Option.of (new java.util.HashMap[String, String] (mapAsJavaMap (metaMap) ) ),
-  tableInstantInfo.commitActionType,
-  writeResult.getPartitionToReplaceFileIds)
+  private def commitAndPerformPostOperations(spark: SparkSession,
+                                             schema: StructType,
+                                             writeResult: HoodieWriteResult,
+                                             parameters: Map[String, String],
+                                             client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
+                                             tableConfig: HoodieTableConfig,
+                                             jsc: JavaSparkContext,
+                                             tableInstantInfo: TableInstantInfo
+                                            ): (Boolean, common.util.Option[java.lang.String], common.util.Option[java.lang.String]) = {
+    if (writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors).isEmpty()) {
+      log.info("Proceeding to commit the write.")
+      val metaMap = parameters.filter(kv =>
+        kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX.key)))
+      val commitSuccess =
+        client.commit(tableInstantInfo.instantTime, writeResult.getWriteStatuses,
+          common.util.Option.of(new java.util.HashMap[String, String](mapAsJavaMap(metaMap))),
+          tableInstantInfo.commitActionType,
+          writeResult.getPartitionToReplaceFileIds)
 
-  if (commitSuccess) {
-  log.info ("Commit " + tableInstantInfo.instantTime + " successful!")
-}
-  else {
-  log.info ("Commit " + tableInstantInfo.instantTime + " failed!")
-}
+      if (commitSuccess) {
+        log.info("Commit " + tableInstantInfo.instantTime + " successful!")
+      }
+      else {
+        log.info("Commit " + tableInstantInfo.instantTime + " failed!")
+      }
 
-  val asyncCompactionEnabled = isAsyncCompactionEnabled (client, tableConfig, parameters, jsc.hadoopConfiguration () )
-  val compactionInstant: common.util.Option[java.lang.String] =
-  if (asyncCompactionEnabled) {
-  client.scheduleCompaction (common.util.Option.of (new java.util.HashMap[String, String] (mapAsJavaMap (metaMap) ) ) )
-} else {
-  common.util.Option.empty ()
-}
+      val asyncCompactionEnabled = isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())
+      val compactionInstant: common.util.Option[java.lang.String] =
+        if (asyncCompactionEnabled) {
+          client.scheduleCompaction(common.util.Option.of(new java.util.HashMap[String, String](mapAsJavaMap(metaMap))))
+        } else {
+          common.util.Option.empty()
+        }
 
-  log.info (s"Compaction Scheduled is $compactionInstant")
+      log.info(s"Compaction Scheduled is $compactionInstant")
 
-  val asyncClusteringEnabled = isAsyncClusteringEnabled (client, parameters)
-  val clusteringInstant: common.util.Option[java.lang.String] =
-  if (asyncClusteringEnabled) {
-  client.scheduleClustering (common.util.Option.of (new java.util.HashMap[String, String] (mapAsJavaMap (metaMap) ) ) )
-} else {
-  common.util.Option.empty ()
-}
+      val asyncClusteringEnabled = isAsyncClusteringEnabled(client, parameters)
+      val clusteringInstant: common.util.Option[java.lang.String] =
+        if (asyncClusteringEnabled) {
+          client.scheduleClustering(common.util.Option.of(new java.util.HashMap[String, String](mapAsJavaMap(metaMap))))
+        } else {
+          common.util.Option.empty()
+        }
 
-  log.info (s"Clustering Scheduled is $clusteringInstant")
+      log.info(s"Clustering Scheduled is $clusteringInstant")
 
-  val metaSyncSuccess = metaSync (spark, HoodieWriterUtils.convertMapToHoodieConfig (parameters),
-  tableInstantInfo.basePath, schema)
+      val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
+        tableInstantInfo.basePath, schema)
 
-  log.info (s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
-  if (! asyncCompactionEnabled && ! asyncClusteringEnabled) {
-  client.close ()
-}
-  (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
-} else {
-  log.error (s"${
-  tableInstantInfo.operation
-} failed with errors")
-  if (log.isTraceEnabled) {
-  log.trace ("Printing out the top 100 errors")
-  writeResult.getWriteStatuses.rdd.filter (ws => ws.hasErrors)
-  .take (100)
-  .foreach (ws => {
-  log.trace ("Global error :", ws.getGlobalError)
-  if (ws.getErrors.size () > 0) {
-  ws.getErrors.foreach (kt =>
-  log.trace (s"Error for key: ${
-  kt._1
-}", kt._2) )
-}
-})
-}
-  (false, common.util.Option.empty (), common.util.Option.empty () )
-}
-}
+      log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
+      if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
+        client.close()
+      }
+      (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
+    } else {
+      log.error(s"${
+        tableInstantInfo.operation
+      } failed with errors")
+      if (log.isTraceEnabled) {
+        log.trace("Printing out the top 100 errors")
+        writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors)
+          .take(100)
+          .foreach(ws => {
+            log.trace("Global error :", ws.getGlobalError)
+            if (ws.getErrors.size() > 0) {
+              ws.getErrors.foreach(kt =>
+                log.trace(s"Error for key: ${
+                  kt._1
+                }", kt._2))
+            }
+          })
+      }
+      (false, common.util.Option.empty(), common.util.Option.empty())
+    }
+  }
 
-  private def isAsyncCompactionEnabled (client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
-  tableConfig: HoodieTableConfig,
-  parameters: Map[String, String], configuration: Configuration): Boolean = {
-  log.info (s"Config.inlineCompactionEnabled ? ${
-  client.getConfig.inlineCompactionEnabled
-}")
-  if (asyncCompactionTriggerFnDefined && ! client.getConfig.inlineCompactionEnabled
-  && parameters.get (ASYNC_COMPACT_ENABLE.key).exists (r => r.toBoolean) ) {
-  tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
-} else {
-  false
-}
-}
+  private def isAsyncCompactionEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
+                                       tableConfig: HoodieTableConfig,
+                                       parameters: Map[String, String], configuration: Configuration): Boolean = {
+    log.info(s"Config.inlineCompactionEnabled ? ${
+      client.getConfig.inlineCompactionEnabled
+    }")
+    if (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
+      && parameters.get(ASYNC_COMPACT_ENABLE.key).exists(r => r.toBoolean)) {
+      tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
+    } else {
+      false
+    }
+  }
 
-  private def isAsyncClusteringEnabled (client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
-  parameters: Map[String, String] ): Boolean = {
-  log.info (s"Config.asyncClusteringEnabled ? ${
-  client.getConfig.isAsyncClusteringEnabled
-}")
-  asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled &&
-  parameters.get (ASYNC_CLUSTERING_ENABLE.key).exists (r => r.toBoolean)
-}
+  private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
+                                       parameters: Map[String, String]): Boolean = {
+    log.info(s"Config.asyncClusteringEnabled ? ${
+      client.getConfig.isAsyncClusteringEnabled
+    }")
+    asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled &&
+      parameters.get(ASYNC_CLUSTERING_ENABLE.key).exists(r => r.toBoolean)
+  }
 
-  private def getHoodieTableConfig (sparkContext: SparkContext,
-  tablePath: String,
-  hoodieTableConfigOpt: Option[HoodieTableConfig] ): HoodieTableConfig = {
-  if (tableExists) {
-  hoodieTableConfigOpt.getOrElse (
-  HoodieTableMetaClient.builder ().setConf (sparkContext.hadoopConfiguration).setBasePath (tablePath)
-  .build ().getTableConfig)
-} else {
-  null
-}
-}
+  private def getHoodieTableConfig(sparkContext: SparkContext,
+                                   tablePath: String,
+                                   hoodieTableConfigOpt: Option[HoodieTableConfig]): HoodieTableConfig = {
+    if (tableExists) {
+      hoodieTableConfigOpt.getOrElse(
+        HoodieTableMetaClient.builder().setConf(sparkContext.hadoopConfiguration).setBasePath(tablePath)
+          .build().getTableConfig)
+    } else {
+      null
+    }
+  }
 
-  private def mergeParamsAndGetHoodieConfig (optParams: Map[String, String],
-  tableConfig: HoodieTableConfig): (Map[String, String], HoodieConfig) = {
-  val translatedOptions = DataSourceWriteOptions.translateSqlOptions (optParams)
-  val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults (translatedOptions)
-  if (! mergedParams.contains (HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
-  && mergedParams.contains (KEYGENERATOR_CLASS_NAME.key) ) {
-  mergedParams (HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams (KEYGENERATOR_CLASS_NAME.key)
-}
-  if (null != tableConfig) {
-  tableConfig.getProps.foreach {
-  case (key, value) =>
-  mergedParams (key) = value
-}
-}
-  val params = mergedParams.toMap
-  (params, HoodieWriterUtils.convertMapToHoodieConfig (params) )
-}
+  private def mergeParamsAndGetHoodieConfig(optParams: Map[String, String],
+                                            tableConfig: HoodieTableConfig): (Map[String, String], HoodieConfig) = {
+    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(optParams)
+    val mergedParams = mutable.Map.empty ++ HoodieWriterUtils.parametersWithWriteDefaults(translatedOptions)
+    if (!mergedParams.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
+      && mergedParams.contains(KEYGENERATOR_CLASS_NAME.key)) {
+      mergedParams(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = mergedParams(KEYGENERATOR_CLASS_NAME.key)
+    }
+    if (null != tableConfig) {
+      tableConfig.getProps.foreach {
+        case (key, value) =>
+          mergedParams(key) = value
+      }
+    }
+    val params = mergedParams.toMap
+    (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
+  }
 }
