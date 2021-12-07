@@ -10,8 +10,8 @@ Apache Hudi provides the foundational features required to build a state-of-the-
 The following are examples of use cases for why many choose to use Apache Hudi:
 
 ## A Streaming Data Lake
-As outlined in depth in this blog post, https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform, Apache Hudi 
-is a Streaming Data Lake Platform that unlocks near real-time data ingestion and incremental processing pipelines with ease.
+Apache Hudi is a Streaming Data Lake Platform that unlocks near real-time data ingestion and incremental processing pipelines with ease.
+This blog post outlines this use case in more depth - https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform
 
 ### Near Real-Time Ingestion
 
@@ -72,7 +72,7 @@ further validates this newer model.
 
 ## Cloud-Native Tables
 Apache Hudi makes it easy to define tables, manage schema, metadata, and bring SQL semantics to cloud file storage.
-Some may first hear about Hudi as an "open table format" and this is true, but it is also just one small layer the full Hudi stack.
+Some may first hear about Hudi as an "open table format". While this is true, it is just one layer the full Hudi stack.
 The term “table format” is new and still means many things to many people. Drawing an analogy to file formats, a table 
 format simply consists of : the file layout of the table, table’s schema and metadata tracking changes to the table. 
 Hudi is not a table format alone, but it does implement one internally. 
