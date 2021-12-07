@@ -226,6 +226,9 @@ When fetching schemas from a registry, you can specify both the source schema an
 |hoodie.deltastreamer.schemaprovider.registry.url|The schema of the source you are reading from|https://foo:bar@schemaregistry.org|
 |hoodie.deltastreamer.schemaprovider.registry.targetUrl|The schema of the target you are writing to|https://foo:bar@schemaregistry.org|
 
+The above configs are passed to DeltaStreamer spark-submit command like: 
+```--hoodie-conf hoodie.deltastreamer.schemaprovider.registry.url=https://foo:bar@schemaregistry.org```
+
 ### JDBC Schema Provider
 You can obtain the latest schema through a JDBC connection.
 
@@ -239,13 +242,16 @@ You can obtain the latest schema through a JDBC connection.
 |hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout|The number of seconds the driver will wait for a Statement object to execute to the given number of seconds. Zero means there is no limit. In the write path, this option depends on how JDBC drivers implement the API setQueryTimeout, e.g., the h2 JDBC driver checks the timeout of each query instead of an entire JDBC batch. It defaults to 0.|0|
 |hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable|If true, all columns are nullable|true|
 
+The above configs are passed to DeltaStreamer spark-submit command like:
+```--hoodie-conf hoodie.deltastreamer.jdbcbasedschemaprovider.connection.url=jdbc:postgresql://localhost/test?user=fred&password=secret```
+
 ### File Based Schema Provider
 You can use a .avsc file to define your schema. You can then point to this file on DFS as a schema provider.
 
 |Config|Description|Example|
 |---|---|---|
-|hoodie.deltastreamer.schemaprovider.source.schema.file|The schema of the source you are reading from||
-|hoodie.deltastreamer.schemaprovider.target.schema.file|The schema of the target you are writing to||
+|hoodie.deltastreamer.schemaprovider.source.schema.file|The schema of the source you are reading from|[example schema file](https://github.com/apache/hudi/blob/a8fb69656f522648233f0310ca3756188d954281/docker/demo/config/test-suite/source.avsc)|
+|hoodie.deltastreamer.schemaprovider.target.schema.file|The schema of the target you are writing to|[example schema file](https://github.com/apache/hudi/blob/a8fb69656f522648233f0310ca3756188d954281/docker/demo/config/test-suite/target.avsc)|
 
 ### Schema Provider with Post Processor
 The SchemaProviderWithPostProcessor, will extract the schema from one of the previously mentioned Schema Providers and 
