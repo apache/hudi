@@ -25,6 +25,8 @@ Currently, Hudi supports the following indexing options.
 - **Bloom Index (default):** Employs bloom filters built out of the record keys, optionally also pruning candidate files using record key ranges.
 - **Simple Index:** Performs a lean join of the incoming update/delete records against keys extracted from the table on storage.
 - **HBase Index:** Manages the index mapping in an external Apache HBase table.
+- **Bring your own implementation:** You can extend this [public API](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/index/HoodieIndex.java) 
+to implement custom indexing.
 
 Writers can pick one of these options using `hoodie.index.type` config option. Additionally, a custom index implementation can also be employed
 using `hoodie.index.class` and supplying a subclass of `SparkHoodieIndex` (for Apache Spark writers)

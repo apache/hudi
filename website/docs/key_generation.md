@@ -85,6 +85,11 @@ hoodie.datasource.write.partitionpath.field=country:SIMPLE,date:TIMESTAMP
 ``` 
 This will create the partition path in the format `<country_name>/<date>` or `country=<country_name>/date=<date>` depending on whether you want hive style partitioning or not.
 
+### Bring your own implementation
+You can implement your own custom key generator by extending the public API class here:
+
+https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java
+
 ### [TimestampBasedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/TimestampBasedKeyGenerator.java)
 This key generator relies on timestamps for the partition field. The field values are interpreted as timestamps
 and not just converted to string while generating partition path value for records.  Record key is same as before where it is chosen by
