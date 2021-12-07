@@ -51,6 +51,7 @@ module.exports = {
                 'compaction',
                 'clustering',
                 'hoodie_cleaner',
+                'transforms',
                 'markers',
                 'file_sizing',
                 'snapshot_exporter',

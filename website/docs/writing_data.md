@@ -367,6 +367,12 @@ You can push a commit notification to a Kafka topic so it can be used by other r
 | BOOTSTRAP_SERVERS | Bootstrap servers of kafka cluster, to be used for publishing commit metadata | required | N/A |
 | | | | |
 
+#### Bring your own implementation
+You can extend the HoodieWriteCommitCallback class to implement your own way to asynchronously handle the callback
+of a successful write. Use this public API:
+
+https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/callback/HoodieWriteCommitCallback.java
+
 ## Flink SQL Writer
 The hudi-flink module defines the Flink SQL connector for both hudi source and sink.
 There are a number of options available for the sink table:
