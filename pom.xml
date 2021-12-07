@@ -81,7 +81,7 @@
     <maven-failsafe-plugin.version>3.0.0-M4</maven-failsafe-plugin.version>
     <maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
     <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
-    <maven-compiler-plugin.version>3.8.0</maven-compiler-plugin.version>
+    <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
@@ -141,7 +141,7 @@
     <scala.version>${scala11.version}</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
-    <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
+    <scala-maven-plugin.version>4.5.4</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
@@ -381,12 +381,14 @@
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
           <configuration>
+            <recompileMode>all</recompileMode>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven-compiler-plugin.version}</version>
         </plugin>
         <plugin>
           <!-- excludes are inherited -->
@@ -1459,9 +1461,14 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
+            <version>${maven-compiler-plugin.version}</version>
             <configuration>
               <source>${java.version}</source>
               <target>${java.version}</target>
+              <compilerArgs>
+                <arg>-verbose</arg>
+                <arg>-Xlint:unchecked</arg>
+              </compilerArgs>
             </configuration>
           </plugin>
           <plugin>
