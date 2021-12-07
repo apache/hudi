@@ -33,6 +33,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
     PROPS.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.hive.table", dbAndTableName.getRight());
   }
 
+  @Disabled
   @Test
   public void testSourceSchema() throws Exception {
     try {
@@ -76,6 +78,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
     }
   }
 
+  @Disabled
   @Test
   public void testTargetSchema() throws Exception {
     try {
@@ -97,6 +100,7 @@ public class TestHiveSchemaProvider extends SparkClientFunctionalTestHarnessWith
     }
   }
 
+  @Disabled
   @Test
   public void testNotExistTable() {
     String wrongName = "wrong_schema_tab";
