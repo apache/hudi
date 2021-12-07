@@ -62,7 +62,7 @@ public class CleanFunction<T> extends AbstractRichFunction
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       // do not use the remote filesystem view because the async cleaning service
       // local timeline is very probably to fall behind with the remote one.
-      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext(), false);
+      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
   }
