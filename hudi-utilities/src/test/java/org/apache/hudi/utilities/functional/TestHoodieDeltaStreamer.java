@@ -1146,7 +1146,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Test Hive integration
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
-    assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName), "Table " + hiveSyncConfig.tableName + " should exist");
+    assertTrue(hiveClient.tableExists(hiveSyncConfig.tableName), "Table " + hiveSyncConfig.tableName + " should exist");
     assertEquals(1, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
     assertEquals(lastInstantForUpstreamTable,

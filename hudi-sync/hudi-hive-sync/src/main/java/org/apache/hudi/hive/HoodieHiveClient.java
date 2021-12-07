@@ -23,12 +23,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hudi.sync.common.PartitionValueExtractor;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -51,7 +51,10 @@ import java.util.Map;
 
 import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 
-public class HoodieHiveClient extends AbstractSyncHoodieClient {
+/**
+ * This class implements logic to sync a Hudi table with either the Hive server or the Hive Metastore.
+ */
+public class HoodieHiveClient extends AbstractHiveSyncHoodieClient {
 
   private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   private static final String HIVE_ESCAPE_CHARACTER = HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
@@ -144,45 +147,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  /**
-   * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
-   * Generate a list of PartitionEvent based on the changes required.
-   */
-  List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions) {
-    Map<String, String> paths = new HashMap<>();
-    for (Partition tablePartition : tablePartitions) {
-      List<String> hivePartitionValues = tablePartition.getValues();
-      String fullTablePartitionPath =
-          Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
-      paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
-    }
-
-    List<PartitionEvent> events = new ArrayList<>();
-    for (String storagePartition : partitionStoragePartitions) {
-      Path storagePartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, storagePartition);
-      String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
-      // Check if the partition values or if hdfs path is the same
-      List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
-      if (!storagePartitionValues.isEmpty()) {
-        String storageValue = String.join(", ", storagePartitionValues);
-        if (!paths.containsKey(storageValue)) {
-          events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
-        } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
-          events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
-        }
-      }
-    }
-    return events;
-  }
-
-  /**
-   * Scan table partitions.
-   */
-  public List<Partition> scanTablePartitions(String tableName) throws TException {
-    return client.listPartitions(syncConfig.databaseName, tableName, (short) -1);
-  }
-
-  void updateTableDefinition(String tableName, MessageType newSchema) {
+  @Override
+  public void updateSchema(String tableName, MessageType newSchema) {
     ddlExecutor.updateTableDefinition(tableName, newSchema);
   }
 
@@ -198,7 +164,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    */
   @Override
   public Map<String, String> getTableSchema(String tableName) {
-    if (!doesTableExist(tableName)) {
+    if (!tableExists(tableName)) {
       throw new IllegalArgumentException(
           "Failed to get schema for table " + tableName + " does not exist");
     }
@@ -209,7 +175,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    * @return true if the configured table exists
    */
   @Override
-  public boolean doesTableExist(String tableName) {
+  public boolean tableExists(String tableName) {
     try {
       return client.tableExists(syncConfig.databaseName, tableName);
     } catch (TException e) {
@@ -218,23 +184,23 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   /**
-   * @param databaseName
    * @return true if the configured database exists
    */
-  public boolean doesDataBaseExist(String databaseName) {
+  public boolean databaseExists() {
     try {
-      client.getDatabase(databaseName);
+      client.getDatabase(syncConfig.databaseName);
       return true;
     } catch (NoSuchObjectException noSuchObjectException) {
       // NoSuchObjectException is thrown when there is no existing database of the name.
       return false;
     } catch (TException e) {
-      throw new HoodieHiveSyncException("Failed to check if database exists " + databaseName, e);
+      throw new HoodieHiveSyncException("Failed to check if database exists " + syncConfig.databaseName, e);
     }
   }
 
-  public void createDatabase(String databaseName) {
-    ddlExecutor.createDatabase(databaseName);
+  @Override
+  public void createDatabase() {
+    ddlExecutor.createDatabase();
   }
 
   @Override
@@ -293,6 +259,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
+  @Override
   public void close() {
     try {
       ddlExecutor.close();
@@ -320,5 +287,45 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
     }
+  }
+
+  @Override
+  public List<AbstractSyncHoodieClient.PartitionEvent> getPartitionEvents(String tableName, List<String> partitionStoragePartitions) {
+    try {
+      List<Partition> tablePartitions = scanTablePartitions(tableName);
+      Map<String, String> paths = new HashMap<>();
+      for (Partition tablePartition : tablePartitions) {
+        List<String> hivePartitionValues = tablePartition.getValues();
+        String fullTablePartitionPath =
+            Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
+        paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
+      }
+
+      List<PartitionEvent> events = new ArrayList<>();
+      for (String storagePartition : partitionStoragePartitions) {
+        Path storagePartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, storagePartition);
+        String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
+        // Check if the partition values or if hdfs path is the same
+        List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
+        if (!storagePartitionValues.isEmpty()) {
+          String storageValue = String.join(", ", storagePartitionValues);
+          if (!paths.containsKey(storageValue)) {
+            events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
+          } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
+            events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+          }
+        }
+      }
+      return events;
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to sync partitions for table " + tableName, e);
+    }
+  }
+
+  /**
+   * Scan table partitions.
+   */
+  public List<Partition> scanTablePartitions(String tableName) throws TException {
+    return client.listPartitions(syncConfig.databaseName, tableName, (short) -1);
   }
 }

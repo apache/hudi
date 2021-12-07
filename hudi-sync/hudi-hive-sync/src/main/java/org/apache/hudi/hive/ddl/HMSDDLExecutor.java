@@ -77,13 +77,13 @@ public class HMSDDLExecutor implements DDLExecutor {
   }
 
   @Override
-  public void createDatabase(String databaseName) {
+  public void createDatabase() {
     try {
-      Database database = new Database(databaseName, "automatically created by hoodie", null, null);
+      Database database = new Database(syncConfig.databaseName, "automatically created by hoodie", null, null);
       client.createDatabase(database);
     } catch (Exception e) {
-      LOG.error("Failed to create database " + databaseName, e);
-      throw new HoodieHiveSyncException("Failed to create database " + databaseName, e);
+      LOG.error("Failed to create database " + syncConfig.databaseName, e);
+      throw new HoodieHiveSyncException("Failed to create database " + syncConfig.databaseName, e);
     }
   }
 

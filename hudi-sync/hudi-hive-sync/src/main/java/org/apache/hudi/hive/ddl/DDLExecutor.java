@@ -30,9 +30,9 @@ import java.util.Map;
  */
 public interface DDLExecutor {
   /**
-   * @param databaseName name of database to be created.
+   * Create a database if it does not exist.
    */
-  public void createDatabase(String databaseName);
+  void createDatabase();
 
   /**
    * Creates a table with the following properties.
@@ -45,7 +45,7 @@ public interface DDLExecutor {
    * @param serdeProperties
    * @param tableProperties
    */
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
+  void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
                           String outputFormatClass, String serdeClass,
                           Map<String, String> serdeProperties, Map<String, String> tableProperties);
 
@@ -55,7 +55,7 @@ public interface DDLExecutor {
    * @param tableName
    * @param newSchema
    */
-  public void updateTableDefinition(String tableName, MessageType newSchema);
+  void updateTableDefinition(String tableName, MessageType newSchema);
 
   /**
    * Fetches tableSchema for a table.
@@ -63,7 +63,7 @@ public interface DDLExecutor {
    * @param tableName
    * @return
    */
-  public Map<String, String> getTableSchema(String tableName);
+  Map<String, String> getTableSchema(String tableName);
 
   /**
    * Adds partition to table.
@@ -71,7 +71,7 @@ public interface DDLExecutor {
    * @param tableName
    * @param partitionsToAdd
    */
-  public void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
+  void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
   /**
    * Updates partitions for a given table.
@@ -79,7 +79,7 @@ public interface DDLExecutor {
    * @param tableName
    * @param changedPartitions
    */
-  public void updatePartitionsToTable(String tableName, List<String> changedPartitions);
+  void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
-  public void close();
+  void close();
 }

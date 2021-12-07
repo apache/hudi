@@ -68,8 +68,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   public abstract void runSQL(String sql);
 
   @Override
-  public void createDatabase(String databaseName) {
-    runSQL("create database if not exists " + databaseName);
+  public void createDatabase() {
+    runSQL("create database if not exists " + config.databaseName);
   }
 
   @Override

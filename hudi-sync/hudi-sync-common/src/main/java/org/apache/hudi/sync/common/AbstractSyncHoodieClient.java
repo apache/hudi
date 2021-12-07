@@ -42,10 +42,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public abstract class AbstractSyncHoodieClient {
+public abstract class AbstractSyncHoodieClient implements AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
-
+  protected static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   public static final TypeConverter TYPE_CONVERTOR = new TypeConverter() {};
 
   protected final HoodieTableMetaClient metaClient;
@@ -88,7 +88,7 @@ public abstract class AbstractSyncHoodieClient {
                                    String serdeClass, Map<String, String> serdeProperties,
                                    Map<String, String> tableProperties);
 
-  public abstract boolean doesTableExist(String tableName);
+  public abstract boolean tableExists(String tableName);
 
   public abstract Option<String> getLastCommitTimeSynced(String tableName);
 
@@ -216,6 +216,13 @@ public abstract class AbstractSyncHoodieClient {
       return new TableSchemaResolver(this.metaClient).readSchemaFromLastCompaction(lastCompactionCommitOpt);
     }
     return messageType;
+  }
+
+  /**
+   * Releases any resources used by the client.
+   */
+  @Override
+  public void close() {
   }
 
   /**

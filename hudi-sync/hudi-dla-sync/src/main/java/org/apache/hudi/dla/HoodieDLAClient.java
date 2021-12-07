@@ -115,7 +115,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
   }
 
   public Map<String, String> getTableSchema(String tableName) {
-    if (!doesTableExist(tableName)) {
+    if (!tableExists(tableName)) {
       throw new IllegalArgumentException(
           "Failed to get schema for table " + tableName + " does not exist");
     }
@@ -221,7 +221,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public boolean doesTableExist(String tableName) {
+  public boolean tableExists(String tableName) {
     String sql = consutructShowCreateTableSQL(tableName);
     Statement stmt = null;
     ResultSet rs = null;
