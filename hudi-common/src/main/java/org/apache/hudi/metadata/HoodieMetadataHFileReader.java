@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -73,8 +74,12 @@ public class HoodieMetadataHFileReader<R extends IndexedRecord> extends HoodieHF
     }
 
     final Schema.Field keySchemaField = record.getSchema().getField(keyField.get());
-    if (keySchemaField != null && record.get(keySchemaField.pos()) == null) {
-      record.put(keySchemaField.pos(), new String(keyBytes.array()));
+    if (keySchemaField != null) {
+      final Object keyObject = record.get(keySchemaField.pos());
+      ValidationUtils.checkState(keyObject instanceof String);
+      if (((String) keyObject).isEmpty()) {
+        record.put(keySchemaField.pos(), new String(keyBytes.array()));
+      }
     }
   }
 }

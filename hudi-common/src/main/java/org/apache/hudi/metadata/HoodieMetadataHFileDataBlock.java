@@ -78,7 +78,7 @@ public class HoodieMetadataHFileDataBlock extends HoodieHFileDataBlock {
     }
 
     ValidationUtils.checkArgument(record.getSchema() != null, "Unknown schema for the record!");
-    record.put(schemaKeyField.get().pos(), null);
+    record.put(schemaKeyField.get().pos(), "");
     return super.serializeRecord(record, schemaKeyField);
   }
 

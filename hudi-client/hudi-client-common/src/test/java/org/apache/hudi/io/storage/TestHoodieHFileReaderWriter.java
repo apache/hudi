@@ -114,16 +114,19 @@ public class TestHoodieHFileReaderWriter {
     HoodieHFileWriter writer = createHFileWriter(avroSchema, populateMetaFields);
     List<String> keys = new ArrayList<>();
     Map<String, GenericRecord> recordMap = new HashMap<>();
+    final String keyField = "_row_key";
     for (int i = 0; i < 100; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       String key = String.format("%s%04d", "key", i);
+      record.put(keyField, key);
       keys.add(key);
       record.put("time", Integer.toString(RANDOM.nextInt()));
       record.put("number", i);
       if (testAvroWithMeta) {
-        writer.writeAvroWithMetadata(record, new HoodieRecord(new HoodieKey((String) record.get("_row_key"),
-            Integer.toString((Integer) record.get("number"))), new EmptyHoodieRecordPayload())); // payload does not matter. GenericRecord passed in is what matters
+        // payload does not matter. GenericRecord passed in is what matters
         // only HoodieKey will be looked up from the 2nd arg(HoodieRecord).
+        writer.writeAvroWithMetadata(record, new HoodieRecord(new HoodieKey((String) record.get(keyField),
+            Integer.toString((Integer) record.get("number"))), new EmptyHoodieRecordPayload()));
       } else {
         writer.writeAvro(key, record);
       }
@@ -134,7 +137,7 @@ public class TestHoodieHFileReaderWriter {
     Configuration conf = new Configuration();
     CacheConfig cacheConfig = new CacheConfig(conf);
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig,
-        filePath.getFileSystem(conf), null);
+        filePath.getFileSystem(conf), keyField);
     List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
     records.forEach(entry -> assertEquals(entry.getSecond(), recordMap.get(entry.getFirst())));
     hoodieHFileReader.close();
@@ -144,7 +147,7 @@ public class TestHoodieHFileReaderWriter {
       Set<String> rowsToFetch = getRandomKeys(randomRowstoFetch, keys);
       List<String> rowsList = new ArrayList<>(rowsToFetch);
       Collections.sort(rowsList);
-      hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf), "_row_key");
+      hoodieHFileReader = new HoodieHFileReader(conf, filePath, cacheConfig, filePath.getFileSystem(conf), keyField);
       List<Pair<String, GenericRecord>> result = hoodieHFileReader.readRecords(rowsList);
       assertEquals(result.size(), randomRowstoFetch);
       result.forEach(entry -> {
