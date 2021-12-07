@@ -30,15 +30,14 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
-import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -162,14 +161,9 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     Set<String> syncClientToolClasses = new HashSet<>(
         Arrays.asList(connectConfigs.getMetaSyncClasses().split(",")));
     if (connectConfigs.isMetaSyncEnabled()) {
+      FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
       for (String impl : syncClientToolClasses) {
-        impl = impl.trim();
-        FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
-        TypedProperties properties = new TypedProperties();
-        properties.putAll(connectConfigs.getProps());
-        properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, tableBasePath);
-        AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {TypedProperties.class, Configuration.class, FileSystem.class}, properties, hadoopConf, fs);
-        syncTool.syncHoodieTable();
+        SyncUtilHelpers.createAndSyncHoodieMeta(impl.trim(), connectConfigs.getProps(), hadoopConf, fs, tableBasePath, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue());
       }
     }
   }

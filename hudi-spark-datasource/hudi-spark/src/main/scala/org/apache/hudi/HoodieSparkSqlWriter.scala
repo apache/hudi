@@ -21,7 +21,6 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -40,6 +39,7 @@ import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.index.SparkHoodieIndexFactory
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.{AbstractSyncTool, HoodieSyncConfig}
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.log4j.LogManager
@@ -539,11 +539,9 @@ object HoodieSparkSqlWriter {
       val fs = basePath.getFileSystem(spark.sessionState.newHadoopConf())
       val properties = new TypedProperties()
       properties.putAll(hoodieConfig.getProps)
-      properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, basePath.toString)
       properties.put(HiveSyncConfig.HIVE_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD, spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD).toString)
       syncClientToolClassSet.foreach(impl => {
-        val syncHoodie = ReflectionUtils.loadClass(impl.trim, Array[Class[_]](classOf[TypedProperties], classOf[Configuration], classOf[FileSystem]), properties, fs.getConf(), fs).asInstanceOf[AbstractSyncTool]
-        syncHoodie.syncHoodieTable()
+        SyncUtilHelpers.createAndSyncHoodieMeta(impl.trim, properties, fs.getConf(), fs, basePath.toString, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue)
       })
       metaSyncSuccess = true
     }

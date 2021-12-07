@@ -41,7 +41,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -55,8 +54,7 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.sync.common.AbstractSyncTool;
-import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
@@ -77,7 +75,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -612,39 +609,14 @@ public class DeltaSync implements Serializable {
       LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
     }
     if (cfg.enableMetaSync) {
+      FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
       for (String impl : syncClientToolClasses) {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
-        impl = impl.trim();
-        FileSystem fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
-        TypedProperties properties = new TypedProperties();
-        properties.putAll(props);
-        properties.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
-        properties.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
-        AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {TypedProperties.class, Configuration.class, FileSystem.class}, properties, conf, fs);
-        syncTool.syncHoodieTable();
+        SyncUtilHelpers.createAndSyncHoodieMeta(impl.trim(), props, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
         long metaSyncTimeMs = syncContext != null ? syncContext.stop() : 0;
         metrics.updateDeltaStreamerMetaSyncMetrics(getSyncClassShortName(impl), metaSyncTimeMs);
       }
     }
-  }
-
-  public void syncHive() {
-    //HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
-    //LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-    //    + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
-    HiveConf hiveConf = new HiveConf(conf, HiveConf.class);
-    LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
-    //LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
-
-    props.put(HoodieSyncConfig.META_SYNC_BASE_PATH, cfg.targetBasePath);
-    props.put(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, cfg.baseFileFormat);
-
-    new HiveSyncTool(props, hiveConf, fs).syncHoodieTable();
-  }
-
-  public void syncHive(HiveConf conf) {
-    this.conf = conf;
-    syncHive();
   }
 
   /**

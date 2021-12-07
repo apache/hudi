@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hadoop.conf.Configuration;
+
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -105,13 +106,13 @@ public class UtilHelpers {
     try {
       try {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class,
                 HoodieDeltaStreamerMetrics.class},
             cfg, jssc, sparkSession, schemaProvider, metrics);
       } catch (HoodieException e) {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class},
             cfg, jssc, sparkSession, schemaProvider);
       }
@@ -121,7 +122,7 @@ public class UtilHelpers {
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
-      JavaSparkContext jssc) throws IOException {
+                                                    JavaSparkContext jssc) throws IOException {
     try {
       return StringUtils.isNullOrEmpty(schemaProviderClass) ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
@@ -397,21 +398,21 @@ public class UtilHelpers {
   }
 
   public static SchemaProviderWithPostProcessor wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
-      TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
+                                                                                    TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
 
     if (provider == null) {
       return null;
     }
 
-    if (provider instanceof  SchemaProviderWithPostProcessor) {
-      return (SchemaProviderWithPostProcessor)provider;
+    if (provider instanceof SchemaProviderWithPostProcessor) {
+      return (SchemaProviderWithPostProcessor) provider;
     }
 
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
     boolean enableSparkAvroPostProcessor = Boolean.parseBoolean(cfg.getString(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE, "true"));
 
     if (transformerClassNames != null && !transformerClassNames.isEmpty()
-            && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
+        && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
       schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
     }
 
