@@ -210,6 +210,21 @@ A deltastreamer job can then be triggered as follows:
 
 Read more in depth about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section
 
+## Checkpointing
+HoodieDeltaStreamer uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
+When using a Kafka source, the checkpoint is the [Kafka Offset](https://cwiki.apache.org/confluence/display/KAFKA/Offset+Management) 
+When using a DFS source, the checkpoint is the 'last modified' timestamp of the latest file read.
+Checkpoints are saved in the .hoodie commit file as `deltastreamer.checkpoint.key`.
+
+If you need to change the checkpoints for reprocessing or replaying data you can use the following options:
+
+- `--checkpoint` will overwrite the current commit file checkpoint.
+- `--source-limit` will set a maximum amount of data to read from the source. For DFS sources, this is max # of bytes read.
+For Kafka, this is the max # of events to read.
+- `deltastreamer.checkpoint.reset_key` will temporarily run delta streamer from a specific checkpoint, but the current commit file checkpoint 
+will not be overwritten.
+
+
 ## Schema Providers
 By default, Spark will infer the schema of the source and use that inferred schema when writing to a table. If you need 
 to explicitly define the schema you can use one of the following Schema Providers below.
