@@ -149,7 +149,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieBackedMetadata.class);
 
-  public static List<Arguments> bootstrapAndTableOperationTestArgs() {
+  public static List<Arguments> tableTypeAndBooleanArgs() {
     return asList(
         Arguments.of(COPY_ON_WRITE, true),
         Arguments.of(COPY_ON_WRITE, false),
@@ -162,7 +162,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Metadata Table bootstrap scenarios.
    */
   @ParameterizedTest
-  @MethodSource("bootstrapAndTableOperationTestArgs")
+  @MethodSource("tableTypeAndBooleanArgs")
   public void testMetadataTableBootstrap(HoodieTableType tableType, boolean addRollback) throws Exception {
     init(tableType, false);
     // bootstrap with few commits
@@ -243,7 +243,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Test various table operations sync to Metadata Table correctly.
    */
   @ParameterizedTest
-  @MethodSource("bootstrapAndTableOperationTestArgs")
+  @MethodSource("tableTypeAndBooleanArgs")
   public void testTableOperations(HoodieTableType tableType, boolean enableFullScan) throws Exception {
     init(tableType, true, enableFullScan, false, false);
     doWriteInsertAndUpsert(testTable);
@@ -705,8 +705,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType) throws Exception {
+  @MethodSource("tableTypeAndBooleanArgs")
+  public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType, boolean nonPartitionedDataset) throws Exception {
     init(tableType, true, true, true, false);
     long baseCommitTime = Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
     for (int i = 1; i < 25; i += 7) {
@@ -718,17 +718,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       long commitTime6 = getNextCommitTime(commitTime5);
       long commitTime7 = getNextCommitTime(commitTime6);
       baseCommitTime = commitTime7;
-      doWriteOperation(testTable, Long.toString(commitTime1), INSERT);
-      doWriteOperation(testTable, Long.toString(commitTime2), UPSERT);
+      doWriteOperation(testTable, Long.toString(commitTime1), INSERT, nonPartitionedDataset);
+      doWriteOperation(testTable, Long.toString(commitTime2), UPSERT, nonPartitionedDataset);
       doClean(testTable, Long.toString(commitTime3), Arrays.asList(Long.toString(commitTime1)));
-      doWriteOperation(testTable, Long.toString(commitTime4), UPSERT);
+      doWriteOperation(testTable, Long.toString(commitTime4), UPSERT, nonPartitionedDataset);
       if (tableType == MERGE_ON_READ) {
-        doCompaction(testTable, Long.toString(commitTime5));
+        doCompaction(testTable, Long.toString(commitTime5), nonPartitionedDataset);
       }
-      doWriteOperation(testTable, Long.toString(commitTime6));
+      doWriteOperation(testTable, Long.toString(commitTime6), UPSERT, nonPartitionedDataset);
       doRollback(testTable, Long.toString(commitTime6), Long.toString(commitTime7));
     }
-    validateMetadata(testTable, emptyList(), true);
+    validateMetadata(testTable, emptyList(), nonPartitionedDataset);
   }
 
   // Some operations are not feasible with test table infra. hence using write client to test those cases.

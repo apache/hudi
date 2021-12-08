@@ -139,6 +139,14 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     testTable.doWriteOperation(commitTime, operationType, emptyList(), asList(""), 3);
   }
 
+  protected void doWriteOperation(HoodieTestTable testTable, String commitTime, WriteOperationType operationType, boolean nonPartitioned) throws Exception {
+    if (nonPartitioned) {
+      doWriteOperationNonPartitioned(testTable, commitTime, operationType);
+    } else {
+      doWriteOperation(testTable, commitTime, operationType);
+    }
+  }
+
   protected void doWriteOperation(HoodieTestTable testTable, String commitTime, WriteOperationType operationType) throws Exception {
     testTable.doWriteOperation(commitTime, operationType, emptyList(), asList("p1", "p2"), 3);
   }
@@ -160,6 +168,10 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
 
   protected void doCompactionNonPartitioned(HoodieTestTable testTable, String commitTime) throws Exception {
     doCompactionInternal(testTable, commitTime, false, true);
+  }
+
+  protected void doCompaction(HoodieTestTable testTable, String commitTime, boolean nonPartitioned) throws Exception {
+    doCompactionInternal(testTable, commitTime, false, nonPartitioned);
   }
 
   protected void doCompaction(HoodieTestTable testTable, String commitTime) throws Exception {
