@@ -149,6 +149,9 @@ You can update multiple docs versions at the same time because each directory in
 
 Example: When you change any file in `versioned_docs/version-0.7.0/`, it will only affect the docs for version `0.7.0`.
 
+## Configs
+Configs can be automatically updated by following these steps documented at ../hudi-utils/README.md
+
 ## Maintainer
 
 Apache Hudi Community
