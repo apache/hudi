@@ -218,12 +218,9 @@ Checkpoints are saved in the .hoodie commit file as `deltastreamer.checkpoint.ke
 
 If you need to change the checkpoints for reprocessing or replaying data you can use the following options:
 
-- `--checkpoint` will overwrite the current commit file checkpoint.
+- `--checkpoint` will set `deltastreamer.checkpoint.reset_key` in the commit file to overwrite the current checkpoint.
 - `--source-limit` will set a maximum amount of data to read from the source. For DFS sources, this is max # of bytes read.
 For Kafka, this is the max # of events to read.
-- `deltastreamer.checkpoint.reset_key` will temporarily run delta streamer from a specific checkpoint, but the current commit file checkpoint 
-will not be overwritten.
-
 
 ## Schema Providers
 By default, Spark will infer the schema of the source and use that inferred schema when writing to a table. If you need 
