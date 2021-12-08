@@ -297,22 +297,101 @@ For more info refer to [Delete support in Hudi](https://cwiki.apache.org/conflue
 - **Soft Deletes** : Retain the record key and just null out the values for all the other fields.
   This can be achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
 
-- **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways.
+- **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways. 
 
-    1) Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
+1. Using Datasource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
 
-    2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted.
+Example, first read in a dataset:
+```scala
+val roViewDF = spark.
+        read.
+        format("org.apache.hudi").
+        load(basePath + "/*/*/*/*")
+roViewDF.createOrReplaceTempView("hudi_ro_table")
+spark.sql("select count(*) from hudi_ro_table").show() // should return 10 (number of records inserted above)
+val riderValue = spark.sql("select distinct rider from hudi_ro_table").show()
+// copy the value displayed to be used in next step
+```
+Now write a query of which records you would like to delete:
+```scala
+val df = spark.sql("select uuid, partitionPath from hudi_ro_table where rider = 'rider-213'")
+```
+Lastly, execute the deletion of these records:
+```scala
+val deletes = dataGen.generateDeletes(df.collectAsList())
+val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2));
+df.write.format("org.apache.hudi").
+options(getQuickstartWriteConfigs).
+option(OPERATION_OPT_KEY,"delete").
+option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+option(TABLE_NAME, tableName).
+mode(Append).
+save(basePath);
+```
 
-    3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
+2. Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
 
-Example using hard delete method 2, remove all the records from the table that exist in the DataSet `deleteDF`:
-```java
+This example will remove all the records from the table that exist in the DataSet `deleteDF`:
+```scala
  deleteDF // dataframe containing just records to be deleted
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey & usual params
    .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
- 
+```
+
+3. Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
+
+Let's say the original schema is:
+```json
+{
+  "type":"record",
+  "name":"example_tbl",
+  "fields":[{
+     "name": "uuid",
+     "type": "String"
+  }, {
+     "name": "ts",
+     "type": "string"
+  },  {
+     "name": "partitionPath",
+     "type": "string"
+  }, {
+     "name": "rank",
+     "type": "long"
+  }
+]}
+```
+Make sure you add `_hoodie_is_deleted` column:
+```json
+{
+  "type":"record",
+  "name":"example_tbl",
+  "fields":[{
+     "name": "uuid",
+     "type": "String"
+  }, {
+     "name": "ts",
+     "type": "string"
+  },  {
+     "name": "partitionPath",
+     "type": "string"
+  }, {
+     "name": "rank",
+     "type": "long"
+  }, {
+    "name" : "_hoodie_is_deleted",
+    "type" : "boolean",
+    "default" : false
+  }
+]}
+```
+
+Then any record you want to delete you can mark `_hoodie_is_deleted` as true:
+```json
+{"ts": 0.0, "uuid": "19tdb048-c93e-4532-adf9-f61ce6afe10", "rank": 1045, "partitionpath": "americas/brazil/sao_paulo", "_hoodie_is_deleted" : true}
 ```
 
 ### Concurrency Control
