@@ -142,7 +142,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     HFileInfo fileInfo;
     try {
       fileInfo = reader.getHFileInfo();
-      ByteBuff serializedFilter = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK, false).getBufferReadOnly();
+      ByteBuff serializedFilter = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK, false).getBufferWithoutHeader();
       byte[] filterBytes = new byte[serializedFilter.remaining()];
       serializedFilter.get(filterBytes); // read the bytes that were written
       return BloomFilterFactory.fromString(new String(filterBytes),
