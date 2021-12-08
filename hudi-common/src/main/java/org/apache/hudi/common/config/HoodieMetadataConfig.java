@@ -22,7 +22,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -137,9 +136,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
           + "determines how to handle such spurious deletes");
 
-  public static final ConfigProperty<String> RECORDKEY_DE_DUPLICATE = ConfigProperty
+  public static final ConfigProperty<Boolean> RECORDKEY_DE_DUPLICATE = ConfigProperty
       .key(METADATA_PREFIX + ".recordkey.deduplicate")
-      .defaultValue("false")
+      .defaultValue(true)
       .sinceVersion("0.10.0")
       .withDocumentation("When enabled, Metadata table records will have key de-duplication.");
 

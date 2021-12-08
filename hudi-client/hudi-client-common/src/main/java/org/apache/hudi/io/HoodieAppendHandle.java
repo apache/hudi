@@ -38,10 +38,10 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.table.log.block.HoodieLogBlockFactory;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -50,7 +50,6 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
@@ -361,16 +360,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
-        final boolean withMetadataKeyDeDuplication = config.getMetadataConfig().getRecordKeyDeDuplicate()
-            && HoodieTableMetadata.isMetadataTable(hoodieTable.getMetaClient().getBasePath());
-        if (config.populateMetaFields()) {
-          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header,
-              withMetadataKeyDeDuplication));
-        } else {
-          final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header, keyField,
-              withMetadataKeyDeDuplication));
-        }
+        blocks.add(HoodieLogBlockFactory.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header,
+            hoodieTable.getMetaClient().getTableConfig(), config.getMetadataConfig(),
+            hoodieTable.getMetaClient().getBasePath(), config.populateMetaFields()));
       }
       if (keysToDelete.size() > 0) {
         blocks.add(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));

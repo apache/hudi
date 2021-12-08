@@ -18,19 +18,14 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hudi.metadata.HoodieMetadataHFileDataBlock;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 
 import javax.annotation.Nonnull;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -73,49 +68,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.schema = readerSchema;
     this.keyField = keyField;
-  }
-
-  /**
-   * Util method to get a data block for the requested type.
-   *
-   * @param logDataBlockFormat           - Data block type
-   * @param recordList                   - List of records that goes in the data block
-   * @param header                       - data block header
-   * @param withMetadataKeyDeDuplication - Whether metadata key de duplication needed
-   * @return Data block of the requested type.
-   */
-  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header,
-                                        boolean withMetadataKeyDeDuplication) {
-    return getBlock(logDataBlockFormat, recordList, header,
-        (withMetadataKeyDeDuplication ? HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY : HoodieRecord.RECORD_KEY_METADATA_FIELD),
-        withMetadataKeyDeDuplication);
-  }
-
-  /**
-   * Util method to get a data block for the requested type.
-   *
-   * @param logDataBlockFormat           - Data block type
-   * @param recordList                   - List of records that goes in the data block
-   * @param header                       - data block header
-   * @param keyField                     - FieldId to get the key from the records
-   * @param withMetadataKeyDeDuplication - Whether metadata key de duplication needed
-   * @return Data block of the requested type.
-   */
-  public static HoodieLogBlock getBlock(HoodieLogBlockType logDataBlockFormat, List<IndexedRecord> recordList,
-                                        Map<HeaderMetadataType, String> header, String keyField,
-                                        boolean withMetadataKeyDeDuplication) {
-    switch (logDataBlockFormat) {
-      case AVRO_DATA_BLOCK:
-        return new HoodieAvroDataBlock(recordList, header, keyField);
-      case HFILE_DATA_BLOCK:
-        if (withMetadataKeyDeDuplication) {
-          return new HoodieMetadataHFileDataBlock(recordList, header, keyField);
-        }
-        return new HoodieHFileDataBlock(recordList, header, keyField);
-      default:
-        throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
-    }
   }
 
   @Override
