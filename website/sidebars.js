@@ -54,6 +54,7 @@ module.exports = {
                 'transforms',
                 'markers',
                 'file_sizing',
+                'metadata',
                 'snapshot_exporter',
                 'precommit_validator'
             ],
