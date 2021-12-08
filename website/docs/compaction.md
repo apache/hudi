@@ -5,17 +5,12 @@ toc: true
 last_modified_at:
 ---
 
-Compaction is executed asynchronously with Hudi by default.
-
 ## Async Compaction
-
-Async Compaction is performed in 2 steps:
+Compaction is executed asynchronously with Hudi by default. Async Compaction is performed in 2 steps:
 
 1. ***Compaction Scheduling***: This is done by the ingestion job. In this step, Hudi scans the partitions and selects **file
    slices** to be compacted. A compaction plan is finally written to Hudi timeline.
 1. ***Compaction Execution***: A separate process reads the compaction plan and performs compaction of file slices.
-
-## Deployment Models
 
 There are few ways by which we can execute compactions asynchronously.
 
@@ -68,31 +63,6 @@ spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \
 --continous
 ```
 
-### Hudi Compactor Utility
-Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/deployment#compactions)
-
-Example:
-```properties
-spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \
---class org.apache.hudi.utilities.HoodieCompactor \
---base-path <base_path> \
---table-name <table_name> \
---schema-file <schema_file> \
---instant-time <compaction_instant>
-```
-
-Note, the `instant-time` parameter is now optional for the Hudi Compactor Utility. If using the utility without `--instant time`, 
-the spark-submit will execute the earliest scheduled compaction on the Hudi timeline.
-
-### Hudi CLI
-Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example and you can read more in the [deployment guide](/docs/cli#compactions)
-
-Example:
-```properties
-hudi:trips->compaction run --tableName <table_name> --parallelism <parallelism> --compactionInstant <InstantTime>
-...
-```
-
 ## Synchronous Compaction
 By default, compaction is run asynchronously.
 
@@ -109,3 +79,60 @@ When both ingestion and compaction is running in the same spark context, you can
 in DeltaStreamer CLI such as ("--delta-sync-scheduling-weight",
 "--compact-scheduling-weight", ""--delta-sync-scheduling-minshare", and "--compact-scheduling-minshare")
 to control executor allocation between ingestion and compaction.
+
+
+## Offline Compaction
+
+The compaction of the MERGE_ON_READ table is enabled by default. The trigger strategy is to perform compaction after completing
+five commits. Because compaction consumes a lot of memory and is placed in the same pipeline with the write operation, it's easy to
+interfere with the write operation when there is a large amount of data (> 100000 per second). As this time, it is more stable to execute
+the compaction task by using offline compaction.
+
+:::note
+The execution of a compaction task includes two parts: schedule compaction plan and execute compaction plan. It's recommended that
+the process of schedule compaction plan be triggered periodically by the write task, and the write parameter `compaction.schedule.enable`
+is enabled by default.
+:::
+
+### Hudi Compactor Utility
+Hudi provides a standalone tool to execute specific compactions asynchronously. Below is an example and you can read more in the [deployment guide](/docs/deployment#compactions)
+
+Example:
+```properties
+spark-submit --packages org.apache.hudi:hudi-utilities-bundle_2.11:0.6.0 \
+--class org.apache.hudi.utilities.HoodieCompactor \
+--base-path <base_path> \
+--table-name <table_name> \
+--schema-file <schema_file> \
+--instant-time <compaction_instant>
+```
+
+Note, the `instant-time` parameter is now optional for the Hudi Compactor Utility. If using the utility without `--instant time`,
+the spark-submit will execute the earliest scheduled compaction on the Hudi timeline.
+
+### Hudi CLI
+Hudi CLI is yet another way to execute specific compactions asynchronously. Here is an example and you can read more in the [deployment guide](/docs/cli#compactions)
+
+Example:
+```properties
+hudi:trips->compaction run --tableName <table_name> --parallelism <parallelism> --compactionInstant <InstantTime>
+...
+```
+
+### Flink Offline Compaction
+Offline compaction needs to submit the Flink task on the command line. The program entry is as follows: `hudi-flink-bundle_2.11-0.9.0-SNAPSHOT.jar` :
+`org.apache.hudi.sink.compact.HoodieFlinkCompactor`
+
+```bash
+# Command line
+./bin/flink run -c org.apache.hudi.sink.compact.HoodieFlinkCompactor lib/hudi-flink-bundle_2.11-0.9.0.jar --path hdfs://xxx:9000/table
+```
+
+#### Options
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `--path` | `frue` | `--` | The path where the target table is stored on Hudi |
+| `--compaction-max-memory` | `false` | `100` | The index map size of log data during compaction, 100 MB by default. If you have enough memory, you can turn up this parameter |
+| `--schedule` | `false` | `false` | whether to execute the operation of scheduling compaction plan. When the write process is still writing， turning on this parameter have a risk of losing data. Therefore, it must be ensured that there are no write tasks currently writing data to this table when this parameter is turned on |
+| `--seq` | `false` | `LIFO` | The order in which compaction tasks are executed. Executing from the latest compaction plan by default. `LIFO`: executing from the latest plan. `FIFO`: executing from the oldest plan. |
