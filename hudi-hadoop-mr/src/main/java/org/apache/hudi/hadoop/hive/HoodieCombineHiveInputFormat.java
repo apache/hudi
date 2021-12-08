@@ -618,10 +618,6 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       return inputFormatClassName;
     }
 
-    public void setInputFormatClassName(String inputFormatClassName) {
-      this.inputFormatClassName = inputFormatClassName;
-    }
-
     @Override
     public JobConf getJob() {
       return inputSplitShim.getJob();
