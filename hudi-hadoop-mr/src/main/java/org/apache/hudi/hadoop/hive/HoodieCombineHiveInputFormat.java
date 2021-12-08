@@ -579,10 +579,6 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     protected CombineFileSplit inputSplitShim;
     private Map<Path, PartitionDesc> pathToPartitionInfo;
 
-    public CombineHiveInputSplit() throws IOException {
-      this(ShimLoader.getHadoopShims().getCombineFileInputFormat().getInputSplitShim());
-    }
-
     public CombineHiveInputSplit(CombineFileSplit inputSplitShim) throws IOException {
       this(inputSplitShim.getJob(), inputSplitShim);
     }
