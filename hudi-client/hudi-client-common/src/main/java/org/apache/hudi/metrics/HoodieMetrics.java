@@ -215,7 +215,7 @@ public class HoodieMetrics {
   }
 
   String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
+    return config == null ? null : String.format("%s.%s.%s", config.getMetricReporterMetricsNamePrefix(), action, metric);
   }
 
   /**

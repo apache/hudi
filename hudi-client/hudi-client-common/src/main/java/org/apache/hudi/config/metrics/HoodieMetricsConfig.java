@@ -67,7 +67,7 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> METRICS_REPORTER_PREFIX = ConfigProperty
       .key(METRIC_PREFIX + ".reporter.metricsname.prefix")
-      .noDefaultValue()
+      .defaultValue("")
       .sinceVersion("0.11.0")
       .withInferFunction(cfg -> {
         if (cfg.contains(HoodieTableConfig.NAME)) {
