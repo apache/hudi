@@ -26,6 +26,7 @@ module.exports = {
                 'table_types',
                 'indexing',
                 'file_layouts',
+                'metadata',
                 'write_operations',
                 'schema_evolution',
                 'key_generation',
@@ -54,7 +55,6 @@ module.exports = {
                 'transforms',
                 'markers',
                 'file_sizing',
-                'metadata',
                 'snapshot_exporter',
                 'precommit_validator'
             ],
