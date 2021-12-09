@@ -22,7 +22,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
