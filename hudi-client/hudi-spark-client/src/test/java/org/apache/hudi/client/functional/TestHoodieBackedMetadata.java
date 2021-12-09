@@ -149,7 +149,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieBackedMetadata.class);
 
-  public static List<Arguments> tableTypeAndBooleanArgs() {
+  public static List<Arguments> tableTypeAndEnableOperationArgs() {
     return asList(
         Arguments.of(COPY_ON_WRITE, true),
         Arguments.of(COPY_ON_WRITE, false),
@@ -162,7 +162,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Metadata Table bootstrap scenarios.
    */
   @ParameterizedTest
-  @MethodSource("tableTypeAndBooleanArgs")
+  @MethodSource("tableTypeAndEnableOperationArgs")
   public void testMetadataTableBootstrap(HoodieTableType tableType, boolean addRollback) throws Exception {
     init(tableType, false);
     // bootstrap with few commits
@@ -243,7 +243,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Test various table operations sync to Metadata Table correctly.
    */
   @ParameterizedTest
-  @MethodSource("tableTypeAndBooleanArgs")
+  @MethodSource("tableTypeAndEnableOperationArgs")
   public void testTableOperations(HoodieTableType tableType, boolean enableFullScan) throws Exception {
     init(tableType, true, enableFullScan, false, false);
     doWriteInsertAndUpsert(testTable);
@@ -705,7 +705,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndBooleanArgs")
+  @MethodSource("tableTypeAndEnableOperationArgs")
   public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType, boolean nonPartitionedDataset) throws Exception {
     init(tableType, true, true, true, false);
     long baseCommitTime = Long.parseLong(HoodieActiveTimeline.createNewInstantTime());

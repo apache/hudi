@@ -52,6 +52,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
 /**
@@ -89,7 +90,7 @@ public class HoodieTableMetadataUtil {
     List<HoodieRecord> records = new LinkedList<>();
     List<String> allPartitions = new LinkedList<>();
     commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
-      final String partition = partitionStatName.equals("") ? NON_PARTITIONED_NAME : partitionStatName;
+      final String partition = partitionStatName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionStatName;
       allPartitions.add(partition);
 
       Map<String, Long> newFiles = new HashMap<>(writeStats.size());
@@ -134,7 +135,7 @@ public class HoodieTableMetadataUtil {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
     cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
-      final String partition = partitionName.equals("") ? NON_PARTITIONED_NAME : partitionName;
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
@@ -285,7 +286,7 @@ public class HoodieTableMetadataUtil {
 
     partitionToDeletedFiles.forEach((partitionName, deletedFiles) -> {
       fileChangeCount[0] += deletedFiles.size();
-      final String partition = partitionName.equals("") ? NON_PARTITIONED_NAME : partitionName;
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
 
       Option<Map<String, Long>> filesAdded = Option.empty();
       if (partitionToAppendedFiles.containsKey(partitionName)) {
@@ -298,7 +299,7 @@ public class HoodieTableMetadataUtil {
     });
 
     partitionToAppendedFiles.forEach((partitionName, appendedFileMap) -> {
-      final String partition = partitionName.equals("") ? NON_PARTITIONED_NAME : partitionName;
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
       fileChangeCount[1] += appendedFileMap.size();
 
       // Validate that no appended file has been deleted
