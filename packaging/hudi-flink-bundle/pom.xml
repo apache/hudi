@@ -130,7 +130,6 @@
                   <inclide>com.esotericsoftware:kryo-shaded</inclide>
 
                   <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
-                  <include>org.apache.flink:flink-avro</include>
                   <include>org.apache.flink:flink-json</include>
                   <include>org.apache.flink:flink-parquet_${scala.binary.version}</include>
 
@@ -222,6 +221,11 @@
                 <relocation>
                   <pattern>org.eclipse.jetty.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.jetty.</shadedPattern>
+                </relocation>
+                <!-- Shade kryo-shaded because it may conflict with kryo used by flink -->
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.esotericsoftware.kryo.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
@@ -326,12 +330,6 @@
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
-      <version>${flink.version}</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.flink</groupId>
-      <artifactId>flink-avro</artifactId>
       <version>${flink.version}</version>
       <scope>compile</scope>
     </dependency>
@@ -459,6 +457,10 @@
           <groupId>org.pentaho</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>com.esotericsoftware</groupId>
+          <artifactId>kryo-shaded</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -573,12 +575,6 @@
       <groupId>com.esotericsoftware</groupId>
       <artifactId>kryo-shaded</artifactId>
       <version>4.0.2</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.esotericsoftware.kryo</groupId>
-      <artifactId>kryo</artifactId>
-      <version>2.24.0</version>
     </dependency>
 
     <!-- ORC -->
