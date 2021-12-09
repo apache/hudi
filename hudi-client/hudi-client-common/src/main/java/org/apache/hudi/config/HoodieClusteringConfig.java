@@ -32,12 +32,8 @@ import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Clustering specific configs.
@@ -547,7 +543,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
         throw new HoodieException(String.format("Invalid value (%s)", value));
       }
 
-      return enumValue;    }
+      return enumValue;
+    }
   }
 
   /**
