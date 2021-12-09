@@ -18,8 +18,6 @@
 
 package org.apache.hudi
 
-import java.io.Closeable
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
@@ -30,12 +28,14 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
+import org.apache.spark.sql.avro.{HoodieAvroSerializer, HoodieAvroDeserializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
+
+import java.io.Closeable
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -87,6 +87,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         s"merge type: ${mergeOnReadPartition.split.mergeType}")
     }
     if (iter.isInstanceOf[Closeable]) {
+      // register a callback to close logScanner which will be executed on task completion.
+      // when tasks finished, this method will be called, and release resources.
       Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.asInstanceOf[Closeable].close()))
     }
     iter
@@ -127,7 +129,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val deserializer = HoodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
-      private val logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
+      private var logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
       private val logRecords = logScanner.getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
 
@@ -155,7 +157,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       }
 
       override def close(): Unit = {
-        if (logScanner != null) logScanner.close()
+        if (logScanner != null) {
+          try {
+            logScanner.close()
+          } finally {
+            logScanner = null
+          }
+        }
       }
     }
 
@@ -171,7 +179,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val deserializer = HoodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
-      private val logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
+      private var logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
       private val logRecords = logScanner.getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
 
@@ -206,7 +214,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       }
 
       override def close(): Unit = {
-        if (logScanner != null) logScanner.close()
+        if (logScanner != null) {
+          try {
+            logScanner.close()
+          } finally {
+            logScanner = null
+          }
+        }
       }
     }
 
@@ -223,7 +237,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       private val requiredDeserializer = HoodieAvroDeserializer(requiredAvroSchema, tableState.requiredStructSchema)
       private val recordBuilder = new GenericRecordBuilder(requiredAvroSchema)
       private val unsafeProjection = UnsafeProjection.create(tableState.requiredStructSchema)
-      private val logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
+      private var logScanner = HoodieMergeOnReadRDD.scanLog(split, tableAvroSchema, config)
       private val logRecords = logScanner.getRecords
       private val logRecordsKeyIterator = logRecords.keySet().iterator().asScala
       private val keyToSkip = mutable.Set.empty[String]
@@ -294,7 +308,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
       override def next(): InternalRow = recordToLoad
 
       override def close(): Unit = {
-        if (logScanner != null) logScanner.close()
+        if (logScanner != null) {
+          try {
+            logScanner.close()
+          } finally {
+            logScanner = null
+          }
+        }
       }
 
       private def createRowWithRequiredSchema(row: InternalRow): InternalRow = {
