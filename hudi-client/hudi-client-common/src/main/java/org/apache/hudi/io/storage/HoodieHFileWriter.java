@@ -62,6 +62,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final long maxFileSize;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
+  private final boolean populateMetaFields;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -70,7 +71,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
   public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                           TaskContextSupplier taskContextSupplier) throws IOException {
+                           TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -84,6 +85,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.maxFileSize = hfileConfig.getMaxFileSize();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
+    this.populateMetaFields = populateMetaFields;
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
         .withCompression(hfileConfig.getCompressionAlgorithm())
@@ -104,9 +106,13 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-    prepRecordWithMetadata(avroRecord, record, instantTime,
-        taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
-    writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+    if (populateMetaFields) {
+      prepRecordWithMetadata(avroRecord, record, instantTime,
+          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
+      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+    } else {
+      writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
+    }
   }
 
   @Override

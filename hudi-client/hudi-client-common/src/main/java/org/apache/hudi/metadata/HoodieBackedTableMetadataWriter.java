@@ -204,7 +204,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
             // we will trigger compaction manually, to control the instant times
             .withInlineCompaction(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
+            // we will trigger archive manually, to ensure only regular writer invokes it
+            .withAutoArchive(false).build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)
@@ -680,7 +682,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *      deltacommit.
    */
   protected void compactIfNecessary(AbstractHoodieWriteClient writeClient, String instantTime) {
-    String latestDeltacommitTime = metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
+    // finish off any pending compactions if any from previous attempt.
+    writeClient.runAnyPendingCompactions();
+
+    String latestDeltacommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
         .get().getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
         .findInstantsBefore(latestDeltacommitTime).getInstants().collect(Collectors.toList());
@@ -690,6 +695,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           pendingInstants.size(), latestDeltacommitTime, Arrays.toString(pendingInstants.toArray())));
       return;
     }
+
 
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the

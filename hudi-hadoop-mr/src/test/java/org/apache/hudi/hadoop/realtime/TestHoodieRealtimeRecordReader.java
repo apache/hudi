@@ -82,6 +82,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -235,6 +236,7 @@ public class TestHoodieRealtimeRecordReader {
         jobConf.setBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), isCompressionEnabled);
 
         // validate record reader compaction
+        long logTmpFileStartTime = System.currentTimeMillis();
         HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
 
         // use reader to read base Parquet File and log file, merge in flight and return latest commit
@@ -255,6 +257,8 @@ public class TestHoodieRealtimeRecordReader {
         assertEquals(1.0, recordReader.getProgress(), 0.05);
         assertEquals(120, recordCnt);
         recordReader.close();
+        // the temp file produced by logScanner should be deleted
+        assertTrue(!getLogTempFile(logTmpFileStartTime, System.currentTimeMillis(), diskMapType.toString()).exists());
       } catch (Exception ioe) {
         throw new HoodieException(ioe.getMessage(), ioe);
       }
@@ -262,6 +266,13 @@ public class TestHoodieRealtimeRecordReader {
 
     // Add Rollback last version to next log-file
 
+  }
+
+  private File getLogTempFile(long startTime, long endTime, String diskType) {
+    return Arrays.stream(new File("/tmp").listFiles())
+        .filter(f -> f.isDirectory() && f.getName().startsWith("hudi-" + diskType) && f.lastModified() > startTime && f.lastModified() < endTime)
+        .findFirst()
+        .orElse(new File(""));
   }
 
   @Test
@@ -473,6 +484,7 @@ public class TestHoodieRealtimeRecordReader {
         assertEquals("stringArray" + i + recordCommitTimeSuffix, arrayValues[i].toString(),
             "test value for field: stringArray");
       }
+      reader.close();
     }
   }
 
@@ -552,6 +564,7 @@ public class TestHoodieRealtimeRecordReader {
     while (recordReader.next(key, value)) {
       // keep reading
     }
+    reader.close();
   }
 
   private static Stream<Arguments> testArguments() {

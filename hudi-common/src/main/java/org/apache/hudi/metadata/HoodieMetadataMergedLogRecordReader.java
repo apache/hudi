@@ -28,6 +28,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
+
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.log4j.LogManager;
@@ -142,7 +144,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
    */
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
     private Set<String> mergeKeyFilter = Collections.emptySet();
-    private boolean enableFullScan;
+    private boolean enableFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
     private boolean enableInlineReading;
 
     @Override

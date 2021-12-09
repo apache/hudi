@@ -291,13 +291,13 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
     @Override
     public List<String> getIndexedPartitionPaths() {
-      HFileScanner scanner = partitionIndexReader().getScanner(true, true);
+      HFileScanner scanner = partitionIndexReader().getScanner(true, false);
       return getAllKeys(scanner, HFileBootstrapIndex::getPartitionFromKey);
     }
 
     @Override
     public List<HoodieFileGroupId> getIndexedFileGroupIds() {
-      HFileScanner scanner = fileIdIndexReader().getScanner(true, true);
+      HFileScanner scanner = fileIdIndexReader().getScanner(true, false);
       return getAllKeys(scanner, HFileBootstrapIndex::getFileGroupFromKey);
     }
 
@@ -319,7 +319,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     @Override
     public List<BootstrapFileMapping> getSourceFileMappingForPartition(String partition) {
       try {
-        HFileScanner scanner = partitionIndexReader().getScanner(true, true);
+        HFileScanner scanner = partitionIndexReader().getScanner(true, false);
         KeyValue keyValue = new KeyValue(Bytes.toBytes(getPartitionKey(partition)), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);
         if (scanner.seekTo(keyValue) == 0) {
@@ -352,7 +352,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       List<HoodieFileGroupId> fileGroupIds = new ArrayList<>(ids);
       Collections.sort(fileGroupIds);
       try {
-        HFileScanner scanner = fileIdIndexReader().getScanner(true, true);
+        HFileScanner scanner = fileIdIndexReader().getScanner(true, false);
         for (HoodieFileGroupId fileGroupId : fileGroupIds) {
           KeyValue keyValue = new KeyValue(Bytes.toBytes(getFileGroupKey(fileGroupId)), new byte[0], new byte[0],
               HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put, new byte[0]);

@@ -246,7 +246,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
     synchronized (this) {
       if (keyScanner == null) {
-        keyScanner = reader.getScanner(false, true);
+        keyScanner = reader.getScanner(false, false);
       }
 
       if (keyScanner.seekTo(kv) == 0) {
