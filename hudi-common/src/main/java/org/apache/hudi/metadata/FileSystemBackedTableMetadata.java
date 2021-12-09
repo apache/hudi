@@ -64,8 +64,8 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
 
   @Override
   public List<String> getAllPartitionPaths() throws IOException {
+    FileSystem fs = new Path(datasetBasePath).getFileSystem(hadoopConf.get());
     if (assumeDatePartitioning) {
-      FileSystem fs = new Path(datasetBasePath).getFileSystem(hadoopConf.get());
       return FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, datasetBasePath);
     }
 
@@ -78,30 +78,32 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
       int listingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, pathsToList.size());
 
       // List all directories in parallel
-      List<Pair<Path, FileStatus[]>> dirToFileListing = engineContext.map(pathsToList, path -> {
+      List<FileStatus[]> dirToFileListing = engineContext.map(pathsToList, path -> {
         FileSystem fileSystem = path.getFileSystem(hadoopConf.get());
-        return Pair.of(path, fileSystem.listStatus(path));
+        return fileSystem.listStatus(path);
       }, listingParallelism);
       pathsToList.clear();
 
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
-      dirToFileListing.forEach(p -> {
-        Option<FileStatus> partitionMetaFile = Option.fromJavaOptional(Arrays.stream(p.getRight()).parallel()
-            .filter(fs -> fs.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))
-            .findFirst());
+      dirToFileListing.forEach(fileStatuses -> {
+        List<Option<FileStatus>> partitionMetaFileList = Arrays.stream(fileStatuses).parallel()
+            .filter(fileStatus -> fileStatus.isDirectory() && HoodiePartitionMetadata.hasPartitionMetadata(fs, fileStatus.getPath()))
+            .map(Option::of)
+            .collect(Collectors.toList());
 
-        if (partitionMetaFile.isPresent()) {
-          // Is a partition.
-          String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), p.getLeft());
-          partitionPaths.add(partitionName);
-        } else {
-          // Add sub-dirs to the queue
-          pathsToList.addAll(Arrays.stream(p.getRight())
-              .filter(fs -> fs.isDirectory() && !fs.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME))
-              .map(fs -> fs.getPath())
-              .collect(Collectors.toList()));
-        }
+        partitionMetaFileList.forEach(partitionMetaFile -> {
+          if (partitionMetaFile.isPresent()) {
+            // Is a partition.
+            partitionPaths.add(FSUtils.getRelativePartitionPath(new Path(datasetBasePath), partitionMetaFile.get().getPath()));
+          } else {
+            // Add sub-dirs to the queue
+            pathsToList.addAll(Arrays.stream(fileStatuses)
+                .filter(fileStatus -> fileStatus.isDirectory() && !fileStatus.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME))
+                .map(FileStatus::getPath)
+                .collect(Collectors.toList()));
+          }
+        });
       });
     }
     return partitionPaths;

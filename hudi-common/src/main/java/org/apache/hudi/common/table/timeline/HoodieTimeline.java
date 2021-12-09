@@ -153,13 +153,6 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingCompactionTimeline();
 
   /**
-   * Filter this timeline to just include requested and inflight compaction/replace instants.
-   *
-   * @return
-   */
-  HoodieTimeline filterPendingCompactionAndReplaceTimeline();
-
-  /**
    * Filter this timeline to just include requested and inflight replacecommit instants.
    */
   HoodieTimeline filterPendingReplaceTimeline();
