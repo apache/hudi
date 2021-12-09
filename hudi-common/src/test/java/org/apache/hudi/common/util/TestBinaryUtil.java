@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.optimize;
+package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
 
@@ -27,7 +27,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestZOrderingUtil {
+public class TestBinaryUtil {
 
   @Test
   public void testIntConvert() {
@@ -37,12 +37,12 @@ public class TestZOrderingUtil {
     List<ConvertResultWrapper<Integer>> convertResultWrappers = new ArrayList<>();
     for (int i = 0; i < testInt.length; i++) {
       valueWrappers.add(new OrginValueWrapper<>(i, testInt[i]));
-      convertResultWrappers.add(new ConvertResultWrapper<>(i, ZOrderingUtil.intTo8Byte(testInt[i])));
+      convertResultWrappers.add(new ConvertResultWrapper<>(i, BinaryUtil.intTo8Byte(testInt[i])));
     }
 
     Collections.sort(valueWrappers, ((o1, o2) -> o1.originValue.compareTo(o2.originValue)));
 
-    Collections.sort(convertResultWrappers, ((o1, o2) -> ZOrderingUtil.compareTo(o1.result, 0, o1.result.length, o2.result, 0, o2.result.length)));
+    Collections.sort(convertResultWrappers, ((o1, o2) -> BinaryUtil.compareTo(o1.result, 0, o1.result.length, o2.result, 0, o2.result.length)));
 
     for (int i = 0; i < testInt.length; i++) {
       assertEquals(valueWrappers.get(i).index, convertResultWrappers.get(i).index);
@@ -57,12 +57,12 @@ public class TestZOrderingUtil {
     List<ConvertResultWrapper<Long>> convertResultWrappers = new ArrayList<>();
     for (int i = 0; i < testLong.length; i++) {
       valueWrappers.add(new OrginValueWrapper<>((long)i, testLong[i]));
-      convertResultWrappers.add(new ConvertResultWrapper<>((long)i, ZOrderingUtil.longTo8Byte(testLong[i])));
+      convertResultWrappers.add(new ConvertResultWrapper<>((long)i, BinaryUtil.longTo8Byte(testLong[i])));
     }
 
     Collections.sort(valueWrappers, ((o1, o2) -> o1.originValue.compareTo(o2.originValue)));
 
-    Collections.sort(convertResultWrappers, ((o1, o2) -> ZOrderingUtil.compareTo(o1.result, 0, o1.result.length, o2.result, 0, o2.result.length)));
+    Collections.sort(convertResultWrappers, ((o1, o2) -> BinaryUtil.compareTo(o1.result, 0, o1.result.length, o2.result, 0, o2.result.length)));
 
     for (int i = 0; i < testLong.length; i++) {
       assertEquals(valueWrappers.get(i).index, convertResultWrappers.get(i).index);
@@ -77,12 +77,12 @@ public class TestZOrderingUtil {
     List<ConvertResultWrapper<Double>> convertResultWrappers = new ArrayList<>();
     for (int i = 0; i < testDouble.length; i++) {
       valueWrappers.add(new OrginValueWrapper<>((Double)(i * 1.0), testDouble[i]));
-      convertResultWrappers.add(new ConvertResultWrapper<>((Double)(i * 1.0), ZOrderingUtil.doubleTo8Byte(testDouble[i])));
+      convertResultWrappers.add(new ConvertResultWrapper<>((Double)(i * 1.0), BinaryUtil.doubleTo8Byte(testDouble[i])));
     }
 
     Collections.sort(valueWrappers, ((o1, o2) -> o1.originValue.compareTo(o2.originValue)));
 
-    Collections.sort(convertResultWrappers, ((o1, o2) -> ZOrderingUtil.compareTo(o1.result, 0, o1.result.length, o2.result, 0, o2.result.length)));
+    Collections.sort(convertResultWrappers, ((o1, o2) -> BinaryUtil.compareTo(o1.result, 0, o1.result.length, o2.result, 0, o2.result.length)));
 
     for (int i = 0; i < testDouble.length; i++) {
       assertEquals(valueWrappers.get(i).index, convertResultWrappers.get(i).index);
@@ -97,12 +97,12 @@ public class TestZOrderingUtil {
     List<ConvertResultWrapper<Float>> convertResultWrappers = new ArrayList<>();
     for (int i = 0; i < testDouble.length; i++) {
       valueWrappers.add(new OrginValueWrapper<>((float)(i * 1.0), testDouble[i]));
-      convertResultWrappers.add(new ConvertResultWrapper<>((float)(i * 1.0), ZOrderingUtil.doubleTo8Byte((double) testDouble[i])));
+      convertResultWrappers.add(new ConvertResultWrapper<>((float)(i * 1.0), BinaryUtil.doubleTo8Byte((double) testDouble[i])));
     }
 
     Collections.sort(valueWrappers, ((o1, o2) -> o1.originValue.compareTo(o2.originValue)));
 
-    Collections.sort(convertResultWrappers, ((o1, o2) -> ZOrderingUtil.compareTo(o1.result, 0, o1.result.length, o2.result, 0, o2.result.length)));
+    Collections.sort(convertResultWrappers, ((o1, o2) -> BinaryUtil.compareTo(o1.result, 0, o1.result.length, o2.result, 0, o2.result.length)));
 
     for (int i = 0; i < testDouble.length; i++) {
       assertEquals(valueWrappers.get(i).index, convertResultWrappers.get(i).index);
@@ -131,7 +131,7 @@ public class TestZOrderingUtil {
   public void testConvertBytesToLong() {
     long[] tests = new long[] {Long.MIN_VALUE, -1L, 0, 1L, Long.MAX_VALUE};
     for (int i = 0; i < tests.length; i++) {
-      assertEquals(ZOrderingUtil.convertBytesToLong(convertLongToBytes(tests[i])), tests[i]);
+      assertEquals(BinaryUtil.convertBytesToLong(convertLongToBytes(tests[i])), tests[i]);
     }
   }
 
@@ -140,7 +140,7 @@ public class TestZOrderingUtil {
     byte[] bytes = new byte[2];
     bytes[0] = 2;
     bytes[1] = 127;
-    assertEquals(ZOrderingUtil.convertBytesToLong(bytes), 2 * 256 + 127);
+    assertEquals(BinaryUtil.convertBytesToLong(bytes), 2 * 256 + 127);
   }
 
   private byte[] convertLongToBytes(long num) {
