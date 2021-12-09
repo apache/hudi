@@ -56,6 +56,10 @@ case class InsertIntoHoodieTableCommand(
     overwrite: Boolean)
   extends RunnableCommand {
 
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): InsertIntoHoodieTableCommand = {
+    this
+  }
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
     assert(logicalRelation.catalogTable.isDefined, "Missing catalog table")
 

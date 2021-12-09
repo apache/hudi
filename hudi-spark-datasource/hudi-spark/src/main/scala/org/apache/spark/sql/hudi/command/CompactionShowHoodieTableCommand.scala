@@ -20,12 +20,17 @@ package org.apache.spark.sql.hudi.command
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils.getTableLocation
 import org.apache.spark.sql.types.{IntegerType, StringType}
 
 case class CompactionShowHoodieTableCommand(table: CatalogTable, limit: Int)
   extends RunnableCommand {
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CompactionShowHoodieTableCommand = {
+    this
+  }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val basePath = getTableLocation(table, sparkSession)

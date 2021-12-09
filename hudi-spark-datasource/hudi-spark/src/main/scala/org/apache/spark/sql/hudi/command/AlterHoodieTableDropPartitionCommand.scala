@@ -29,6 +29,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
@@ -40,6 +41,10 @@ case class AlterHoodieTableDropPartitionCommand(
     purge : Boolean,
     retainData : Boolean)
 extends RunnableCommand {
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): AlterHoodieTableDropPartitionCommand = {
+    this
+  }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"

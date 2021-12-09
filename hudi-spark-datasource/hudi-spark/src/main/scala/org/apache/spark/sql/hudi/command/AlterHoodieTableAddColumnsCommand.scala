@@ -31,6 +31,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.util.SchemaUtils
@@ -45,6 +46,10 @@ case class AlterHoodieTableAddColumnsCommand(
    tableId: TableIdentifier,
    colsToAdd: Seq[StructField])
   extends RunnableCommand {
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): AlterHoodieTableAddColumnsCommand = {
+    this
+  }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     if (colsToAdd.nonEmpty) {
@@ -67,14 +72,13 @@ case class AlterHoodieTableAddColumnsCommand(
       AlterHoodieTableAddColumnsCommand.commitWithSchema(newSchema, hoodieCatalogTable, sparkSession)
 
       // Refresh the new schema to meta
-      val newDataSchema = StructType(hoodieCatalogTable.dataSchema.fields ++ colsToAdd)
-      refreshSchemaInMeta(sparkSession, hoodieCatalogTable.table, newDataSchema)
+      refreshSchemaInMeta(sparkSession, hoodieCatalogTable.table, newSchema)
     }
     Seq.empty[Row]
   }
 
   private def refreshSchemaInMeta(sparkSession: SparkSession, table: CatalogTable,
-      newSqlSchema: StructType): Unit = {
+      newSchema: Schema): Unit = {
     try {
       sparkSession.catalog.uncacheTable(tableId.quotedString)
     } catch {
@@ -83,13 +87,16 @@ case class AlterHoodieTableAddColumnsCommand(
     }
     sparkSession.catalog.refreshTable(table.identifier.unquotedString)
 
+    val newSqlSchema = AvroConversionUtils.convertAvroSchemaToStructType(newSchema)
+    val newTable = table.copy(schema = newSqlSchema)
     SchemaUtils.checkColumnNameDuplication(
-      newSqlSchema.map(_.name),
+      newTable.dataSchema.map(_.name),
       "in the table definition of " + table.identifier,
       conf.caseSensitiveAnalysis)
-    DDLUtils.checkDataColNames(table, colsToAdd.map(_.name))
 
-    sparkSession.sessionState.catalog.alterTableDataSchema(tableId, newSqlSchema)
+    DDLUtils.checkDataColNames(newTable)
+
+    sparkSession.sessionState.catalog.alterTableDataSchema(tableId, newTable.dataSchema)
   }
 }
 

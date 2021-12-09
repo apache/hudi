@@ -18,17 +18,25 @@
 package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
+
 import org.apache.spark.sql.types.DataType
 
 /**
  * This is to be compatible with the type returned by Spark 3.1
  * and other spark versions for AvroDeserializer
  */
-case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType)
-  extends AvroDeserializer(rootAvroType, rootCatalystType) {
+case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
+
+  private val avroDeserializer = if (org.apache.spark.SPARK_VERSION.startsWith("3.2")) {
+    val constructor = classOf[AvroDeserializer].getConstructor(classOf[Schema], classOf[DataType], classOf[String])
+    constructor.newInstance(rootAvroType, rootCatalystType, "EXCEPTION")
+  } else {
+    val constructor = classOf[AvroDeserializer].getConstructor(classOf[Schema], classOf[DataType])
+    constructor.newInstance(rootAvroType, rootCatalystType)
+  }
 
   def deserializeData(data: Any): Any = {
-    super.deserialize(data) match {
+    avroDeserializer.deserialize(data) match {
       case Some(r) => r // spark 3.1 return type is Option, we fetch the data.
       case o => o // for other spark version, return the data directly.
     }

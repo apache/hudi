@@ -41,6 +41,10 @@ case class CreateHoodieTableAsSelectCommand(
    mode: SaveMode,
    query: LogicalPlan) extends DataWritingCommand {
 
+  def withNewChildInternal(newChild: LogicalPlan): CreateHoodieTableAsSelectCommand = {
+    this
+  }
+
   override def run(sparkSession: SparkSession, child: SparkPlan): Seq[Row] = {
     assert(table.tableType != CatalogTableType.VIEW)
     assert(table.provider.isDefined)

@@ -28,7 +28,7 @@ import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, UpdateTable}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.internal.SQLConf
@@ -41,6 +41,10 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
 
   private val table = updateTable.table
   private val tableId = getTableIdentify(table)
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): UpdateHoodieTableCommand = {
+    this
+  }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute update command for $tableId")

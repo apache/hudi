@@ -25,6 +25,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, NoSuchTableException}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hudi.HoodieSqlUtils.isEnableHive
@@ -37,6 +38,10 @@ case class DropHoodieTableCommand(
           isView: Boolean,
           purge: Boolean) extends RunnableCommand
   with SparkAdapterSupport {
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): DropHoodieTableCommand = {
+    this
+  }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"

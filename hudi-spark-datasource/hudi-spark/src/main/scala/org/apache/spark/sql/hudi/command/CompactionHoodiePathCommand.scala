@@ -24,9 +24,10 @@ import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeli
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{HoodieTimer, Option => HOption}
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import org.apache.spark.sql.catalyst.plans.logical.CompactionOperation
+import org.apache.spark.sql.catalyst.plans.logical.{CompactionOperation, LogicalPlan}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.CompactionOperation.{CompactionOperation, RUN, SCHEDULE}
 import org.apache.spark.sql.execution.command.RunnableCommand
@@ -39,6 +40,10 @@ import scala.collection.JavaConverters._
 case class CompactionHoodiePathCommand(path: String,
   operation: CompactionOperation, instantTimestamp: Option[Long] = None)
   extends RunnableCommand {
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CompactionHoodiePathCommand = {
+    this
+  }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)

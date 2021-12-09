@@ -28,6 +28,7 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
 
 import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, TableAlreadyExistsException}
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
@@ -47,6 +48,10 @@ import scala.util.control.NonFatal
  */
 case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean)
   extends RunnableCommand with SparkAdapterSupport {
+
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CreateHoodieTableCommand = {
+    this
+  }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableIsExists = sparkSession.sessionState.catalog.tableExists(table.identifier)
@@ -198,7 +203,7 @@ object CreateHoodieTableCommand {
     val schemaJsonString = schema.json
     // Split the JSON string.
     val parts = schemaJsonString.grouped(threshold).toSeq
-    properties.put(DATASOURCE_SCHEMA_NUMPARTS, parts.size.toString)
+    properties.put(DATASOURCE_SCHEMA_PREFIX + "numParts", parts.size.toString)
     parts.zipWithIndex.foreach { case (part, index) =>
       properties.put(s"$DATASOURCE_SCHEMA_PART_PREFIX$index", part)
     }

@@ -293,28 +293,26 @@ class TestHoodieSparkSqlWriter {
    */
   @Test
   def testDisableAndEnableMetaFields(): Unit = {
-    try {
-      testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields = false)
-      //create a new table
-      val fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
-        .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
-        .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
-        .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), BulkInsertSortMode.NONE.name())
-        .updated(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true")
+    testBulkInsertWithSortMode(BulkInsertSortMode.NONE, populateMetaFields = false)
+    //create a new table
+    val fooTableModifier = commonTableModifier.updated("hoodie.bulkinsert.shuffle.parallelism", "4")
+      .updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .updated(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "true")
+      .updated(HoodieWriteConfig.BULK_INSERT_SORT_MODE.key(), BulkInsertSortMode.NONE.name())
+      .updated(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true")
 
-      // generate the inserts
-      val schema = DataSourceTestUtils.getStructTypeExampleSchema
-      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
-      val inserts = DataSourceTestUtils.generateRandomRows(1000)
-      val df = spark.createDataFrame(sc.parallelize(inserts), structType)
-      try {
-        // write to Hudi
-        HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
-        fail("Should have thrown exception")
-      } catch {
-        case e: HoodieException => assertTrue(e.getMessage.startsWith("Config conflict"))
-        case e: Exception => fail(e);
-      }
+    // generate the inserts
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val inserts = DataSourceTestUtils.generateRandomRows(1000)
+    val df = spark.createDataFrame(sc.parallelize(inserts), structType)
+    try {
+      // write to Hudi
+      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, df)
+      fail("Should have thrown exception")
+    } catch {
+      case e: HoodieException => assertTrue(e.getMessage.startsWith("Config conflict"))
+      case e: Exception => fail(e);
     }
   }
 
@@ -711,51 +709,49 @@ class TestHoodieSparkSqlWriter {
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
         HoodieWriteConfig.TBL_NAME.key -> "hoodie_test")
-      try {
-        val df = spark.range(0, 1000).toDF("keyid")
-          .withColumn("col3", expr("keyid"))
-          .withColumn("age", lit(1))
-          .withColumn("p", lit(2))
+      val df = spark.range(0, 1000).toDF("keyid")
+        .withColumn("col3", expr("keyid"))
+        .withColumn("age", lit(1))
+        .withColumn("p", lit(2))
 
-        df.write.format("hudi")
-          .options(options)
-          .option(DataSourceWriteOptions.OPERATION.key, "insert")
-          .option("hoodie.insert.shuffle.parallelism", "4")
-          .mode(SaveMode.Overwrite).save(tempBasePath)
+      df.write.format("hudi")
+        .options(options)
+        .option(DataSourceWriteOptions.OPERATION.key, "insert")
+        .option("hoodie.insert.shuffle.parallelism", "4")
+        .mode(SaveMode.Overwrite).save(tempBasePath)
 
-        df.write.format("hudi")
-          .options(options)
-          .option(DataSourceWriteOptions.OPERATION.key, "insert_overwrite_table")
-          .option("hoodie.insert.shuffle.parallelism", "4")
-          .mode(SaveMode.Append).save(tempBasePath)
+      df.write.format("hudi")
+        .options(options)
+        .option(DataSourceWriteOptions.OPERATION.key, "insert_overwrite_table")
+        .option("hoodie.insert.shuffle.parallelism", "4")
+        .mode(SaveMode.Append).save(tempBasePath)
 
-        val currentCommits = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
-        val incrementalKeyIdNum = spark.read.format("hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "0000")
-          .option(DataSourceReadOptions.END_INSTANTTIME.key, currentCommits(0))
-          .load(tempBasePath).select("keyid").orderBy("keyid").count
-        assert(incrementalKeyIdNum == 1000)
+      val currentCommits = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
+      val incrementalKeyIdNum = spark.read.format("hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "0000")
+        .option(DataSourceReadOptions.END_INSTANTTIME.key, currentCommits(0))
+        .load(tempBasePath).select("keyid").orderBy("keyid").count
+      assert(incrementalKeyIdNum == 1000)
 
-        df.write.mode(SaveMode.Overwrite).save(baseBootStrapPath)
-        spark.emptyDataFrame.write.format("hudi")
-          .options(options)
-          .option(HoodieBootstrapConfig.BASE_PATH.key, baseBootStrapPath)
-          .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
-          .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
-          .option(HoodieBootstrapConfig.PARALLELISM_VALUE.key, "4")
-          .mode(SaveMode.Overwrite).save(tempBasePath)
-        df.write.format("hudi").options(options)
-          .option(DataSourceWriteOptions.OPERATION.key, "insert_overwrite_table")
-          .option("hoodie.insert.shuffle.parallelism", "4").mode(SaveMode.Append).save(tempBasePath)
-        val currentCommitsBootstrap = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
-        val incrementalKeyIdNumBootstrap = spark.read.format("hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "0000")
-          .option(DataSourceReadOptions.END_INSTANTTIME.key, currentCommitsBootstrap(0))
-          .load(tempBasePath).select("keyid").orderBy("keyid").count
-        assert(incrementalKeyIdNumBootstrap == 1000)
-      }
+      df.write.mode(SaveMode.Overwrite).save(baseBootStrapPath)
+      spark.emptyDataFrame.write.format("hudi")
+        .options(options)
+        .option(HoodieBootstrapConfig.BASE_PATH.key, baseBootStrapPath)
+        .option(HoodieBootstrapConfig.KEYGEN_CLASS_NAME.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
+        .option(HoodieBootstrapConfig.PARALLELISM_VALUE.key, "4")
+        .mode(SaveMode.Overwrite).save(tempBasePath)
+      df.write.format("hudi").options(options)
+        .option(DataSourceWriteOptions.OPERATION.key, "insert_overwrite_table")
+        .option("hoodie.insert.shuffle.parallelism", "4").mode(SaveMode.Append).save(tempBasePath)
+      val currentCommitsBootstrap = spark.read.format("hudi").load(tempBasePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
+      val incrementalKeyIdNumBootstrap = spark.read.format("hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "0000")
+        .option(DataSourceReadOptions.END_INSTANTTIME.key, currentCommitsBootstrap(0))
+        .load(tempBasePath).select("keyid").orderBy("keyid").count
+      assert(incrementalKeyIdNumBootstrap == 1000)
     }
   }
 

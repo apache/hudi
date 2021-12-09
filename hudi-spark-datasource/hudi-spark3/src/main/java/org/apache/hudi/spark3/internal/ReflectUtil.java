@@ -19,11 +19,15 @@ package org.apache.hudi.spark3.internal;
 
 import org.apache.spark.sql.catalyst.plans.logical.InsertIntoStatement;
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
+import org.apache.spark.sql.catalyst.util.DateFormatter;
+
 import scala.Option;
 import scala.collection.Seq;
 import scala.collection.immutable.Map;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.time.ZoneId;
 
 public class ReflectUtil {
 
@@ -41,6 +45,25 @@ public class ReflectUtil {
       }
     } catch (Exception e) {
       throw new RuntimeException("Error in create InsertIntoStatement", e);
+    }
+  }
+
+  public static DateFormatter getDateFormatter(String sparkVersion, ZoneId zoneId) {
+    try {
+      ClassLoader loader = Thread.currentThread().getContextClassLoader();
+      if (sparkVersion.startsWith("3.2")) {
+        Class clazz = loader.loadClass(DateFormatter.class.getName());
+        Method applyMethod = clazz.getDeclaredMethod("apply");
+        applyMethod.setAccessible(true);
+        return (DateFormatter)applyMethod.invoke(null);
+      } else {
+        Class clazz = loader.loadClass(DateFormatter.class.getName());
+        Method applyMethod = clazz.getDeclaredMethod("apply", ZoneId.class);
+        applyMethod.setAccessible(true);
+        return (DateFormatter)applyMethod.invoke(null, zoneId);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException("Error in apply DateFormatter", e);
     }
   }
 }

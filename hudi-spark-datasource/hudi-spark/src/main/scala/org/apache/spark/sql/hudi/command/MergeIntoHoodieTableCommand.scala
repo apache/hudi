@@ -145,6 +145,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     }).filter(p => p._2 != null)
   }
 
+  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): MergeIntoHoodieTableCommand = {
+    this
+  }
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
 
@@ -203,7 +207,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
 
     sourceExpression match {
       case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
-      case Cast(attr: AttributeReference, _, _) if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+      case cast: Cast =>
+        cast.child match {
+          case attr: AttributeReference if sourceColumnName.find(resolver(_, attr.name)).get.equals(targetColumnName) => true
+          case _ => false
+        }
       case _=> false
     }
   }
