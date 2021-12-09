@@ -210,7 +210,134 @@ A deltastreamer job can then be triggered as follows:
 
 Read more in depth about concurrency control in the [concurrency control concepts](/docs/concurrency_control) section
 
+## Checkpointing
+HoodieDeltaStreamer uses checkpoints to keep track of what data has been read already so it can resume without needing to reprocess all data.
+When using a Kafka source, the checkpoint is the [Kafka Offset](https://cwiki.apache.org/confluence/display/KAFKA/Offset+Management) 
+When using a DFS source, the checkpoint is the 'last modified' timestamp of the latest file read.
+Checkpoints are saved in the .hoodie commit file as `deltastreamer.checkpoint.key`.
+
+If you need to change the checkpoints for reprocessing or replaying data you can use the following options:
+
+- `--checkpoint` will set `deltastreamer.checkpoint.reset_key` in the commit file to overwrite the current checkpoint.
+- `--source-limit` will set a maximum amount of data to read from the source. For DFS sources, this is max # of bytes read.
+For Kafka, this is the max # of events to read.
+
+## Schema Providers
+By default, Spark will infer the schema of the source and use that inferred schema when writing to a table. If you need 
+to explicitly define the schema you can use one of the following Schema Providers below.
+
+### Schema Registry Provider
+You can obtain the latest schema from an online registry. You pass a URL to the registry and if needed, you can also 
+pass userinfo and credentials in the url like: `https://foo:bar@schemaregistry.org` The credentials are then extracted 
+and are set on the request as an Authorization Header.
+
+When fetching schemas from a registry, you can specify both the source schema and the target schema separately.
+
+|Config|Description|Example|
+|---|---|---|
+|hoodie.deltastreamer.schemaprovider.registry.url|The schema of the source you are reading from|https://foo:bar@schemaregistry.org|
+|hoodie.deltastreamer.schemaprovider.registry.targetUrl|The schema of the target you are writing to|https://foo:bar@schemaregistry.org|
+
+The above configs are passed to DeltaStreamer spark-submit command like: 
+```--hoodie-conf hoodie.deltastreamer.schemaprovider.registry.url=https://foo:bar@schemaregistry.org```
+
+### JDBC Schema Provider
+You can obtain the latest schema through a JDBC connection.
+
+|Config|Description|Example|
+|---|---|---|
+|hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url|The JDBC URL to connect to. You can specify source specific connection properties in the URL|jdbc:postgresql://localhost/test?user=fred&password=secret|
+|hoodie.deltastreamer.schemaprovider.source.schema.jdbc.driver.type|The class name of the JDBC driver to use to connect to this URL|org.h2.Driver|
+|hoodie.deltastreamer.schemaprovider.source.schema.jdbc.username|username for the connection|fred|
+|hoodie.deltastreamer.schemaprovider.source.schema.jdbc.password|password for the connection|secret|
+|hoodie.deltastreamer.schemaprovider.source.schema.jdbc.dbtable|The table with the schema to reference|test_database.test1_table or test1_table|
+|hoodie.deltastreamer.schemaprovider.source.schema.jdbc.timeout|The number of seconds the driver will wait for a Statement object to execute to the given number of seconds. Zero means there is no limit. In the write path, this option depends on how JDBC drivers implement the API setQueryTimeout, e.g., the h2 JDBC driver checks the timeout of each query instead of an entire JDBC batch. It defaults to 0.|0|
+|hoodie.deltastreamer.schemaprovider.source.schema.jdbc.nullable|If true, all columns are nullable|true|
+
+The above configs are passed to DeltaStreamer spark-submit command like:
+```--hoodie-conf hoodie.deltastreamer.jdbcbasedschemaprovider.connection.url=jdbc:postgresql://localhost/test?user=fred&password=secret```
+
+### File Based Schema Provider
+You can use a .avsc file to define your schema. You can then point to this file on DFS as a schema provider.
+
+|Config|Description|Example|
+|---|---|---|
+|hoodie.deltastreamer.schemaprovider.source.schema.file|The schema of the source you are reading from|[example schema file](https://github.com/apache/hudi/blob/a8fb69656f522648233f0310ca3756188d954281/docker/demo/config/test-suite/source.avsc)|
+|hoodie.deltastreamer.schemaprovider.target.schema.file|The schema of the target you are writing to|[example schema file](https://github.com/apache/hudi/blob/a8fb69656f522648233f0310ca3756188d954281/docker/demo/config/test-suite/target.avsc)|
+
+### Schema Provider with Post Processor
+The SchemaProviderWithPostProcessor, will extract the schema from one of the previously mentioned Schema Providers and 
+then will apply a post processor to change the schema before it is used. You can write your own post processor by extending 
+this class: https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/schema/SchemaPostProcessor.java
+
+## Sources
+Hoodie DeltaStreamer can read data from a wide variety of sources. The following are a list of supported sources:
+
+### Distributed File System (DFS)
+See the storage configurations page to see some examples of DFS applications Hudi can read from. The following are the 
+supported file formats Hudi can read/write with on DFS Sources. (Note: you can still use Spark/Flink readers to read from 
+other formats and then write data as Hudi format.)
+
+- CSV
+- AVRO
+- JSON
+- PARQUET
+- ORC
+- HUDI
+
+### Kafka
+Hudi can read directly from Kafka clusters. See more details on HoodieDeltaStreamer to learn how to setup streaming 
+ingestion with exactly once semantics, checkpointing, and plugin transformations. The following formats are supported 
+when reading data from Kafka:
+
+- AVRO
+- JSON
+
+### S3 Events
+AWS S3 storage provides an event notification service which will post notifications when certain events happen in your S3 bucket: 
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html
+AWS will put these events in a Simple Queue Service (SQS). Apache Hudi provides an S3EventsSource that can read from SQS 
+to trigger/processing of new or changed data as soon as it is available on S3.
+
+#### Setup
+1. Enable S3 Event Notifications https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html
+2. Download the aws-java-sdk-sqs jar. 
+3. Find the queue URL and Region to set these configurations:
+   1. hoodie.deltastreamer.s3.source.queue.url=https://sqs.us-west-2.amazonaws.com/queue/url
+   2. hoodie.deltastreamer.s3.source.queue.region=us-west-2 
+4. start the S3EventsSource and S3EventsHoodieIncrSource using the HoodieDeltaStreamer utility as shown in sample commands below:
+
+Insert code sample from this blog: https://hudi.apache.org/blog/2021/08/23/s3-events-source/#configuration-and-setup
+
+### JDBC Source
+Hudi can read from a JDBC source with a full fetch of a table, or Hudi can even read incrementally with checkpointing from a JDBC source.
+
+|Config|Description|Example|
+|---|---|---|
+|hoodie.deltastreamer.jdbc.url|URL of the JDBC connection|jdbc:postgresql://localhost/test|
+|hoodie.deltastreamer.jdbc.user|User to use for authentication of the JDBC connection|fred|
+|hoodie.deltastreamer.jdbc.password|Password to use for authentication of the JDBC connection|secret|
+|hoodie.deltastreamer.jdbc.password.file|If you prefer to use a password file for the connection||
+|hoodie.deltastreamer.jdbc.driver.class|Driver class to use for the JDBC connection||
+|hoodie.deltastreamer.jdbc.table.name||my_table|
+|hoodie.deltastreamer.jdbc.table.incr.column.name|If run in incremental mode, this field will be used to pull new data incrementally||
+|hoodie.deltastreamer.jdbc.incr.pull|Will the JDBC connection perform an incremental pull?||
+|hoodie.deltastreamer.jdbc.extra.options.|How you pass extra configurations that would normally by specified as spark.read.option()|hoodie.deltastreamer.jdbc.extra.options.fetchSize=100 hoodie.deltastreamer.jdbc.extra.options.upperBound=1 hoodie.deltastreamer.jdbc.extra.options.lowerBound=100|
+|hoodie.deltastreamer.jdbc.storage.level|Used to control the persistence level|Default = MEMORY_AND_DISK_SER|
+|hoodie.deltastreamer.jdbc.incr.fallback.to.full.fetch|Boolean which if set true makes an incremental fetch fallback to a full fetch if there is any error in the incremental read|FALSE|
+
+### SQL Source
+SQL Source that reads from any table, used mainly for backfill jobs which will process specific partition dates. 
+This won't update the deltastreamer.checkpoint.key to the processed commit, instead it will fetch the latest successful 
+checkpoint key and set that value as this backfill commits checkpoint so that it won't interrupt the regular incremental 
+processing. To fetch and use the latest incremental checkpoint, you need to also set this hoodie_conf for deltastremer 
+jobs: `hoodie.write.meta.key.prefixes = 'deltastreamer.checkpoint.key'`
+
+Spark SQL should be configured using this hoodie config:
+hoodie.deltastreamer.source.sql.sql.query = 'select * from source_table'
+
 ## Hudi Kafka Connect Sink
 If you want to perform streaming ingestion into Hudi format similar to HoodieDeltaStreamer, but you don't want to depend on Spark,
 try out the new experimental release of Hudi Kafka Connect Sink. Read the [ReadMe](https://github.com/apache/hudi/tree/master/hudi-kafka-connect) 
 for full documentation.
+
