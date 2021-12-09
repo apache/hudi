@@ -94,12 +94,12 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
         schema.getNamespace(), false, org.apache.hudi.common.util.Option.empty()).toJavaRDD();
   }
 
-  private Dataset<Row> reorder(Dataset<Row> sourceDF, int numOutputGroups) {
+  private Dataset<Row> reorder(Dataset<Row> originDF, int numOutputGroups) {
     String orderedColumnsListConfig = config.getClusteringSortColumns();
 
     if (isNullOrEmpty(orderedColumnsListConfig) || numOutputGroups <= 0) {
       // No-op
-      return sourceDF;
+      return originDF;
     }
 
     List<String> orderedCols =
@@ -110,13 +110,15 @@ public class RDDSpatialCurveOptimizationSortPartitioner<T extends HoodieRecordPa
     HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy =
         HoodieClusteringConfig.LayoutOptimizationStrategy.fromValue(config.getLayoutOptimizationStrategy());
 
-    switch (config.getLayoutOptimizationCurveBuildMethod()) {
+    HoodieClusteringConfig.BuildCurveStrategyType curveBuildStrategyType = config.getLayoutOptimizationCurveBuildMethod();
+
+    switch (curveBuildStrategyType) {
       case DIRECT:
-        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(sourceDF, layoutOptStrategy, orderedCols, numOutputGroups);
+        return SpaceCurveSortingHelper.orderDataFrameByMappingValues(originDF, layoutOptStrategy, orderedCols, numOutputGroups);
       case SAMPLE:
-        return SpaceCurveSortingHelper.orderDataFrameBySamplingValues(sourceDF, layoutOptStrategy, orderedCols, numOutputGroups);
+        return SpaceCurveSortingHelper.orderDataFrameBySamplingValues(originDF, layoutOptStrategy, orderedCols, numOutputGroups);
       default:
-        throw new HoodieException("Not a valid build curve method for doWriteOperation: ");
+        throw new UnsupportedOperationException(String.format("Unsupported space-curve curve building strategy (%s)", curveBuildStrategyType));
     }
   }
 
