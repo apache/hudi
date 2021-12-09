@@ -4,7 +4,7 @@ keywords: [ configurations, default, flink options, spark, configs, parameters ]
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2021-12-08T09:59:32.441
+last_modified_at: 2021-12-08T17:24:42.348
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -1514,6 +1514,67 @@ Configurations that control aspects around writing, sizing, reading base and log
 > Compression Codec for parquet files<br></br>
 > **Default Value**: gzip (Optional)<br></br>
 > `Config Param: PARQUET_COMPRESSION_CODEC_NAME`<br></br>
+
+---
+
+### DynamoDB based Locks Configurations {#DynamoDB-based-Locks-Configurations}
+
+Configs that control DynamoDB based locking mechanisms required for concurrency control  between writers to a Hudi table. Concurrency between Hudi's own table services  are auto managed internally.
+
+`Config Class`: org.apache.hudi.config.DynamoDbBasedLockConfig<br></br>
+> #### hoodie.write.lock.dynamodb.billing_mode
+> For DynamoDB based lock provider, by default it is PAY_PER_REQUEST mode<br></br>
+> **Default Value**: PAY_PER_REQUEST (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_BILLING_MODE`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.table
+> For DynamoDB based lock provider, the name of the DynamoDB table acting as lock table<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: DYNAMODB_LOCK_TABLE_NAME`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.region
+> For DynamoDB based lock provider, the region used in endpoint for Amazon DynamoDB service. Would try to first get it from AWS_REGION environment variable. If not find, by default use us-east-1<br></br>
+> **Default Value**: us-east-1 (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_REGION`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.partition_key
+> For DynamoDB based lock provider, the partition key for the DynamoDB lock table. Each Hudi dataset should has it's unique key so concurrent writers could refer to the same partition key. By default we use the Hudi table name specified to be the partition key<br></br>
+> **Default Value**: N/A (Required)<br></br>
+> `Config Param: DYNAMODB_LOCK_PARTITION_KEY`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.write_capacity
+> For DynamoDB based lock provider, write capacity units when using PROVISIONED billing mode<br></br>
+> **Default Value**: 10 (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_WRITE_CAPACITY`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.table_creation_timeout
+> For DynamoDB based lock provider, the maximum number of milliseconds to wait for creating DynamoDB table<br></br>
+> **Default Value**: 600000 (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT`<br></br>
+> `Since Version: 0.10.0`<br></br>
+
+---
+
+> #### hoodie.write.lock.dynamodb.read_capacity
+> For DynamoDB based lock provider, read capacity units when using PROVISIONED billing mode<br></br>
+> **Default Value**: 20 (Optional)<br></br>
+> `Config Param: DYNAMODB_LOCK_READ_CAPACITY`<br></br>
+> `Since Version: 0.10.0`<br></br>
 
 ---
 
