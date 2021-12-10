@@ -887,7 +887,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testHoodieAsyncClusteringJob(boolean shouldPassInClusteringInstantTime) throws Exception {
-    String tableBasePath = dfsBasePath + "/asyncClustering";
+    String tableBasePath = dfsBasePath + "/asyncClusteringJob";
 
     HoodieDeltaStreamer ds = initialHoodieDeltaStreamer(tableBasePath, 3000, "true");
 
