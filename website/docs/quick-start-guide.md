@@ -177,6 +177,7 @@ values={[
 
 Spark SQL needs an explicit create table command.
 
+**Table Concepts**
 - Table types:
   Both of Hudi's table types (Copy-On-Write (COW) and Merge-On-Read (MOR)) can be created using Spark SQL.
 
@@ -192,10 +193,15 @@ Spark SQL needs an explicit create table command.
   If one specifies a location using **location** statement or use `create external table` to create table explicitly, it is an external table, else its considered a managed table.
   You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
 
-- Table with primary key:
-  Users can choose to create a table with primary key as required. Else table is considered a non-primary keyed table.
-  One needs to set **primaryKey** column in options to create a primary key table.
-  If you are using any of the built-in key generators in Hudi, likely it is a primary key table.
+:::note
+1. Since hudi 0.10.0, `primaryKey` is required to specify. It can align with Hudi datasource writer’s and resolve many behavioural discrepancies reported in previous versions.
+ Non-primaryKey tables are no longer supported. Any hudi table created pre 0.10.0 without a `primaryKey` needs to be recreated with a `primaryKey` field with 0.10.0.
+ Same as `hoodie.datasource.write.recordkey.field`, hudi use `uuid` as the default primaryKey. So if you want to use `uuid` as your table's `primaryKey`, you can omit the `primaryKey` config in `tblproperties`.
+2. `primaryKey`, `preCombineField`, `type` is case sensitive.
+3. To specify `primaryKey`, `preCombineField`, `type` or other hudi configs, `tblproperties` is the preferred way than `options`. Spark SQL syntax is detailed here.
+4. A new hudi table created by Spark SQL will set `hoodie.table.keygenerator.class` as `org.apache.hudi.keygen.ComplexKeyGenerator`, and
+`hoodie.datasource.write.hive_style_partitioning` as `true` by default.
+:::
 
 Let's go over some of the create table commands.
 
@@ -323,14 +329,6 @@ Users can set table properties while creating a hudi table. Critical options are
 | type       | cow | The table type to create. type = 'cow' means a COPY-ON-WRITE table, while type = 'mor' means a MERGE-ON-READ table. Same as `hoodie.datasource.write.table.type` |
 
 To set any custom hudi config(like index type, max parquet size, etc), see the  "Set hudi config section" .
-
-:::note
-1. Since hudi 0.10.0, `primaryKey` is required to specify. It can align with Hudi datasource writer’s and resolve many behavioural discrepancies reported in previous versions.
-2. `primaryKey`, `preCombineField`, `type` is case sensitive.
-3. To specify `primaryKey`, `preCombineField`, `type` or other hudi configs, `tblproperties` is the preferred way than `options`. Spark SQL syntax is detailed here.
-4. A new hudi table created by Spark SQL will set `hoodie.table.keygenerator.class` as `org.apache.hudi.keygen.ComplexKeyGenerator`, and
-`hoodie.datasource.write.hive_style_partitioning` as `true` by default.
-:::
 
 </TabItem>
 </Tabs>
