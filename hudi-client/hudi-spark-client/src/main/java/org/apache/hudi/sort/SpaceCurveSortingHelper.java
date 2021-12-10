@@ -30,7 +30,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.Row$;
 import org.apache.spark.sql.hudi.execution.RangeSampleSort$;
-import org.apache.spark.sql.hudi.execution.ZorderingBinarySort;
+import org.apache.spark.sql.hudi.execution.ByteArraySorting;
 import org.apache.spark.sql.types.BinaryType;
 import org.apache.spark.sql.types.BinaryType$;
 import org.apache.spark.sql.types.BooleanType;
@@ -189,7 +189,7 @@ public class SpaceCurveSortingHelper {
       zVaules.add(BinaryUtil.interleaving(zBytes, 8));
       return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(zVaules));
     })
-        .sortBy(f -> new ZorderingBinarySort((byte[]) f.get(fieldNum)), true, fileNum);
+        .sortBy(f -> new ByteArraySorting((byte[]) f.get(fieldNum)), true, fileNum);
   }
 
   private static JavaRDD<Row> createHilbertSortedRDD(JavaRDD<Row> originRDD, Map<Integer, StructField> fieldMap, int fieldNum, int fileNum) {
@@ -246,7 +246,7 @@ public class SpaceCurveSortingHelper {
           return Row$.MODULE$.apply(JavaConversions.asScalaBuffer(values));
         }
       };
-    }).sortBy(f -> new ZorderingBinarySort((byte[]) f.get(fieldNum)), true, fileNum);
+    }).sortBy(f -> new ByteArraySorting((byte[]) f.get(fieldNum)), true, fileNum);
   }
 
   public static Dataset<Row> orderDataFrameBySamplingValues(

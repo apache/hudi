@@ -237,8 +237,8 @@ class RawDecisionBound[K : Ordering : ClassTag](ordering: Ordering[K]) extends S
   }
 }
 
-case class ZorderingBinarySort(b: Array[Byte]) extends Ordered[ZorderingBinarySort] with Serializable {
-  override def compare(that: ZorderingBinarySort): Int = {
+case class ByteArraySorting(b: Array[Byte]) extends Ordered[ByteArraySorting] with Serializable {
+  override def compare(that: ByteArraySorting): Int = {
     val len = this.b.length
     BinaryUtil.compareTo(this.b, 0, len, that.b, 0, len)
   }
@@ -435,7 +435,7 @@ object RangeSampleSort {
 
           Row.fromSeq(row.toSeq ++ Seq(mapValues))
         }
-      }.sortBy(x => ZorderingBinarySort(x.getAs[Array[Byte]](fieldNum)), numPartitions = targetPartitionsCount)
+      }.sortBy(x => ByteArraySorting(x.getAs[Array[Byte]](fieldNum)), numPartitions = targetPartitionsCount)
       val newDF = df.sparkSession.createDataFrame(indexRdd, StructType(
         df.schema.fields ++ Seq(
           StructField(s"index",
@@ -531,7 +531,7 @@ object RangeSampleSort {
 
           mutablePair.update(unsafeRow, zValues)
         }
-      }.sortBy(x => ZorderingBinarySort(x._2), numPartitions = fileNum).map(_._1)
+      }.sortBy(x => ByteArraySorting(x._2), numPartitions = fileNum).map(_._1)
       spark.internalCreateDataFrame(indexRdd, schema)
     }
   }

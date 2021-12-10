@@ -79,7 +79,7 @@ class TestSpaceCurveLayoutOptimization extends HoodieClientTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testLayoutOptimizationParameters"))
-  def testZOrderingLayoutClustering(tableType: String): Unit = {
+  def testLayoutOptimizationFunctional(tableType: String): Unit = {
     val targetRecordsCount = 10000
     // Bulk Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("001", targetRecordsCount)).toList
