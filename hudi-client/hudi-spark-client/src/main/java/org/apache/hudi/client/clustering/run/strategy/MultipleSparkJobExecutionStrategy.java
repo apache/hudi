@@ -63,6 +63,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -91,12 +92,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
     // execute clustering for each group async and collect WriteStatus
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     // execute clustering for each group async and collect WriteStatus
-    Stream<JavaRDD<WriteStatus>> writeStatusRDDStream = clusteringPlan.getInputGroups().stream()
+    Stream<JavaRDD<WriteStatus>> writeStatusRDDStream = allOf(clusteringPlan.getInputGroups().stream()
         .map(inputGroup -> runClusteringForGroupAsync(inputGroup,
             clusteringPlan.getStrategy().getStrategyParams(),
             Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
-            instantTime)).collect(Collectors.toList()).stream().map(CompletableFuture::join);
-
+            instantTime)).collect(Collectors.toList())).join().stream();
     JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusRDDStream);
     JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
 
@@ -143,7 +143,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       return Option.empty();
     }
   }
-
 
   /**
    * Submit job to execute clustering for the group.
@@ -244,6 +243,16 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
 
       return new ConcatenatingIterator<>(iteratorsForPartition);
     }).map(this::transform);
+  }
+
+  private static <T> CompletableFuture<List<T>> allOf(@Nonnull List<CompletableFuture<T>> futures) {
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+        .thenApply(aVoid ->
+            futures.stream()
+                // NOTE: This join wouldn't block, since all the
+                //       futures are completed at this point.
+                .map(CompletableFuture::join)
+                .collect(Collectors.toList()));
   }
 
   /**
