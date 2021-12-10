@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.index.zorder.ZOrderingIndexHelper
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Expression, Not}
@@ -66,7 +66,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
     )
 
   val indexSchema =
-    ZOrderingIndexHelper.composeIndexSchema(
+    ColumnStatsIndexHelper.composeIndexSchema(
       sourceTableSchema.fields.toSeq
         .filter(f => indexedCols.contains(f.name))
         .asJava
@@ -77,7 +77,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
   def testLookupFilterExpressions(sourceExpr: String, input: Seq[IndexRow], output: Seq[String]): Unit = {
     val resolvedExpr: Expression = resolveFilterExpr(sourceExpr, sourceTableSchema)
 
-    val lookupFilter = DataSkippingUtils.createZIndexLookupFilter(resolvedExpr, indexSchema)
+    val lookupFilter = DataSkippingUtils.createColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val spark2 = spark
     import spark2.implicits._
@@ -97,7 +97,7 @@ class TestDataSkippingUtils extends HoodieClientTestBase {
   @MethodSource(Array("testStringsLookupFilterExpressionsSource"))
   def testStringsLookupFilterExpressions(sourceExpr: Expression, input: Seq[IndexRow], output: Seq[String]): Unit = {
     val resolvedExpr = resolveFilterExpr(sourceExpr, sourceTableSchema)
-    val lookupFilter = DataSkippingUtils.createZIndexLookupFilter(resolvedExpr, indexSchema)
+    val lookupFilter = DataSkippingUtils.createColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
     val spark2 = spark
     import spark2.implicits._

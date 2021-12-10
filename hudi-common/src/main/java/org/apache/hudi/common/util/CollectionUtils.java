@@ -18,15 +18,17 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.Properties;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -34,6 +36,36 @@ import java.util.stream.Stream;
 public class CollectionUtils {
 
   public static final Properties EMPTY_PROPERTIES = new Properties();
+
+  /**
+   * Combines provided {@link List}s into one
+   */
+  public static <E> List<E> combine(List<E> one, List<E> another) {
+    ArrayList<E> combined = new ArrayList<>(one);
+    combined.addAll(another);
+    return combined;
+  }
+
+  /**
+   * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
+   */
+  public static <E> Set<E> diff(Set<E> one, Set<E> another) {
+    Set<E> diff = new HashSet<>(one);
+    diff.removeAll(another);
+    return diff;
+  }
+
+  /**
+   * Returns difference b/w {@code one} {@link List} of elements and {@code another}
+   *
+   * NOTE: This is less optimal counterpart to {@link #diff(Set, Set)}, accepting {@link List}
+   *       as a holding collection to support duplicate elements use-cases
+   */
+  public static <E> List<E> diff(List<E> one, List<E> another) {
+    List<E> diff = new ArrayList<>(one);
+    diff.removeAll(another);
+    return diff;
+  }
 
   /**
    * Determines whether two iterators contain equal elements in the same order. More specifically,

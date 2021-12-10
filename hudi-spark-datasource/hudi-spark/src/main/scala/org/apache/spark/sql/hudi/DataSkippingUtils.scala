@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hudi.index.zorder.ZOrderingIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper.{getMaxColumnNameFor, getMinColumnNameFor, getNumNullsColumnNameFor}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -39,14 +39,14 @@ import scala.collection.JavaConverters._
 object DataSkippingUtils extends Logging {
 
   /**
-   * Translates provided {@link filterExpr} into corresponding filter-expression for Z-index index table
+   * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index index table
    * to filter out candidate files that would hold records matching the original filter
    *
-   * @param sourceFilterExpr  original filter from query
+   * @param sourceFilterExpr source table's query's filter expression
    * @param indexSchema index table schema
-   * @return filter for Z-index table
+   * @return filter for column-stats index's table
    */
-  def createZIndexLookupFilter(sourceFilterExpr: Expression, indexSchema: StructType): Expression = {
+  def createColumnStatsIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType): Expression = {
     // Try to transform original Source Table's filter expression into
     // Column-Stats Index filter expression
     tryComposeIndexFilterExpr(sourceFilterExpr, indexSchema) match {
@@ -201,14 +201,14 @@ object DataSkippingUtils extends Logging {
           )
 
       case or: Or =>
-        val resLeft = createZIndexLookupFilter(or.left, indexSchema)
-        val resRight = createZIndexLookupFilter(or.right, indexSchema)
+        val resLeft = createColumnStatsIndexFilterExpr(or.left, indexSchema)
+        val resRight = createColumnStatsIndexFilterExpr(or.right, indexSchema)
 
         Option(Or(resLeft, resRight))
 
       case and: And =>
-        val resLeft = createZIndexLookupFilter(and.left, indexSchema)
-        val resRight = createZIndexLookupFilter(and.right, indexSchema)
+        val resLeft = createColumnStatsIndexFilterExpr(and.left, indexSchema)
+        val resRight = createColumnStatsIndexFilterExpr(and.right, indexSchema)
 
         Option(And(resLeft, resRight))
 
@@ -219,10 +219,10 @@ object DataSkippingUtils extends Logging {
       //
 
       case Not(And(left: Expression, right: Expression)) =>
-        Option(createZIndexLookupFilter(Or(Not(left), Not(right)), indexSchema))
+        Option(createColumnStatsIndexFilterExpr(Or(Not(left), Not(right)), indexSchema))
 
       case Not(Or(left: Expression, right: Expression)) =>
-        Option(createZIndexLookupFilter(And(Not(left), Not(right)), indexSchema))
+        Option(createColumnStatsIndexFilterExpr(And(Not(left), Not(right)), indexSchema))
 
       case _: Expression => None
     }
