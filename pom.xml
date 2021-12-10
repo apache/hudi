@@ -50,6 +50,7 @@
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
+    <module>packaging/hudi-trino-bundle</module>
     <module>docker/hoodie/hadoop</module>
     <module>hudi-integ-test</module>
     <module>packaging/hudi-integ-test-bundle</module>
@@ -147,15 +148,17 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
-    <spark.bundle.hive.shade.prefix />
+    <spark.bundle.hive.shade.prefix/>
     <spark.bundle.avro.scope>compile</spark.bundle.avro.scope>
     <spark.bundle.spark.shade.prefix>org.apache.hudi.spark.</spark.bundle.spark.shade.prefix>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
-    <utilities.bundle.hive.shade.prefix />
+    <utilities.bundle.hive.shade.prefix/>
     <argLine>-Xmx2g</argLine>
     <jacoco.version>0.8.5</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
+    <trino.bundle.bootstrap.scope>compile</trino.bundle.bootstrap.scope>
+    <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
     <antlr.version>4.7</antlr.version>
