@@ -18,41 +18,36 @@
 
 package org.apache.hudi.index.bucket;
 
-import java.util.HashMap;
-import java.util.Map;
-
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.WorkloadProfile;
-import org.apache.hudi.table.action.commit.Partitioner;
-import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.spark.api.java.JavaRDD;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
-public class SparkBucketIndex<T extends HoodieRecordPayload>
-    extends HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+import java.util.HashMap;
+import java.util.Map;
 
-  private static final Logger LOG =  LogManager.getLogger(SparkBucketIndex.class);
+public class HoodieBucketIndex<T extends HoodieRecordPayload<T>>
+    extends HoodieIndex<T, Object, Object, Object> {
+
+  private static final Logger LOG =  LogManager.getLogger(HoodieBucketIndex.class);
 
   private final int numBuckets;
 
-  public SparkBucketIndex(HoodieWriteConfig config) {
+  public HoodieBucketIndex(HoodieWriteConfig config) {
     super(config);
     numBuckets = config.getBucketIndexNumBuckets();
     LOG.info("use bucket index, numBuckets=" + numBuckets);
@@ -84,8 +79,7 @@ public class SparkBucketIndex<T extends HoodieRecordPayload>
         @Override
         protected HoodieRecord<T> computeNext() {
           HoodieRecord record = recordIter.next();
-          int bucketId = BucketIdentifier.getBucketId(record, config.getBucketIndexHashField(),
-              numBuckets, config.getBucketIndexHashFunction());
+          int bucketId = BucketIdentifier.getBucketId(record, config.getBucketIndexHashField(), numBuckets);
           String partitionPath = record.getPartitionPath();
           if (!partitionPathFileIDList.containsKey(partitionPath)) {
             partitionPathFileIDList.put(partitionPath, loadPartitionBucketIdFileIdMapping(hoodieTable, partitionPath));
@@ -109,7 +103,7 @@ public class SparkBucketIndex<T extends HoodieRecordPayload>
   }
 
   private Map<Integer, Pair<String, String>> loadPartitionBucketIdFileIdMapping(
-      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable,
+      HoodieTable hoodieTable,
       String partition) {
     // bucketId -> fileIds
     Map<Integer, Pair<String, String>> fileIDList = new HashMap<>();
@@ -151,21 +145,15 @@ public class SparkBucketIndex<T extends HoodieRecordPayload>
   }
 
   @Override
-  public Option<Partitioner> getCustomizedPartitioner(WorkloadProfile profile,
-      HoodieEngineContext context,
-      HoodieTable table,
-      HoodieWriteConfig writeConfig) {
-    return Option.of(new SparkBucketIndexPartitioner<>(profile, context, table, config));
-  }
-
-  @Override
-  public boolean needCustomizedPartitioner() {
-    return true;
-  }
-
-  @Override
-  public boolean needTaggingIfInsert() {
-    return true;
+  public boolean performTagging(WriteOperationType operationType) {
+    switch (operationType) {
+      case INSERT:
+      case INSERT_OVERWRITE:
+      case UPSERT:
+        return true;
+      default:
+        return false;
+    }
   }
 
   public int getNumBuckets() {

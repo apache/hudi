@@ -21,7 +21,6 @@ package org.apache.hudi.index.bucket;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.utils.HashFunction;
 
 import java.util.Arrays;
 import java.util.List;
@@ -33,11 +32,11 @@ public class BucketIdentifier {
   // compatible with the spark bucket name
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
 
-  public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets, String hashFunction) {
-    return getBucketId(record.getKey(), indexKeyFields, numBuckets, hashFunction);
+  public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
+    return getBucketId(record.getKey(), indexKeyFields, numBuckets);
   }
 
-  public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets, String hashFunction) {
+  public static int getBucketId(HoodieKey hoodieKey, String indexKeyFields, int numBuckets) {
     List<String> hashKeyFields;
     if (!hoodieKey.getRecordKey().contains(":")) {
       hashKeyFields = Arrays.asList(hoodieKey.getRecordKey());
@@ -49,8 +48,12 @@ public class BucketIdentifier {
           .map(f -> recordKeyPairs.get(f))
           .collect(Collectors.toList());
     }
-    return mod(HashFunction.getHashFunction(hashFunction).hash(hashKeyFields)
-        & Integer.MAX_VALUE, numBuckets);
+    return (hashKeyFields.hashCode() & Integer.MAX_VALUE) % numBuckets;
+  }
+
+  // only for test
+  public  static int getBucketId(List<String> hashKeyFields, int numBuckets) {
+    return hashKeyFields.hashCode() % numBuckets;
   }
 
   public static int bucketIdFromFileId(String fileId) {
@@ -61,24 +64,11 @@ public class BucketIdentifier {
     return String.format("%08d", n);
   }
 
-  public static String bucketIdStr(int n, int m) {
-    return bucketIdStr(mod(n, m));
-  }
-
   public static String newBucketFileIdPrefix(String bucketId) {
     return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
   }
 
   public static boolean isBucketFileName(String name) {
     return BUCKET_NAME.matcher(name).matches();
-  }
-
-  private static int mod(int x, int y) {
-    int r = x % y;
-    if (r < 0) {
-      return (r + y) % y;
-    } else {
-      return r;
-    }
   }
 }

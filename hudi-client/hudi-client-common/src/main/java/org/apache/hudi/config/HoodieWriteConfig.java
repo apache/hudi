@@ -1430,10 +1430,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getIntOrDefault(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS);
   }
 
-  public String getBucketIndexHashFunction() {
-    return getStringOrDefault(HoodieIndexConfig.BUCKET_INDEX_HASH_FUNCTION);
-  }
-
   public String getBucketIndexHashField() {
     return getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD);
   }

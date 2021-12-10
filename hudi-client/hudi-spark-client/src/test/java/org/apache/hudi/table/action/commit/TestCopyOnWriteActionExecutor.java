@@ -132,7 +132,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   private HoodieIndexConfig makeIndexConfig(HoodieIndex.IndexType indexType) {
     HoodieIndexConfig.Builder indexConfig = HoodieIndexConfig.newBuilder()
         .withIndexType(indexType);
-    if (indexType.equals(HoodieIndex.IndexType.BUCKET_INDEX)) {
+    if (indexType.equals(HoodieIndex.IndexType.BUCKET)) {
       indexConfig.withIndexKeyField("_row_key").withBucketNum("8");
     }
     return indexConfig.build();

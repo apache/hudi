@@ -58,7 +58,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
     return SparkWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
-        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, false);
+        config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
   }
 
   @Override

@@ -57,7 +57,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
       .key("hoodie.index.type")
-      .noDefaultValue()
+      .defaultValue("BLOOM")
       .withDocumentation("Type of index to use. Default is Bloom filter. "
           + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
           + "Bloom filters removes the dependency on a external system "
@@ -228,12 +228,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Index key. It is used to index the record and find its file group. "
           + "If not set, use record key field as default");
-
-  public static final ConfigProperty<String> BUCKET_INDEX_HASH_FUNCTION = ConfigProperty
-      .key("hoodie.bucket.index.hash.function")
-      .defaultValue("JVMHash")
-      .withDocumentation("Hash function. It is used to compute the index key hash value "
-          + "Possible options are [JVMHash | HiveHash]. ");
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
@@ -589,7 +583,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     private void validateBucketIndexConfig() {
       if (hoodieIndexConfig.getString(INDEX_TYPE)
-          .equalsIgnoreCase(HoodieIndex.IndexType.BUCKET_INDEX.toString())) {
+          .equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
         // check the bucket index hash field
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
@@ -600,7 +594,7 @@ public class HoodieIndexConfig extends HoodieConfig {
               .collect(Collectors.toSet())
               .containsAll(Arrays.asList(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD).split(",")));
           if (!valid) {
-            throw new HoodieException("Bucket index key (if configured) must be subset of record key.");
+            throw new HoodieIndexException("Bucket index key (if configured) must be subset of record key.");
           }
         }
         // check the bucket num

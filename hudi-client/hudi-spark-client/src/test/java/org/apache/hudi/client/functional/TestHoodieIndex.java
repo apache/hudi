@@ -90,7 +90,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         {IndexType.GLOBAL_SIMPLE, true},
         {IndexType.SIMPLE, false},
         {IndexType.GLOBAL_SIMPLE, false},
-        {IndexType.BUCKET_INDEX, false}
+        {IndexType.BUCKET, false}
     };
     return Stream.of(data).map(Arguments::of);
   }

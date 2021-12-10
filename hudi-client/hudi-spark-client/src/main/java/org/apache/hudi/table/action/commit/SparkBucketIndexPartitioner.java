@@ -38,7 +38,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.bucket.SparkBucketIndex;
+import org.apache.hudi.index.bucket.HoodieBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -47,7 +47,6 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
     SparkHoodiePartitioner<T> {
 
   private final int numBuckets;
-  private final String hashFunction;
   private final String indexKeyField;
   private final int totalPartitionPaths;
   private final List<String> partitionPaths;
@@ -59,13 +58,12 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
                                      HoodieTable table,
                                      HoodieWriteConfig config) {
     super(profile, table);
-    if (!(table.getIndex() instanceof SparkBucketIndex)) {
+    if (!(table.getIndex() instanceof HoodieBucketIndex)) {
       throw new HoodieException(
           " Bucket index partitioner should only be used by BucketIndex other than "
               + table.getIndex().getClass().getSimpleName());
     }
-    this.numBuckets = ((SparkBucketIndex<T>) table.getIndex()).getNumBuckets();
-    this.hashFunction = config.getBucketIndexHashFunction();
+    this.numBuckets = ((HoodieBucketIndex<T>) table.getIndex()).getNumBuckets();
     this.indexKeyField = config.getBucketIndexHashField();
     this.totalPartitionPaths = profile.getPartitionPaths().size();
     partitionPaths = new ArrayList<>(profile.getPartitionPaths());
@@ -122,7 +120,7 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
     Option<HoodieRecordLocation> location = keyLocation._2;
     int bucketId = location.isPresent()
         ? BucketIdentifier.bucketIdFromFileId(location.get().getFileId())
-        : BucketIdentifier.getBucketId(keyLocation._1, indexKeyField, numBuckets, hashFunction);
+        : BucketIdentifier.getBucketId(keyLocation._1, indexKeyField, numBuckets);
     return partitionPathOffset.get(partitionPath) + bucketId;
   }
 }

@@ -45,7 +45,7 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET_INDEX.name,
+    HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET.name,
     HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "8",
     KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> "_row_key"
   )

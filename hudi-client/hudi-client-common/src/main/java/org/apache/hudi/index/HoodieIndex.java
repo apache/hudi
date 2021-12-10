@@ -28,13 +28,11 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.WorkloadProfile;
-import org.apache.hudi.table.action.commit.Partitioner;
 
 import java.io.Serializable;
 
@@ -129,8 +127,16 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
    * If the `getCustomizedPartitioner` returns a partitioner, it has to be true.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public boolean needTaggingIfInsert() {
-    return false;
+  public boolean performTagging(WriteOperationType operationType) {
+    switch (operationType) {
+      case INSERT:
+      case INSERT_OVERWRITE:
+        return false;
+      case UPSERT:
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**
@@ -140,6 +146,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET_INDEX
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET
   }
 }
