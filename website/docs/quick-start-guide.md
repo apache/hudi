@@ -188,7 +188,7 @@ Spark SQL needs an explicit create table command.
   When there is no **partitioned by** statement with create table command, table is considered to be a non-partitioned table.
 
 - Managed & External table:
-  In general, spark-sql supports two kinds of tables, namely managed and external.
+  In general, Spark SQL supports two kinds of tables, namely managed and external.
   If one specifies a location using **location** statement or use `create external table` to create table explicitly, it is an external table, else its considered a managed table.
   You can read more about external vs managed tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
 
