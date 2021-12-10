@@ -270,7 +270,7 @@ You don't need to specify schema and any properties except the partitioned colum
 
 **CTAS**
 
-Hudi supports CTAS(Create Table As Select) on spark sql. <br/>
+Hudi supports CTAS (Create Table As Select) on spark sql. <br/>
 Note: For better performance to load data to hudi table, CTAS uses the **bulk insert** as the write operation.
 
 Example CTAS command to create a non-partitioned COW table without preCombineField.
