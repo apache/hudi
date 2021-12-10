@@ -178,7 +178,7 @@ values={[
 Spark SQL needs an explicit create table command.
 
 - Table types:
-  Both types of hudi tables (CopyOnWrite (COW) and MergeOnRead (MOR)) can be created using spark-sql.
+  Both of Hudi's table types (Copy-On-Write (COW) and Merge-On-Read (MOR)) can be created using Spark SQL.
 
   While creating the table, table type can be specified using **type** option. **type = 'cow'** represents COW table, while **type = 'mor'** represents MOR table.
 
