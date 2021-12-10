@@ -602,7 +602,7 @@ public class HoodieTestTable {
   }
 
   public List<java.nio.file.Path> getAllPartitionPaths() throws IOException {
-    java.nio.file.Path basePathPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).getParent().getParent();
+    java.nio.file.Path basePathPath = Paths.get(basePath);
     return FileCreateUtils.getPartitionPaths(basePathPath);
   }
 
@@ -660,8 +660,10 @@ public class HoodieTestTable {
     return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, partitionPath).toString())).stream()
         .filter(entry -> {
           boolean toReturn = true;
+          String filePath = entry.getPath().toString();
           String fileName = entry.getPath().getName();
-          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE) || (!fileName.contains("log") && !fileName.contains("parquet"))
+              || filePath.contains("metadata")) {
             toReturn = false;
           } else {
             for (String inflight : inflightCommits) {

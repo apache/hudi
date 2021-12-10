@@ -48,6 +48,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   String RECORDKEY_PARTITION_LIST = "__all_partitions__";
   // The partition name used for non-partitioned tables
   String NON_PARTITIONED_NAME = ".";
+  String EMPTY_PARTITION_NAME = "";
 
   // Base path of the Metadata Table relative to the dataset (.hoodie/metadata)
   static final String METADATA_TABLE_REL_PATH = HoodieTableMetaClient.METAFOLDER_NAME + Path.SEPARATOR + "metadata";
