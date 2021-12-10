@@ -417,8 +417,8 @@ module.exports = {
               path: 'next',
               banner: 'unreleased',
             },
-            '0.9.0': {
-              label: '0.9.0',
+            '0.10.0': {
+              label: '0.10.0',
               path: '',
             }
           },
