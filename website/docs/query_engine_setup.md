@@ -18,12 +18,29 @@ Both snapshot and read optimized queries are supported on MERGE_ON_READ Hudi tab
 instructions for PrestoDB would vary based on versions. Please check the below table for query types supported and installation instructions
 for different versions of PrestoDB.
 
-
 | **PrestoDB Version** | **Installation description** | **Query types supported** |
 |----------------------|------------------------------|---------------------------|
 | < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
 | >= 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
 | >= 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables |
+
+### Presto Environment
+1. Configure Presto according to the [Presto configuration document](https://prestodb.io/docs/current/installation/deployment.html).
+2. Configure hive catalog in ` /presto-server-0.2xxx/etc/catalog/hive.properties` as follows:
+
+```properties
+connector.name=hive-hadoop2
+hive.metastore.uri=thrift://xxx.xxx.xxx.xxx:9083
+hive.config.resources=.../hadoop-2.x/etc/hadoop/core-site.xml,.../hadoop-2.x/etc/hadoop/hdfs-site.xml
+```
+
+### Query
+Beginning query by connecting hive metastore with presto client. The presto client connection command is as follows:
+
+```bash
+# The presto client connection command
+./presto --server xxx.xxx.xxx.xxx:9999 --catalog hive --schema default
+```
 
 ## Trino
 :::note

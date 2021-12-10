@@ -151,7 +151,7 @@ and then ingest it as follows.
 
 In some cases, you may want to migrate your existing table into Hudi beforehand. Please refer to [migration guide](/docs/migration_guide).
 
-## MultiTableDeltaStreamer
+### MultiTableDeltaStreamer
 
 `HoodieMultiTableDeltaStreamer`, a wrapper on top of `HoodieDeltaStreamer`, enables one to ingest multiple tables at a single go into hudi datasets. Currently it only supports sequential processing of tables to be ingested and COPY_ON_WRITE storage type. The command line options for `HoodieMultiTableDeltaStreamer` are pretty much similar to `HoodieDeltaStreamer` with the only exception that you are required to provide table wise configs in separate files in a dedicated config folder. The following command line options are introduced
 
@@ -189,7 +189,7 @@ Sample config files for table wise overridden properties can be found under `hud
 
 For detailed information on how to configure and use `HoodieMultiTableDeltaStreamer`, please refer [blog section](/blog/2020/08/22/ingest-multiple-tables-using-hudi).
 
-## Concurrency Control
+### Concurrency Control
 
 The `HoodieDeltaStreamer` utility (part of hudi-utilities-bundle) provides ways to ingest from different sources such as DFS or Kafka, with the following capabilities.
 
@@ -336,7 +336,146 @@ jobs: `hoodie.write.meta.key.prefixes = 'deltastreamer.checkpoint.key'`
 Spark SQL should be configured using this hoodie config:
 hoodie.deltastreamer.source.sql.sql.query = 'select * from source_table'
 
-## Hudi Kafka Connect Sink
+## Flink Ingestion
+
+### CDC Ingestion
+CDC(change data capture) keep track of the data changes evolving in a source system so a downstream process or system can action that change.
+We recommend two ways for syncing CDC data into Hudi:
+
+![slide1 title](/assets/images/cdc-2-hudi.png)
+
+1. Using the Ververica [flink-cdc-connectors](https://github.com/ververica/flink-cdc-connectors) directly connect to DB Server to sync the binlog data into Hudi.
+   The advantage is that it does not rely on message queues, but the disadvantage is that it puts pressure on the db server;
+2. Consume data from a message queue (for e.g, the Kafka) using the flink cdc format, the advantage is that it is highly scalable,
+   but the disadvantage is that it relies on message queues.
+
+:::note
+- If the upstream data cannot guarantee the order, you need to specify option `write.precombine.field` explicitly;
+- The MOR table can not handle DELETEs in event time sequence now, thus causing data loss. You better switch on the changelog mode through
+  option `changelog.enabled`.
+  :::
+
+### Bulk Insert
+
+For the demand of snapshot data import. If the snapshot data comes from other data sources, use the `bulk_insert` mode to quickly
+import the snapshot data into Hudi.
+
+
+:::note
+`bulk_insert` eliminates the serialization and data merging. The data deduplication is skipped, so the user need to guarantee the uniqueness of the data.
+:::
+
+:::note
+`bulk_insert` is more efficient in the `batch execution mode`. By default, the `batch execution mode` sorts the input records
+by the partition path and writes these records to Hudi, which can avoid write performance degradation caused by
+frequent `file handle` switching.  
+:::
+
+:::note  
+The parallelism of `bulk_insert` is specified by `write.tasks`. The parallelism will affect the number of small files.
+In theory, the parallelism of `bulk_insert` is the number of `bucket`s (In particular, when each bucket writes to maximum file size, it
+will rollover to the new file handle. Finally, `the number of files` >= [`write.bucket_assign.tasks`](#parallelism)).
+:::
+
+#### Options
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `write.operation` | `true` | `upsert` | Setting as `bulk_insert` to open this function  |
+| `write.tasks`  |  `false`  | `4` | The parallelism of `bulk_insert`, `the number of files` >= [`write.bucket_assign.tasks`](#parallelism) |
+| `write.bulk_insert.shuffle_by_partition` | `false` | `true` | Whether to shuffle data according to the partition field before writing. Enabling this option will reduce the number of small files, but there may be a risk of data skew  |
+| `write.bulk_insert.sort_by_partition` | `false`  | `true` | Whether to sort data according to the partition field before writing. Enabling this option will reduce the number of small files when a write task writes multiple partitions  |
+| `write.sort.memory` | `false` | `128` | Available managed memory of sort operator. default  `128` MB |
+
+### Index Bootstrap
+
+For the demand of `snapshot data` + `incremental data` import. If the `snapshot data` already insert into Hudi by  [bulk insert](#bulk-insert).
+User can insert `incremental data` in real time and ensure the data is not repeated by using the index bootstrap function.
+
+:::note
+If you think this process is very time-consuming, you can add resources to write in streaming mode while writing `snapshot data`,
+and then reduce the resources to write `incremental data` (or open the rate limit function).
+:::
+
+#### Options
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `index.bootstrap.enabled` | `true` | `false` | When index bootstrap is enabled, the remain records in Hudi table will be loaded into the Flink state at one time |
+| `index.partition.regex`  |  `false`  | `*` | Optimize option. Setting regular expressions to filter partitions. By default, all partitions are loaded into flink state |
+
+#### How To Use
+
+1. `CREATE TABLE` creates a statement corresponding to the Hudi table. Note that the `table.type` must be correct.
+2. Setting `index.bootstrap.enabled` = `true` to enable the index bootstrap function.
+3. Setting Flink checkpoint failure tolerance in `flink-conf.yaml` : `execution.checkpointing.tolerable-failed-checkpoints = n` (depending on Flink checkpoint scheduling times).
+4. Waiting until the first checkpoint succeeds, indicating that the index bootstrap completed.
+5. After the index bootstrap completed, user can exit and save the savepoint (or directly use the externalized checkpoint).
+6. Restart the job, setting `index.bootstrap.enable` as `false`.
+
+:::note
+1. Index bootstrap is blocking, so checkpoint cannot be completed during index bootstrap.
+2. Index bootstrap triggers by the input data. User need to ensure that there is at least one record in each partition.
+3. Index bootstrap executes concurrently. User can search in log by `finish loading the index under partition` and `Load record form file` to observe the progress of index bootstrap.
+4. The first successful checkpoint indicates that the index bootstrap completed. There is no need to load the index again when recovering from the checkpoint.
+   :::
+
+### Changelog Mode
+Hudi can keep all the intermediate changes (I / -U / U / D) of messages, then consumes through stateful computing of flink to have a near-real-time
+data warehouse ETL pipeline (Incremental computing). Hudi MOR table stores messages in the forms of rows, which supports the retention of all change logs (Integration at the format level).
+All changelog records can be consumed with Flink streaming reader.
+
+#### Options
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `changelog.enabled` | `false` | `false` | It is turned off by default, to have the `upsert` semantics, only the merged messages are ensured to be kept, intermediate changes may be merged. Setting to true to support consumption of all changes |
+
+:::note
+Batch (Snapshot) read still merge all the intermediate changes, regardless of whether the format has stored the intermediate changelog messages.
+:::
+
+:::note
+After setting `changelog.enable` as `true`, the retention of changelog records are only best effort: the asynchronous compaction task will merge the changelog records into one record, so if the
+stream source does not consume timely, only the merged record for each key can be read after compaction. The solution is to reserve some buffer time for the reader by adjusting the compaction strategy, such as
+the compaction options: [`compaction.delta_commits`](#compaction) and [`compaction.delta_seconds`](#compaction).
+:::
+
+
+### Append Mode
+
+If INSERT operation is used for ingestion, for COW table, there is no merging of small files by default; for MOR table, the small file strategy is applied always: MOR appends delta records to log files.
+
+The small file strategy lead to performance degradation. If you want to apply the behavior of file merge for COW table, turns on option `write.insert.cluster`, there is no record key combining by the way.
+
+#### Options
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `write.insert.cluster` | `false` | `false` | Whether to merge small files while ingesting, for COW table, open the option to enable the small file merging strategy(no deduplication for keys but the throughput will be affected) |
+
+### Rate Limit
+There are many use cases that user put the full history data set onto the message queue together with the realtime incremental data. Then they consume the data from the queue into the hudi from the earliest offset using flink. Consuming history data set has these characteristics:
+1). The instant throughput is huge 2). It has serious disorder (with random writing partitions). It will lead to degradation of writing performance and throughput glitches. At this time, the speed limit parameter can be turned on to ensure smooth writing of the flow.
+
+#### Options
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `write.rate.limit` | `false` | `0` | Default disable the rate limit |
+
+### Incremental Query
+There are 3 use cases for incremental query:
+1. Streaming query: specify the start commit with option `read.start-commit`;
+2. Batch query: specify the start commit with option `read.start-commit` and end commit with option `read.end-commit`,
+   the interval is a closed one: both start commit and end commit are inclusive;
+3. TimeTravel: consume as batch for an instant time, specify the `read.end-commit` is enough because the start commit is latest by default.
+
+#### Options
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `write.start-commit` | `false` | the latest commit | Specify `earliest` to consume from the start commit |
+| `write.end-commit` | `false` | the latest commit | -- |
+
+## Kafka Connect Sink
 If you want to perform streaming ingestion into Hudi format similar to HoodieDeltaStreamer, but you don't want to depend on Spark,
 try out the new experimental release of Hudi Kafka Connect Sink. Read the [ReadMe](https://github.com/apache/hudi/tree/master/hudi-kafka-connect) 
 for full documentation.

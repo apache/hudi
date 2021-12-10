@@ -41,6 +41,7 @@ module.exports = {
                 'writing_data',
                 'hoodie_deltastreamer',
                 'querying_data',
+                'flink_configuration',
                 'syncing_metastore',
             ],
         },
