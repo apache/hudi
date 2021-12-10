@@ -157,6 +157,7 @@
                   <include>org.apache.hbase:hbase-hadoop-compat</include>
                   <include>org.apache.hbase:hbase-hadoop2-compat</include>
                   <include>org.apache.hbase:hbase-metrics-api</include>
+                  <include>org.apache.hbase:hbase-metrics</include>
                   <include>org.apache.hbase:hbase-protocol-shaded</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
                   <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
