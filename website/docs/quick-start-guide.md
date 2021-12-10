@@ -175,7 +175,7 @@ values={[
 </TabItem>
 <TabItem value="sparksql">
 
-Spark-sql needs an explicit create table command.
+Spark SQL needs an explicit create table command.
 
 - Table types:
   Both types of hudi tables (CopyOnWrite (COW) and MergeOnRead (MOR)) can be created using spark-sql.
