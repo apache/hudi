@@ -265,6 +265,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param metadata instance of {@link HoodieCommitMetadata}.
    */
   protected void writeTableMetadata(HoodieTable table, String instantTime, String actionType, HoodieCommitMetadata metadata) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table");
     table.getMetadataWriter(instantTime).ifPresent(w -> ((HoodieTableMetadataWriter) w).update(metadata, instantTime,
         table.isTableServiceAction(actionType)));
   }

@@ -120,6 +120,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Committing stats");
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
   }

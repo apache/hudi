@@ -118,6 +118,7 @@ public class ScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, 
             .collect(Collectors.toSet());
         // exclude files in pending clustering from compaction.
         fgInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
+        context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
         return compactor.generateCompactionPlan(context, table, config, instantTime, fgInPendingCompactionAndClustering);
       } catch (IOException e) {
         throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
