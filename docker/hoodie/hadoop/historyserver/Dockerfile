@@ -15,7 +15,7 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=2.8.4 
+ARG HADOOP_VERSION=2.10.1
 ARG HADOOP_HISTORY_PORT=8188
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 

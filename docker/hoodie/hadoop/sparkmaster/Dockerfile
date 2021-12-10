@@ -15,8 +15,8 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=2.8.4 
-ARG HIVE_VERSION=2.3.3
+ARG HADOOP_VERSION=2.10.1
+ARG HIVE_VERSION=2.3.8
 ARG SPARK_VERSION=2.4.4
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
 
