@@ -328,7 +328,7 @@ To set any custom hudi config(like index type, max parquet size, etc), see the  
 1. Since hudi 0.10.0, `primaryKey` is required to specify. It can align with Hudi datasource writer’s and resolve many behavioural discrepancies reported in previous versions.
 2. `primaryKey`, `preCombineField`, `type` is case sensitive.
 3. To specify `primaryKey`, `preCombineField`, `type` or other hudi configs, `tblproperties` is the preferred way than `options`. Spark SQL syntax is detailed here.
-4. A new hudi table created by spark-sql will set `hoodie.table.keygenerator.class` as `org.apache.hudi.keygen.ComplexKeyGenerator`,
+4. A new hudi table created by Spark SQL will set `hoodie.table.keygenerator.class` as `org.apache.hudi.keygen.ComplexKeyGenerator`, and
 `hoodie.datasource.write.hive_style_partitioning` as `true` by default.
 :::
 
