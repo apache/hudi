@@ -109,10 +109,10 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     cleanupResources();
   }
 
-  protected void doWriteInsertAndUpsert(HoodieTestTable testTable, String commit1, String commit2) throws Exception {
-    testTable.doWriteOperation(commit1, INSERT, asList("p1", "p2"), asList("p1", "p2"),
+  protected void doWriteInsertAndUpsert(HoodieTestTable testTable, String commit1, String commit2, boolean nonPartitioned) throws Exception {
+    testTable.doWriteOperation(commit1, INSERT, nonPartitioned ? asList("") : asList("p1", "p2"), nonPartitioned ? asList("") : asList("p1", "p2"),
         4, false);
-    testTable.doWriteOperation(commit2, UPSERT, asList("p1", "p2"),
+    testTable.doWriteOperation(commit2, UPSERT, nonPartitioned ? asList("") : asList("p1", "p2"),
         4, false);
     validateMetadata(testTable);
   }
@@ -135,6 +135,18 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     validateMetadata(testTable);
   }
 
+  protected void doWriteOperationNonPartitioned(HoodieTestTable testTable, String commitTime, WriteOperationType operationType) throws Exception {
+    testTable.doWriteOperation(commitTime, operationType, emptyList(), asList(""), 3);
+  }
+
+  protected void doWriteOperation(HoodieTestTable testTable, String commitTime, WriteOperationType operationType, boolean nonPartitioned) throws Exception {
+    if (nonPartitioned) {
+      doWriteOperationNonPartitioned(testTable, commitTime, operationType);
+    } else {
+      doWriteOperation(testTable, commitTime, operationType);
+    }
+  }
+
   protected void doWriteOperation(HoodieTestTable testTable, String commitTime, WriteOperationType operationType) throws Exception {
     testTable.doWriteOperation(commitTime, operationType, emptyList(), asList("p1", "p2"), 3);
   }
@@ -154,16 +166,28 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     }
   }
 
+  protected void doCompactionNonPartitioned(HoodieTestTable testTable, String commitTime) throws Exception {
+    doCompactionInternal(testTable, commitTime, false, true);
+  }
+
+  protected void doCompaction(HoodieTestTable testTable, String commitTime, boolean nonPartitioned) throws Exception {
+    doCompactionInternal(testTable, commitTime, false, nonPartitioned);
+  }
+
   protected void doCompaction(HoodieTestTable testTable, String commitTime) throws Exception {
-    doCompactionInternal(testTable, commitTime, false);
+    doCompactionInternal(testTable, commitTime, false, false);
+  }
+
+  protected void doCompactionNonPartitionedAndValidate(HoodieTestTable testTable, String commitTime) throws Exception {
+    doCompactionInternal(testTable, commitTime, true, true);
   }
 
   protected void doCompactionAndValidate(HoodieTestTable testTable, String commitTime) throws Exception {
-    doCompactionInternal(testTable, commitTime, true);
+    doCompactionInternal(testTable, commitTime, true, false);
   }
 
-  private void doCompactionInternal(HoodieTestTable testTable, String commitTime, boolean validate) throws Exception {
-    testTable.doCompaction(commitTime, asList("p1", "p2"));
+  private void doCompactionInternal(HoodieTestTable testTable, String commitTime, boolean validate, boolean nonPartitioned) throws Exception {
+    testTable.doCompaction(commitTime, nonPartitioned ? asList("") : asList("p1", "p2"));
     if (validate) {
       validateMetadata(testTable);
     }
