@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -88,16 +89,17 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime) {
-    // execute clustering for each group async and collect WriteStatus
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     // execute clustering for each group async and collect WriteStatus
-    Stream<JavaRDD<WriteStatus>> writeStatusRDDStream = clusteringPlan.getInputGroups().stream()
+    Stream<JavaRDD<WriteStatus>> writeStatusRDDStream = FutureUtils.allOf(
+        clusteringPlan.getInputGroups().stream()
         .map(inputGroup -> runClusteringForGroupAsync(inputGroup,
             clusteringPlan.getStrategy().getStrategyParams(),
             Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
             instantTime))
-        .map(CompletableFuture::join);
-
+            .collect(Collectors.toList()))
+        .join()
+        .stream();
     JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusRDDStream);
     JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
 
@@ -144,7 +146,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T extends HoodieRecordPa
       return Option.empty();
     }
   }
-
 
   /**
    * Submit job to execute clustering for the group.
