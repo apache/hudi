@@ -183,7 +183,7 @@ Spark SQL needs an explicit create table command.
   While creating the table, table type can be specified using **type** option. **type = 'cow'** represents COW table, while **type = 'mor'** represents MOR table.
 
 - Partitioned & Non-Partitioned table:
-  Users can create a partitioned table or non-partitioned table in spark-sql.
+  Users can create a partitioned table or a non-partitioned table in Spark SQL.
   To create a partitioned table, one needs to use **partitioned by** statement to specify the partition columns to create a partitioned table.
   When there is no **partitioned by** statement with create table command, table is considered to be a non-partitioned table.
 
