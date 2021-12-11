@@ -34,7 +34,6 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,8 +52,8 @@ public class HoodieDatasetBulkInsertHelper {
 
   private static final Logger LOG = LogManager.getLogger(HoodieDatasetBulkInsertHelper.class);
 
-  private static final String RECORD_KEY_UDF_FN = "hudi_recordkey_gen_function";
-  private static final String PARTITION_PATH_UDF_FN = "hudi_partition_gen_function";
+  private static final String RECORD_KEY_UDF_FN = "hudi_recordkey_gen_function_";
+  private static final String PARTITION_PATH_UDF_FN = "hudi_partition_gen_function_";
 
   /**
    * Prepares input hoodie spark dataset for bulk insert. It does the following steps.
@@ -79,18 +78,19 @@ public class HoodieDatasetBulkInsertHelper {
     properties.putAll(config.getProps());
     String keyGeneratorClass = properties.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key());
     BuiltinKeyGenerator keyGenerator = (BuiltinKeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, properties);
-    StructType structTypeForUDF = rows.schema();
-
-    sqlContext.udf().register(RECORD_KEY_UDF_FN, (UDF1<Row, String>) keyGenerator::getRecordKey, DataTypes.StringType);
-    sqlContext.udf().register(PARTITION_PATH_UDF_FN, (UDF1<Row, String>) keyGenerator::getPartitionPath, DataTypes.StringType);
+    String tableName = properties.getString(HoodieWriteConfig.TBL_NAME.key());
+    String recordKeyUdfFn = RECORD_KEY_UDF_FN + tableName;
+    String partitionPathUdfFn = PARTITION_PATH_UDF_FN + tableName;
+    sqlContext.udf().register(recordKeyUdfFn, (UDF1<Row, String>) keyGenerator::getRecordKey, DataTypes.StringType);
+    sqlContext.udf().register(partitionPathUdfFn, (UDF1<Row, String>) keyGenerator::getPartitionPath, DataTypes.StringType);
 
     final Dataset<Row> rowDatasetWithRecordKeys = rows.withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        callUDF(RECORD_KEY_UDF_FN, org.apache.spark.sql.functions.struct(
+        callUDF(recordKeyUdfFn, org.apache.spark.sql.functions.struct(
             JavaConverters.collectionAsScalaIterableConverter(originalFields).asScala().toSeq())));
 
     final Dataset<Row> rowDatasetWithRecordKeysAndPartitionPath =
         rowDatasetWithRecordKeys.withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-            callUDF(PARTITION_PATH_UDF_FN,
+            callUDF(partitionPathUdfFn,
                 org.apache.spark.sql.functions.struct(
                     JavaConverters.collectionAsScalaIterableConverter(originalFields).asScala().toSeq())));
 

@@ -18,45 +18,37 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
+
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.TruncateTableCommand
-import org.apache.spark.sql.hudi.HoodieSqlUtils.getTableLocation
 
 /**
  * Command for truncate hudi table.
  */
 class TruncateHoodieTableCommand(
-   tableName: TableIdentifier,
+   tableIdentifier: TableIdentifier,
    partitionSpec: Option[TablePartitionSpec])
-  extends TruncateTableCommand(tableName, partitionSpec) {
+  extends TruncateTableCommand(tableIdentifier, partitionSpec) {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val table = sparkSession.sessionState.catalog.getTableMetadata(tableName)
-    val path = getTableLocation(table, sparkSession)
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    // If we have not specified the partition, truncate will delete all the
-    // data in the table path include the hoodi.properties. In this case we
-    // should reInit the table.
-    val needReInitTable = partitionSpec.isEmpty
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
+    val properties = hoodieCatalogTable.tableConfig.getProps
+    val tablePath = hoodieCatalogTable.tableLocation
 
-    val tableProperties = if (needReInitTable) {
-      // Create MetaClient
-      val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
-        .setConf(hadoopConf).build()
-      Some(metaClient.getTableConfig.getProps)
-    } else {
-      None
-    }
     // Delete all data in the table directory
     super.run(sparkSession)
 
-    if (tableProperties.isDefined) {
+    // If we have not specified the partition, truncate will delete all the data in the table path
+    // include the hoodi.properties. In this case we should reInit the table.
+    if (partitionSpec.isEmpty) {
+      val hadoopConf = sparkSession.sessionState.newHadoopConf()
       // ReInit hoodie.properties
       HoodieTableMetaClient.withPropertyBuilder()
-        .fromProperties(tableProperties.get)
-        .initTable(hadoopConf, path)
+        .fromProperties(properties)
+        .initTable(hadoopConf, hoodieCatalogTable.tableLocation)
     }
     Seq.empty[Row]
   }

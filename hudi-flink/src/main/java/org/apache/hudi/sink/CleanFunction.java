@@ -47,6 +47,7 @@ public class CleanFunction<T> extends AbstractRichFunction
   private final Configuration conf;
 
   protected HoodieFlinkWriteClient writeClient;
+
   private NonThrownExecutor executor;
 
   private volatile boolean isCleaning;
@@ -59,8 +60,10 @@ public class CleanFunction<T> extends AbstractRichFunction
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      // do not use the remote filesystem view because the async cleaning service
+      // local timeline is very probably to fall behind with the remote one.
       this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
-      this.executor = new NonThrownExecutor(LOG);
+      this.executor = NonThrownExecutor.builder(LOG).build();
     }
   }
 

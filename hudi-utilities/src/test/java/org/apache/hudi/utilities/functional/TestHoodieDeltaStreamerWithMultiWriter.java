@@ -61,6 +61,7 @@ import static org.apache.hudi.config.HoodieWriteConfig.INSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.PROPS_FILENAME_TEST_MULTI_WRITER;
+import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.addCommitToTimeline;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.defaultSchemaProviderClassName;
 import static org.apache.hudi.utilities.functional.HoodieDeltaStreamerTestBase.prepareInitialConfigs;
 import static org.apache.hudi.utilities.functional.TestHoodieDeltaStreamer.deltaStreamerTestRunner;
@@ -70,6 +71,8 @@ import static org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource
 
 @Tag("functional")
 public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctionalTestHarness {
+
+  private static final String COW_TEST_TABLE_NAME = "testtable_COPY_ON_WRITE";
 
   String basePath;
   String propsFilePath;
@@ -150,11 +153,14 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE"})
-  void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType) throws Exception {
+  public void testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType tableType) throws Exception {
+    testCheckpointCarryOver(tableType);
+  }
+
+  private void testCheckpointCarryOver(HoodieTableType tableType) throws Exception {
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
-    // enable carrying forward latest checkpoint
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
@@ -171,36 +177,55 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()));
     cfgBackfillJob.continuousMode = false;
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
+
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadataForFirstInstant = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
 
-    // get current checkpoint after preparing base dataset with some commits
-    HoodieCommitMetadata commitMetadataForLastInstant = HoodieCommitMetadata
-        .fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
-    String lastCheckpointBeforeParallelBackfill = commitMetadataForLastInstant.getMetadata(CHECKPOINT_KEY);
-
-    // run the backfill job, enable overriding checkpoint from the latest commit
+    // run the backfill job
     props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
-    props.setProperty("hoodie.write.meta.key.prefixes", CHECKPOINT_KEY);
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
-    // reset checkpoint to first instant to simulate a random checkpoint for backfill job
-    // checkpoint will move from 00000 to 00001 for this backfill job
-    cfgBackfillJob.checkpoint = commitMetadataForFirstInstant.getMetadata(CHECKPOINT_KEY);
+    // get current checkpoint after preparing base dataset with some commits
+    HoodieCommitMetadata commitMetadataForLastInstant = getLatestMetadata(meta);
+
+    // Set checkpoint to the last successful position
+    cfgBackfillJob.checkpoint = commitMetadataForLastInstant.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
     HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
     backfillJob.sync();
 
-    // check if the checkpoint is carried over
-    timeline = meta.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    commitMetadataForLastInstant = HoodieCommitMetadata
-        .fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
-    String lastCheckpointAfterParallelBackfill = commitMetadataForLastInstant.getMetadata(CHECKPOINT_KEY);
-    Assertions.assertEquals(lastCheckpointBeforeParallelBackfill, lastCheckpointAfterParallelBackfill);
+    meta.reloadActiveTimeline();
+    int totalCommits = meta.getCommitsTimeline().filterCompletedInstants().countInstants();
+
+    // add a new commit to timeline which may not have the checkpoint in extra metadata
+    addCommitToTimeline(meta);
+    meta.reloadActiveTimeline();
+    verifyCommitMetadataCheckpoint(meta, null);
+
+    cfgBackfillJob.checkpoint = null;
+    new HoodieDeltaStreamer(cfgBackfillJob, jsc()).sync(); // if deltastreamer checkpoint fetch does not walk back to older commits, this sync will fail
+    meta.reloadActiveTimeline();
+    Assertions.assertEquals(totalCommits + 2, meta.getCommitsTimeline().filterCompletedInstants().countInstants());
+    verifyCommitMetadataCheckpoint(meta, "00008");
+  }
+
+  private void verifyCommitMetadataCheckpoint(HoodieTableMetaClient metaClient, String expectedCheckpoint) throws IOException {
+    HoodieCommitMetadata commitMeta = getLatestMetadata(metaClient);
+    if (expectedCheckpoint == null) {
+      Assertions.assertNull(commitMeta.getMetadata(CHECKPOINT_KEY));
+    } else {
+      Assertions.assertEquals(expectedCheckpoint, commitMeta.getMetadata(CHECKPOINT_KEY));
+    }
+  }
+
+  private static HoodieCommitMetadata getLatestMetadata(HoodieTableMetaClient meta) throws IOException {
+    HoodieTimeline timeline = meta.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    return HoodieCommitMetadata
+            .fromBytes(timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
   }
 
   private static TypedProperties prepareMultiWriterProps(FileSystem fs, String basePath, String propsFilePath) throws IOException {

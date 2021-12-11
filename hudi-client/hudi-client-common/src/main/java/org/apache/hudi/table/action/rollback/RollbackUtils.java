@@ -18,10 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -42,6 +38,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,12 +56,13 @@ public class RollbackUtils {
 
   /**
    * Get Latest version of Rollback plan corresponding to a clean instant.
-   * @param metaClient  Hoodie Table Meta Client
+   *
+   * @param metaClient      Hoodie Table Meta Client
    * @param rollbackInstant Instant referring to rollback action
    * @return Rollback plan corresponding to rollback instant
    * @throws IOException
    */
-  static HoodieRollbackPlan getRollbackPlan(HoodieTableMetaClient metaClient, HoodieInstant rollbackInstant)
+  public static HoodieRollbackPlan getRollbackPlan(HoodieTableMetaClient metaClient, HoodieInstant rollbackInstant)
       throws IOException {
     // TODO: add upgrade step if required.
     return TimelineMetadataUtils.deserializeAvroMetadata(
@@ -106,12 +107,10 @@ public class RollbackUtils {
    * Generate all rollback requests that needs rolling back this action without actually performing rollback for COW table type.
    * @param engineContext instance of {@link HoodieEngineContext} to use.
    * @param basePath base path of interest.
-   * @param config instance of {@link HoodieWriteConfig} to use.
    * @return {@link List} of {@link ListingBasedRollbackRequest}s thus collected.
    */
-  public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(HoodieEngineContext engineContext,
-                                                                                       String basePath, HoodieWriteConfig config) {
-    return FSUtils.getAllPartitionPaths(engineContext, config.getMetadataConfig(), basePath).stream()
+  public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(HoodieEngineContext engineContext, String basePath) {
+    return FSUtils.getAllPartitionPaths(engineContext, basePath, false, false).stream()
         .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
         .collect(Collectors.toList());
   }
@@ -127,7 +126,7 @@ public class RollbackUtils {
   public static List<ListingBasedRollbackRequest> generateRollbackRequestsUsingFileListingMOR(HoodieInstant instantToRollback, HoodieTable table, HoodieEngineContext context) throws IOException {
     String commit = instantToRollback.getTimestamp();
     HoodieWriteConfig config = table.getConfig();
-    List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(), false, false);
     if (partitions.isEmpty()) {
       return new ArrayList<>();
     }
@@ -229,8 +228,10 @@ public class RollbackUtils {
     // used to write the new log files. In this case, the commit time for the log file is the compaction requested time.
     // But the index (global) might store the baseCommit of the base and not the requested, hence get the
     // baseCommit always by listing the file slice
-    Map<String, String> fileIdToBaseCommitTimeForLogMap = table.getSliceView().getLatestFileSlices(partitionPath)
-        .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
+    // With multi writers, rollbacks could be lazy. and so we need to use getLatestFileSlicesBeforeOrOn() instead of getLatestFileSlices()
+    Map<String, String> fileIdToBaseCommitTimeForLogMap = table.getSliceView().getLatestFileSlicesBeforeOrOn(partitionPath, rollbackInstant.getTimestamp(),
+        true).collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
+
     return commitMetadata.getPartitionToWriteStats().get(partitionPath).stream().filter(wStat -> {
 
       // Filter out stats without prevCommit since they are all inserts

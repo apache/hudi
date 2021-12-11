@@ -22,10 +22,13 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.KafkaConnectFileIdPrefixProvider;
@@ -62,7 +65,7 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
       KafkaConnectConfigs connectConfigs,
       TopicPartition partition) throws HoodieException {
     this.connectConfigs = connectConfigs;
-    Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf();
+    Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf(connectConfigs);
 
     try {
       this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null
@@ -72,8 +75,9 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
       this.keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(
           new TypedProperties(connectConfigs.getProps()));
 
-      // Create the write client to write some records in
+      // This is the writeConfig for the writers for the individual Transaction Coordinators
       writeConfig = HoodieWriteConfig.newBuilder()
+          .withEngineType(EngineType.JAVA)
           .withProperties(connectConfigs.getProps())
           .withFileIdPrefixProviderClassName(KafkaConnectFileIdPrefixProvider.class.getName())
           .withProps(Collections.singletonMap(
@@ -82,6 +86,14 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
           .withSchema(schemaProvider.getSourceSchema().toString())
           .withAutoCommit(false)
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+          // participants should not trigger table services, and leave it to the coordinator
+          .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+              .withAutoClean(false)
+              .withAutoArchive(false)
+              .withInlineCompaction(false).build())
+          .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+              .withInlineClustering(false)
+              .build())
           .build();
 
       context = new HoodieJavaEngineContext(hadoopConf);

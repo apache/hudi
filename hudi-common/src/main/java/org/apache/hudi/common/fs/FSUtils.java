@@ -239,7 +239,7 @@ public class FSUtils {
   /**
    * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
    * are skipped
-   * 
+   *
    * @param fs File System
    * @param basePathStr Base-Path
    * @param consumer Callback for processing
@@ -431,15 +431,27 @@ public class FSUtils {
 
   public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
       String writeToken) {
-    String suffix =
-        (writeToken == null) ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
-            : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
+    String suffix = (writeToken == null)
+        ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
+        : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
     return LOG_FILE_PREFIX + suffix;
+  }
+
+  public static boolean isBaseFile(Path path) {
+    String extension = getFileExtension(path.getName());
+    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
   }
 
   public static boolean isLogFile(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
     return matcher.find() && logPath.getName().contains(".log");
+  }
+
+  /**
+   * Returns true if the given path is a Base file or a Log file.
+   */
+  public static boolean isDataFile(Path path) {
+    return isBaseFile(path) || isLogFile(path);
   }
 
   /**
@@ -450,10 +462,19 @@ public class FSUtils {
         .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
     final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
 
-    return Arrays.stream(fs.listStatus(partitionPath, path -> {
-      String extension = FSUtils.getFileExtension(path.getName());
-      return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
-    })).filter(FileStatus::isFile).toArray(FileStatus[]::new);
+    try {
+      return Arrays.stream(fs.listStatus(partitionPath, path -> {
+        String extension = FSUtils.getFileExtension(path.getName());
+        return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
+      })).filter(FileStatus::isFile).toArray(FileStatus[]::new);
+    } catch (IOException e) {
+      // return empty FileStatus if partition does not exist already
+      if (!fs.exists(partitionPath)) {
+        return new FileStatus[0];
+      } else {
+        throw e;
+      }
+    }
   }
 
   /**
@@ -658,15 +679,26 @@ public class FSUtils {
           .filter(subPathPredicate)
           .map(fileStatus -> fileStatus.getPath().toString())
           .collect(Collectors.toList());
-      if (subPaths.size() > 0) {
-        SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
-        int actualParallelism = Math.min(subPaths.size(), parallelism);
-        result = hoodieEngineContext.mapToPair(subPaths,
-            subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
-            actualParallelism);
-      }
+      result = parallelizeFilesProcess(hoodieEngineContext, fs, parallelism, pairFunction, subPaths);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+    return result;
+  }
+
+  public static <T> Map<String, T> parallelizeFilesProcess(
+      HoodieEngineContext hoodieEngineContext,
+      FileSystem fs,
+      int parallelism,
+      SerializableFunction<Pair<String, SerializableConfiguration>, T> pairFunction,
+      List<String> subPaths) {
+    Map<String, T> result = new HashMap<>();
+    if (subPaths.size() > 0) {
+      SerializableConfiguration conf = new SerializableConfiguration(fs.getConf());
+      int actualParallelism = Math.min(subPaths.size(), parallelism);
+      result = hoodieEngineContext.mapToPair(subPaths,
+          subPath -> new ImmutablePair<>(subPath, pairFunction.apply(new ImmutablePair<>(subPath, conf))),
+          actualParallelism);
     }
     return result;
   }

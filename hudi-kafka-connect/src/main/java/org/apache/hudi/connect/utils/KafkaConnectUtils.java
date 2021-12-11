@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.connect.ControlMessage;
+import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.CustomAvroKeyGenerator;
@@ -63,6 +64,7 @@ import java.util.stream.Collectors;
 public class KafkaConnectUtils {
 
   private static final Logger LOG = LogManager.getLogger(KafkaConnectUtils.class);
+  private static final String HOODIE_CONF_PREFIX = "hoodie.";
 
   public static int getLatestNumPartitions(String bootstrapServers, String topicName) {
     Properties props = new Properties();
@@ -85,9 +87,15 @@ public class KafkaConnectUtils {
    *
    * @return
    */
-  public static Configuration getDefaultHadoopConf() {
+  public static Configuration getDefaultHadoopConf(KafkaConnectConfigs connectConfigs) {
     Configuration hadoopConf = new Configuration();
-    hadoopConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+    connectConfigs.getProps().keySet().stream().filter(prop -> {
+      // In order to prevent printing unnecessary warn logs, here filter out the hoodie
+      // configuration items before passing to hadoop/hive configs
+      return !prop.toString().startsWith(HOODIE_CONF_PREFIX);
+    }).forEach(prop -> {
+      hadoopConf.set(prop.toString(), connectConfigs.getProps().get(prop.toString()).toString());
+    });
     return hadoopConf;
   }
 

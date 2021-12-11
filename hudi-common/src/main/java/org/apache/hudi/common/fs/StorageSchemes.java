@@ -54,6 +54,8 @@ public enum StorageSchemes {
   COSN("cosn", false),
   // Tencent Cloud HDFS
   CHDFS("ofs", true),
+  // Tencent Cloud CacheFileSystem
+  GOOSEFS("gfs", false),
   // Databricks file system
   DBFS("dbfs", false),
   // IBM Cloud Object Storage

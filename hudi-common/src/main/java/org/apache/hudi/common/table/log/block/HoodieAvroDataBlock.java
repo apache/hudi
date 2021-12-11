@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -58,22 +59,27 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   private ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
   public HoodieAvroDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-       FSDataInputStream inputStream, boolean readBlockLazily) {
+                             @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
+                             @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
+                             FSDataInputStream inputStream, boolean readBlockLazily) {
     super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
   }
 
   public HoodieAvroDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-       boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
-       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+                             boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
+                             Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer, String keyField) {
     super(content, inputStream, readBlockLazily,
-          Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
-          footer);
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
+        footer, keyField);
+  }
+
+  public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType,
+      String> header, String keyField) {
+    super(records, header, new HashMap<>(), keyField);
   }
 
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header) {
-    super(records, header, new HashMap<>());
+    super(records, header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   @Override

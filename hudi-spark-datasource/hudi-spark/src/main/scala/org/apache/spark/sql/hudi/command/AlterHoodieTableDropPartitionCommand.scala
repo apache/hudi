@@ -17,15 +17,16 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+
 import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 
@@ -35,44 +36,39 @@ case class AlterHoodieTableDropPartitionCommand(
 extends RunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val catalog = sparkSession.sessionState.catalog
-    val table = catalog.getTableMetadata(tableIdentifier)
-    DDLUtils.verifyAlterTableType(catalog, table, isView = false)
+    val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
+    DDLUtils.verifyAlterTableType(
+      sparkSession.sessionState.catalog, hoodieCatalogTable.table, isView = false)
 
-    val path = getTableLocation(table, sparkSession)
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(hadoopConf).build()
-    val partitionColumns = metaClient.getTableConfig.getPartitionFields
     val normalizedSpecs: Seq[Map[String, String]] = specs.map { spec =>
       normalizePartitionSpec(
         spec,
-        partitionColumns.get(),
-        table.identifier.quotedString,
+        hoodieCatalogTable.partitionFields,
+        hoodieCatalogTable.tableName,
         sparkSession.sessionState.conf.resolver)
     }
 
-    val parameters = buildHoodieConfig(sparkSession, path, partitionColumns.get, normalizedSpecs)
-
+    val parameters = buildHoodieConfig(sparkSession, hoodieCatalogTable, normalizedSpecs)
     HoodieSparkSqlWriter.write(
       sparkSession.sqlContext,
       SaveMode.Append,
       parameters,
       sparkSession.emptyDataFrame)
 
+    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     Seq.empty[Row]
   }
 
   private def buildHoodieConfig(
       sparkSession: SparkSession,
-      path: String,
-      partitionColumns: Seq[String],
+      hoodieCatalogTable: HoodieCatalogTable,
       normalizedSpecs: Seq[Map[String, String]]): Map[String, String] = {
-    val table = sparkSession.sessionState.catalog.getTableMetadata(tableIdentifier)
-    val allPartitionPaths = getAllPartitionPaths(sparkSession, table)
+    val table = hoodieCatalogTable.table
+    val allPartitionPaths = hoodieCatalogTable.getAllPartitionPaths
     val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
     val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
     val partitionsToDelete = normalizedSpecs.map { spec =>
-      partitionColumns.map{ partitionColumn =>
+      hoodieCatalogTable.partitionFields.map{ partitionColumn =>
         val encodedPartitionValue = if (enableEncodeUrl) {
           PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
         } else {
@@ -86,28 +82,18 @@ extends RunnableCommand {
       }.mkString("/")
     }.mkString(",")
 
-    val metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(path)
-      .setConf(sparkSession.sessionState.newHadoopConf)
-      .build()
-    val tableConfig = metaClient.getTableConfig
-
-    val optParams = withSparkConf(sparkSession, table.storage.properties) {
+    withSparkConf(sparkSession, Map.empty) {
       Map(
-        "path" -> path,
-        TBL_NAME.key -> tableIdentifier.table,
-        TABLE_TYPE.key -> tableConfig.getTableType.name,
+        "path" -> hoodieCatalogTable.tableLocation,
+        TBL_NAME.key -> hoodieCatalogTable.tableName,
+        TABLE_TYPE.key -> hoodieCatalogTable.tableTypeName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
         PARTITIONS_TO_DELETE.key -> partitionsToDelete,
-        RECORDKEY_FIELD.key -> tableConfig.getRecordKeyFieldProp,
-        PRECOMBINE_FIELD.key -> tableConfig.getPreCombineField,
-        PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp
+        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
+        PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
+        PARTITIONPATH_FIELD.key -> hoodieCatalogTable.partitionFields.mkString(",")
       )
     }
-
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
-    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
-    translatedOptions
   }
 
   def normalizePartitionSpec[T](

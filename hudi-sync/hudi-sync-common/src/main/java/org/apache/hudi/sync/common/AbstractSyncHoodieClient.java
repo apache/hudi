@@ -56,6 +56,12 @@ public abstract class AbstractSyncHoodieClient {
   private final boolean useFileListingFromMetadata;
   private final boolean withOperationField;
 
+  @Deprecated
+  public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
+                                  boolean verifyMetadataFileListing, boolean withOperationField, FileSystem fs) {
+    this(basePath, assumeDatePartitioning, useFileListingFromMetadata, withOperationField, fs);
+  }
+
   public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
                                   boolean withOperationField, FileSystem fs) {
     this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();

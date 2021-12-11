@@ -49,6 +49,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
 import org.apache.hudi.testutils.providers.SparkProvider;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -81,10 +82,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
+  protected static int timelineServicePort =
+      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
   private static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;
   private static transient HoodieSparkEngineContext context;
+  private static transient TimelineService timelineService;
 
   /**
    * An indicator of the initialization status.
@@ -174,6 +178,9 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       sqlContext = spark.sqlContext();
       jsc = new JavaSparkContext(spark.sparkContext());
       context = new HoodieSparkEngineContext(jsc);
+      timelineService = HoodieClientTestUtils.initTimelineService(
+          context, basePath(), incrementTimelineServicePortToUse());
+      timelineServicePort = timelineService.getServerPort();
     }
   }
 
@@ -189,6 +196,9 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       spark.close();
       spark = null;
     }
+    if (timelineService != null) {
+      timelineService.close();
+    }
   }
 
   protected JavaRDD<HoodieRecord> tagLocation(
@@ -203,7 +213,8 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         index.updateLocation(HoodieJavaRDD.of(writeStatus), context, table));
   }
 
-  protected void insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+  protected Stream<HoodieBaseFile> insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
+                                                 SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -228,8 +239,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
     roView = getHoodieTableFileSystemView(reloadedMetaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
     dataFilesToRead = roView.getLatestBaseFiles();
-    assertTrue(dataFilesToRead.findAny().isPresent(),
-        "should list the base files we wrote in the delta commit");
+    return dataFilesToRead;
   }
 
   protected void updateRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
@@ -312,9 +322,17 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+            .withRemoteServerPort(timelineServicePort)
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(rollbackUsingMarkers);
+  }
+
+  protected int incrementTimelineServicePortToUse() {
+    // Increment the timeline service port for each individual test
+    // to avoid port reuse causing failures
+    timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
+    return timelineServicePort;
   }
 }

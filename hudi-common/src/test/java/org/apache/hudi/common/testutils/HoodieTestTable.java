@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -84,7 +85,6 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.CLUSTER;
 import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
-import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -131,6 +131,7 @@ public class HoodieTestTable {
     this.basePath = basePath;
     this.fs = fs;
     this.metaClient = metaClient;
+    testTableState = HoodieTestTableState.of();
   }
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
@@ -147,7 +148,7 @@ public class HoodieTestTable {
   }
 
   public static String makeNewCommitTime(Instant dateTime) {
-    return COMMIT_FORMATTER.format(Date.from(dateTime));
+    return HoodieActiveTimeline.formatDate(Date.from(dateTime));
   }
 
   public static List<String> makeIncrementalCommitTimes(int num) {
@@ -601,7 +602,7 @@ public class HoodieTestTable {
   }
 
   public List<java.nio.file.Path> getAllPartitionPaths() throws IOException {
-    java.nio.file.Path basePathPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).getParent().getParent();
+    java.nio.file.Path basePathPath = Paths.get(basePath);
     return FileCreateUtils.getPartitionPaths(basePathPath);
   }
 
@@ -659,8 +660,10 @@ public class HoodieTestTable {
     return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, partitionPath).toString())).stream()
         .filter(entry -> {
           boolean toReturn = true;
+          String filePath = entry.getPath().toString();
           String fileName = entry.getPath().getName();
-          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+          if (fileName.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE) || (!fileName.contains("log") && !fileName.contains("parquet"))
+              || filePath.contains("metadata")) {
             toReturn = false;
           } else {
             for (String inflight : inflightCommits) {
@@ -700,6 +703,25 @@ public class HoodieTestTable {
     for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
+    return addRollback(commitTime, rollbackMetadata);
+  }
+
+  public HoodieTestTable doRollbackWithExtraFiles(String commitTimeToRollback, String commitTime, Map<String, List<String>> extraFiles) throws Exception {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Option<HoodieCommitMetadata> commitMetadata = getMetadataForInstant(commitTimeToRollback);
+    if (!commitMetadata.isPresent()) {
+      throw new IllegalArgumentException("Instant to rollback not present in timeline: " + commitTimeToRollback);
+    }
+    Map<String, List<String>> partitionFiles = getPartitionFiles(commitMetadata.get());
+    for (Map.Entry<String, List<String>> entry : partitionFiles.entrySet()) {
+      deleteFilesInPartition(entry.getKey(), entry.getValue());
+    }
+    for (Map.Entry<String, List<String>> entry: extraFiles.entrySet()) {
+      if (partitionFiles.containsKey(entry.getKey())) {
+        partitionFiles.get(entry.getKey()).addAll(entry.getValue());
+      }
+    }
+    HoodieRollbackMetadata rollbackMetadata = getRollbackMetadata(commitTimeToRollback, partitionFiles);
     return addRollback(commitTime, rollbackMetadata);
   }
 

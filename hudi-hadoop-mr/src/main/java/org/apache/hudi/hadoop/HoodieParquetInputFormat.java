@@ -59,7 +59,7 @@ import java.util.stream.IntStream;
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
  * that does not correspond to a hoodie table then they are passed in as is (as what FileInputFormat.listStatus()
- * would do). The JobConf could have paths from multipe Hoodie/Non-Hoodie tables
+ * would do). The JobConf could have paths from multiple Hoodie/Non-Hoodie tables
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
@@ -71,6 +71,14 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
 
   protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
     return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
+  }
+
+  protected FileStatus[] getStatus(JobConf job) throws IOException {
+    return super.listStatus(job);
+  }
+
+  protected boolean includeLogFilesForSnapShotView() {
+    return false;
   }
 
   @Override
@@ -108,7 +116,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // process snapshot queries next.
     List<Path> snapshotPaths = inputPathHandler.getSnapshotPaths();
     if (snapshotPaths.size() > 0) {
-      returns.addAll(HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths));
+      returns.addAll(HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths, includeLogFilesForSnapShotView()));
     }
     return returns.toArray(new FileStatus[0]);
   }
@@ -120,7 +128,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
    * partitions and then filtering based on the commits of interest, this logic first extracts the
    * partitions touched by the desired commits and then lists only those partitions.
    */
-  private List<FileStatus> listStatusForIncrementalMode(
+  protected List<FileStatus> listStatusForIncrementalMode(
       JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
     String tableName = tableMetaClient.getTableConfig().getTableName();
     Job jobContext = Job.getInstance(job);

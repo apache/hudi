@@ -91,7 +91,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     //2. rollback
     HoodieInstant rollBackInstant = new HoodieInstant(isUsingMarkers, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
-        new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false);
+        new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false,
+            cfg.shouldRollbackUsingMarkers());
     mergeOnReadRollbackPlanActionExecutor.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
@@ -99,7 +100,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         table,
         "003",
         rollBackInstant,
-        true);
+        true,
+        false);
     //3. assert the rollback stat
     Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = mergeOnReadRollbackActionExecutor.execute().getPartitionMetadata();
     assertEquals(2, rollbackMetadata.size());
@@ -148,18 +150,20 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
           rollBackInstant,
           true,
           true,
-          true).execute();
+          true,
+          false).execute();
     });
   }
 
   /**
-   * Test Cases for rollbacking when has not base file.
+   * Test Cases for rolling back when there is no base file.
    */
   @Test
   public void testRollbackWhenFirstCommitFail() throws Exception {
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
-
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withRollbackUsingMarkers(false)
+        .withPath(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       client.startCommitWithTime("001");
       client.insert(jsc.emptyRDD(), "001");

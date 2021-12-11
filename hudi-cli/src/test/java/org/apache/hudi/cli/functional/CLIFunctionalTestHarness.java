@@ -22,7 +22,10 @@ package org.apache.hudi.cli.functional;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.providers.SparkProvider;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
@@ -39,10 +42,13 @@ import java.nio.file.Paths;
 
 public class CLIFunctionalTestHarness implements SparkProvider {
 
+  protected static int timelineServicePort =
+      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
+  protected static transient TimelineService timelineService;
+  protected static transient HoodieSparkEngineContext context;
   private static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;
-  private static transient HoodieSparkEngineContext context;
   private static transient JLineShellComponent shell;
   /**
    * An indicator of the initialization status.
@@ -107,6 +113,9 @@ public class CLIFunctionalTestHarness implements SparkProvider {
       jsc = new JavaSparkContext(spark.sparkContext());
       context = new HoodieSparkEngineContext(jsc);
       shell = new Bootstrap().getJLineShellComponent();
+      timelineService = HoodieClientTestUtils.initTimelineService(
+          context, basePath(), incrementTimelineServicePortToUse());
+      timelineServicePort = timelineService.getServerPort();
     }
   }
 
@@ -120,14 +129,25 @@ public class CLIFunctionalTestHarness implements SparkProvider {
       shell.stop();
       shell = null;
     }
+    if (timelineService != null) {
+      timelineService.close();
+    }
   }
 
   /**
    * Helper to prepare string for matching.
+   *
    * @param str Input string.
    * @return pruned string with non word characters removed.
    */
   protected static String removeNonWordAndStripSpace(String str) {
     return str.replaceAll("[\\s]+", ",").replaceAll("[\\W]+", ",");
+  }
+
+  protected int incrementTimelineServicePortToUse() {
+    // Increment the timeline service port for each individual test
+    // to avoid port reuse causing failures
+    timelineServicePort = (timelineServicePort + 1 - 1024) % (65536 - 1024) + 1024;
+    return timelineServicePort;
   }
 }

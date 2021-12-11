@@ -27,16 +27,23 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
+import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 
 public abstract class BaseClusteringPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieClusteringPlan>> {
+
+  private static final Logger LOG = LogManager.getLogger(BaseClusteringPlanActionExecutor.class);
 
   private final Option<Map<String, String>> extraMetadata;
 
@@ -49,7 +56,32 @@ public abstract class BaseClusteringPlanActionExecutor<T extends HoodieRecordPay
     this.extraMetadata = extraMetadata;
   }
 
-  protected abstract Option<HoodieClusteringPlan> createClusteringPlan();
+  protected Option<HoodieClusteringPlan> createClusteringPlan() {
+    LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
+    Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getCompletedReplaceTimeline().lastInstant();
+
+    int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
+        .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
+        .countInstants();
+    if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
+      LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
+          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+          + config.getInlineClusterMaxCommits());
+      return Option.empty();
+    }
+
+    if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+      LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
+          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+          + config.getAsyncClusterMaxCommits());
+      return Option.empty();
+    }
+
+    LOG.info("Generating clustering plan for table " + config.getBasePath());
+    ClusteringPlanStrategy strategy = (ClusteringPlanStrategy)
+        ReflectionUtils.loadClass(config.getClusteringPlanStrategyClass(), table, context, config);
+    return strategy.generateClusteringPlan();
+  }
 
   @Override
   public Option<HoodieClusteringPlan> execute() {

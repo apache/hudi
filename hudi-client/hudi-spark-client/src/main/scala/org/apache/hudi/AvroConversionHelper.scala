@@ -20,7 +20,6 @@ package org.apache.hudi
 
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
-import java.util
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
@@ -28,12 +27,15 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{Fixed, Record}
 import org.apache.avro.generic.{GenericData, GenericFixed, GenericRecord}
 import org.apache.avro.{LogicalTypes, Schema}
+
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.avro.{IncompatibleSchemaException, SchemaConverters}
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
+
 import org.apache.hudi.AvroConversionUtils._
+import org.apache.hudi.exception.HoodieIncompatibleSchemaException
 
 import scala.collection.JavaConverters._
 
@@ -131,7 +133,7 @@ object AvroConversionHelper {
                 case null =>
                   new Timestamp(item.asInstanceOf[Long])
                 case other =>
-                  throw new IncompatibleSchemaException(
+                  throw new HoodieIncompatibleSchemaException(
                     s"Cannot convert Avro logical type $other to Catalyst Timestamp type.")
               }
             }
@@ -149,7 +151,7 @@ object AvroConversionHelper {
               converters(i) = converter
               avroFieldIndexes(i) = avroField.pos()
             } else if (!sqlField.nullable) {
-              throw new IncompatibleSchemaException(
+              throw new HoodieIncompatibleSchemaException(
                 s"Cannot find non-nullable field ${sqlField.name} at path ${path.mkString(".")} " +
                   "in Avro schema\n" +
                   s"Source Avro schema: $sourceAvroSchema.\n" +
@@ -254,7 +256,7 @@ object AvroConversionHelper {
                       converted(i) = fieldConverters(i)(item)
                       new GenericRow(converted)
                     }
-                case _ => throw new IncompatibleSchemaException(
+                case _ => throw new HoodieIncompatibleSchemaException(
                   s"Cannot convert Avro schema to catalyst type because schema at path " +
                     s"${path.mkString(".")} is not compatible " +
                     s"(avroType = $other, sqlType = $sqlType). \n" +
@@ -263,7 +265,7 @@ object AvroConversionHelper {
               }
           }
         case (left, right) =>
-          throw new IncompatibleSchemaException(
+          throw new HoodieIncompatibleSchemaException(
             s"Cannot convert Avro schema to catalyst type because schema at path " +
               s"${path.mkString(".")} is not compatible (avroType = $left, sqlType = $right). \n" +
               s"Source Avro schema: $sourceAvroSchema.\n" +
@@ -315,7 +317,7 @@ object AvroConversionHelper {
           } else {
             val sourceArray = item.asInstanceOf[Seq[Any]]
             val sourceArraySize = sourceArray.size
-            val targetList = new util.ArrayList[Any](sourceArraySize)
+            val targetList = new java.util.ArrayList[Any](sourceArraySize)
             var idx = 0
             while (idx < sourceArraySize) {
               targetList.add(elementConverter(sourceArray(idx)))
@@ -333,7 +335,7 @@ object AvroConversionHelper {
           if (item == null) {
             null
           } else {
-            val javaMap = new util.HashMap[String, Any]()
+            val javaMap = new java.util.HashMap[String, Any]()
             item.asInstanceOf[Map[String, Any]].foreach { case (key, value) =>
               javaMap.put(key, valueConverter(value))
             }

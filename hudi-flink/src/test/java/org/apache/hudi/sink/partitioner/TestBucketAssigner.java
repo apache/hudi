@@ -401,7 +401,7 @@ public class TestBucketAssigner {
   }
 
   private static String getLastCompleteInstant(WriteProfile profile) {
-    return StreamerUtil.getLastCompletedInstant(profile.getTable().getMetaClient());
+    return StreamerUtil.getLastCompletedInstant(profile.getMetaClient());
   }
 
   private void assertBucketEquals(

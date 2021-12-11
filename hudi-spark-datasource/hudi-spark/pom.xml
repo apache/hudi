@@ -19,12 +19,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.11.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark_${scala.binary.version}</artifactId>
-  <version>0.10.0-SNAPSHOT</version>
+  <version>0.11.0-SNAPSHOT</version>
 
   <name>hudi-spark_${scala.binary.version}</name>
   <packaging>jar</packaging>
@@ -48,6 +48,7 @@
           <configuration>
             <args>
               <arg>-nobootcp</arg>
+              <arg>-target:jvm-1.8</arg>
             </args>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
@@ -504,6 +505,13 @@
     </dependency>
 
     <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
@@ -524,6 +532,5 @@
         </exclusion>
       </exclusions>
     </dependency>
-
   </dependencies>
 </project>

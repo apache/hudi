@@ -38,7 +38,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
          |  dt string
          | )
          | using hudi
-         | options (
+         | tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts'
          | )
@@ -46,8 +46,8 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
     // insert data
     spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
 
-    checkException(s"alter table $tableName drop partition (dt='2021-10-01')")(
-      s"dt is not a valid partition column in table `default`.`${tableName}`.;")
+    checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01')")(
+      s"dt is not a valid partition column in table")
   }
 
   Seq(false, true).foreach { urlencode =>
@@ -77,7 +77,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             | options (
+             |tblproperties (
              | primaryKey = 'id',
              | preCombineField = 'ts'
              |)
@@ -105,7 +105,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
          |  dt string
          | )
          | using hudi
-         | options (
+         | tblproperties (
          |  primaryKey = 'id',
          |  preCombineField = 'ts'
          | )
@@ -115,12 +115,8 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
     spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
 
     // specify duplicate partition columns
-    try {
-      spark.sql(s"alter table $tableName drop partition (dt='2021-10-01', dt='2021-10-02')")
-    } catch {
-      case NonFatal(e) =>
-        assert(e.getMessage.contains("Found duplicate keys 'dt'"))
-    }
+    checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01', dt='2021-10-02')")(
+      "Found duplicate keys 'dt'")
 
     // drop 2021-10-01 partition
     spark.sql(s"alter table $tableName drop partition (dt='2021-10-01')")
@@ -155,7 +151,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             | options (
+             |tblproperties (
              | primaryKey = 'id',
              | preCombineField = 'ts'
              |)
@@ -164,8 +160,8 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
              |""".stripMargin)
 
         // not specified all partition column
-        checkException(s"alter table $tableName drop partition (year='2021', month='10')")(
-          "All partition columns need to be specified for Hoodie's dropping partition;"
+        checkExceptionContain(s"alter table $tableName drop partition (year='2021', month='10')")(
+          "All partition columns need to be specified for Hoodie's dropping partition"
         )
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")

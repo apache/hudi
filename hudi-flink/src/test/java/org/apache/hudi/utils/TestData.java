@@ -343,6 +343,37 @@ public class TestData {
     funcWrapper.close();
   }
 
+  /**
+   * Write a list of row data with Hoodie format base on the given configuration.
+   *
+   * <p>The difference with {@link #writeData} is that it flush data using #endInput, and it
+   * does not generate inflight instant.
+   *
+   * @param dataBuffer The data buffer to write
+   * @param conf       The flink configuration
+   * @throws Exception if error occurs
+   */
+  public static void writeDataAsBatch(
+      List<RowData> dataBuffer,
+      Configuration conf) throws Exception {
+    StreamWriteFunctionWrapper<RowData> funcWrapper = new StreamWriteFunctionWrapper<>(
+        conf.getString(FlinkOptions.PATH),
+        conf);
+    funcWrapper.openFunction();
+
+    for (RowData rowData : dataBuffer) {
+      funcWrapper.invoke(rowData);
+    }
+
+    // this triggers the data write and event send
+    funcWrapper.endInput();
+
+    final OperatorEvent nextEvent = funcWrapper.getNextEvent();
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+
+    funcWrapper.close();
+  }
+
   private static String toStringSafely(Object obj) {
     return obj == null ? "null" : obj.toString();
   }

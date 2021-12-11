@@ -18,17 +18,22 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
-import org.apache.hudi.common.config.ConfigProperty
+import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig}
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.util.ConfigUtils
-import org.apache.hudi.hive.{HiveSyncTool, SlashEncodedDayPartitionValueExtractor}
+import org.apache.hudi.hive.{HiveStylePartitionValueExtractor, HiveSyncTool, MultiPartKeysValueExtractor, NonPartitionedExtractor, SlashEncodedDayPartitionValueExtractor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.keygen.{CustomKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
+
+import java.util.function.{Function => JavaFunction}
+import scala.collection.JavaConverters._
+import scala.language.implicitConversions
 
 /**
  * List of options that can be passed to the Hoodie datasource,
@@ -109,6 +114,12 @@ object DataSourceReadOptions {
     .noDefaultValue()
     .withDocumentation("The query instant for time travel. Without specified this option," +
       " we query the latest snapshot.")
+
+  val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.enable.data.skipping")
+    .defaultValue(true)
+    .sinceVersion("0.10.0")
+    .withDocumentation("enable data skipping to boost query after doing z-order optimize for current table")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -205,7 +216,7 @@ object DataSourceWriteOptions {
         .map(SparkDataSourceUtils.decodePartitioningColumns)
         .getOrElse(Nil)
       val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key(),
-        DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL)
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue)
 
       val partitionPathField =
         keyGeneratorClass match {
@@ -267,8 +278,26 @@ object DataSourceWriteOptions {
    */
   val HIVE_STYLE_PARTITIONING = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE
 
-  val KEYGENERATOR_CLASS_NAME = ConfigProperty.key("hoodie.datasource.write.keygenerator.class")
+  /**
+    * Key generator class, that implements will extract the key out of incoming record
+    *
+    */
+  val keyGeneraterInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
+    if (!p.contains(PARTITIONPATH_FIELD)) {
+      Option.of(classOf[NonpartitionedKeyGenerator].getName)
+    } else {
+      val numOfPartFields = p.getString(PARTITIONPATH_FIELD).split(",").length
+      if (numOfPartFields == 1) {
+        Option.of(classOf[SimpleKeyGenerator].getName)
+      } else {
+        Option.of(classOf[ComplexKeyGenerator].getName)
+      }
+    }
+  })
+  val KEYGENERATOR_CLASS_NAME: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.write.keygenerator.class")
     .defaultValue(classOf[SimpleKeyGenerator].getName)
+    .withInferFunction(keyGeneraterInferFunc)
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
 
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
@@ -358,9 +387,19 @@ object DataSourceWriteOptions {
     .defaultValue("default")
     .withDocumentation("database to sync to")
 
+  val hiveTableOptKeyInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
+    if (p.contains(TABLE_NAME)) {
+      Option.of(p.getString(TABLE_NAME))
+    } else if (p.contains(HoodieWriteConfig.TBL_NAME)) {
+      Option.of(p.getString(HoodieWriteConfig.TBL_NAME))
+    } else {
+      Option.empty[String]()
+    }
+  })
   val HIVE_TABLE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.table")
     .defaultValue("unknown")
+    .withInferFunction(hiveTableOptKeyInferFunc)
     .withDocumentation("table to sync to")
 
   val HIVE_BASE_FILE_FORMAT: ConfigProperty[String] = ConfigProperty
@@ -383,16 +422,37 @@ object DataSourceWriteOptions {
     .defaultValue("jdbc:hive2://localhost:10000")
     .withDocumentation("Hive metastore url")
 
+  val hivePartitionFieldsInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
+    if (p.contains(PARTITIONPATH_FIELD)) {
+      Option.of(p.getString(PARTITIONPATH_FIELD))
+    } else {
+      Option.empty[String]()
+    }
+  })
   val HIVE_PARTITION_FIELDS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.partition_fields")
     .defaultValue("")
     .withDocumentation("Field in the table to use for determining hive partition columns.")
+    .withInferFunction(hivePartitionFieldsInferFunc)
 
+  val hivePartitionExtractorInferFunc = DataSourceOptionsHelper.scalaFunctionToJavaFunction((p: HoodieConfig) => {
+    if (!p.contains(PARTITIONPATH_FIELD)) {
+      Option.of(classOf[NonPartitionedExtractor].getName)
+    } else {
+      val numOfPartFields = p.getString(PARTITIONPATH_FIELD).split(",").length
+      if (numOfPartFields == 1 && p.contains(HIVE_STYLE_PARTITIONING) && p.getString(HIVE_STYLE_PARTITIONING) == "true") {
+        Option.of(classOf[HiveStylePartitionValueExtractor].getName)
+      } else {
+        Option.of(classOf[MultiPartKeysValueExtractor].getName)
+      }
+    }
+  })
   val HIVE_PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.partition_extractor_class")
     .defaultValue(classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName)
     .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
       + "default 'SlashEncodedDayPartitionValueExtractor'.")
+    .withInferFunction(hivePartitionExtractorInferFunc)
 
   val HIVE_ASSUME_DATE_PARTITION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.assume_date_partitioning")
@@ -616,7 +676,7 @@ object DataSourceWriteOptions {
   val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()
   /** @deprecated Use {@link PARTITIONPATH_FIELD} and its methods instead */
   @Deprecated
-  val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = PARTITIONPATH_FIELD.defaultValue()
+  val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = null
 
   /** @deprecated Use {@link TABLE_NAME} and its methods instead */
   @Deprecated
@@ -749,7 +809,7 @@ object DataSourceOptionsHelper {
   // maps the deprecated config name to its latest name
   val allAlternatives: Map[String, String] = {
     val alterMap = scala.collection.mutable.Map[String, String]()
-    allConfigsWithAlternatives.foreach(cfg => cfg.getAlternatives.foreach(alternative => alterMap(alternative) = cfg.key))
+    allConfigsWithAlternatives.foreach(cfg => cfg.getAlternatives.asScala.foreach(alternative => alterMap(alternative) = cfg.key))
     alterMap.toMap
   }
 
@@ -787,5 +847,11 @@ object DataSourceOptionsHelper {
     Map(
       QUERY_TYPE.key -> queryType
     ) ++ translateConfigurations(parameters)
+  }
+
+  implicit def scalaFunctionToJavaFunction[From, To](function: (From) => To): JavaFunction[From, To] = {
+    new JavaFunction[From, To] {
+      override def apply (input: From): To = function (input)
+    }
   }
 }

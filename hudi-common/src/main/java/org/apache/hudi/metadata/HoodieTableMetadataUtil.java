@@ -50,7 +50,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 
 /**
@@ -88,7 +90,7 @@ public class HoodieTableMetadataUtil {
     List<HoodieRecord> records = new LinkedList<>();
     List<String> allPartitions = new LinkedList<>();
     commitMetadata.getPartitionToWriteStats().forEach((partitionStatName, writeStats) -> {
-      final String partition = partitionStatName.equals("") ? NON_PARTITIONED_NAME : partitionStatName;
+      final String partition = partitionStatName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionStatName;
       allPartitions.add(partition);
 
       Map<String, Long> newFiles = new HashMap<>(writeStats.size());
@@ -102,8 +104,10 @@ public class HoodieTableMetadataUtil {
 
         int offset = partition.equals(NON_PARTITIONED_NAME) ? (pathWithPartition.startsWith("/") ? 1 : 0) : partition.length() + 1;
         String filename = pathWithPartition.substring(offset);
-        ValidationUtils.checkState(!newFiles.containsKey(filename), "Duplicate files in HoodieCommitMetadata");
-        newFiles.put(filename, hoodieWriteStat.getTotalWriteBytes());
+        long totalWriteBytes = newFiles.containsKey(filename)
+            ? newFiles.get(filename) + hoodieWriteStat.getTotalWriteBytes()
+            : hoodieWriteStat.getTotalWriteBytes();
+        newFiles.put(filename, totalWriteBytes);
       });
       // New files added to a partition
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(
@@ -130,7 +134,8 @@ public class HoodieTableMetadataUtil {
   public static List<HoodieRecord> convertMetadataToRecords(HoodieCleanMetadata cleanMetadata, String instantTime) {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileDeleteCount = {0};
-    cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
+    cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Option.empty(),
@@ -279,12 +284,13 @@ public class HoodieTableMetadataUtil {
     List<HoodieRecord> records = new LinkedList<>();
     int[] fileChangeCount = {0, 0}; // deletes, appends
 
-    partitionToDeletedFiles.forEach((partition, deletedFiles) -> {
+    partitionToDeletedFiles.forEach((partitionName, deletedFiles) -> {
       fileChangeCount[0] += deletedFiles.size();
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
 
       Option<Map<String, Long>> filesAdded = Option.empty();
-      if (partitionToAppendedFiles.containsKey(partition)) {
-        filesAdded = Option.of(partitionToAppendedFiles.remove(partition));
+      if (partitionToAppendedFiles.containsKey(partitionName)) {
+        filesAdded = Option.of(partitionToAppendedFiles.remove(partitionName));
       }
 
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, filesAdded,
@@ -292,7 +298,8 @@ public class HoodieTableMetadataUtil {
       records.add(record);
     });
 
-    partitionToAppendedFiles.forEach((partition, appendedFileMap) -> {
+    partitionToAppendedFiles.forEach((partitionName, appendedFileMap) -> {
+      final String partition = partitionName.equals(EMPTY_PARTITION_NAME) ? NON_PARTITIONED_NAME : partitionName;
       fileChangeCount[1] += appendedFileMap.size();
 
       // Validate that no appended file has been deleted
@@ -336,9 +343,10 @@ public class HoodieTableMetadataUtil {
    * The list of file slices returned is sorted in the correct order of file group name.
    * @param metaClient instance of {@link HoodieTableMetaClient}.
    * @param partition The name of the partition whose file groups are to be loaded.
+   * @param isReader true if reader code path, false otherwise.
    * @return List of latest file slices for all file groups in a given partition.
    */
-  public static List<FileSlice> loadPartitionFileGroupsWithLatestFileSlices(HoodieTableMetaClient metaClient, String partition) {
+  public static List<FileSlice> loadPartitionFileGroupsWithLatestFileSlices(HoodieTableMetaClient metaClient, String partition, boolean isReader) {
     LOG.info("Loading file groups for metadata table partition " + partition);
 
     // If there are no commits on the metadata table then the table's default FileSystemView will not return any file
@@ -350,7 +358,9 @@ public class HoodieTableMetadataUtil {
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline);
-    return fsView.getLatestFileSlices(partition).sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
+    Stream<FileSlice> fileSliceStream = isReader ? fsView.getLatestMergedFileSlicesBeforeOrOn(partition, timeline.filterCompletedInstants().lastInstant().get().getTimestamp()) :
+        fsView.getLatestFileSlices(partition);
+    return fileSliceStream.sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
         .collect(Collectors.toList());
   }
 }

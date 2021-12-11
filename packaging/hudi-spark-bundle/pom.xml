@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.11.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -73,6 +73,7 @@
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
+                  <include>org.apache.hudi:hudi-aws</include>
 
                   <include>com.beust:jcommander</include>
                   <include>io.javalin:javalin</include>
@@ -87,6 +88,8 @@
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
 
+                  <include>com.github.davidmoten:guava-mini</include>
+                  <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
@@ -99,6 +102,10 @@
                   <include>io.prometheus:simpleclient_common</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.google.guava:guava</include>
+
+                  <include>com.amazonaws:dynamodb-lock-client</include>
+                  <include>com.amazonaws:aws-java-sdk-dynamodb</include>
+                  <include>com.amazonaws:aws-java-sdk-core</include>
 
                   <include>org.apache.spark:spark-avro_${scala.binary.version}</include>
                   <include>org.apache.hive:hive-common</include>
@@ -321,6 +328,10 @@
       <version>${hbase.version}</version>
       <scope>compile</scope>
       <exclusions>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-common</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>

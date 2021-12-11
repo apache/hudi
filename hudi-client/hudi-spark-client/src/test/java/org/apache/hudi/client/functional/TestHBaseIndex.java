@@ -119,7 +119,11 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
 
   @AfterAll
   public static void clean() throws Exception {
-    utility.shutdownMiniCluster();
+    utility.shutdownMiniHBaseCluster();
+    utility.shutdownMiniDFSCluster();
+    utility.shutdownMiniMapReduceCluster();
+    // skip shutdownZkCluster due to localhost connection refused issue
+    utility = null;
   }
 
   @BeforeEach
@@ -278,7 +282,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
     final int numRecords = 10;
     final String oldPartitionPath = "1970/01/01";
     final String emptyHoodieRecordPayloadClasssName = EmptyHoodieRecordPayload.class.getName();
-    HoodieWriteConfig config = getConfig(true, true);
+    HoodieWriteConfig config = getConfigBuilder(100,  true, true).withRollbackUsingMarkers(false).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
@@ -337,6 +341,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
   public void testSimpleTagLocationAndUpdateWithRollback() throws Exception {
     // Load to memory
     HoodieWriteConfig config = getConfigBuilder(100, false, false)
+        .withRollbackUsingMarkers(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
@@ -383,7 +388,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
   @Test
   public void testSimpleTagLocationWithInvalidCommit() throws Exception {
     // Load to memory
-    HoodieWriteConfig config = getConfig();
+    HoodieWriteConfig config = getConfigBuilder(100, false, false).withRollbackUsingMarkers(false).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
 
@@ -425,6 +430,7 @@ public class TestHBaseIndex extends SparkClientFunctionalTestHarness {
   public void testEnsureTagLocationUsesCommitTimeline() throws Exception {
     // Load to memory
     HoodieWriteConfig config = getConfigBuilder(100, false, false)
+        .withRollbackUsingMarkers(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);

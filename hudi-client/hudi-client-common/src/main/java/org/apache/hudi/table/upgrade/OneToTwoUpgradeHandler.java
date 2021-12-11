@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.Map;
 
 /**
@@ -36,7 +36,7 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
   public Map<ConfigProperty, String> upgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       BaseUpgradeDowngradeHelper upgradeDowngradeHelper) {
-    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, upgradeDowngradeHelper.getPartitionColumns(config));
     tablePropsToAdd.put(HoodieTableConfig.RECORDKEY_FIELDS, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     tablePropsToAdd.put(HoodieTableConfig.BASE_FILE_FORMAT, config.getString(HoodieTableConfig.BASE_FILE_FORMAT));

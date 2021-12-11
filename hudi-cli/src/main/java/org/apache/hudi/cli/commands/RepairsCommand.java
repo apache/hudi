@@ -156,7 +156,7 @@ public class RepairsCommand implements CommandMarker {
     newProps.load(new FileInputStream(new File(overwriteFilePath)));
     Map<String, String> oldProps = client.getTableConfig().propsMap();
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
-    HoodieTableConfig.createHoodieProperties(client.getFs(), metaPathDir, newProps);
+    HoodieTableConfig.create(client.getFs(), metaPathDir, newProps);
 
     TreeSet<String> allPropKeys = new TreeSet<>();
     allPropKeys.addAll(newProps.keySet().stream().map(Object::toString).collect(Collectors.toSet()));

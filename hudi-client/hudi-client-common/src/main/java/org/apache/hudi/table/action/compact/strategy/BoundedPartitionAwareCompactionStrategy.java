@@ -39,14 +39,17 @@ import java.util.stream.Collectors;
  */
 public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionStrategy {
 
-  SimpleDateFormat dateFormat = new SimpleDateFormat(DayBasedCompactionStrategy.DATE_PARTITION_FORMAT);
+  // NOTE: {@code SimpleDataFormat} is NOT thread-safe
+  // TODO replace w/ DateTimeFormatter
+  private final ThreadLocal<SimpleDateFormat> dateFormat =
+      ThreadLocal.withInitial(() -> new SimpleDateFormat(DayBasedCompactionStrategy.DATE_PARTITION_FORMAT));
 
   @Override
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // The earliest partition to compact - current day minus the target partitions limit
     String earliestPartitionPathToCompact =
-        dateFormat.format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
+        dateFormat.get().format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
     // Filter out all partitions greater than earliestPartitionPathToCompact
 
     return operations.stream().collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet()
@@ -59,7 +62,7 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
     // The earliest partition to compact - current day minus the target partitions limit
     String earliestPartitionPathToCompact =
-        dateFormat.format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
+        dateFormat.get().format(getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
     // Get all partitions and sort them
     return partitionPaths.stream().map(partition -> partition.replace("/", "-"))
         .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
