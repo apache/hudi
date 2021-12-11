@@ -227,6 +227,10 @@
                   <pattern>com.esotericsoftware.kryo.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.esotericsoftware.kryo.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.</shadedPattern>
+                </relocation>
               </relocations>
               <filters>
                 <filter>
