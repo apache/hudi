@@ -351,7 +351,7 @@
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
-       <exclusions>
+      <exclusions>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
@@ -360,8 +360,12 @@
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+         <groupId>org.eclipse.jetty</groupId>
+         <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
-     <scope>provided</scope>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Hive -->
@@ -394,6 +398,14 @@
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty.aggregate</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -419,6 +431,10 @@
         <exclusion>
           <groupId>org.eclipse.jetty.orbit</groupId>
           <artifactId>javax.servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -545,6 +561,10 @@
         </exclusion>
         <exclusion>
           <groupId>javax.servlet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
