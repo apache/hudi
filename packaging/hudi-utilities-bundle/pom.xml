@@ -413,6 +413,12 @@
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
       <scope>${utilities.bundle.hive.scope}</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -427,6 +433,16 @@
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
       <scope>${utilities.bundle.hive.scope}</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.eclipse.jetty.aggregate</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -441,6 +457,12 @@
       <artifactId>hive-common</artifactId>
       <version>${hive.version}</version>
       <scope>${utilities.bundle.hive.scope}</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -486,6 +508,10 @@
         </exclusion>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
           <artifactId>*</artifactId>
         </exclusion>
         <exclusion>
