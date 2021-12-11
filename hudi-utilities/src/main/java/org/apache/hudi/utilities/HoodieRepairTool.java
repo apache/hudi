@@ -336,7 +336,9 @@ public class HoodieRepairTool {
         ).collect(Collectors.toList());
 
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimelineWithInstantDetails();
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    // This assumes that the archived timeline only has completed instants so this is safe
+    archivedTimeline.loadCompletedInstantDetailsInMemory();
 
     int parallelism = Math.max(Math.min(instantTimesToRepair.size(), cfg.parallelism), 1);
     List<Tuple2<String, List<String>>> instantFilesToRemove =

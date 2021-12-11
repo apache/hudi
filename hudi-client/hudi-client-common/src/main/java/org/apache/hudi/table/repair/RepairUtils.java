@@ -150,7 +150,7 @@ public final class RepairUtils {
       }
 
       if (doesInstantExist) {
-        if (!filesFromTimeline.isPresent()) {
+        if (!filesFromTimeline.isPresent() || filesFromTimeline.get().isEmpty()) {
           // Skips if no instant details
           return Collections.emptyList();
         }

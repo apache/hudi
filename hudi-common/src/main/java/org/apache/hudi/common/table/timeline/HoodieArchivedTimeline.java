@@ -77,18 +77,14 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   private static final Logger LOG = LogManager.getLogger(HoodieArchivedTimeline.class);
 
-  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
-    this(metaClient, false);
-  }
-
   /**
    * Loads instants between (startTs, endTs].
    * Note that there is no lazy loading, so this may not work if really long time range (endTs-startTs) is specified.
    * TBD: Should we enforce maximum time range?
    */
-  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient, boolean shouldLoadInstantDetails) {
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
-    setInstants(this.loadInstants(shouldLoadInstantDetails));
+    setInstants(this.loadInstants(false));
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
@@ -116,6 +112,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public void loadInstantDetailsInMemory(String startTs, String endTs) {
     loadInstants(startTs, endTs);
+  }
+
+  public void loadCompletedInstantDetailsInMemory() {
+    loadInstants(null, true,
+        record -> HoodieInstant.State.COMPLETED.toString().equals(record.get(ACTION_STATE).toString()));
   }
 
   public void loadCompactionDetailsInMemory(String compactionInstantTime) {
@@ -151,13 +152,10 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private HoodieInstant readCommit(GenericRecord record, boolean loadDetails) {
     final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
-    String actionState = record.get(ACTION_STATE).toString();
     if (loadDetails) {
       getMetadataKey(action).map(key -> {
         Object actionData = record.get(key);
-        // The archived timeline should only have completed instants.
-        // Only puts instant details if the instant is completed which has action data
-        if (HoodieInstant.State.COMPLETED.toString().equals(actionState)) {
+        if (actionData != null) {
           if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
             this.readCommits.put(instantTime, HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
           } else {
