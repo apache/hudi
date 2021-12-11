@@ -147,7 +147,8 @@
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
-    <jetty.version>9.4.15.v20190215</jetty.version>
+    <jetty.version>9.4.43.v20210629</jetty.version>
+    <javalin.version>3.13.12</javalin.version>
     <htrace.version>3.1.0-incubating</htrace.version>
     <hbase.version>2.4.9</hbase.version>
     <hbase-thirdparty.version>3.5.1</hbase-thirdparty.version>
