@@ -18,8 +18,8 @@
 
 ## Presto docker setup is based on https://github.com/smizy/docker-presto
 
-ARG HADOOP_VERSION=2.10.1
-ARG HIVE_VERSION=2.3.8
+ARG HADOOP_VERSION=3.3.1
+ARG HIVE_VERSION=3.1.2
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest as hadoop-base
 
 ARG PRESTO_VERSION=0.271
