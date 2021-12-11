@@ -1628,6 +1628,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
   }
 
+  public String getMetricReporterMetricsNamePrefix() {
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+  }
+  
   /**
    * memory configs.
    */
