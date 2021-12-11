@@ -15,7 +15,7 @@ After each write operation we will also show how to read the data both snapshot 
 ## Setup
 
 Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up spark.
-As of 0.9.0 release, spark-sql dml support has been added and is experimental.
+As of 0.9.0 release, Spark SQL DML support has been added and is experimental.
 
 <Tabs
 defaultValue="scala"
@@ -48,21 +48,21 @@ spark-shell \
 </TabItem>
 <TabItem value="sparksql">
 
-Hudi support using spark sql to write and read data with the **HoodieSparkSessionExtension** sql extension.
-From the extracted directory run spark-sql with Hudi as:
+Hudi support using Spark SQL to write and read data with the **HoodieSparkSessionExtension** sql extension.
+From the extracted directory run Spark SQL with Hudi as:
 
 ```shell
-# spark sql for spark 3
+# Spark SQL for spark 3
 spark-sql --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.10.0,org.apache.spark:spark-avro_2.12:3.1.2 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
-# spark-sql for spark 2 with scala 2.11
+# Spark SQL for spark 2 with scala 2.11
 spark-sql --packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.0,org.apache.spark:spark-avro_2.11:2.4.4 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
-# spark-sql for spark 2 with scala 2.12
+# Spark SQL for spark 2 with scala 2.12
 spark-sql \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.0,org.apache.spark:spark-avro_2.12:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
@@ -276,7 +276,7 @@ You don't need to specify schema and any properties except the partitioned colum
 
 **CTAS**
 
-Hudi supports CTAS (Create Table As Select) on spark sql. <br/>
+Hudi supports CTAS (Create Table As Select) on Spark SQL. <br/>
 Note: For better performance to load data to hudi table, CTAS uses the **bulk insert** as the write operation.
 
 Example CTAS command to create a non-partitioned COW table without preCombineField.
@@ -599,7 +599,7 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `d
 </TabItem>
 <TabItem value="sparksql">
 
-Spark sql supports two kinds of DML to update hudi table: Merge-Into and Update.
+Spark SQL supports two kinds of DML to update hudi table: Merge-Into and Update.
 
 ### Update
 **Syntax**
