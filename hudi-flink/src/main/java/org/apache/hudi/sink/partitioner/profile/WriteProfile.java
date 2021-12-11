@@ -249,7 +249,7 @@ public class WriteProfile {
       return;
     }
     this.metaClient.reloadActiveTimeline();
-    this.fsView = getFileSystemView();
+    this.fsView.sync();
     recordProfile();
     cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstants());
     this.smallFilesMap.clear();
