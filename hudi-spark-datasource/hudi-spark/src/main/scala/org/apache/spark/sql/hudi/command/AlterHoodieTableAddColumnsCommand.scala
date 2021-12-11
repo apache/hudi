@@ -64,7 +64,7 @@ case class AlterHoodieTableAddColumnsCommand(
           s" table columns is: [${hoodieCatalogTable.tableSchemaWithoutMetaFields.fieldNames.mkString(",")}]")
       }
       // Get the new schema
-      val newSqlSchema = StructType(tableSchema.fields ++ colsToAdd)
+      val newSqlSchema = StructType(hoodieCatalogTable.dataSchema.fields ++ colsToAdd ++ hoodieCatalogTable.partitionSchema.fields)
       val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
       val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
 
@@ -72,13 +72,14 @@ case class AlterHoodieTableAddColumnsCommand(
       AlterHoodieTableAddColumnsCommand.commitWithSchema(newSchema, hoodieCatalogTable, sparkSession)
 
       // Refresh the new schema to meta
-      refreshSchemaInMeta(sparkSession, hoodieCatalogTable.table, newSchema)
+      val newDataSchema = StructType(hoodieCatalogTable.dataSchema.fields ++ colsToAdd)
+      refreshSchemaInMeta(sparkSession, hoodieCatalogTable.table, newDataSchema)
     }
     Seq.empty[Row]
   }
 
   private def refreshSchemaInMeta(sparkSession: SparkSession, table: CatalogTable,
-      newSchema: Schema): Unit = {
+      newSqlDataSchema: StructType): Unit = {
     try {
       sparkSession.catalog.uncacheTable(tableId.quotedString)
     } catch {
@@ -87,16 +88,12 @@ case class AlterHoodieTableAddColumnsCommand(
     }
     sparkSession.catalog.refreshTable(table.identifier.unquotedString)
 
-    val newSqlSchema = AvroConversionUtils.convertAvroSchemaToStructType(newSchema)
-    val newTable = table.copy(schema = newSqlSchema)
     SchemaUtils.checkColumnNameDuplication(
-      newTable.dataSchema.map(_.name),
+      newSqlDataSchema.map(_.name),
       "in the table definition of " + table.identifier,
       conf.caseSensitiveAnalysis)
 
-    DDLUtils.checkDataColNames(newTable)
-
-    sparkSession.sessionState.catalog.alterTableDataSchema(tableId, newTable.dataSchema)
+    sparkSession.sessionState.catalog.alterTableDataSchema(tableId, newSqlDataSchema)
   }
 }
 
