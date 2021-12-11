@@ -179,7 +179,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void ingestFirstBatchAndHiveSync() throws Exception {
     List<String> cmds = CollectionUtils.createImmutableList(
         "spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
+            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --base-file-format " + baseFileFormat.toString()
@@ -187,7 +188,10 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
             + " --props /var/demo/config/dfs-source.properties"
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider ",
-        "spark-submit --class org.apache.hudi.hive.HiveSyncTool " + HUDI_HIVE_SYNC_BUNDLE
+        "spark-submit "
+            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + "--class org.apache.hudi.hive.HiveSyncTool " + HUDI_HIVE_SYNC_BUNDLE
             + " --database default"
             + " --table " + COW_TABLE_NAME
             + " --base-path " + COW_BASE_PATH
@@ -197,7 +201,8 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --jdbc-url jdbc:hive2://hiveserver:10000"
             + " --partitioned-by dt",
         ("spark-submit"
-            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
+            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --base-file-format " + baseFileFormat.toString()
@@ -210,7 +215,10 @@ public class ITTestHoodieDemo extends ITTestBase {
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
     executeSparkSQLCommand(SPARKSQL_BS_PREP_COMMANDS, true);
     List<String> bootstrapCmds = CollectionUtils.createImmutableList(
-        "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+        "spark-submit "
+            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
         + " --table-type COPY_ON_WRITE "
         + " --run-bootstrap "
         + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
@@ -224,7 +232,10 @@ public class ITTestHoodieDemo extends ITTestBase {
         + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
         + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
         + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_BOOTSTRAPPED_TABLE_NAME),
-        "spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
+        "spark-submit "
+            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
         + " --table-type MERGE_ON_READ "
         + " --run-bootstrap "
         + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
