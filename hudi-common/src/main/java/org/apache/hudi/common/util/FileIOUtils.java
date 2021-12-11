@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -95,6 +100,31 @@ public class FileIOUtils {
     int len;
     while ((len = inputStream.read(buffer)) != -1) {
       outputStream.write(buffer, 0, len);
+    }
+  }
+
+  /**
+   * Copies the file content from source path to destination path.
+   *
+   * @param fileSystem     {@link FileSystem} instance.
+   * @param sourceFilePath Source file path.
+   * @param destFilePath   Destination file path.
+   */
+  public static void copy(
+      FileSystem fileSystem, org.apache.hadoop.fs.Path sourceFilePath,
+      org.apache.hadoop.fs.Path destFilePath) {
+    FSDataInputStream fsDataInputStream = null;
+    FSDataOutputStream fsDataOutputStream = null;
+    try {
+      fsDataInputStream = fileSystem.open(sourceFilePath);
+      fsDataOutputStream = fileSystem.create(destFilePath, false);
+      copy(fsDataInputStream, fsDataOutputStream);
+    } catch (IOException e) {
+      throw new HoodieIOException(String.format("Cannot copy from %s to %s",
+          sourceFilePath.toString(), destFilePath.toString()), e);
+    } finally {
+      closeQuietly(fsDataInputStream);
+      closeQuietly(fsDataOutputStream);
     }
   }
 
