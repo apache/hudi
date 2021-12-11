@@ -348,18 +348,21 @@ public class HoodieRepairTool {
                     instantToFilesMap.get(instantToRepair), activeTimeline, archivedTimeline)))
             .collect();
 
-    List<Tuple2<String, List<String>>> instantsToRepair =
+    List<Tuple2<String, List<String>>> instantsWithDanglingFiles =
         instantFilesToRemove.stream().filter(e -> !e._2.isEmpty()).collect(Collectors.toList());
-    printRepairInfo(instantsToRepair);
+    printRepairInfo(instantTimesToRepair, instantsWithDanglingFiles);
     if (!isDryRun) {
       List<String> relativeFilePathsToDelete =
-          instantsToRepair.stream().flatMap(e -> e._2.stream()).collect(Collectors.toList());
-      parallelism = Math.max(Math.min(relativeFilePathsToDelete.size(), cfg.parallelism), 1);
-      if (!backupFiles(relativeFilePathsToDelete, parallelism)) {
-        LOG.error("Error backing up dangling files. Exiting...");
-        return;
+          instantsWithDanglingFiles.stream().flatMap(e -> e._2.stream()).collect(Collectors.toList());
+      if (relativeFilePathsToDelete.size() > 0) {
+        parallelism = Math.max(Math.min(relativeFilePathsToDelete.size(), cfg.parallelism), 1);
+        if (!backupFiles(relativeFilePathsToDelete, parallelism)) {
+          LOG.error("Error backing up dangling files. Exiting...");
+          return;
+        }
+        deleteFiles(relativeFilePathsToDelete, parallelism);
       }
-      deleteFiles(relativeFilePathsToDelete, parallelism);
+      LOG.info(String.format("Table repair on %s is successful", cfg.basePath));
     }
   }
 
@@ -499,13 +502,18 @@ public class HoodieRepairTool {
   /**
    * Prints the repair info.
    *
-   * @param instantsToRepair A list of instants to repair.
+   * @param instantTimesToRepair      A list instant times in consideration for repair
+   * @param instantsWithDanglingFiles A list of instants with dangling files.
    */
-  private void printRepairInfo(List<Tuple2<String, List<String>>> instantsToRepair) {
-    int numInstantsToRepair = instantsToRepair.size();
+  private void printRepairInfo(
+      List<String> instantTimesToRepair, List<Tuple2<String, List<String>>> instantsWithDanglingFiles) {
+    int numInstantsToRepair = instantsWithDanglingFiles.size();
+    LOG.warn("Number of instants verified based on the base and log files: "
+        + instantTimesToRepair.size());
+    LOG.warn("Instant timestamps: " + instantTimesToRepair);
     LOG.warn("Number of instants to repair: " + numInstantsToRepair);
     if (numInstantsToRepair > 0) {
-      instantsToRepair.forEach(e -> {
+      instantsWithDanglingFiles.forEach(e -> {
         LOG.warn(" -> Instant " + numInstantsToRepair);
         LOG.warn("   ** Removing files: " + e._2);
       });
