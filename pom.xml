@@ -140,7 +140,7 @@
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala11.version}</scala.version>
-    <scala.binary.version>2.12</scala.binary.version>
+    <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
     <scala-maven-plugin.version>4.5.4</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
