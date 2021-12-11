@@ -29,7 +29,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -130,7 +129,7 @@ public abstract class HoodieAsyncService implements Serializable {
     future = res.getKey();
     executor = res.getValue();
     started = true;
-    monitorThreads(onShutdownCallback);
+    shutdownCallback(onShutdownCallback);
   }
 
   /**
@@ -141,34 +140,15 @@ public abstract class HoodieAsyncService implements Serializable {
   protected abstract Pair<CompletableFuture, ExecutorService> startService();
 
   /**
-   * A monitor thread is started which would trigger a callback if the service is shutdown.
+   * Add shutdown callback for the completable future.
    * 
-   * @param onShutdownCallback
+   * @param callback The callback
    */
-  private void monitorThreads(Function<Boolean, Boolean> onShutdownCallback) {
-    LOG.info("Submitting monitor thread !!");
-    Executors.newSingleThreadExecutor(r -> {
-      Thread t = new Thread(r, "Monitor Thread");
-      t.setDaemon(isRunInDaemonMode());
-      return t;
-    }).submit(() -> {
-      boolean error = false;
-      try {
-        LOG.info("Monitoring thread(s) !!");
-        future.get();
-      } catch (ExecutionException ex) {
-        LOG.error("Monitor noticed one or more threads failed. Requesting graceful shutdown of other threads", ex);
-        error = true;
-      } catch (InterruptedException ie) {
-        LOG.error("Got interrupted Monitoring threads", ie);
-        error = true;
-      } finally {
-        // Mark as shutdown
-        shutdown = true;
-        if (null != onShutdownCallback) {
-          onShutdownCallback.apply(error);
-        }
-        shutdown(false);
+  @SuppressWarnings("unchecked")
+  private void shutdownCallback(Function<Boolean, Boolean> callback) {
+    future.whenComplete((resp, error) -> {
+      if (null != callback) {
+        callback.apply(null != error);
       }
     });
   }
