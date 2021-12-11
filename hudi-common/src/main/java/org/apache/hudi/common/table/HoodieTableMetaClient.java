@@ -315,11 +315,10 @@ public class HoodieTableMetaClient implements Serializable {
     }
     return archivedTimeline;
   }
-  
+
   /**
    * Validate table properties.
-   *
-   * @param properties    Properties from writeConfig.
+   * @param properties Properties from writeConfig.
    * @param operationType operation type to be executed.
    */
   public void validateTableProperties(Properties properties, WriteOperationType operationType) {
