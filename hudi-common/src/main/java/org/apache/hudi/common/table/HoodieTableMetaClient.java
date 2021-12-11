@@ -328,6 +328,10 @@ public class HoodieTableMetaClient implements Serializable {
     return consistencyGuardConfig;
   }
 
+  public FileSystemRetryConfig getFileSystemRetryConfig() {
+    return fileSystemRetryConfig;
+  }
+
   /**
    * Get the archived commits as a timeline. This is costly operation, as all data from the archived files are read.
    * This should not be used, unless for historical debugging purposes.
