@@ -419,8 +419,8 @@ public class HoodieRepairTool {
     }
 
     Path backupPath = new Path(cfg.backupPath);
-    if (!metaClient.getFs().exists(backupPath)
-        || metaClient.getFs().listStatus(backupPath).length > 0) {
+    if (metaClient.getFs().exists(backupPath)
+        && metaClient.getFs().listStatus(backupPath).length > 0) {
       LOG.error(String.format("Cannot use backup path %s: it is not empty", cfg.backupPath));
       return -1;
     }
