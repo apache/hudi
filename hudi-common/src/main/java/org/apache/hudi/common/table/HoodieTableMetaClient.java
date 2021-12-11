@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
-import org.apache.hudi.common.fs.FileSystemGuardConfig;
+import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.HoodieRetryWrapperFileSystem;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
@@ -101,14 +101,14 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieActiveTimeline activeTimeline;
   private HoodieArchivedTimeline archivedTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
-  private FileSystemGuardConfig fileSystemGuardConfig = FileSystemGuardConfig.newBuilder().build();
+  private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
 
   private HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
                                 ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-                                String payloadClassName, FileSystemGuardConfig fileSystemGuardConfig) {
+                                String payloadClassName, FileSystemRetryConfig fileSystemRetryConfig) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.consistencyGuardConfig = consistencyGuardConfig;
-    this.fileSystemGuardConfig = fileSystemGuardConfig;
+    this.fileSystemRetryConfig = fileSystemRetryConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
     Path basePathDir = new Path(basePath);
     this.basePath = basePathDir.toString();
@@ -148,7 +148,7 @@ public class HoodieTableMetaClient implements Serializable {
             .setBasePath(oldMetaClient.basePath)
             .setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
             .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig)
-            .setFileSystemGuardConfig(oldMetaClient.fileSystemGuardConfig)
+            .setFileSystemRetryConfig(oldMetaClient.fileSystemRetryConfig)
             .setLayoutVersion(Option.of(oldMetaClient.timelineLayoutVersion))
             .setPayloadClassName(null)
             .build();
@@ -266,11 +266,11 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieWrapperFileSystem getFs() {
     if (fs == null) {
       FileSystem fileSystem;
-      if (fileSystemGuardConfig.isFileSystemActionRetryEnable()) {
+      if (fileSystemRetryConfig.isFileSystemActionRetryEnable()) {
         RetryHelper retryHelper = new RetryHelper<>()
-                .tryMaxInterval(fileSystemGuardConfig.getMaxRetryIntervalMs())
-                .tryNum(fileSystemGuardConfig.getMaxRetryNumbers())
-                .tryInitialInterval(fileSystemGuardConfig.getInitialRetryIntervalMs());
+                .tryMaxInterval(fileSystemRetryConfig.getMaxRetryIntervalMs())
+                .tryNum(fileSystemRetryConfig.getMaxRetryNumbers())
+                .tryInitialInterval(fileSystemRetryConfig.getInitialRetryIntervalMs());
         fileSystem = new HoodieRetryWrapperFileSystem(FSUtils.getFs(metaPath, hadoopConf.newCopy()), retryHelper);
       } else {
         fileSystem = FSUtils.getFs(metaPath, hadoopConf.newCopy());
@@ -601,7 +601,7 @@ public class HoodieTableMetaClient implements Serializable {
     private boolean loadActiveTimelineOnLoad = false;
     private String payloadClassName = null;
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
-    private FileSystemGuardConfig fileSystemGuardConfig = FileSystemGuardConfig.newBuilder().build();
+    private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
     private Option<TimelineLayoutVersion> layoutVersion = Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION);
 
     public Builder setConf(Configuration conf) {
@@ -629,8 +629,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public Builder setFileSystemGuardConfig(FileSystemGuardConfig fileSystemGuardConfig) {
-      this.fileSystemGuardConfig = fileSystemGuardConfig;
+    public Builder setFileSystemRetryConfig(FileSystemRetryConfig fileSystemRetryConfig) {
+      this.fileSystemRetryConfig = fileSystemRetryConfig;
       return this;
     }
 
@@ -643,7 +643,7 @@ public class HoodieTableMetaClient implements Serializable {
       ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init HoodieTableMetaClient");
       ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
       return new HoodieTableMetaClient(conf, basePath,
-          loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, fileSystemGuardConfig);
+          loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, fileSystemRetryConfig);
     }
   }
 

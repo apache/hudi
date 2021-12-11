@@ -29,18 +29,18 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * The consistency guard relevant config options.
+ * The file system retry relevant config options.
  */
 @ConfigClassProperty(name = "FileSystem Guard Configurations",
         groupName = ConfigGroups.Names.WRITE_CLIENT,
-        description = "The filesystem guard related config options, to help deal with runtime exception like s3 list/get/put/delete performance issues.")
-public class FileSystemGuardConfig  extends HoodieConfig {
+        description = "The filesystem retry related config options, to help deal with runtime exception like list/get/put/delete performance issues.")
+public class FileSystemRetryConfig  extends HoodieConfig {
 
   public static final ConfigProperty<String> FILESYSTEM_RETRY_ENABLE = ConfigProperty
-      .key("hoodie.filesystem.action.retry.enabled")
+      .key("hoodie.filesystem.action.retry.enable")
       .defaultValue("false")
       .sinceVersion("0.10.0")
-      .withDocumentation("Enabled to handle S3 list/get/delete etc file system performance issue.");
+      .withDocumentation("Enabled to handle list/get/delete etc file system performance issue.");
 
   public static final ConfigProperty<Long> INITIAL_RETRY_INTERVAL_MS = ConfigProperty
       .key("hoodie.filesystem.action.retry.initial_interval_ms")
@@ -60,7 +60,7 @@ public class FileSystemGuardConfig  extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");
 
-  private FileSystemGuardConfig() {
+  private FileSystemRetryConfig() {
     super();
   }
 
@@ -80,7 +80,7 @@ public class FileSystemGuardConfig  extends HoodieConfig {
     return Boolean.parseBoolean(getStringOrDefault(FILESYSTEM_RETRY_ENABLE));
   }
 
-  public static FileSystemGuardConfig.Builder newBuilder() {
+  public static FileSystemRetryConfig.Builder newBuilder() {
     return new Builder();
   }
 
@@ -89,43 +89,43 @@ public class FileSystemGuardConfig  extends HoodieConfig {
    */
   public static class Builder {
 
-    private final FileSystemGuardConfig fileSystemGuardConfig = new FileSystemGuardConfig();
+    private final FileSystemRetryConfig fileSystemRetryConfig = new FileSystemRetryConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
-        fileSystemGuardConfig.getProps().load(reader);
+        fileSystemRetryConfig.getProps().load(reader);
         return this;
       }
     }
 
     public Builder fromProperties(Properties props) {
-      this.fileSystemGuardConfig.getProps().putAll(props);
+      this.fileSystemRetryConfig.getProps().putAll(props);
       return this;
     }
 
     public Builder withMaxRetryNumbers(int numbers) {
-      fileSystemGuardConfig.setValue(MAX_RETRY_NUMBERS, String.valueOf(numbers));
+      fileSystemRetryConfig.setValue(MAX_RETRY_NUMBERS, String.valueOf(numbers));
       return this;
     }
 
     public Builder withInitialRetryIntervalMs(long intervalMs) {
-      fileSystemGuardConfig.setValue(INITIAL_RETRY_INTERVAL_MS, String.valueOf(intervalMs));
+      fileSystemRetryConfig.setValue(INITIAL_RETRY_INTERVAL_MS, String.valueOf(intervalMs));
       return this;
     }
 
     public Builder withMaxRetryIntervalMs(long intervalMs) {
-      fileSystemGuardConfig.setValue(MAX_RETRY_INTERVAL_MS, String.valueOf(intervalMs));
+      fileSystemRetryConfig.setValue(MAX_RETRY_INTERVAL_MS, String.valueOf(intervalMs));
       return this;
     }
 
     public Builder withFileSystemActionRetryEnabled(boolean enabled) {
-      fileSystemGuardConfig.setValue(FILESYSTEM_RETRY_ENABLE, String.valueOf(enabled));
+      fileSystemRetryConfig.setValue(FILESYSTEM_RETRY_ENABLE, String.valueOf(enabled));
       return this;
     }
 
-    public FileSystemGuardConfig build() {
-      fileSystemGuardConfig.setDefaults(FileSystemGuardConfig.class.getName());
-      return fileSystemGuardConfig;
+    public FileSystemRetryConfig build() {
+      fileSystemRetryConfig.setDefaults(FileSystemRetryConfig.class.getName());
+      return fileSystemRetryConfig;
     }
   }
 }

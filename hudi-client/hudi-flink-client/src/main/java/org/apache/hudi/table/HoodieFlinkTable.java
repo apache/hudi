@@ -56,7 +56,7 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
             .setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true)
             .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setFileSystemGuardConfig(config.getFileSystemGuardConfig())
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .build();
     return HoodieFlinkTable.create(config, context, metaClient);

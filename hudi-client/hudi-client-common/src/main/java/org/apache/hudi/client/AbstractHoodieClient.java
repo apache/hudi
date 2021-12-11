@@ -137,7 +137,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
             .setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad)
             .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setFileSystemGuardConfig(config.getFileSystemGuardConfig())
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .build();
   }

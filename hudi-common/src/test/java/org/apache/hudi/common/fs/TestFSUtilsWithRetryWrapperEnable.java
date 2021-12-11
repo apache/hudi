@@ -53,11 +53,11 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
   @BeforeEach
   public void setUp() throws IOException {
     initMetaClient();
-    FileSystemGuardConfig fileSystemGuardConfig = FileSystemGuardConfig.newBuilder().withFileSystemActionRetryEnabled(true).build();
+    FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().withFileSystemActionRetryEnabled(true).build();
     retryHelper = new RetryHelper<>()
-            .tryMaxInterval(fileSystemGuardConfig.getMaxRetryIntervalMs())
-            .tryNum(fileSystemGuardConfig.getMaxRetryNumbers())
-            .tryInitialInterval(fileSystemGuardConfig.getInitialRetryIntervalMs());
+            .tryMaxInterval(fileSystemRetryConfig.getMaxRetryIntervalMs())
+            .tryNum(fileSystemRetryConfig.getMaxRetryNumbers())
+            .tryInitialInterval(fileSystemRetryConfig.getInitialRetryIntervalMs());
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 1);
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, retryHelper);
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());

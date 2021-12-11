@@ -69,11 +69,11 @@ public class RetryHelper<T> {
     int retries = 0;
     boolean success = false;
     RuntimeException exception = null;
-    T t = null;
+    T functionResult = null;
     do {
       long waitTime = Math.min(getWaitTimeExp(retries), maxIntervalTime);
       try {
-        t = func.get();
+        functionResult = func.get();
         success = true;
         break;
       } catch (RuntimeException e) {
@@ -97,7 +97,7 @@ public class RetryHelper<T> {
     if (retries > 0) {
       LOG.info("Success to " + taskInfo + " after retried " + retries + " times.");
     }
-    return t;
+    return functionResult;
   }
 
   private long getWaitTimeExp(int retryCount) {

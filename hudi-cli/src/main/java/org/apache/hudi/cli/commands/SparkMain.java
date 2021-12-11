@@ -459,7 +459,7 @@ public class SparkMain {
                 .setBasePath(config.getBasePath())
                 .setLoadActiveTimelineOnLoad(false)
                 .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-                .setFileSystemGuardConfig(config.getFileSystemGuardConfig())
+                .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
                 .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
                 .build();
     try {
