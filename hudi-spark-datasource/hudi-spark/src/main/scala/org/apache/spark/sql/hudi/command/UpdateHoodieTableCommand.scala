@@ -29,22 +29,17 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, LogicalPlan, UpdateTable}
-import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import scala.collection.JavaConverters._
 
-case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCommand
+case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends HoodieLeafRunnableCommand
   with SparkAdapterSupport {
 
   private val table = updateTable.table
   private val tableId = getTableIdentify(table)
-
-  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): UpdateHoodieTableCommand = {
-    this
-  }
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     logInfo(s"start execute update command for $tableId")

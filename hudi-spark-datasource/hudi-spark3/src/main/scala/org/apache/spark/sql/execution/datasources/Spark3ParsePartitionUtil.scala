@@ -43,6 +43,11 @@ import scala.util.control.NonFatal
 
 class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
 
+  /**
+   * The definition of PartitionValues has been changed by SPARK-34314 in Spark3.2.
+   * To solve the compatibility between 3.1 and 3.2, copy some codes from PartitioningUtils in Spark3.2 here.
+   * And this method will generate and return `InternalRow` directly instead of `PartitionValues`.
+   */
   override def parsePartition(
       path: Path,
       typeInference: Boolean,

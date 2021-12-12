@@ -30,7 +30,6 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.{CompactionOperation, LogicalPlan}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.plans.logical.CompactionOperation.{CompactionOperation, RUN, SCHEDULE}
-import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.types.StringType
 
@@ -39,11 +38,7 @@ import scala.collection.JavaConverters._
 
 case class CompactionHoodiePathCommand(path: String,
   operation: CompactionOperation, instantTimestamp: Option[Long] = None)
-  extends RunnableCommand {
-
-  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CompactionHoodiePathCommand = {
-    this
-  }
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)

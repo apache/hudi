@@ -32,7 +32,6 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.util.SchemaUtils
 
@@ -45,11 +44,7 @@ import scala.util.control.NonFatal
 case class AlterHoodieTableAddColumnsCommand(
    tableId: TableIdentifier,
    colsToAdd: Seq[StructField])
-  extends RunnableCommand {
-
-  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): AlterHoodieTableAddColumnsCommand = {
-    this
-  }
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     if (colsToAdd.nonEmpty) {
@@ -64,7 +59,7 @@ case class AlterHoodieTableAddColumnsCommand(
           s" table columns is: [${hoodieCatalogTable.tableSchemaWithoutMetaFields.fieldNames.mkString(",")}]")
       }
       // Get the new schema
-      val newSqlSchema = StructType(hoodieCatalogTable.dataSchema.fields ++ colsToAdd ++ hoodieCatalogTable.partitionSchema.fields)
+      val newSqlSchema = StructType(tableSchema.fields ++ colsToAdd)
       val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
       val newSchema = AvroConversionUtils.convertStructTypeToAvroSchema(newSqlSchema, structName, nameSpace)
 

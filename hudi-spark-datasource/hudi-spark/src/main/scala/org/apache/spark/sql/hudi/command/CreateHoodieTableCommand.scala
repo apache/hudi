@@ -29,7 +29,6 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
 import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, TableAlreadyExistsException}
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
@@ -47,11 +46,7 @@ import scala.util.control.NonFatal
  * Command for create hoodie table.
  */
 case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean)
-  extends RunnableCommand with SparkAdapterSupport {
-
-  def withNewChildrenInternal(newChildren: IndexedSeq[LogicalPlan]): CreateHoodieTableCommand = {
-    this
-  }
+  extends HoodieLeafRunnableCommand with SparkAdapterSupport {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableIsExists = sparkSession.sessionState.catalog.tableExists(table.identifier)

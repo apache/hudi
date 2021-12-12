@@ -17,26 +17,8 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.hudi.HoodieSqlUtils.getTableLocation
-import org.apache.spark.sql.types.{IntegerType, StringType}
+import org.apache.spark.sql.catalyst.trees.HoodieLeafLike
+import org.apache.spark.sql.execution.command.RunnableCommand
 
-case class CompactionShowHoodieTableCommand(table: CatalogTable, limit: Int)
-  extends HoodieLeafRunnableCommand {
-
-  override def run(sparkSession: SparkSession): Seq[Row] = {
-    val basePath = getTableLocation(table, sparkSession)
-    CompactionShowHoodiePathCommand(basePath, limit).run(sparkSession)
-  }
-
-  override val output: Seq[Attribute] = {
-    Seq(
-      AttributeReference("timestamp", StringType, nullable = false)(),
-      AttributeReference("action", StringType, nullable = false)(),
-      AttributeReference("size", IntegerType, nullable = false)()
-    )
-  }
-}
+trait HoodieLeafRunnableCommand extends RunnableCommand with HoodieLeafLike[LogicalPlan]

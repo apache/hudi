@@ -252,7 +252,8 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           val resolvedCondition = condition.map(resolveExpressionFrom(resolvedSource)(_))
           DeleteAction(resolvedCondition)
         case action: MergeAction =>
-          // ForSpark3.2, it's UpdateStarAction
+          // SPARK-34962:  use UpdateStarAction as the explicit representation of * in UpdateAction.
+          // So match and covert this in Spark3.2 env.
           UpdateAction(action.condition, Seq.empty)
       }
       // Resolve the notMatchedActions
@@ -262,7 +263,8 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
             resolveConditionAssignments(condition, assignments)
           InsertAction(resolvedCondition, resolvedAssignments)
         case action: MergeAction =>
-          // ForSpark3.2, it's InsertStarAction
+          // SPARK-34962:  use InsertStarAction as the explicit representation of * in InsertAction.
+          // So match and covert this in Spark3.2 env.
           InsertAction(action.condition, Seq.empty)
       }
       // Return the resolved MergeIntoTable
@@ -441,6 +443,8 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case AlterTableChangeColumnCommand(tableName, columnName, newColumn)
         if isHoodieTable(tableName, sparkSession) =>
         AlterHoodieTableChangeColumnCommand(tableName, columnName, newColumn)
+      // SPARK-34238: the definition of ShowPartitionsCommand has been changed in Spark3.2.
+      // Match the class type instead of call the `unapply` method.
       case s: ShowPartitionsCommand
         if isHoodieTable(s.tableName, sparkSession) =>
           ShowHoodieTablePartitionsCommand(s.tableName, s.spec)
