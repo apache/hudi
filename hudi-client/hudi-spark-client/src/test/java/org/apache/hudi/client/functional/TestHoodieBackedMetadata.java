@@ -424,10 +424,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     });
   }
 
-
   /**
    * Tests that virtual key configs are honored in base files after compaction in metadata table.
-   *
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
