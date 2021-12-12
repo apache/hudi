@@ -287,6 +287,11 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
     }
   }
 
+  @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDelete) {
+    throw new UnsupportedOperationException("No support for dropPartitionsToTable");
+  }
+
   public Map<List<String>, String> scanTablePartitions(String tableName) {
     String sql = constructShowPartitionSQL(tableName);
     Statement stmt = null;

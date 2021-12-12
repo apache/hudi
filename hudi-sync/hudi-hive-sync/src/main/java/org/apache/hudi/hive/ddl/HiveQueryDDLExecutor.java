@@ -127,6 +127,11 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   }
 
   @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDelete) {
+    throw new UnsupportedOperationException("No support for dropPartitionsToTable");
+  }
+
+  @Override
   public void close() {
     if (metaStoreClient != null) {
       Hive.closeCurrent();
