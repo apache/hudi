@@ -697,7 +697,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       return;
     }
 
-
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
