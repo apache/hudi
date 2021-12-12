@@ -353,7 +353,7 @@ We recommend two ways for syncing CDC data into Hudi:
 - If the upstream data cannot guarantee the order, you need to specify option `write.precombine.field` explicitly;
 - The MOR table can not handle DELETEs in event time sequence now, thus causing data loss. You better switch on the changelog mode through
   option `changelog.enabled`.
-  :::
+:::
 
 ### Bulk Insert
 
@@ -418,7 +418,7 @@ and then reduce the resources to write `incremental data` (or open the rate limi
 2. Index bootstrap triggers by the input data. User need to ensure that there is at least one record in each partition.
 3. Index bootstrap executes concurrently. User can search in log by `finish loading the index under partition` and `Load record form file` to observe the progress of index bootstrap.
 4. The first successful checkpoint indicates that the index bootstrap completed. There is no need to load the index again when recovering from the checkpoint.
-   :::
+:::
 
 ### Changelog Mode
 Hudi can keep all the intermediate changes (I / -U / U / D) of messages, then consumes through stateful computing of flink to have a near-real-time
@@ -455,7 +455,7 @@ The small file strategy lead to performance degradation. If you want to apply th
 
 ### Rate Limit
 There are many use cases that user put the full history data set onto the message queue together with the realtime incremental data. Then they consume the data from the queue into the hudi from the earliest offset using flink. Consuming history data set has these characteristics:
-1). The instant throughput is huge 2). It has serious disorder (with random writing partitions). It will lead to degradation of writing performance and throughput glitches. At this time, the speed limit parameter can be turned on to ensure smooth writing of the flow.
+1). The instant throughput is huge 2). It has serious disorder (with random writing partitions). It will lead to degradation of writing performance and throughput glitches. For this case, the speed limit parameter can be turned on to ensure smooth writing of the flow.
 
 #### Options
 |  Option Name  | Required | Default | Remarks |

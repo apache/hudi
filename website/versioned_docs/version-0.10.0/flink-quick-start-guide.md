@@ -110,7 +110,6 @@ select * from t1;
 
 This query provides snapshot querying of the ingested data. 
 Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
-{: .notice--info}
 
 ### Update Data
 
@@ -124,8 +123,7 @@ insert into t1 values
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated records. Each write operation generates a new [commit](/docs/concepts) 
-denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `age` fields for the same `_hoodie_record_key`s in previous commit. 
-{: .notice--info}
+denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `age` fields for the same `_hoodie_record_key`s in previous commit.
 
 ### Streaming Query
 
