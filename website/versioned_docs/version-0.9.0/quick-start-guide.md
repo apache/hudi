@@ -704,6 +704,11 @@ Hudi also provides capability to obtain a stream of records that changed since g
 This can be achieved using Hudi's incremental querying and providing a begin time from which changes need to be streamed. 
 We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
 
+:::note
+Note that the amount of data you can incrementally pull from a table depends on the amount of retained commits. 
+Hudi automatically cleans old commits, the amount of retained commits can be specified using `CLEAN_RETAIN_COMMITS` parameter. 
+:::
+
 <Tabs
 defaultValue="scala"
 values={[
