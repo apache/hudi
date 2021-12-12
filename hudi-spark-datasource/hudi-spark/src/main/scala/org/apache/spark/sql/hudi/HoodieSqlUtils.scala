@@ -31,7 +31,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
-import org.apache.spark.SPARK_VERSION
+
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -281,8 +281,6 @@ object HoodieSqlUtils extends SparkAdapterSupport {
       (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mappingSqlOptionToHoodieParam(options))
         .filterKeys(_.startsWith("hoodie."))
   }
-
-  def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
 
   def isEnableHive(sparkSession: SparkSession): Boolean =
     "hive" == sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)

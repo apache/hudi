@@ -19,6 +19,8 @@ package org.apache.spark.sql.avro
 
 import org.apache.avro.Schema
 
+import org.apache.hudi.HoodieSparkUtils
+
 import org.apache.spark.sql.types.DataType
 
 /**
@@ -27,7 +29,7 @@ import org.apache.spark.sql.types.DataType
  */
 case class HoodieAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType) {
 
-  private val avroDeserializer = if (org.apache.spark.SPARK_VERSION.startsWith("3.2")) {
+  private val avroDeserializer = if (HoodieSparkUtils.isSpark3_2) {
     // SPARK-34404: As of Spark3.2, there is no AvroDeserializer's constructor with Schema and DataType arguments.
     // So use the reflection to get AvroDeserializer instance.
     val constructor = classOf[AvroDeserializer].getConstructor(classOf[Schema], classOf[DataType], classOf[String])

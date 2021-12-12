@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.convertToCatalystExpressions
 import org.apache.hudi.HoodieSparkUtils.convertToCatalystExpression
-import org.apache.spark.SPARK_VERSION
+
 import org.apache.spark.sql.sources.{And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -71,7 +71,7 @@ class TestConvertFilterToCatalystExpression {
   private def checkConvertFilter(filter: Filter, expectExpression: String): Unit = {
     // [SPARK-25769][SPARK-34636][SPARK-34626][SQL] sql method in UnresolvedAttribute,
     // AttributeReference and Alias don't quote qualified names properly
-    val removeQuotesIfNeed = if (expectExpression != null && SPARK_VERSION.startsWith("3.2")) {
+    val removeQuotesIfNeed = if (expectExpression != null && HoodieSparkUtils.isSpark3_2) {
       expectExpression.replace("`", "")
     } else {
       expectExpression
@@ -88,7 +88,7 @@ class TestConvertFilterToCatalystExpression {
   private def checkConvertFilters(filters: Array[Filter], expectExpression: String): Unit = {
     // [SPARK-25769][SPARK-34636][SPARK-34626][SQL] sql method in UnresolvedAttribute,
     // AttributeReference and Alias don't quote qualified names properly
-    val removeQuotesIfNeed = if (expectExpression != null && SPARK_VERSION.startsWith("3.2")) {
+    val removeQuotesIfNeed = if (expectExpression != null && HoodieSparkUtils.isSpark3_2) {
       expectExpression.replace("`", "")
     } else {
       expectExpression

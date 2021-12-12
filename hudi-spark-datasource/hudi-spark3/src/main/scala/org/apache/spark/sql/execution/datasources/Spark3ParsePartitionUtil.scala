@@ -27,7 +27,6 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.spark3.internal.ReflectUtil
 
-import org.apache.spark.SPARK_VERSION
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.unescapePathName
 import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
@@ -54,7 +53,7 @@ class Spark3ParsePartitionUtil(conf: SQLConf) extends SparkParsePartitionUtil {
       basePaths: Set[Path],
       userSpecifiedDataTypes: Map[String, DataType],
       timeZone: TimeZone): InternalRow = {
-    val dateFormatter = ReflectUtil.getDateFormatter(SPARK_VERSION, timeZone.toZoneId)
+    val dateFormatter = ReflectUtil.getDateFormatter(timeZone.toZoneId)
     val timestampFormatter = TimestampFormatter(timestampPartitionPattern,
       timeZone.toZoneId, isParsing = true)
 

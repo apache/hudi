@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.catalyst.trees
 
+/**
+ * Similar to `LeafLike` in Spark3.2.
+ */
 trait HoodieLeafLike[T <: TreeNode[T]] { self: TreeNode[T] =>
 
   override final def children: Seq[T] = Nil

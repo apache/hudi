@@ -21,4 +21,9 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.HoodieLeafLike
 import org.apache.spark.sql.execution.command.RunnableCommand
 
+/**
+ * Similar to `LeafRunnableCommand` in Spark3.2, `HoodieLeafRunnableCommand` mixed in
+ * `HoodieLeafLike` can avoid subclasses of `RunnableCommand` to override
+ * the `withNewChildrenInternal` method repeatedly.
+ */
 trait HoodieLeafRunnableCommand extends RunnableCommand with HoodieLeafLike[LogicalPlan]

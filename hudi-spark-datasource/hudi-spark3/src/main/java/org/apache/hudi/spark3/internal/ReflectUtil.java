@@ -17,6 +17,7 @@
 
 package org.apache.hudi.spark3.internal;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.spark.sql.catalyst.plans.logical.InsertIntoStatement;
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
 import org.apache.spark.sql.catalyst.util.DateFormatter;
@@ -31,10 +32,10 @@ import java.time.ZoneId;
 
 public class ReflectUtil {
 
-  public static InsertIntoStatement createInsertInto(boolean isSpark30, LogicalPlan table, Map<String, Option<String>> partition, Seq<String> userSpecifiedCols,
+  public static InsertIntoStatement createInsertInto(LogicalPlan table, Map<String, Option<String>> partition, Seq<String> userSpecifiedCols,
                                                      LogicalPlan query, boolean overwrite, boolean ifPartitionNotExists) {
     try {
-      if (isSpark30) {
+      if (HoodieSparkUtils.isSpark3_0()) {
         Constructor<InsertIntoStatement> constructor = InsertIntoStatement.class.getConstructor(
                 LogicalPlan.class, Map.class, LogicalPlan.class, boolean.class, boolean.class);
         return constructor.newInstance(table, partition, query, overwrite, ifPartitionNotExists);
@@ -48,10 +49,10 @@ public class ReflectUtil {
     }
   }
 
-  public static DateFormatter getDateFormatter(String sparkVersion, ZoneId zoneId) {
+  public static DateFormatter getDateFormatter(ZoneId zoneId) {
     try {
       ClassLoader loader = Thread.currentThread().getContextClassLoader();
-      if (sparkVersion.startsWith("3.2")) {
+      if (HoodieSparkUtils.isSpark3_2()) {
         Class clazz = loader.loadClass(DateFormatter.class.getName());
         Method applyMethod = clazz.getDeclaredMethod("apply");
         applyMethod.setAccessible(true);

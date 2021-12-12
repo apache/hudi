@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
-import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 
@@ -138,7 +138,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           // We can do this because under the normal case, we should not allow to update or set
           // the hoodie's meta field in sql statement, it is a system field, cannot set the value
           // by user.
-          if (HoodieSqlUtils.isSpark3) {
+          if (HoodieSparkUtils.isSpark3) {
             val assignmentFieldNames = assignments.map(_.key).map {
               case attr: AttributeReference =>
                 attr.name
