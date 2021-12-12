@@ -38,6 +38,8 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -57,12 +59,15 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static AtomicLong recordIndex = new AtomicLong(1);
 
   private final Path file;
+  private final Schema schema;
   private HoodieHFileConfig hfileConfig;
   private final HoodieWrapperFileSystem fs;
   private final long maxFileSize;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final Option<Schema.Field> schemaKeyFieldID;
+  private final boolean excludeKeyFromPayload;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -71,7 +76,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
   public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                           TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
+                           Option<Schema.Field> schemaKeyFieldID, TaskContextSupplier taskContextSupplier,
+                           boolean populateMetaFields, boolean excludeKeyFromPayload) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -86,6 +92,9 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
+    this.excludeKeyFromPayload = excludeKeyFromPayload;
+    this.schemaKeyFieldID = schemaKeyFieldID;
+    this.schema = schema;
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
         .withCompression(hfileConfig.getCompressionAlgorithm())
@@ -122,7 +131,14 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
-    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord)object);
+    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord) object);
+    if (excludeKeyFromPayload) {
+      ValidationUtils.checkArgument(schemaKeyFieldID.isPresent(),
+          "Failed to exclude key from payload. Unknown key field for the record.");
+      GenericRecord tmp = HoodieAvroUtils.bytesToAvro(value, schema);
+      tmp.put(schemaKeyFieldID.get().pos(), "");
+      value = HoodieAvroUtils.avroToBytes(tmp);
+    }
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 

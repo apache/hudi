@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata;
+package org.apache.hudi.common.table.log.block;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -27,9 +27,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.io.storage.HoodieHFileKeyExcludedReader;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -46,21 +46,21 @@ import java.util.Map;
  * of the Key in the Cell, the redundant key field in the record can be nullified to save on the
  * cost. Such trimmed metadata records need to re-materialized with the key field during deserialization.
  */
-public class HoodieMetadataHFileDataBlock extends HoodieHFileDataBlock {
+public class HoodieHFileKeyExcludedDataBlock extends HoodieHFileDataBlock {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataHFileDataBlock.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieHFileKeyExcludedDataBlock.class);
 
-  public HoodieMetadataHFileDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-                                      boolean readBlockLazily, long position, long blockSize, long blockEndPos,
-                                      Schema readerSchema, Map<HeaderMetadataType, String> header,
-                                      Map<HeaderMetadataType, String> footer, boolean enableInlineReading,
-                                      String keyField) {
+  public HoodieHFileKeyExcludedDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
+                                         boolean readBlockLazily, long position, long blockSize, long blockEndPos,
+                                         Schema readerSchema, Map<HeaderMetadataType, String> header,
+                                         Map<HeaderMetadataType, String> footer, boolean enableInlineReading,
+                                         String keyField) {
     super(logFile, inputStream, content, readBlockLazily, position, blockSize, blockEndPos, readerSchema, header,
         footer, enableInlineReading, keyField);
   }
 
-  public HoodieMetadataHFileDataBlock(@NotNull List<IndexedRecord> records,
-                                      @NotNull Map<HeaderMetadataType, String> header, String keyField) {
+  public HoodieHFileKeyExcludedDataBlock(@NotNull List<IndexedRecord> records,
+                                         @NotNull Map<HeaderMetadataType, String> header, String keyField) {
     super(records, header, keyField);
   }
 
@@ -96,7 +96,7 @@ public class HoodieMetadataHFileDataBlock extends HoodieHFileDataBlock {
   @Override
   protected HoodieHFileReader<IndexedRecord> createHFileReader(final byte[] content,
                                                                final String keyField) throws IOException {
-    return new HoodieMetadataHFileReader<>(content, keyField);
+    return new HoodieHFileKeyExcludedReader<>(content, keyField);
   }
 
   /**
@@ -117,7 +117,7 @@ public class HoodieMetadataHFileDataBlock extends HoodieHFileDataBlock {
   protected HoodieHFileReader<IndexedRecord> createHFileReader(Configuration inlineConf, Path inlinePath,
                                                                CacheConfig cacheConf, FileSystem fileSystem,
                                                                String keyField) throws IOException {
-    return new HoodieMetadataHFileReader<>(inlineConf, inlinePath, cacheConf, fileSystem, keyField);
+    return new HoodieHFileKeyExcludedReader<>(inlineConf, inlinePath, cacheConf, fileSystem, keyField);
   }
 
 }

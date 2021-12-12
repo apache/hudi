@@ -253,8 +253,9 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
-      HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
-    return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
+                                                 HoodieWriteConfig config, Schema schema,
+                                                 Option<Schema.Field> schemaKeyFieldID, TaskContextSupplier taskContextSupplier) throws IOException {
+    return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, schemaKeyFieldID, taskContextSupplier);
   }
 
   private static class IgnoreRecord implements GenericRecord {

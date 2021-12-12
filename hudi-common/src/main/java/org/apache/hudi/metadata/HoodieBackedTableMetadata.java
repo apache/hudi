@@ -279,7 +279,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Option<HoodieBaseFile> basefile = slice.getBaseFile();
     if (basefile.isPresent()) {
       String basefilePath = basefile.get().getPath();
-      baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
+      baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath),
+          metadataConfig.getRecordKeyDeDuplicate(), Option.ofNullable(metadataMetaClient.getTableConfig().getRecordKeyFieldProp()));
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", basefilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));
@@ -342,6 +343,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withBitCaskDiskMapCompressionEnabled(commonConfig.isBitCaskDiskMapCompressionEnabled())
         .withLogBlockTimestamps(validInstantTimestamps)
         .enableFullScan(metadataConfig.enableFullScan())
+        .withKeyExcludeFromPayload(metadataConfig.getRecordKeyDeDuplicate())
         .withPartition(partitionName)
         .build();
 

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,7 +35,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -81,10 +81,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean enableFullScan,
-                                         Option<String> partitionName) {
+                                         Option<String> partitionName, boolean isKeyExcludedFromPayload) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
         instantRange, withOperationField,
-        enableFullScan, partitionName);
+        enableFullScan, partitionName, isKeyExcludedFromPayload);
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
@@ -195,6 +195,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     // operation field default false
     private boolean withOperationField = false;
     protected String partitionName;
+    protected boolean isKeyExcludedFromPayload = HoodieMetadataConfig.RECORDKEY_DE_DUPLICATE.defaultValue();
 
     @Override
     public Builder withFileSystem(FileSystem fs) {
@@ -291,9 +292,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       return this;
     }
 
+    public Builder withKeyExcludeFromPayload(boolean keyExcludeFromPayload) {
+      this.isKeyExcludedFromPayload = keyExcludeFromPayload;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordScanner build() {
-      if (HoodieTableMetadata.isMetadataTable(basePath)) {
+      if (isKeyExcludedFromPayload) {
         return HoodieMetadataMergedLogRecordReader.newBuilder()
             .withFileSystem(fs)
             .withBasePath(basePath)
@@ -309,13 +315,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
             .withBitCaskDiskMapCompressionEnabled(isBitCaskDiskMapCompressionEnabled)
             .withPartition(partitionName)
             .withReverseReader(reverseReader)
+            .withKeyExcludeFromPayload(isKeyExcludedFromPayload)
             .withReadBlocksLazily(readBlocksLazily).build();
       }
       return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
           bufferSize, spillableMapBasePath, instantRange, autoScan,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, enableFullScan,
-          Option.ofNullable(partitionName));
+          Option.ofNullable(partitionName), false);
     }
   }
 }

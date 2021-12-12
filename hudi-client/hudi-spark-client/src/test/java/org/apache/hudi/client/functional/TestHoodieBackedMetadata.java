@@ -413,7 +413,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
-        new CacheConfig(context.getHadoopConf().get()));
+        new CacheConfig(context.getHadoopConf().get()), Option.ofNullable(table.getMetaClient().getTableConfig().getRecordKeyFieldProp()));
     List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
     records.forEach(entry -> {
       if (populateMetaFields) {

@@ -98,8 +98,14 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
       createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
+
+      Option<String> keyField = Option.ofNullable(hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp());
+      Option<Schema.Field> keySchemaFieldID = Option.empty();
+      if (keyField.isPresent()) {
+        keySchemaFieldID = Option.ofNullable(writeSchemaWithMetaFields.getField(keyField.get()));
+      }
       this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config,
-        writeSchemaWithMetaFields, this.taskContextSupplier);
+          writeSchemaWithMetaFields, keySchemaFieldID, this.taskContextSupplier);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }

@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieHFileKeyExcludedDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -43,8 +44,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hudi.metadata.HoodieMetadataHFileDataBlock;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -70,7 +69,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
   private final String keyField;
-  private final boolean keyDeDuplication;
+  private final boolean isKeyExcludedFromPayload;
   private boolean readBlockLazily;
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
@@ -87,12 +86,12 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
     this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, false,
-        HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        HoodieRecord.RECORD_KEY_METADATA_FIELD, false);
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader, boolean enableInlineReading,
-                             String keyField) throws IOException {
+                             String keyField, boolean isKeyExcludedFromPayload) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     this.logFile = logFile;
     this.inputStream = getFSDataInputStream(fsDataInputStream, fs, bufferSize);
@@ -101,7 +100,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.reverseReader = reverseReader;
     this.enableInlineReading = enableInlineReading;
     this.keyField = keyField;
-    this.keyDeDuplication = false;
+    this.isKeyExcludedFromPayload = isKeyExcludedFromPayload;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = logFile.getFileSize();
     }
@@ -259,8 +258,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
               contentPosition, contentLength, blockEndPos, readerSchema, header, footer, keyField);
         }
       case HFILE_DATA_BLOCK:
-        if (HoodieTableMetadata.isMetadataTable(logFile) && keyDeDuplication) {
-          return new HoodieMetadataHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+        if (isKeyExcludedFromPayload) {
+          return new HoodieHFileKeyExcludedDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
               contentPosition, contentLength, blockEndPos, readerSchema,
               header, footer, enableInlineReading, keyField);
         }

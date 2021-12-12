@@ -62,10 +62,11 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               String spillableMapBasePath, Set<String> mergeKeyFilter,
                                               ExternalSpillableMap.DiskMapType diskMapType,
                                               boolean isBitCaskDiskMapCompressionEnabled,
-                                              Option<InstantRange> instantRange, boolean enableFullScan) {
+                                              Option<InstantRange> instantRange, boolean enableFullScan,
+                                              boolean isKeyExcludedFromPayload) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
         spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false,
-        enableFullScan, Option.of(partitionName));
+        enableFullScan, Option.of(partitionName), isKeyExcludedFromPayload);
     this.mergeKeyFilter = mergeKeyFilter;
     if (enableFullScan) {
       performScan();
@@ -228,11 +229,16 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
       return this;
     }
 
+    public Builder withKeyExcludeFromPayload(boolean keyExcludeFromPayload) {
+      this.isKeyExcludedFromPayload = keyExcludeFromPayload;
+      return this;
+    }
+
     @Override
     public HoodieMetadataMergedLogRecordReader build() {
       return new HoodieMetadataMergedLogRecordReader(fs, basePath, partitionName, logFilePaths, readerSchema,
           latestInstantTime, maxMemorySizeInBytes, bufferSize, spillableMapBasePath, mergeKeyFilter,
-          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, enableFullScan);
+          diskMapType, isBitCaskDiskMapCompressionEnabled, instantRange, enableFullScan, isKeyExcludedFromPayload);
     }
   }
 

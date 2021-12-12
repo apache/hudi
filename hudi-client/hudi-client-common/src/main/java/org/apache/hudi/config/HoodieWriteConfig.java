@@ -1050,6 +1050,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
   }
 
+  public boolean shouldMetadataExcludeKeyFromPayload() {
+    return getMetadataConfig().getBooleanOrDefault(HoodieMetadataConfig.RECORDKEY_DE_DUPLICATE);
+  }
+
   /**
    * compaction properties.
    */

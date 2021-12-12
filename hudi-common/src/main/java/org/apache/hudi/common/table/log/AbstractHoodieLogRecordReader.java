@@ -118,6 +118,8 @@ public abstract class AbstractHoodieLogRecordReader {
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
   // Enables full scan of log records
   protected final boolean enableFullScan;
+  // Are keys excluded from payload on disk
+  protected final boolean keyExcludedFromPayload;
   private int totalScannedLogFiles;
   // Progress
   private float progress = 0.0f;
@@ -132,14 +134,14 @@ public abstract class AbstractHoodieLogRecordReader {
                                           int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField) {
     this(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize,
-        instantRange, withOperationField, true, Option.empty());
+        instantRange, withOperationField, true, Option.empty(), false);
   }
 
   protected AbstractHoodieLogRecordReader(FileSystem fs, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime, boolean readBlocksLazily,
                                           boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                           boolean withOperationField, boolean enableFullScan,
-                                          Option<String> partitionName) {
+                                          Option<String> partitionName, boolean keyExcludedFromPayload) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -156,6 +158,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.enableFullScan = enableFullScan;
+    this.keyExcludedFromPayload = keyExcludedFromPayload;
 
     // Key fields when populate meta fields is disabled (that is, virtual keys enabled)
     if (!tableConfig.populateMetaFields()) {
@@ -199,7 +202,7 @@ public abstract class AbstractHoodieLogRecordReader {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
-          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField);
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, !enableFullScan, keyField, keyExcludedFromPayload);
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();

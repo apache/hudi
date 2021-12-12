@@ -137,10 +137,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "determines how to handle such spurious deletes");
 
   public static final ConfigProperty<Boolean> RECORDKEY_DE_DUPLICATE = ConfigProperty
-      .key(METADATA_PREFIX + ".recordkey.deduplicate")
-      .defaultValue(true)
-      .sinceVersion("0.10.0")
-      .withDocumentation("When enabled, Metadata table records will have key de-duplication.");
+      .key("_" + METADATA_PREFIX + ".recordkey.deduplicate")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("When enabled, metadata table records will have the redundant key field excluded from the "
+          + "payload when persisted on disk. when reading back the the payload will be materialized with the "
+          + "key field again. This config is to save on the storage cost for metadata table.");
 
   private HoodieMetadataConfig() {
     super();
@@ -230,6 +232,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       metadataConfig.setValue(POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      return this;
+    }
+
+    public Builder withRecordKeyDeDuplicate(boolean deDuplicateRecordKey) {
+      metadataConfig.setValue(RECORDKEY_DE_DUPLICATE, Boolean.toString(deDuplicateRecordKey));
       return this;
     }
 

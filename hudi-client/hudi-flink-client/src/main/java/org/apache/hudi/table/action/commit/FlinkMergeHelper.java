@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -62,6 +63,8 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
   @Override
   public void runMerge(HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
                        HoodieMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> mergeHandle) throws IOException {
+    final HoodieWriteConfig config = table.getConfig();
+    final String keyField = table.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     final GenericDatumWriter<GenericRecord> gWriter;
     final GenericDatumReader<GenericRecord> gReader;
     Schema readSchema;
@@ -69,7 +72,8 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
-      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
+      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath(),
+          config.shouldMetadataExcludeKeyFromPayload(), Option.ofNullable(keyField)).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
       gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
     } else {
@@ -80,7 +84,8 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
     Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile,
+        mergeHandle.getOldFilePath(), config.shouldMetadataExcludeKeyFromPayload(), Option.ofNullable(keyField));
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {

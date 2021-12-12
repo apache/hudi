@@ -70,11 +70,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   public static final String KEY_MIN_RECORD = "minRecordKey";
   public static final String KEY_MAX_RECORD = "maxRecordKey";
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
+  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, Option<String> keyField) throws IOException {
     this.conf = configuration;
     this.path = path;
     this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
-    this.keyField = Option.empty();
+    this.keyField = keyField;
   }
 
   public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs, String keyField) throws IOException {

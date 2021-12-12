@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata;
+package org.apache.hudi.io.storage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -27,7 +27,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -43,20 +42,21 @@ import java.nio.ByteBuffer;
  *
  * @param <R> Metadata table record type.
  */
-public class HoodieMetadataHFileReader<R extends IndexedRecord> extends HoodieHFileReader<R> {
+public class HoodieHFileKeyExcludedReader<R extends IndexedRecord> extends HoodieHFileReader<R> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataHFileReader.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieHFileKeyExcludedReader.class);
 
-  public HoodieMetadataHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig) throws IOException {
-    super(configuration, path, cacheConfig);
+  public HoodieHFileKeyExcludedReader(Configuration configuration, Path path, CacheConfig cacheConfig,
+                                      Option<String> keyField) throws IOException {
+    super(configuration, path, cacheConfig, keyField);
   }
 
-  public HoodieMetadataHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs,
-                                   String keyField) throws IOException {
+  public HoodieHFileKeyExcludedReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs,
+                                      String keyField) throws IOException {
     super(configuration, path, cacheConfig, inlineFs, keyField);
   }
 
-  public HoodieMetadataHFileReader(final byte[] content, final String keyField) throws IOException {
+  public HoodieHFileKeyExcludedReader(final byte[] content, final String keyField) throws IOException {
     super(content, keyField);
   }
 

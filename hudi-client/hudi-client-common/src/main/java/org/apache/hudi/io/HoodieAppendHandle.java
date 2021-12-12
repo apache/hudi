@@ -361,8 +361,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
         blocks.add(HoodieLogBlockFactory.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header,
-            hoodieTable.getMetaClient().getTableConfig(), config.getMetadataConfig(),
-            hoodieTable.getMetaClient().getBasePath(), config.populateMetaFields()));
+            hoodieTable.getMetaClient().getTableConfig(),
+            config.populateMetaFields(), config.shouldMetadataExcludeKeyFromPayload()));
       }
       if (keysToDelete.size() > 0) {
         blocks.add(new HoodieDeleteBlock(keysToDelete.toArray(new HoodieKey[keysToDelete.size()]), header));

@@ -33,6 +33,7 @@ import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 
@@ -47,7 +48,7 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
     Path path = fileSplit.getPath();
-    reader = new HoodieHFileReader(conf, path, new CacheConfig(conf));
+    reader = new HoodieHFileReader(conf, path, new CacheConfig(conf), Option.empty());
 
     schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);

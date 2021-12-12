@@ -181,6 +181,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
+        .withKeyExcludeFromPayload(config.shouldMetadataExcludeKeyFromPayload())
         .build();
     if (!scanner.iterator().hasNext()) {
       scanner.close();

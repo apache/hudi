@@ -35,6 +35,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
@@ -93,7 +94,7 @@ public class TestHoodieHFileReaderWriter {
     }).map(Arguments::of);
   }
 
-  private HoodieHFileWriter createHFileWriter(Schema avroSchema, boolean populateMetaFields) throws Exception {
+  private HoodieHFileWriter createHFileWriter(Schema avroSchema, Schema.Field keyField, boolean populateMetaFields) throws Exception {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.00001, -1, BloomFilterTypeCode.SIMPLE.name());
     Configuration conf = new Configuration();
     TaskContextSupplier mockTaskContextSupplier = Mockito.mock(TaskContextSupplier.class);
@@ -104,17 +105,19 @@ public class TestHoodieHFileReaderWriter {
 
     HoodieHFileConfig hoodieHFileConfig = new HoodieHFileConfig(conf, Compression.Algorithm.GZ, 1024 * 1024, 120 * 1024 * 1024,
         PREFETCH_ON_OPEN, CACHE_DATA_IN_L1, DROP_BEHIND_CACHE_COMPACTION, filter, HFILE_COMPARATOR);
-    return new HoodieHFileWriter(instantTime, filePath, hoodieHFileConfig, avroSchema, mockTaskContextSupplier, populateMetaFields);
+    return new HoodieHFileWriter(instantTime, filePath, hoodieHFileConfig, avroSchema, Option.of(keyField),
+        mockTaskContextSupplier, populateMetaFields, false);
   }
 
   @ParameterizedTest
   @MethodSource("populateMetaFieldsAndTestAvroWithMeta")
   public void testWriteReadHFile(boolean populateMetaFields, boolean testAvroWithMeta) throws Exception {
-    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
-    HoodieHFileWriter writer = createHFileWriter(avroSchema, populateMetaFields);
+    final Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    final String keyField = "_row_key";
+
+    HoodieHFileWriter writer = createHFileWriter(avroSchema, avroSchema.getField(keyField), populateMetaFields);
     List<String> keys = new ArrayList<>();
     Map<String, GenericRecord> recordMap = new HashMap<>();
-    final String keyField = "_row_key";
     for (int i = 0; i < 100; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
       String key = String.format("%s%04d", "key", i);

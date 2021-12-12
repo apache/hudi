@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.utils.MergingIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieMergeHandle;
@@ -94,7 +95,9 @@ public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O
                                                                                                Schema readSchema, boolean externalSchemaTransformation) throws IOException {
     Path externalFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> bootstrapReader = HoodieFileReaderFactory.<GenericRecord>getFileReader(bootstrapFileConfig, externalFilePath);
+    HoodieFileReader<GenericRecord> bootstrapReader = HoodieFileReaderFactory.<GenericRecord>getFileReader(
+        bootstrapFileConfig, externalFilePath, table.getConfig().shouldMetadataExcludeKeyFromPayload(),
+        Option.ofNullable(table.getMetaClient().getTableConfig().getRecordKeyFieldProp()));
     Schema bootstrapReadSchema;
     if (externalSchemaTransformation) {
       bootstrapReadSchema = bootstrapReader.getSchema();
