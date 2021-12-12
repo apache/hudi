@@ -160,8 +160,8 @@ values={[
 <TabItem value="scala">
 
 ```scala
-# scala
- // No separate create table command required in spark. First batch of write to a table will create the table if not exists. 
+// scala
+// No separate create table command required in spark. First batch of write to a table will create the table if not exists. 
 ```
 
 </TabItem>
@@ -169,7 +169,7 @@ values={[
 
 ```python
 # pyspark
- // No separate create table command required in spark. First batch of write to a table will create the table if not exists.
+# No separate create table command required in spark. First batch of write to a table will create the table if not exists.
 ```
 
 </TabItem>
