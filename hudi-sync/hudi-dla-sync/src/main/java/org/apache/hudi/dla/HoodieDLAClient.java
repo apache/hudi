@@ -289,7 +289,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
 
   @Override
   public void dropPartitionsToTable(String tableName, List<String> partitionsToDelete) {
-    throw new UnsupportedOperationException("Not support dropPartitionsToTables yet.");
+    throw new UnsupportedOperationException("Not support dropPartitionsToTable yet.");
   }
 
   public Map<List<String>, String> scanTablePartitions(String tableName) {

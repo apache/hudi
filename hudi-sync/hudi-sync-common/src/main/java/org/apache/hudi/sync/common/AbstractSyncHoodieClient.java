@@ -159,7 +159,7 @@ public abstract class AbstractSyncHoodieClient {
     }
   }
 
-  public boolean isDeletePartition() {
+  public boolean isDropPartition() {
     try {
       Option<HoodieCommitMetadata> hoodieCommitMetadata;
       if (withOperationField) {

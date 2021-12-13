@@ -165,13 +165,13 @@ public class HiveSyncTool extends AbstractSyncTool {
     // Check if the necessary table exists
     boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
-    // check if isDeletePartition
-    boolean isDeletePartition = hoodieHiveClient.isDeletePartition();
+    // check if isDropPartition
+    boolean isDropPartition = hoodieHiveClient.isDropPartition();
 
     // check if schemaChanged
     boolean schemaChanged = false;
 
-    if (!isDeletePartition) {
+    if (!isDropPartition) {
       // Get the parquet schema for this table looking at the latest commit
       MessageType schema = hoodieHiveClient.getDataSchema();
 
@@ -199,7 +199,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
 
     // Sync the partitions if needed
-    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, isDeletePartition);
+    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, isDropPartition);
     boolean meetSyncConditions = schemaChanged || partitionsChanged;
     if (!cfg.isConditionalSync || meetSyncConditions) {
       hoodieHiveClient.updateLastCommitTimeSynced(tableName);
