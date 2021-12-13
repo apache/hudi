@@ -338,7 +338,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return new FileStatus[0];
       }
     }
-    throw new HoodieIOException(String.format("Failed to list partition path: %s", partitionPath));
   }
 
   /**
