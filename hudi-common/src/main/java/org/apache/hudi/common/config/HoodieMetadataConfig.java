@@ -125,7 +125,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key(METADATA_PREFIX + ".populate.meta.fields")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("0.10.0")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
 
@@ -138,7 +138,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> EXCLUDE_KEY_FROM_PAYLOAD = ConfigProperty
       .key("_" + METADATA_PREFIX + ".exclude.key.from.payload")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("When enabled, metadata table records will have the redundant key field excluded from the "
           + "payload when persisted on disk. when reading back the the payload will be materialized with the "
