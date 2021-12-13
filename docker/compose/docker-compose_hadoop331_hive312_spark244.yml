@@ -79,7 +79,7 @@ services:
       - historyserver:/hadoop/yarn/timeline
 
   hive-metastore-postgresql:
-    image: bde2020/hive-metastore-postgresql:2.3.0
+    image: bde2020/hive-metastore-postgresql:3.1.0
     volumes:
       - hive-metastore-postgresql:/var/lib/postgresql
     hostname: hive-metastore-postgresql
