@@ -51,7 +51,8 @@ public class LocalProcessLockProvider implements LockProvider<ReentrantReadWrite
   public LocalProcessLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     TypedProperties typedProperties = lockConfiguration.getConfig();
     maxWaitTimeMillis = (typedProperties.containsKey(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY)
-        ? lockConfiguration.getConfig().getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY) : 0);
+        ? lockConfiguration.getConfig().getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY) :
+        LockConfiguration.DEFAULT_ACQUIRE_LOCK_WAIT_TIMEOUT_MS);
   }
 
   @Override
@@ -66,18 +67,7 @@ public class LocalProcessLockProvider implements LockProvider<ReentrantReadWrite
 
   @Override
   public boolean tryLock() {
-    LOG.info(getLogMessage(LockState.ACQUIRING));
-    if (LOCK.writeLock().isHeldByCurrentThread()) {
-      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
-    }
-    final boolean isLockAcquired;
-    try {
-      isLockAcquired = LOCK.writeLock().tryLock(maxWaitTimeMillis, TimeUnit.MILLISECONDS);
-    } catch (InterruptedException e) {
-      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_ACQUIRE));
-    }
-    LOG.info(getLogMessage(isLockAcquired ? LockState.ACQUIRED : LockState.FAILED_TO_ACQUIRE));
-    return isLockAcquired;
+    return tryLock(maxWaitTimeMillis, TimeUnit.MILLISECONDS);
   }
 
   @Override
