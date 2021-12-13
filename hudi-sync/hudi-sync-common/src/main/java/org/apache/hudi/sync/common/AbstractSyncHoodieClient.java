@@ -167,12 +167,9 @@ public abstract class AbstractSyncHoodieClient {
       } else {
         hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
       }
-      if (hoodieCommitMetadata != null) {
-        if (hoodieCommitMetadata.getOperationType().equals(WriteOperationType.DELETE_PARTITION)) {
-          return true;
-        }
-      } else {
-        return false;
+
+      if (hoodieCommitMetadata != null && hoodieCommitMetadata.getOperationType().equals(WriteOperationType.DELETE_PARTITION)) {
+        return true;
       }
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read data schema", e);
