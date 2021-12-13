@@ -28,7 +28,9 @@ import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -67,20 +69,31 @@ public class TestLocalProcessLockProvider {
   @Test
   public void testLockReAcquisitionByDifferentThread() {
     LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    final AtomicBoolean writer2Completed = new AtomicBoolean(false);
 
     // Main test thread
     assertDoesNotThrow(() -> {
       localProcessLockProvider.lock();
     });
 
-    // Another writer thread
+    // Another writer thread in parallel, should block
+    // and later acquire the lock once it is released
     Thread writer2 = new Thread(new Runnable() {
       @Override
       public void run() {
-        assertThrows(HoodieLockException.class, () -> {
+        assertDoesNotThrow(() -> {
           localProcessLockProvider.lock();
         });
+        assertDoesNotThrow(() -> {
+          localProcessLockProvider.unlock();
+        });
+        writer2Completed.set(true);
       }
+    });
+    writer2.start();
+
+    assertDoesNotThrow(() -> {
+      localProcessLockProvider.unlock();
     });
 
     try {
@@ -88,10 +101,7 @@ public class TestLocalProcessLockProvider {
     } catch (InterruptedException e) {
       //
     }
-
-    assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
-    });
+    Assertions.assertTrue(writer2Completed.get());
   }
 
   @Test
@@ -127,18 +137,17 @@ public class TestLocalProcessLockProvider {
   @Test
   public void testTryLockReAcquisitionByDifferentThread() {
     LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    final AtomicBoolean writer2Completed = new AtomicBoolean(false);
 
     // Main test thread
     Assertions.assertTrue(localProcessLockProvider.tryLock());
 
     // Another writer thread
-    Thread writer2 = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        Assertions.assertFalse(localProcessLockProvider.tryLock());
-      }
+    Thread writer2 = new Thread(() -> {
+      Assertions.assertFalse(localProcessLockProvider.tryLock(100L, TimeUnit.MILLISECONDS));
+      writer2Completed.set(true);
     });
-
+    writer2.start();
     try {
       writer2.join();
     } catch (InterruptedException e) {
@@ -148,6 +157,65 @@ public class TestLocalProcessLockProvider {
     assertDoesNotThrow(() -> {
       localProcessLockProvider.unlock();
     });
+    Assertions.assertTrue(writer2Completed.get());
+  }
+
+  @Test
+  public void testTryLockAcquisitionBeforeTimeOutFromTwoThreads() {
+    final LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    final int threadCount = 3;
+    final long awaitMaxTimeoutMs = 2000L;
+    final CountDownLatch latch = new CountDownLatch(threadCount);
+    final AtomicBoolean writer1Completed = new AtomicBoolean(false);
+    final AtomicBoolean writer2Completed = new AtomicBoolean(false);
+
+    // Let writer1 get the lock first, then wait for others
+    // to join the sync up point.
+    Thread writer1 = new Thread(() -> {
+      Assertions.assertTrue(localProcessLockProvider.tryLock());
+      latch.countDown();
+      try {
+        latch.await(awaitMaxTimeoutMs, TimeUnit.MILLISECONDS);
+        // Following sleep is to make sure writer2 attempts
+        // to try lock and to get bocked on the lock which
+        // this thread is currently holding.
+        Thread.sleep(50);
+      } catch (InterruptedException e) {
+        //
+      }
+      assertDoesNotThrow(() -> {
+        localProcessLockProvider.unlock();
+      });
+      writer1Completed.set(true);
+    });
+    writer1.start();
+
+    // Writer2 will block on trying to acquire the lock
+    // and will eventually get the lock before the timeout.
+    Thread writer2 = new Thread(() -> {
+      latch.countDown();
+      Assertions.assertTrue(localProcessLockProvider.tryLock(awaitMaxTimeoutMs, TimeUnit.MILLISECONDS));
+      assertDoesNotThrow(() -> {
+        localProcessLockProvider.unlock();
+      });
+      writer2Completed.set(true);
+    });
+    writer2.start();
+
+    // Let writer1 and writer2 wait at the sync up
+    // point to make sure they run in parallel and
+    // one get blocked by the other.
+    latch.countDown();
+    try {
+      writer1.join();
+      writer2.join();
+    } catch (InterruptedException e) {
+      //
+    }
+
+    // Make sure both writers actually completed good
+    Assertions.assertTrue(writer1Completed.get());
+    Assertions.assertTrue(writer2Completed.get());
   }
 
   @Test
