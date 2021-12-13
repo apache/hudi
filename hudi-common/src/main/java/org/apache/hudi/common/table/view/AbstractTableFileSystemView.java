@@ -336,6 +336,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (!metaClient.getFs().exists(partitionPath)) {
         metaClient.getFs().mkdirs(partitionPath);
         return new FileStatus[0];
+      } else {
+        // in case the partition path was created by another caller
+        return metaClient.getFs().listStatus(partitionPath);
       }
     }
   }
