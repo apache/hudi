@@ -69,7 +69,7 @@ extends RunnableCommand {
     val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
     val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
-    val partitionsToDelete = normalizedSpecs.map { spec =>
+    val partitionsToDrop = normalizedSpecs.map { spec =>
       hoodieCatalogTable.partitionFields.map{ partitionColumn =>
         val encodedPartitionValue = if (enableEncodeUrl) {
           PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
@@ -91,7 +91,7 @@ extends RunnableCommand {
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         TABLE_TYPE.key -> hoodieCatalogTable.tableTypeName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
-        PARTITIONS_TO_DELETE.key -> partitionsToDelete,
+        PARTITIONS_TO_DELETE.key -> partitionsToDrop,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
         PARTITIONPATH_FIELD.key -> partitionFields,
