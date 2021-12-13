@@ -735,14 +735,17 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val records2 = recordsToStrings(dataGen.generateUpdates("002", 5)).toList
-    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-      .withColumn("shortDecimal", lit(new java.math.BigDecimal(s"2090.0000"))) // create decimalType(8, 4)
+    // update the value of shortDecimal
+    val inputDF2 = inputDF1.withColumn("shortDecimal", lit(new java.math.BigDecimal(s"3090.0000")))
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
-    assert(spark.read.format("hudi").load(basePath).count() == 5)
+    val readResult = spark.read.format("hudi").load(basePath)
+    assert(readResult.count() == 5)
+    // compare the test result
+    assertEquals(inputDF2.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","),
+      readResult.sort("_row_key").select("shortDecimal").collect().map(_.getDecimal(0).toPlainString).mkString(","))
   }
 }

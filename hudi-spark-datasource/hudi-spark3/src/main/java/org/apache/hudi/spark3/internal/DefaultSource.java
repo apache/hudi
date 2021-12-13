@@ -25,6 +25,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.BaseDefaultSource;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
 
+import org.apache.hudi.util.DataTypeUtils;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableProvider;
 import org.apache.spark.sql.connector.expressions.Transform;
@@ -38,6 +41,8 @@ import java.util.Map;
  * This class is only compatible with datasource V2 API in Spark 3.
  */
 public class DefaultSource extends BaseDefaultSource implements TableProvider {
+
+  private static final Logger LOG = LogManager.getLogger(DefaultSource.class);
 
   @Override
   public StructType inferSchema(CaseInsensitiveStringMap options) {
@@ -53,6 +58,15 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
         HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
     boolean arePartitionRecordsSorted = Boolean.parseBoolean(properties.getOrDefault(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED,
         Boolean.toString(HoodieInternalConfig.DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED)));
+
+    // Now by default ParquetWriteSupport will write DecimalType to parquet as int32/int64 when the scale of decimalType < Decimal.MAX_LONG_DIGITS(),
+    // but AvroParquetReader which used by HoodieParquetReader cannot support read int32/int64 as DecimalType.
+    // try to find current schema whether contains that DecimalType, and auto set the value of "hoodie.parquet.writeLegacyFormat.enabled"
+    if (DataTypeUtils.foundSmallPrecisionDecimalType(schema)
+        && !Boolean.parseBoolean(properties.getOrDefault("hoodie.parquet.writeLegacyFormat.enabled", "false"))) {
+      properties.put("hoodie.parquet.writeLegacyFormat.enabled", "true");
+      LOG.warn("Small Decimal Type found in current schema, auto set the value of hoodie.parquet.writeLegacyFormat.enabled to true");
+    }
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(properties.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()), path, tblName, properties);
     return new HoodieDataSourceInternalTable(instantTime, config, schema, getSparkSession(),

@@ -24,15 +24,8 @@ import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
-import org.apache.spark.sql.types.ArrayType;
-import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.types.Decimal;
-import org.apache.spark.sql.types.DecimalType;
-import org.apache.spark.sql.types.MapType;
-import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
-import java.util.Arrays;
 import java.util.HashMap;
 
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
@@ -53,30 +46,11 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
   public HoodieRowParquetWriteSupport(Configuration conf, StructType structType, BloomFilter bloomFilter, HoodieWriteConfig writeConfig) {
     super();
     Configuration hadoopConf = new Configuration(conf);
-    hadoopConf.set("spark.sql.parquet.writeLegacyFormat", findSmallPrecisionDecimalType(structType) ? "true" : writeConfig.parquetWriteLegacyFormatEnabled());
+    hadoopConf.set("spark.sql.parquet.writeLegacyFormat", writeConfig.parquetWriteLegacyFormatEnabled());
     hadoopConf.set("spark.sql.parquet.outputTimestampType", writeConfig.parquetOutputTimestampType());
     this.hadoopConf = hadoopConf;
     setSchema(structType, hadoopConf);
     this.bloomFilter = bloomFilter;
-  }
-
-  // Now by default ParquetWriteSupport will write DecimalType to parquet as int32/int64 when the scale of decimalType < Decimal.MAX_LONG_DIGITS(),
-  // but AvroParquetReader which used by HoodieParquetReader cannot support read int32/int64 as DecimalType.
-  // try to find current sparkType whether contains that DecimalType.
-  private boolean findSmallPrecisionDecimalType(DataType sparkType) {
-    if (sparkType instanceof StructType) {
-      StructField[] fields = ((StructType) sparkType).fields();
-      return Arrays.stream(fields).anyMatch(f -> findSmallPrecisionDecimalType(f.dataType()));
-    } else if (sparkType instanceof MapType) {
-      MapType map = (MapType) sparkType;
-      return findSmallPrecisionDecimalType(map.keyType()) || findSmallPrecisionDecimalType(map.valueType());
-    } else if (sparkType instanceof ArrayType) {
-      return findSmallPrecisionDecimalType(((ArrayType) sparkType).elementType());
-    } else if (sparkType instanceof DecimalType) {
-      DecimalType decimalType = (DecimalType) sparkType;
-      return decimalType.scale() < Decimal.MAX_LONG_DIGITS();
-    }
-    return false;
   }
 
   public Configuration getHadoopConf() {
