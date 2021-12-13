@@ -127,15 +127,15 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   }
 
   @Override
-  public void dropPartitionsToTable(String tableName, List<String> dropPartitions) {
-    if (dropPartitions.isEmpty()) {
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    if (partitionsToDrop.isEmpty()) {
       LOG.info("No partitions to drop for " + tableName);
       return;
     }
 
-    LOG.info("Drop partitions " + dropPartitions.size() + " on " + tableName);
+    LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
     try {
-      for (String dropPartition : dropPartitions) {
+      for (String dropPartition : partitionsToDrop) {
         metaStoreClient.dropPartition(config.databaseName, tableName, dropPartition, false);
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }

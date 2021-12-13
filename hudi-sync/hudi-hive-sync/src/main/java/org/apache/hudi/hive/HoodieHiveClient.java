@@ -126,8 +126,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    * Partition path has changed - drop the following partitions.
    */
   @Override
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDelete) {
-    ddlExecutor.dropPartitionsToTable(tableName, partitionsToDelete);
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    ddlExecutor.dropPartitionsToTable(tableName, partitionsToDrop);
   }
 
   /**
@@ -162,7 +162,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
    * Generate a list of PartitionEvent based on the changes required.
    */
-  List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, boolean isDeletePartition) {
+  List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, boolean isDropPartition) {
     Map<String, String> paths = new HashMap<>();
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
@@ -178,7 +178,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
 
-      if (isDeletePartition) {
+      if (isDropPartition) {
         events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
       } else {
         if (!storagePartitionValues.isEmpty()) {

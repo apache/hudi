@@ -161,14 +161,15 @@ public abstract class AbstractSyncHoodieClient {
 
   public boolean isDeletePartition() {
     try {
-      HoodieCommitMetadata hoodieCommitMetadata;
+      Option<HoodieCommitMetadata> hoodieCommitMetadata;
       if (withOperationField) {
         hoodieCommitMetadata = new TableSchemaResolver(metaClient, true).getLatestCommitMetadata();
       } else {
         hoodieCommitMetadata = new TableSchemaResolver(metaClient).getLatestCommitMetadata();
       }
 
-      if (hoodieCommitMetadata != null && hoodieCommitMetadata.getOperationType().equals(WriteOperationType.DELETE_PARTITION)) {
+      if (hoodieCommitMetadata.isPresent()
+          && hoodieCommitMetadata.get().getOperationType().equals(WriteOperationType.DELETE_PARTITION)) {
         return true;
       }
     } catch (Exception e) {

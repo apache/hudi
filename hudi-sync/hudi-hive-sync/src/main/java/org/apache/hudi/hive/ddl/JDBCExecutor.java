@@ -143,8 +143,10 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
   }
 
   @Override
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDelete) {
-    throw new UnsupportedOperationException("No support for dropPartitionsToTable");
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    partitionsToDrop.stream()
+        .map(partition -> String.format("ALTER TABLE `%s` DROP PARTITION (%s)", tableName, partition))
+        .forEach(this::runSQL);
   }
 
   @Override

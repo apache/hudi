@@ -338,12 +338,12 @@ public class HiveSyncTool extends AbstractSyncTool {
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
    */
-  private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, boolean isDeletePartition) {
+  private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, boolean isDropPartition) {
     boolean partitionsChanged;
     try {
       List<Partition> hivePartitions = hoodieHiveClient.scanTablePartitions(tableName);
       List<PartitionEvent> partitionEvents =
-          hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, isDeletePartition);
+          hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, isDropPartition);
 
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
       if (!newPartitions.isEmpty()) {
