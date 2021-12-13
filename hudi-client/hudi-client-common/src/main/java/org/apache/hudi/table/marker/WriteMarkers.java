@@ -87,8 +87,8 @@ public abstract class WriteMarkers implements Serializable {
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Deleting marker directory");
       deleteMarkerDir(context, parallelism);
-    } catch (HoodieIOException ioe) {
-      LOG.warn("Error deleting marker directory for instant " + instantTime, ioe);
+    } catch (Exception e) {
+      LOG.warn("Error deleting marker directory for instant " + instantTime, e);
     }
   }
 
