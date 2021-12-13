@@ -24,12 +24,12 @@ services:
     environment:
       - CLUSTER_NAME=hudi_hadoop331_hive312_spark244
     ports:
-      - "50070:50070"
+      - "9870:9870"
       - "8020:8020"
     env_file:
       - ./hadoop.env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://namenode:50070"]
+      test: ["CMD", "curl", "-f", "http://namenode:9870"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -96,7 +96,7 @@ services:
       - ./hadoop.env
     command: /opt/hive/bin/hive --service metastore
     environment:
-      SERVICE_PRECONDITION: "namenode:50070 hive-metastore-postgresql:5432"
+      SERVICE_PRECONDITION: "namenode:9870 hive-metastore-postgresql:5432"
     ports:
       - "9083:9083"
     healthcheck:
