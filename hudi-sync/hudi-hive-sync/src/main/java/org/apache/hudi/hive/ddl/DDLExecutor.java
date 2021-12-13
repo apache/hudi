@@ -82,12 +82,12 @@ public interface DDLExecutor {
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
   /**
-   * Remove partitions for a given table.
+   * Drop partitions for a given table.
    *
    * @param tableName
-   * @param partitionsToDelete
+   * @param partitionsToDrop
    */
-  public void dropPartitionsToTable(String tableName, List<String> partitionsToDelete);
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
 
   public void close();
 }

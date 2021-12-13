@@ -100,7 +100,7 @@ public abstract class AbstractSyncHoodieClient {
 
   public abstract void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
-  public abstract void dropPartitionsToTable(String tableName, List<String> partitionsToDelete);
+  public abstract void dropPartitionsToTable(String tableName, List<String> partitionsToDrop);
 
   public  void updateTableProperties(String tableName, Map<String, String> tableProperties) {}
 
