@@ -522,7 +522,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Test arguments - Table type, populate meta fields, exclude key from payload.
    */
-  public static List<Arguments> testMetadataRecordKeyDeDuplicationArgs() {
+  public static List<Arguments> testMetadataRecordKeyExcludeFromPayloadArgs() {
     return asList(
         Arguments.of(COPY_ON_WRITE, true, true),
         Arguments.of(COPY_ON_WRITE, true, false),
@@ -543,9 +543,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * 3. Verify table services like compaction benefit from record key deduplication feature.
    */
   @ParameterizedTest
-  @MethodSource("testMetadataRecordKeyDeDuplicationArgs")
-  public void testMetadataRecordKeyDeDuplication(final HoodieTableType tableType, final boolean enableMetaFields,
-                                                 final boolean excludeKeyFromPayload) throws Exception {
+  @MethodSource("testMetadataRecordKeyExcludeFromPayloadArgs")
+  public void testMetadataRecordKeyExcludeFromPayload(final HoodieTableType tableType, final boolean enableMetaFields,
+                                                      final boolean excludeKeyFromPayload) throws Exception {
     initPath();
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
@@ -571,13 +571,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Compaction has not yet kicked in. Verify all the log files
     // for the metadata records persisted on disk as per the config.
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyDeDuplicatedLogFiles(table, metadataMetaClient, "0000001",
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000001",
           enableMetaFields, excludeKeyFromPayload);
     }, "Metadata table should have valid log files!");
 
     // Verify no base file created yet.
     assertThrows(IllegalStateException.class, () -> {
-      verifyMetadataRecordKeyDeDuplicatedBaseFiles(table, enableMetaFields, excludeKeyFromPayload);
+      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields, excludeKeyFromPayload);
     }, "Metadata table should not have a base file yet!");
 
     // 3rd commit
@@ -586,13 +586,13 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Compaction should be triggered by now. Let's verify the log files
     // if any for the metadata records persisted on disk as per the config.
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyDeDuplicatedLogFiles(table, metadataMetaClient, "0000002",
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000002",
           enableMetaFields, excludeKeyFromPayload);
     }, "Metadata table should have valid log files!");
 
     // Verify the base file created by the just completed compaction.
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyDeDuplicatedBaseFiles(table, enableMetaFields, excludeKeyFromPayload);
+      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields, excludeKeyFromPayload);
     }, "Metadata table should have a valid base file!");
 
     // 3 more commits to trigger one more compaction, along with a clean
@@ -602,11 +602,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000007", UPSERT);
 
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyDeDuplicatedLogFiles(table, metadataMetaClient, "7", enableMetaFields, excludeKeyFromPayload);
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "7", enableMetaFields, excludeKeyFromPayload);
     }, "Metadata table should have valid log files!");
 
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyDeDuplicatedBaseFiles(table, enableMetaFields, excludeKeyFromPayload);
+      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields, excludeKeyFromPayload);
     }, "Metadata table should have a valid base file!");
 
     validateMetadata(testTable);
@@ -624,9 +624,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param enableKeyDeDuplication - Enable key deduplication for the table records
    * @throws IOException
    */
-  private void verifyMetadataRecordKeyDeDuplicatedLogFiles(HoodieTable table, HoodieTableMetaClient metadataMetaClient,
-                                                           String latestCommitTimestamp,
-                                                           boolean enableMetaFields, boolean enableKeyDeDuplication) throws IOException {
+  private void verifyMetadataRecordKeyExcludeFromPayloadLogFiles(HoodieTable table, HoodieTableMetaClient metadataMetaClient,
+                                                                 String latestCommitTimestamp,
+                                                                 boolean enableMetaFields, boolean enableKeyDeDuplication) throws IOException {
     table.getHoodieView().sync();
 
     // Compaction should not be triggered yet. Let's verify no base file
@@ -759,8 +759,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param enableMetaFields       - Enable meta fields
    * @param enableKeyDeDuplication - Enable key deduplication
    */
-  private void verifyMetadataRecordKeyDeDuplicatedBaseFiles(HoodieTable table, boolean enableMetaFields,
-                                                            boolean enableKeyDeDuplication) throws IOException {
+  private void verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(HoodieTable table, boolean enableMetaFields,
+                                                                  boolean enableKeyDeDuplication) throws IOException {
     table.getHoodieView().sync();
     List<FileSlice> fileSlices = table.getSliceView()
         .getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
