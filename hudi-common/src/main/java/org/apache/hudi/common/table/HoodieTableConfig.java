@@ -169,9 +169,9 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Key Generator class property for the hoodie table");
 
   public static final ConfigProperty<String> TimeLine_UTC_KEY = ConfigProperty
-          .key("hoodie.table.timeline.useutc")
-          .defaultValue("false")
-          .withDocumentation("timeline is or not utc timezone");
+      .key("hoodie.table.timeline.useutc")
+      .defaultValue("false")
+      .withDocumentation("timeline is or not utc timezone");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
