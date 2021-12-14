@@ -146,6 +146,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
   public static class Builder extends HoodieMergedLogRecordScanner.Builder {
     private Set<String> mergeKeyFilter = Collections.emptySet();
     private boolean enableFullScan = HoodieMetadataConfig.ENABLE_FULL_SCAN_LOG_FILES.defaultValue();
+    private boolean isKeyExcludedFromPayload = HoodieMetadataConfig.EXCLUDE_KEY_FROM_PAYLOAD.defaultValue();
     private boolean enableInlineReading;
 
     @Override

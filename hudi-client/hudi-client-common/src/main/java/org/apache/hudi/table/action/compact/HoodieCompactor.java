@@ -48,6 +48,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -164,10 +166,17 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
 
     List<String> logFiles = operation.getDeltaFileNames().stream().map(
-        p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
-        .collect(toList());
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p)
+            .toString()).collect(toList());
+
+    // Compactor could be running for the data table or for the internal metadata table.
+    // Build the merged log record scanner accordingly.
+    HoodieMergedLogRecordScanner.Builder builder = HoodieMergedLogRecordScanner.newBuilder();
+    if (HoodieTableMetadata.isMetadataTable(metaClient.getBasePath())) {
+      builder = HoodieMetadataMergedLogRecordReader.newBuilder()
+          .withKeyExcludeFromPayload(config.shouldMetadataExcludeKeyFromPayload());
+    }
+    builder.withFileSystem(fs)
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
@@ -180,9 +189,9 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
         .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withOperationField(config.allowOperationMetadataField())
-        .withPartition(operation.getPartitionPath())
-        .withKeyExcludeFromPayload(config.shouldMetadataExcludeKeyFromPayload())
-        .build();
+        .withPartition(operation.getPartitionPath());
+
+    HoodieMergedLogRecordScanner scanner = builder.build();
     if (!scanner.iterator().hasNext()) {
       scanner.close();
       return new ArrayList<>();
