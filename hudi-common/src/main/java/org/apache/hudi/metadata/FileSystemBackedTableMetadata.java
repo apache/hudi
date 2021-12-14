@@ -139,4 +139,9 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   public void close() throws Exception {
     // no-op
   }
+
+  @Override
+  public void reset() {
+    // no-op
+  }
 }

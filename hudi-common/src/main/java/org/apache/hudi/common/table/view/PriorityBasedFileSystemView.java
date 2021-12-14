@@ -253,8 +253,8 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public void sync() {
-    preferredView.reset();
-    secondaryView.reset();
+    preferredView.sync();
+    secondaryView.sync();
   }
 
   @Override
