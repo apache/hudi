@@ -364,7 +364,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
           blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockType(), recordList, header));
         } else {
           final String keyField = hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
-          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header, keyField));
+          blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockType(), recordList, header, keyField));
         }
       }
       if (keysToDelete.size() > 0) {
