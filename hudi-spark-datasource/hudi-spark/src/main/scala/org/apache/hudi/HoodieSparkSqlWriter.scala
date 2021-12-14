@@ -397,6 +397,7 @@ object HoodieSparkSqlWriter {
         .setKeyGeneratorClassProp(keyGenProp)
         .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
         .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
+        .setUTCTimeZone(hoodieConfig.getBoolean(HoodieTableConfig.TimeLine_UTC_KEY))
         .initTable(sparkContext.hadoopConfiguration, path)
     }
 

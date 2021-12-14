@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -166,6 +167,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
+
+  public static final ConfigProperty<String> TimeLine_UTC_KEY = ConfigProperty
+          .key("hoodie.table.timeline.useutc")
+          .defaultValue("false")
+          .withDocumentation("timeline is or not utc timezone");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -314,6 +320,10 @@ public class HoodieTableConfig extends HoodieConfig {
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
         // Use the default bootstrap index class.
         hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, getDefaultBootstrapIndexClass(properties));
+      }
+      if (hoodieConfig.contains(TimeLine_UTC_KEY)) {
+        // set commit timeline timezone to utc
+        HoodieInstantTimeGenerator.setIsUTCTimezone(hoodieConfig.getBoolean(TimeLine_UTC_KEY));
       }
       hoodieConfig.getProps().store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
