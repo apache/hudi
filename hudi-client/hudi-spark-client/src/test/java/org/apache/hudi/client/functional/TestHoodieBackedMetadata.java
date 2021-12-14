@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -557,7 +558,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(tableType, writeConfig);
 
     // 2nd commit
-    doWriteOperation(testTable, "1", INSERT);
+    doWriteOperation(testTable, "0000001", INSERT);
 
     final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
         .setConf(hadoopConf)
@@ -570,7 +571,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Compaction has not yet kicked in. Verify all the log files
     // for the metadata records persisted on disk as per the config.
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyDeDuplicatedLogFiles(table, metadataMetaClient, "1",
+      verifyMetadataRecordKeyDeDuplicatedLogFiles(table, metadataMetaClient, "0000001",
           enableMetaFields, enableKeyDeDuplication);
     }, "Metadata table should have valid log files!");
 
@@ -580,12 +581,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }, "Metadata table should not have a base file yet!");
 
     // 3rd commit
-    doWriteOperation(testTable, "2", UPSERT);
+    doWriteOperation(testTable, "0000002", UPSERT);
 
     // Compaction should be triggered by now. Let's verify the log files
     // if any for the metadata records persisted on disk as per the config.
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyDeDuplicatedLogFiles(table, metadataMetaClient, "2",
+      verifyMetadataRecordKeyDeDuplicatedLogFiles(table, metadataMetaClient, "0000002",
           enableMetaFields, enableKeyDeDuplication);
     }, "Metadata table should have valid log files!");
 
@@ -595,10 +596,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }, "Metadata table should have a valid base file!");
 
     // 3 more commits to trigger one more compaction, along with a clean
-    doWriteOperation(testTable, "4", UPSERT);
-    doWriteOperation(testTable, "5", UPSERT);
-    doClean(testTable, "6", Arrays.asList("4"));
-    doWriteOperation(testTable, "7", UPSERT);
+    doWriteOperation(testTable, "0000004", UPSERT);
+    doWriteOperation(testTable, "0000005", UPSERT);
+    doClean(testTable, "0000006", Arrays.asList("0000004"));
+    doWriteOperation(testTable, "0000007", UPSERT);
 
     assertDoesNotThrow(() -> {
       verifyMetadataRecordKeyDeDuplicatedLogFiles(table, metadataMetaClient, "7", enableMetaFields, enableKeyDeDuplication);
@@ -741,6 +742,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertDoesNotThrow(() -> {
       logRecordReader.scan();
     }, "Metadata log records materialization failed");
+
+    for (Map.Entry<String, HoodieRecord<? extends HoodieRecordPayload>> entry : logRecordReader.getRecords().entrySet()) {
+      assertFalse(entry.getKey().isEmpty());
+      assertFalse(entry.getValue().getRecordKey().isEmpty());
+      assertEquals(entry.getKey(), entry.getValue().getRecordKey());
+    }
   }
 
   /**
