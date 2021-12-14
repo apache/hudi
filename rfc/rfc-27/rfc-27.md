@@ -92,7 +92,7 @@ So, high level requirement for this column_stats partition is (pertaining to thi
 To cater to the above requirement, we plan to encode column name, partition path and file name to the keys in HFile. 
 Since HFile supports efficient range/prefix search, our look up should be very fast.
 
-![Column Stats Partition](col_stats1.png)
+![Column Stats Partition](col_stats.png)
 
 We plan to generate unique and random and unique hash IDs for all 3 components
 - ColumnID :
@@ -281,6 +281,44 @@ in the WriteStatus.
 
 ### Index integrations with query engines
 
+#### Spark
+We already added support for z-ordering with 0.10.0. So, we will re-use data skipping code paths from there. 
+
+Here is the high level flow of z-ordering:
+##### Write path
+1. Sort the data (Z-order/Hilbert/Linear)
+    - Being triggered by Clustering (right now)
+    - RDDSpatialCurveOptimizationSortPartitioner
+2. Build "Col Stats" Index (.hoodie/.colstatsindex)
+    - Upon Clustering completion we invoke ColumnStatsIndexHelper.updateColumnStatsIndexFor
+
+##### Read path
+1. (Spark SQL) Asks for a list of files to fetch data from
+    - HoodieFileIndex.listFiles
+2. HoodieFileIndex will read Col Stats Index and apply the data predicates to fetch list of candidate files from it
+3. Returns it back to Spark
+
+Given this, lets see how we can integrate the new column_stats partition.
+
+##### Z-order Write path
+1. Sort the data (Z-order/Hilbert/Linear)
+    - Being triggered by Clustering (right now)
+    - RDDSpatialCurveOptimizationSortPartitioner
+2. Do not do anything. 
+    - Upon Clustering completion, replace commit will get applied to metadata table by default if metadata is enabled. 
+
+##### Read path
+1. (Spark SQL) Asks for a list of files to fetch data from
+    - HoodieFileIndex.listFiles
+2. HoodieFileIndex will read Col Stats partition in metadata table and apply the data predicates to fetch list of candidate files from it
+3. Returns it back to Spark
+
+One caveat:
+But we can't get rid of z-order index completely though right away. If metadata table is not build out yet or has entered 
+an inconsistent state and is not usable, we have to go the existing way of building an index at the end of z-order clustering.
+
+### Predicate filtering 
+
 #### How to apply query predicates in Hudi?
 Query predicates are normally constructed in a tree like structure so this will follow same pattern. The proposal is 
 create a mapping utility from “Engine” query predicates to a HudiExpression. This way filtering logic is engine agnostic
@@ -390,9 +428,6 @@ being compared
 
 We can use this information and the SearchArgument to generate our HudiExpression. Then in HoodieParquetInputFormat.listStatus() 
 after fetching files from FileSystemView for the remaining file groups we can apply HudieExpression using column metadata.
-
-#### Spark
-To be filled.
 
 #### Presto
 To be filled. 
