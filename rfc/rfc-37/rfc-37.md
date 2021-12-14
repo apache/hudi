@@ -28,22 +28,26 @@
 JIRA: https://issues.apache.org/jira/browse/HUDI-2703
 
 ## Abstract
-Hudi maintains several indices to locate/map incoming records to file groups during writes. Most commonly 
-used record index is the HoodieBloomIndex. Larger tables and global index has performance issues
-as the bloom filter from a large number of data files needed to be read and looked up. Reading from several
-files over the cloud object storage like S3 also faces request throttling issues. We are proposing to 
-build a new Metadata index (metadata table based bloom index) to boost the performance of existing bloom index. 
+Hudi maintains several indices to locate/map incoming records to file groups during writes. Most commonly used record
+index is the HoodieBloomIndex. Larger tables and global index has performance issues as the bloom filter from a large
+number of data files needed to be read and looked up. Reading from several files over the cloud object storage like S3
+also faces request throttling issues. We are proposing to build a new Metadata index (metadata table based bloom index)
+to boost the performance of existing bloom index.
 
 ## Background
+
 HoodieBloomIndex is used to find the location of incoming records during every write. Bloom index assists Hudi in
 deterministically routing records to a given file group and to distinguish inserts vs updates. This aggregate bloom
 index is built from several bloom filters stored in the base file footers. Prior to bloom filter lookup, the file
-pruning for the incoming records is also done based on the record key min/max stats stored in the base file footers.
-In this RFC, we plan to build a new index for the bloom filters under the metadata table which to assist in 
-bloom index based record location tagging. 
+pruning for the incoming records is also done based on the record key min/max stats stored in the base file footers. In
+this RFC, we plan to build a new index for the bloom filters under the metadata table which to assist in bloom index
+based record location tagging. This overlaps
+with [RFC-27 Data skipping index ](https://cwiki.apache.org/confluence/display/HUDI/RFC-27+Data+skipping+index+to+improve+query+performance)
+in the read path for improving the query performance.
 
 ## Design
 HoodieBloomIndex involves the following steps to find the right location of incoming records
+
 1. Find all the interested partitions and list all its data files.
 2. File Pruning: Load record key min/max details from all the interested data file footers. Filter files and generate
    files to keys mapping for the incoming records based on the key ranges using range interval tree built from
@@ -61,10 +65,10 @@ indices, we are proposing to add following two new partitions:
 1. `bloom_filter` - for the file level bloom filter
 2. `column_stats` - for the key range stats
 
-Why metadata table: 
-Metadata table uses HBase HFile - the map file format to store and retrieve data. HFile is an indexed file format and
-supports map like faster lookups by keys. Since, we will be storing stats/bloom for every file and the index will do
-lookups based on files, we should be able to benefit from the faster lookups in HFile. 
+Why metadata table:
+Metadata table uses HBase HFile - the tree map file format to store and retrieve data. HFile is an indexed file format
+and supports map like faster lookups by keys. Since, we will be storing stats/bloom for every file and the index will do
+lookups based on files, we should be able to benefit from the faster lookups in HFile.
 
 <img src="metadata_index_1.png" alt="High Level Metadata Index Design" width="480"/>
 
@@ -103,8 +107,8 @@ Here is the schema for the bloom filter payload record.
                             "type": "bytes"
                         },
                         {
-                            "doc": "True if this entry is valid",
-                            "name": "valid",
+                            "doc": "True if this entry is deleted",
+                            "name": "isDeleted",
                             "type": "boolean"
                         }
                     ]
@@ -114,14 +118,14 @@ Here is the schema for the bloom filter payload record.
 ```
 
 The key for the bloom filter record would be an encoded string representing the partition and base file combo. The
-partition and the file names are converted to deterministic hash based IDs, and then they are base64 encoded. Hash
-based IDs are easy to generate for the incoming new inserts records and for the lookup for the update records. 
-It and doesn't need any dictionary to be added for the reverse lookups. Hash bits are chosen based on the
-cardinality and the collision probability desired for the support max scale deployment. Base64 encoding the hash IDs
-further reduces the on-disk storage space for these keys.
+partition and the file names are converted to deterministic hash based IDs, and then they are base64 encoded. Hash based
+IDs are easy to generate for the incoming new inserts records and for the lookup for the updated records. It and doesn't
+need any dictionary to be added for the reverse lookups. Hash bits are chosen based on the cardinality and the collision
+probability desired for the support max scale deployment. Base64 encoding the hash IDs further reduces the on-disk
+storage space for these keys.
 
 ```
-key = base64_encode(hash64(partition name) + hash128(file path))
+key = base64_encode(concat(hash64(partition name), hash128(file path)))
 ```
 
 <img src="metadata_index_bloom_partition.png" alt="Bloom filter partition" width="500"/>
@@ -178,7 +182,7 @@ these fields are converted to deterministic hash based IDs, and then they are ba
 bloom filter key.
 
 ```
-key = base64_encode(hash64(column name) + hash64(partition name) + hash128(file path))
+key = base64_encode(concat(hash64(column name), hash64(partition name), hash128(file path)))
 ```
 
 While Hash based IDs have quite a few desirable properties in the context of Hudi index lookups, there is an impact
@@ -195,29 +199,28 @@ index lookup would be
 1. Generate the list of partitions and the list of keys under each partition to be looked up
 2. For all the involved partitions, load all its file list
 3. Level 1: Range pruning using `column_stats` index:
-   1. For each of the record key, generate the column stats index lookup key based on the tuple 
+   1. For each of the record key, generate the column stats index lookup key based on the tuple
       (__hoodie_record_key, partition name, file path)
    2. Meta index lookup with the above key and if available get the value payload with the column stats details
    3. Build the key range interval tree from all the looked up keys
    4. Prune the partition and its candidate files based on the range interval lookups
-4. Leve 2: Record pruning using `bloom_filter`  index:
+4. Level 2: Record pruning using `bloom_filter`  index:
    1. From the shortlisted file candidates per partition, generate bloom filter index lookup key based on the tuple
       (partition name, file path)
    2. Meta index lookup with the above key to load the base file bloom filter
-   3. Bloom filter lookup for the record key to generate the probable keys
+   3. Bloom filter lookup for the record key to generate the candidate keys that are probably available in the base file
 5. Level 3: Record validation
-   1. Given the list of files and their probable keys from above pruning, do the actual file lookup to
-      confirm the keys
+   1. Given the list of files and their candidate keys from above pruning, do the actual file lookup to confirm the keys
    2. Return the location (file id) of the final matching keys
 
 ### Schema Evolution:
 
-HashID based key are deterministically generated from the tuple input. Mean, for the tuple consisting of column name,
+HashID based key are deterministically generated from the tuple input. That is, for the tuple consisting of column name,
 partition name and file name, the key generated would always be the same. So, a table where the schema gets changed over
 time would have an impact on the keys already generated. The most common schema evolution use cases like change of
 column type, adding a new column are not affected though. Other relatively uncommon use cases like column name rename,
 dropping a column and adding a column with dropped name would have indices referring them more than needed. This would
-lead to the index lookup matching stale/new records across evolved schemas. 
+lead to the index lookup matching stale/new records across evolved schemas.
 
 To avoid looking up stale/new index records, here are the design options we have:
 1. (Preferred) Query rewrite / Result recordset pruning
