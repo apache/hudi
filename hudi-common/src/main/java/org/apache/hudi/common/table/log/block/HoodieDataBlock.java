@@ -28,6 +28,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.List;
@@ -48,10 +49,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected Schema schema;
   protected String keyField;
 
-  public HoodieDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
+  public HoodieDataBlock(
+      @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-      FSDataInputStream inputStream, boolean readBlockLazily) {
+      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
+      @Nonnull Option<byte[]> content,
+      @Nullable FSDataInputStream inputStream,
+      boolean readBlockLazily) {
     super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
     this.keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
   }
@@ -112,9 +116,11 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   @Override
   public byte[] getContentBytes() throws IOException {
     // In case this method is called before realizing records from content
-    if (getContent().isPresent()) {
-      return getContent().get();
-    } else if (readBlockLazily && !getContent().isPresent() && records == null) {
+    Option<byte[]> content = getContent();
+
+    if (content.isPresent()) {
+      return content.get();
+    } else if (readBlockLazily && records == null) {
       // read block lazily
       createRecordsFromContentBytes();
     }

@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -58,14 +59,17 @@ public abstract class HoodieLogBlock {
   // TODO : change this to just InputStream so this works for any FileSystem
   // create handlers to return specific type of inputstream based on FS
   // input stream corresponding to the log file where this logBlock belongs
-  protected FSDataInputStream inputStream;
+  private final FSDataInputStream inputStream;
   // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
   protected boolean readBlockLazily;
 
-  public HoodieLogBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
+  public HoodieLogBlock(
+      @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-      FSDataInputStream inputStream, boolean readBlockLazily) {
+      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
+      @Nonnull Option<byte[]> content,
+      @Nullable FSDataInputStream inputStream,
+      boolean readBlockLazily) {
     this.logBlockHeader = logBlockHeader;
     this.logBlockFooter = logBlockFooter;
     this.blockContentLocation = blockContentLocation;
@@ -228,7 +232,6 @@ public abstract class HoodieLogBlock {
    * When lazyReading of blocks is turned on, inflate the content of a log block from disk.
    */
   protected void inflate() throws HoodieIOException {
-
     try {
       content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
       inputStream.seek(this.getBlockContentLocation().get().getContentPositionInLogFile());
