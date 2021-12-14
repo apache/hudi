@@ -5,7 +5,7 @@ summary: 在本页中，我们讨论在 IBM Cloud Object Storage 文件系统中
 last_modified_at: 2020-10-01T11:38:24-10:00
 language: cn
 ---
-在本页中，我们解释如何如何将你的 Hudi Spark 作业存储到 IBM Cloud Object Storage 当中。
+在本页中，我们解释如何将你的 Hudi Spark 作业存储到 IBM Cloud Object Storage 当中。
 
 ## IBM COS 配置
 
