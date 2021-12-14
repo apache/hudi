@@ -66,7 +66,7 @@ public class HoodieMetadataMergedLogRecordReader extends HoodieMergedLogRecordSc
                                               boolean isKeyExcludedFromPayload) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, maxMemorySizeInBytes, false, false, bufferSize,
         spillableMapBasePath, instantRange, false, diskMapType, isBitCaskDiskMapCompressionEnabled, false,
-        enableFullScan, Option.of(partitionName), isKeyExcludedFromPayload);
+        enableFullScan, Option.ofNullable(partitionName), isKeyExcludedFromPayload);
     this.mergeKeyFilter = mergeKeyFilter;
     if (enableFullScan) {
       performScan();

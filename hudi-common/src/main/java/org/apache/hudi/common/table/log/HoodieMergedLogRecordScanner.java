@@ -195,7 +195,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
     // operation field default false
     private boolean withOperationField = false;
     protected String partitionName;
-    protected boolean isKeyExcludedFromPayload = HoodieMetadataConfig.RECORDKEY_DE_DUPLICATE.defaultValue();
+    protected boolean isKeyExcludedFromPayload = HoodieMetadataConfig.EXCLUDE_KEY_FROM_PAYLOAD.defaultValue();
 
     @Override
     public Builder withFileSystem(FileSystem fs) {

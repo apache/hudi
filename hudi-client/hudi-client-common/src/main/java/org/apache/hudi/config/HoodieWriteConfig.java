@@ -50,6 +50,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
@@ -1051,7 +1052,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean shouldMetadataExcludeKeyFromPayload() {
-    return getMetadataConfig().getBooleanOrDefault(HoodieMetadataConfig.RECORDKEY_DE_DUPLICATE);
+    if (getBasePath() == null || !HoodieTableMetadata.isMetadataTable(getBasePath())) {
+      return false;
+    }
+    return getMetadataConfig().getBooleanOrDefault(HoodieMetadataConfig.EXCLUDE_KEY_FROM_PAYLOAD);
   }
 
   /**

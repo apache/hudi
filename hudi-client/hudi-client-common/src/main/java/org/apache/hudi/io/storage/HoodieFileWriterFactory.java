@@ -53,13 +53,13 @@ public class HoodieFileWriterFactory {
 
   public static <T extends HoodieRecordPayload, R extends IndexedRecord, I, K, O> HoodieFileWriter<R> getFileWriter(
       String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config, Schema schema,
-      Option<Schema.Field> schemaKeyFieldID, TaskContextSupplier taskContextSupplier) throws IOException {
+      Option<Schema.Field> recordKeySchemaFieldID, TaskContextSupplier taskContextSupplier) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier, config.populateMetaFields());
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileWriter(instantTime, path, config, schema, schemaKeyFieldID, hoodieTable, taskContextSupplier);
+      return newHFileFileWriter(instantTime, path, config, schema, recordKeySchemaFieldID, hoodieTable, taskContextSupplier);
     }
     if (ORC.getFileExtension().equals(extension)) {
       return newOrcFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier);

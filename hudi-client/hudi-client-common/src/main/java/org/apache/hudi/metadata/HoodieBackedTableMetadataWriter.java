@@ -219,8 +219,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     final Properties properties = new Properties();
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD);
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD);
-    properties.put(HoodieMetadataConfig.RECORDKEY_DE_DUPLICATE.key(),
-        dataWriteConfig.getMetadataConfig().getRecordKeyDeDuplicate());
+    properties.put(HoodieMetadataConfig.EXCLUDE_KEY_FROM_PAYLOAD.key(),
+        dataWriteConfig.getMetadataConfig().getRecordKeyExcludeFromPayload());
     builder.withProperties(properties);
 
     if (writeConfig.isMetricsOn()) {

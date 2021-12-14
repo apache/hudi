@@ -106,7 +106,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected long insertRecordsWritten = 0;
   protected boolean useWriterSchema;
   protected Option<BaseKeyGenerator> keyGeneratorOpt;
-  protected Option<String> keyField;
+  protected Option<String> recordKeyField;
   private HoodieBaseFile baseFileToMerge;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -120,7 +120,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    this.keyField = Option.ofNullable(hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp());
+    this.recordKeyField = Option.ofNullable(hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp());
     init(fileId, recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -133,7 +133,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    this.keyField = Option.ofNullable(hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp());
+    this.recordKeyField = Option.ofNullable(hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp());
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
@@ -185,14 +185,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       // Create Marker file
       createMarkerFile(partitionPath, newFileName);
 
-      Option<Schema.Field> keySchemaFieldID = Option.empty();
-      if (keyField.isPresent()) {
-        keySchemaFieldID = Option.ofNullable(writeSchemaWithMetaFields.getField(keyField.get()));
+      Option<Schema.Field> recordKeySchemaFieldID = Option.empty();
+      if (recordKeyField.isPresent()) {
+        recordKeySchemaFieldID = Option.ofNullable(writeSchemaWithMetaFields.getField(recordKeyField.get()));
       }
 
       // Create the writer for writing the new version file
       fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config,
-          writeSchemaWithMetaFields, keySchemaFieldID, taskContextSupplier);
+          writeSchemaWithMetaFields, recordKeySchemaFieldID, taskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -429,7 +429,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     long oldNumWrites = 0;
     try {
       HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath,
-          config.shouldMetadataExcludeKeyFromPayload(), keyField);
+          config.shouldMetadataExcludeKeyFromPayload(), recordKeyField);
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

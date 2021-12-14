@@ -136,8 +136,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
           + "determines how to handle such spurious deletes");
 
-  public static final ConfigProperty<Boolean> RECORDKEY_DE_DUPLICATE = ConfigProperty
-      .key("_" + METADATA_PREFIX + ".recordkey.deduplicate")
+  public static final ConfigProperty<Boolean> EXCLUDE_KEY_FROM_PAYLOAD = ConfigProperty
+      .key("_" + METADATA_PREFIX + ".exclude.key.from.payload")
       .defaultValue(false)
       .sinceVersion("0.11.0")
       .withDocumentation("When enabled, metadata table records will have the redundant key field excluded from the "
@@ -184,8 +184,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
   }
 
-  public boolean getRecordKeyDeDuplicate() {
-    return getBooleanOrDefault(HoodieMetadataConfig.RECORDKEY_DE_DUPLICATE);
+  public boolean getRecordKeyExcludeFromPayload() {
+    return getBooleanOrDefault(HoodieMetadataConfig.EXCLUDE_KEY_FROM_PAYLOAD);
   }
 
   public static class Builder {
@@ -235,8 +235,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withRecordKeyDeDuplicate(boolean deDuplicateRecordKey) {
-      metadataConfig.setValue(RECORDKEY_DE_DUPLICATE, Boolean.toString(deDuplicateRecordKey));
+    public Builder withRecordKeyExcludeFromPayload(boolean recordKeyExcludeFromPayload) {
+      metadataConfig.setValue(EXCLUDE_KEY_FROM_PAYLOAD, Boolean.toString(recordKeyExcludeFromPayload));
       return this;
     }
 

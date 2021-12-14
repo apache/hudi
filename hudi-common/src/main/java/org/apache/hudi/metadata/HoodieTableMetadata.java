@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hadoop.fs.FileStatus;
@@ -73,17 +72,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       basePath = basePath.substring(0, basePath.length() - 1);
     }
     return basePath.endsWith(METADATA_TABLE_REL_PATH);
-  }
-
-  /**
-   * Is the log file for the Metadata table?
-   *
-   * @param logFile - Log file to check
-   * @return True if the log file belongs to the Metadata table, False otherwise.
-   */
-  static boolean isMetadataTable(HoodieLogFile logFile) {
-    final String logFilePath = logFile.getPath().toString();
-    return logFilePath.contains(METADATA_TABLE_REL_PATH);
   }
 
   static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath,

@@ -229,7 +229,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
         metadataTableConfig.getPayloadClass(), metadataTableConfig.getPreCombineField(),
         Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
-        false, Option.of(partitionName));
+        false, Option.ofNullable(partitionName));
   }
 
   /**
@@ -280,7 +280,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (basefile.isPresent()) {
       String basefilePath = basefile.get().getPath();
       baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath),
-          metadataConfig.getRecordKeyDeDuplicate(), Option.ofNullable(metadataMetaClient.getTableConfig().getRecordKeyFieldProp()));
+          metadataConfig.getRecordKeyExcludeFromPayload(), Option.ofNullable(metadataMetaClient.getTableConfig().getRecordKeyFieldProp()));
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", basefilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));
@@ -343,7 +343,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withBitCaskDiskMapCompressionEnabled(commonConfig.isBitCaskDiskMapCompressionEnabled())
         .withLogBlockTimestamps(validInstantTimestamps)
         .enableFullScan(metadataConfig.enableFullScan())
-        .withKeyExcludeFromPayload(metadataConfig.getRecordKeyDeDuplicate())
+        .withKeyExcludeFromPayload(metadataConfig.getRecordKeyExcludeFromPayload())
         .withPartition(partitionName)
         .build();
 

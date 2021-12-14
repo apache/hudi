@@ -28,7 +28,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.io.storage.HoodieHFileKeyExcludedReader;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.log4j.LogManager;
@@ -67,19 +66,18 @@ public class HoodieHFileKeyExcludedDataBlock extends HoodieHFileDataBlock {
   /**
    * Serialize the metadata table record to byte buffer after any field trimming if needed.
    *
-   * @param record         - Record to serialize
-   * @param schemaKeyField - Key field in the schema
+   * @param record                 - Record to serialize
+   * @param recordKeySchemaFieldID - Key field in the schema
    * @return Serialized byte array of the metadata trimmed record
    */
   @Override
-  protected ByteBuffer serializeRecord(final IndexedRecord record, final Option<Schema.Field> schemaKeyField) {
-    if (!schemaKeyField.isPresent()) {
-      return super.serializeRecord(record, schemaKeyField);
+  protected ByteBuffer serializeRecord(final IndexedRecord record, final Option<Schema.Field> recordKeySchemaFieldID) {
+    if (!recordKeySchemaFieldID.isPresent()) {
+      return super.serializeRecord(record, recordKeySchemaFieldID);
     }
 
-    ValidationUtils.checkArgument(record.getSchema() != null, "Unknown schema for the record!");
-    record.put(schemaKeyField.get().pos(), "");
-    return super.serializeRecord(record, schemaKeyField);
+    record.put(recordKeySchemaFieldID.get().pos(), "");
+    return super.serializeRecord(record, recordKeySchemaFieldID);
   }
 
   /**

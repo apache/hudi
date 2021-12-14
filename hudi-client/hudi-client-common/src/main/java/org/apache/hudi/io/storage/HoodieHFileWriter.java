@@ -66,7 +66,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final Option<Schema.Field> schemaKeyFieldID;
+  private final Option<Schema.Field> recordKeySchemaFieldID;
   private final boolean excludeKeyFromPayload;
   private HFile.Writer writer;
   private String minRecordKey;
@@ -76,7 +76,7 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
   public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                           Option<Schema.Field> schemaKeyFieldID, TaskContextSupplier taskContextSupplier,
+                           Option<Schema.Field> recordKeySchemaFieldID, TaskContextSupplier taskContextSupplier,
                            boolean populateMetaFields, boolean excludeKeyFromPayload) throws IOException {
 
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
@@ -93,8 +93,12 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
     this.excludeKeyFromPayload = excludeKeyFromPayload;
-    this.schemaKeyFieldID = schemaKeyFieldID;
+    this.recordKeySchemaFieldID = recordKeySchemaFieldID;
     this.schema = schema;
+    if (excludeKeyFromPayload) {
+      ValidationUtils.checkArgument(recordKeySchemaFieldID.isPresent(),
+          "Unknown record key field to exclude key from payload!");
+    }
 
     HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
         .withCompression(hfileConfig.getCompressionAlgorithm())
@@ -133,11 +137,11 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
     byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord) object);
     if (excludeKeyFromPayload) {
-      ValidationUtils.checkArgument(schemaKeyFieldID.isPresent(),
+      ValidationUtils.checkArgument(recordKeySchemaFieldID.isPresent(),
           "Failed to exclude key from payload. Unknown key field for the record.");
-      GenericRecord tmp = HoodieAvroUtils.bytesToAvro(value, schema);
-      tmp.put(schemaKeyFieldID.get().pos(), "");
-      value = HoodieAvroUtils.avroToBytes(tmp);
+      GenericRecord recordKeyExcludedRecord = HoodieAvroUtils.bytesToAvro(value, schema);
+      recordKeyExcludedRecord.put(recordKeySchemaFieldID.get().pos(), "");
+      value = HoodieAvroUtils.avroToBytes(recordKeyExcludedRecord);
     }
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
