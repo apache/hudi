@@ -69,10 +69,10 @@ public class HoodieInstantTimeGenerator {
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
-        if (isIsUTCTimezone() == true){
+        if (isIsUTCTimezone() == true) {
           LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
           newCommitTime = now.format(MILLIS_INSTANT_TIME_FORMATTER);
-        }else {
+        } else {
           Date d = new Date(System.currentTimeMillis() + milliseconds);
           newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
         }
