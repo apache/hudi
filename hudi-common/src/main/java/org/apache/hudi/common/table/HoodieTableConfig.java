@@ -168,7 +168,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
 
-  public static final ConfigProperty<String> TimeLine_UTC_KEY = ConfigProperty
+  public static final ConfigProperty<String> TIMELINE_UTC_KEY = ConfigProperty
       .key("hoodie.table.timeline.useutc")
       .defaultValue("false")
       .withDocumentation("timeline is or not utc timezone");
@@ -321,9 +321,9 @@ public class HoodieTableConfig extends HoodieConfig {
         // Use the default bootstrap index class.
         hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, getDefaultBootstrapIndexClass(properties));
       }
-      if (hoodieConfig.contains(TimeLine_UTC_KEY)) {
+      if (hoodieConfig.contains(TIMELINE_UTC_KEY)) {
         // set commit timeline timezone to utc
-        HoodieInstantTimeGenerator.setIsUTCTimezone(hoodieConfig.getBoolean(TimeLine_UTC_KEY));
+        HoodieInstantTimeGenerator.setIsUTCTimezone(hoodieConfig.getBoolean(TIMELINE_UTC_KEY));
       }
       hoodieConfig.getProps().store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }

@@ -880,7 +880,7 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.URL_ENCODE_PARTITIONING, Boolean.toString(urlEncodePartitioning));
       }
       if (null != isUTCTimezone) {
-        tableConfig.setValue(HoodieTableConfig.TimeLine_UTC_KEY, Boolean.toString(isUTCTimezone));
+        tableConfig.setValue(HoodieTableConfig.TIMELINE_UTC_KEY, Boolean.toString(isUTCTimezone));
       }
       return tableConfig.getProps();
     }
