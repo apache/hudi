@@ -77,11 +77,11 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
   }
 
-  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs) throws IOException {
+  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem fs) throws IOException {
     this.conf = configuration;
     this.path = path;
-    this.fsDataInputStream = inlineFs.open(path);
-    this.reader = HFile.createReader(inlineFs, path, cacheConfig, configuration);
+    this.fsDataInputStream = fs.open(path);
+    this.reader = HFile.createReader(fs, path, cacheConfig, configuration);
   }
 
   public HoodieHFileReader(byte[] content) throws IOException {
