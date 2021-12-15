@@ -77,16 +77,6 @@ module.exports = {
       },
     ],
     [
-      '@docusaurus/plugin-content-docs',
-      {
-        id: 'guides',
-        path: 'guides',
-        routeBasePath: 'guides',
-        showLastUpdateAuthor: false,
-        showLastUpdateTime: false,
-      },
-    ],
-    [
       '@docusaurus/plugin-client-redirects',
       {
         fromExtensions: ['html'],
@@ -117,10 +107,6 @@ module.exports = {
           {
             from: ['/docs/learn'],
             to: '/learn/faq',
-          },
-          {
-            from: ['/docs/guides'],
-            to: '/guides/tuning-guide',
           },
         ],
       },
@@ -161,20 +147,6 @@ module.exports = {
             {
               label: 'Technical Wiki',
               href: 'https://cwiki.apache.org/confluence/display/HUDI',
-            }
-          ],
-        },
-        {
-          label: 'Guides',
-          position: 'left',
-          items: [
-            {
-              label: 'Tuning Guide',
-              to: '/guides/tuning-guide',
-            },
-            {
-              label: 'Troubleshooting Guide',
-              to: '/guides/troubleshooting-guide',
             }
           ],
         },

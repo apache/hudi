@@ -71,6 +71,7 @@ module.exports = {
                 'cli',
                 'metrics',
                 'troubleshooting',
+                'tuning-guide',
                 {
                     type: 'category',
                     label: 'Storage Configurations',
