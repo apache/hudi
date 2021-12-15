@@ -262,7 +262,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, readerSchema,
-            header, footer, enableInlineReading, keyField);
+            header, footer, enableInlineReading);
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, readerSchema, header, footer);

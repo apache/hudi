@@ -52,6 +52,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -68,42 +69,20 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final Logger LOG = LogManager.getLogger(HoodieHFileDataBlock.class);
   private static Compression.Algorithm compressionAlgorithm = Compression.Algorithm.GZ;
   private static int blockSize = 1 * 1024 * 1024;
-  private boolean enableInlineReading = false;
+  private boolean enablePointLookups = false;
 
-  public HoodieHFileDataBlock(
-      HoodieLogFile logFile,
-      FSDataInputStream inputStream,
-      Option<byte[]> content,
-      boolean readBlockLazily, long position, long blockSize, long blockEndPos,
-      Schema readerSchema,
-      Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer,
-      boolean enableInlineReading,
-      String keyField) throws IOException {
-    super(
-        content,
-        enableInlineReading ? createInlineFSStream(logFile, position, blockSize) : inputStream,
-        readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
-        readerSchema, header, footer, keyField);
-    this.enableInlineReading = enableInlineReading;
-  }
+  public HoodieHFileDataBlock(HoodieLogFile logFile,
+                              FSDataInputStream inputStream,
+                              Option<byte[]> content,
+                              boolean readBlockLazily, long position, long blockSize, long blockEndPos,
+                              Schema readerSchema,
+                              Map<HeaderMetadataType, String> header,
+                              Map<HeaderMetadataType, String> footer,
+                              boolean enablePointLookups) {
+    super(content, inputStream, readBlockLazily, Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
+        readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME);
 
-  private static FSDataInputStream createInlineFSStream(
-      HoodieLogFile logFile,
-      long contentPosInLogFile,
-      long blockSize
-  ) throws IOException {
-    Configuration inlineConf = new Configuration();
-    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-
-    Path inlinePath = InLineFSUtils.getInlineFilePath(
-        logFile.getPath(),
-        logFile.getPath().getFileSystem(inlineConf).getScheme(),
-        contentPosInLogFile,
-        blockSize);
-
-    return inlinePath.getFileSystem(inlineConf).open(inlinePath);
+    this.enablePointLookups = enablePointLookups;
   }
 
   public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
@@ -125,34 +104,33 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
 
-    HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieHBaseKVComparator()).create();
+    // Use simple incrementing counter as a key
+    boolean useIntegerKey = !getKey(records.get(0)).isPresent();
+    // This is set here to avoid re-computing this in the loop
+    int keyWidth = useIntegerKey ? (int) Math.ceil(Math.log(records.size())) + 1 : -1;
 
     // Serialize records into bytes
     Map<String, byte[]> sortedRecordsMap = new TreeMap<>();
     Iterator<IndexedRecord> itr = records.iterator();
-    boolean useIntegerKey = false;
-    int key = 0;
-    int keySize = 0;
-    final Field keyFieldSchema = records.get(0).getSchema().getField(HoodieHFileReader.KEY_FIELD_NAME);
-    if (keyFieldSchema == null) {
-      // Missing key metadata field so we should use an integer sequence key
-      useIntegerKey = true;
-      keySize = (int) Math.ceil(Math.log(records.size())) + 1;
-    }
+
+    int id = 0;
     while (itr.hasNext()) {
       IndexedRecord record = itr.next();
       String recordKey;
       if (useIntegerKey) {
-        recordKey = String.format("%" + keySize + "s", key++);
+        recordKey = String.format("%" + keyWidth + "s", id++);
       } else {
-        recordKey = record.get(keyFieldSchema.pos()).toString();
+        recordKey = getKey(record).get();
       }
-      final byte[] recordBytes = serializeRecord(record, Option.ofNullable(keyFieldSchema));
+
+      final byte[] recordBytes = serializeRecord(record);
       ValidationUtils.checkState(!sortedRecordsMap.containsKey(recordKey),
           "Writing multiple records with same key not supported for " + this.getClass().getName());
       sortedRecordsMap.put(recordKey, recordBytes);
     }
+
+    HFile.Writer writer = HFile.getWriterFactory(conf, cacheConfig)
+        .withOutputStream(ostream).withFileContext(context).withComparator(new HoodieHBaseKVComparator()).create();
 
     // Write the records
     sortedRecordsMap.forEach((recordKey, recordBytes) -> {
@@ -173,17 +151,21 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   @Override
   public List<IndexedRecord> getRecords(List<String> keys) throws IOException {
-    return readWithInlineFS(keys);
+    if (enablePointLookups) {
+      return lookupRecords(keys);
+    }
+
+    // Otherwise, we fetch all the records and filter out all the records, but the
+    // ones requested
+    HashSet<String> keySet = new HashSet<>(keys);
+    return getRecords().stream()
+        .filter(record -> keySet.contains(getKey(record).get()))
+        .collect(Collectors.toList());
   }
 
-  /**
-   * Serialize the record to byte buffer.
-   *
-   * @param record         - Record to serialize
-   * @param keyField - Key field in the schema
-   * @return Serialized byte buffer for the record
-   */
-  private byte[] serializeRecord(final IndexedRecord record, final Option<Field> keyField) {
+  private byte[] serializeRecord(IndexedRecord record) {
+    Option<Field> keyField = getKeyField(record.getSchema());
+    // Reset key value w/in the record to avoid duplicating the key w/in payload
     if (keyField.isPresent()) {
       record.put(keyField.get().pos(), StringUtils.EMPTY_STRING);
     }
@@ -191,7 +173,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   // TODO abstract this w/in HoodieDataBlock
-  private List<IndexedRecord> readWithInlineFS(List<String> keys) throws IOException {
+  private List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
     boolean enableFullScan = keys.isEmpty();
     // Get schema from the header
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
@@ -213,7 +195,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     }
 
     try (HoodieHFileReader<IndexedRecord> reader =
-        new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
+             new HoodieHFileReader<>(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf))) {
       List<Pair<String, IndexedRecord>> logRecords =
           enableFullScan ? reader.readAllRecords(writerSchema, readerSchema) : reader.readRecords(keys, readerSchema);
       return logRecords.stream().map(Pair::getSecond).collect(Collectors.toList());

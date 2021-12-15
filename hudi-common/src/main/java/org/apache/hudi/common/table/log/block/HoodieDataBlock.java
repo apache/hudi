@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -46,7 +51,7 @@ import java.util.Map;
 public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected final Schema readerSchema;
-  protected final String keyField;
+  protected final String keyFieldRef;
   private List<IndexedRecord> records;
 
   public HoodieDataBlock(
@@ -59,26 +64,26 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
     this.records = null;
     this.readerSchema = null;
-    this.keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    this.keyFieldRef = HoodieRecord.RECORD_KEY_METADATA_FIELD;
   }
 
   public HoodieDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
-                         @Nonnull Map<HeaderMetadataType, String> footer, String keyField) {
+                         @Nonnull Map<HeaderMetadataType, String> footer, String keyFieldRef) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
     this.records = records;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-    this.keyField = keyField;
+    this.keyFieldRef = keyFieldRef;
   }
 
   protected HoodieDataBlock(Option<byte[]> content, @Nonnull FSDataInputStream inputStream, boolean readBlockLazily,
                             Option<HoodieLogBlockContentLocation> blockContentLocation, Schema readerSchema,
                             @Nonnull Map<HeaderMetadataType, String> headers, @Nonnull Map<HeaderMetadataType,
-      String> footer, String keyField) {
+      String> footer, String keyFieldRef) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.records = null;
     this.readerSchema = readerSchema;
-    this.keyField = keyField;
+    this.keyFieldRef = keyFieldRef;
   }
 
   /**
@@ -134,16 +139,21 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   public abstract HoodieLogBlockType getBlockType();
 
-  public List<IndexedRecord> getRecords() {
-    if (records == null) {
-      try {
-        // in case records are absent, read content lazily and then convert to IndexedRecords
-        readRecordsFromContent();
-      } catch (IOException io) {
-        throw new HoodieIOException("Unable to convert content bytes to records", io);
-      }
-    }
-    return records;
+  protected static FSDataInputStream createInlineFSStream(
+      HoodieLogFile logFile,
+      long contentPosInLogFile,
+      long blockSize
+  ) throws IOException {
+    Configuration inlineConf = new Configuration();
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+
+    Path inlinePath = InLineFSUtils.getInlineFilePath(
+        logFile.getPath(),
+        logFile.getPath().getFileSystem(inlineConf).getScheme(),
+        contentPosInLogFile,
+        blockSize);
+
+    return inlinePath.getFileSystem(inlineConf).open(inlinePath);
   }
 
   /**
@@ -177,4 +187,24 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected abstract byte[] serializeRecords(List<IndexedRecord> records) throws IOException;
 
   protected abstract List<IndexedRecord> deserializeRecords(byte[] content) throws IOException;
+
+  public final List<IndexedRecord> getRecords() {
+    if (records == null) {
+      try {
+        // in case records are absent, read content lazily and then convert to IndexedRecords
+        readRecordsFromContent();
+      } catch (IOException io) {
+        throw new HoodieIOException("Unable to convert content bytes to records", io);
+      }
+    }
+    return records;
+  }
+
+  protected Option<Schema.Field> getKeyField(Schema schema) {
+    return Option.ofNullable(schema.getField(keyFieldRef));
+  }
+
+  protected Option<String> getKey(IndexedRecord record) {
+    return getKeyField(record.getSchema()).map(keyField -> record.get(keyField.pos()).toString());
+  }
 }
