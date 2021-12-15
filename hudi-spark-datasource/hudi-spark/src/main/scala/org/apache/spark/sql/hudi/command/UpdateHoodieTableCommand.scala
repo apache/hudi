@@ -51,7 +51,10 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
     }.toMap
 
     val updateExpressions = table.output
-      .map(attr => name2UpdateValue.getOrElse(attr.name, attr))
+      .map(attr => {
+        val UpdateValueOption = name2UpdateValue.find(f => sparkSession.sessionState.conf.resolver(f._1, attr.name))
+        if(UpdateValueOption.isEmpty) attr else UpdateValueOption.get._2
+      })
       .filter { // filter the meta columns
         case attr: AttributeReference =>
           !HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet.contains(attr.name)
@@ -98,7 +101,7 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
         PRECOMBINE_FIELD.key -> preCombineColumn,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
-        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitoning,
+        URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
         KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
         SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> tableConfig.getKeyGeneratorClassName,
         OPERATION.key -> UPSERT_OPERATION_OPT_VAL,

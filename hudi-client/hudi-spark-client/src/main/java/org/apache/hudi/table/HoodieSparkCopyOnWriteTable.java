@@ -47,7 +47,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.index.zorder.ZOrderingIndexHelper;
+import org.apache.hudi.index.columnstats.ColumnStatsIndexHelper;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
@@ -172,18 +172,17 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
 
   @Override
   public void updateMetadataIndexes(@Nonnull HoodieEngineContext context, @Nonnull List<HoodieWriteStat> stats, @Nonnull String instantTime) throws Exception {
-    // Updates Z-ordering Index
-    updateZIndex(context, stats, instantTime);
+    updateColumnsStatsIndex(context, stats, instantTime);
   }
 
-  private void updateZIndex(
+  private void updateColumnsStatsIndex(
       @Nonnull HoodieEngineContext context,
       @Nonnull List<HoodieWriteStat> updatedFilesStats,
       @Nonnull String instantTime
   ) throws Exception {
     String sortColsList = config.getClusteringSortColumns();
     String basePath = metaClient.getBasePath();
-    String indexPath = metaClient.getZindexPath();
+    String indexPath = metaClient.getColumnStatsIndexPath();
 
     List<String> completedCommits =
         metaClient.getCommitsTimeline()
@@ -201,7 +200,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
       return;
     }
 
-    LOG.info(String.format("Updating Z-index table (%s)", indexPath));
+    LOG.info(String.format("Updating column-statistics index table (%s)", indexPath));
 
     List<String> sortCols = Arrays.stream(sortColsList.split(","))
         .map(String::trim)
@@ -209,13 +208,13 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
 
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext)context;
 
-    // Fetch table schema to appropriately construct Z-index schema
+    // Fetch table schema to appropriately construct col-stats index schema
     Schema tableWriteSchema =
         HoodieAvroUtils.createHoodieWriteSchema(
             new TableSchemaResolver(metaClient).getTableAvroSchemaWithoutMetadataFields()
         );
 
-    ZOrderingIndexHelper.updateZIndexFor(
+    ColumnStatsIndexHelper.updateColumnStatsIndexFor(
         sparkEngineContext.getSqlContext().sparkSession(),
         AvroConversionUtils.convertAvroSchemaToStructType(tableWriteSchema),
         touchedFiles,
@@ -225,7 +224,7 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload>
         completedCommits
     );
 
-    LOG.info(String.format("Successfully updated Z-index at instant (%s)", instantTime));
+    LOG.info(String.format("Successfully updated column-statistics index at instant (%s)", instantTime));
   }
 
   @Override

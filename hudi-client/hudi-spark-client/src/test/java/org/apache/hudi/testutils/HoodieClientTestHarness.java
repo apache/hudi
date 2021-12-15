@@ -532,6 +532,9 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     List<java.nio.file.Path> fsPartitionPaths = testTable.getAllPartitionPaths();
     List<String> fsPartitions = new ArrayList<>();
     fsPartitionPaths.forEach(entry -> fsPartitions.add(entry.getFileName().toString()));
+    if (fsPartitions.isEmpty()) {
+      fsPartitions.add("");
+    }
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
     Collections.sort(fsPartitions);
@@ -618,7 +621,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
         }
       }
     }
-    assertEquals(fsStatuses.length, partitionToFilesMap.get(basePath + "/" + partition).length);
+    assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).length);
 
     // Block sizes should be valid
     Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));

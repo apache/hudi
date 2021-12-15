@@ -60,6 +60,8 @@ import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
+import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
+import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
@@ -336,9 +338,6 @@ public class DeltaSync implements Serializable {
         } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
           //if previous checkpoint is an empty string, skip resume use Option.empty()
           resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else if (commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
-          // incase of CLUSTER commit, no checkpoint will be available in metadata.
-          resumeCheckpointStr = Option.empty();
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
@@ -442,6 +441,7 @@ public class DeltaSync implements Serializable {
       return null;
     }
 
+    jssc.setJobGroup(this.getClass().getSimpleName(), "Checking if input is empty");
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
       LOG.info("No new data, perform empty commit.");
       return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
@@ -729,9 +729,16 @@ public class DeltaSync implements Serializable {
 
     HoodieWriteConfig config = builder.build();
 
-    // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
-    if (config.writeCommitCallbackOn() && HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
-      HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
+    if (config.writeCommitCallbackOn()) {
+      // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
+      if (HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
+        HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
+      }
+
+      // set default value for {@link HoodieWriteCommitPulsarCallbackConfig} if needed.
+      if (HoodieWriteCommitPulsarCallback.class.getName().equals(config.getCallbackClass())) {
+        HoodieWriteCommitPulsarCallbackConfig.setCallbackPulsarConfigIfNeeded(config);
+      }
     }
 
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.from(props);

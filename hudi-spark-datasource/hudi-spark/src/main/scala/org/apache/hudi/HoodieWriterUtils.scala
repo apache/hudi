@@ -56,7 +56,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
     hoodieConfig.setDefaultValue(RECORDKEY_FIELD)
-    hoodieConfig.setDefaultValue(PARTITIONPATH_FIELD)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)

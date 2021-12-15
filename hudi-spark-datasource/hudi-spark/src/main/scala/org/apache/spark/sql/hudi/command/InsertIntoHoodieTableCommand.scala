@@ -212,7 +212,7 @@ object InsertIntoHoodieTableCommand extends Logging {
     val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
-    val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitoning).getOrElse("false")
+    val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
     val keyGeneratorClassName = Option(tableConfig.getKeyGeneratorClassName)
       .getOrElse(classOf[ComplexKeyGenerator].getCanonicalName)
 

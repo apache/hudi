@@ -22,7 +22,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SmallFile;
@@ -188,6 +187,7 @@ public class BucketAssigner implements AutoCloseable {
       smallFileAssignMap.put(partitionPath, assign);
       return assign;
     }
+    smallFileAssignMap.put(partitionPath, null);
     return null;
   }
 
@@ -209,10 +209,6 @@ public class BucketAssigner implements AutoCloseable {
     }
     this.smallFileAssignMap.clear();
     this.writeProfile.reload(checkpointId);
-  }
-
-  public HoodieTable<?, ?, ?, ?> getTable() {
-    return this.writeProfile.getTable();
   }
 
   private boolean fileIdOfThisTask(String fileId) {

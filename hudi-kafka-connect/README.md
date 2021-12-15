@@ -54,35 +54,17 @@ mvn package -DskipTests -pl packaging/hudi-kafka-connect-bundle -am
 cp $HUDI_DIR/packaging/hudi-kafka-connect-bundle/target/hudi-kafka-connect-bundle-0.10.0-SNAPSHOT.jar /usr/local/share/kafka/plugins/lib
 ```
 
-### 2 - Set up the docker containers
-
-To run the connect locally, we need kafka, zookeeper, hdfs, hive etc. To make the setup easier, we use the docker 
-containers from the hudi docker demo. Refer to [this link for the setup](https://hudi.apache.org/docs/docker_demo)
-
-Essentially, follow the steps listed here:
-
-/etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
+Set up a Kafka broker locally. Download the latest apache kafka from [here](https://kafka.apache.org/downloads). 
+Once downloaded and built, run the Zookeeper server and Kafka server using the command line tools.
 ```bash
-127.0.0.1 adhoc-1
-127.0.0.1 adhoc-2
-127.0.0.1 namenode
-127.0.0.1 datanode1
-127.0.0.1 hiveserver
-127.0.0.1 hivemetastore
-127.0.0.1 kafkabroker
-127.0.0.1 sparkmaster
-127.0.0.1 zookeeper
+export KAFKA_HOME=/path/to/kafka_install_dir
+cd $KAFKA_HOME
+./bin/zookeeper-server-start.sh ./config/zookeeper.properties
+./bin/kafka-server-start.sh ./config/server.properties
 ```
+Wait until the kafka cluster is up and running.
 
-Bring up the docker containers
-```bash
-cd ${HUDI_DIR}/docker
-./setup_demo.sh
-```
-
-The schema registry and kafka connector can be run from host system directly (mac/ linux).
-
-### 3 - Set up the schema registry
+### 2 - Set up the schema registry
 
 Hudi leverages schema registry to obtain the latest schema when writing records. While it supports most popular schema
 registries, we use Confluent schema registry. Download the
@@ -97,7 +79,7 @@ cd $CONFLUENT_DIR
 ./bin/schema-registry-start etc/schema-registry/schema-registry.properties
 ```
 
-### 4 - Create the Hudi Control Topic for Coordination of the transactions
+### 3 - Create the Hudi Control Topic for Coordination of the transactions
 
 The control topic should only have `1` partition, since its used to coordinate the Hudi write transactions across the multiple Connect tasks.
 
@@ -107,7 +89,7 @@ cd $KAFKA_HOME
 ./bin/kafka-topics.sh --create --topic hudi-control-topic --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
 ```
 
-### 5 - Create the Hudi Topic for the Sink and insert data into the topic
+### 4 - Create the Hudi Topic for the Sink and insert data into the topic
 
 Open a terminal to execute the following command:
 
@@ -123,7 +105,7 @@ to generate, with each batch containing a number of messages and idle time betwe
 bash setupKafka.sh -n <num_kafka_messages_per_batch> -b <num_batches>
 ```
 
-### 6 - Run the Sink connector worker (multiple workers can be run)
+### 5 - Run the Sink connector worker (multiple workers can be run)
 
 The Kafka connect is a distributed platform, with the ability to run one or more workers (each running multiple tasks) 
 that parallely process the records from the Kafka partitions for the same topic. We provide a properties file with 
@@ -137,7 +119,7 @@ cd ${KAFKA_HOME}
 ./bin/connect-distributed.sh ${HUDI_DIR}/hudi-kafka-connect/demo/connect-distributed.properties
 ```
 
-### 7 - To add the Hudi Sink to the Connector (delete it if you want to re-configure)
+### 6 - To add the Hudi Sink to the Connector (delete it if you want to re-configure)
 
 Once the Connector has started, it will not run the Sink, until the Hudi sink is added using the web api. The following 
 curl APIs can be used to delete and add a new Hudi Sink. Again, a default configuration is provided for the Hudi Sink, 
@@ -188,7 +170,7 @@ total 5168
 -rw-r--r--  1 user  wheel  440214 Sep 13 21:43 E200FA75DCD1CED60BE86BCE6BF5D23A-0_0-0-0_20210913214114.parquet
 ```
 
-### 8 - Run async compaction and clustering if scheduled
+### 7 - Run async compaction and clustering if scheduled
 
 When using Merge-On-Read (MOR) as the table type, async compaction and clustering can be scheduled when the Sink is
 running. Inline compaction and clustering are disabled by default due to performance reason. By default, async
@@ -318,10 +300,35 @@ hoodie.write.concurrency.mode=single_writer
 Note that you don't have to provide the instant time through `--instant-time`. In that case, the earliest scheduled
 clustering is going to be executed.
 
-### 9- Querying via Hive
+### 8- Querying via Hive
 
 In this section we explain how one can test syncing of the Hudi table with Hive server/ Hive Metastore, 
 that enable querying via Hive, Presto etc. 
+
+To ease the deployment of HDFS, Hive Server, Hive Metastore etc. for testing hive sync, we use the docker
+containers from the hudi docker demo. Refer to [this link for the setup](https://hudi.apache.org/docs/docker_demo).
+Additionally, the docker deploys kafka and zookeeper too, so you do not need to run them explicitly in this setup.
+
+Essentially, follow the steps listed here:
+
+/etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
+```bash
+127.0.0.1 adhoc-1
+127.0.0.1 adhoc-2
+127.0.0.1 namenode
+127.0.0.1 datanode1
+127.0.0.1 hiveserver
+127.0.0.1 hivemetastore
+127.0.0.1 kafkabroker
+127.0.0.1 sparkmaster
+127.0.0.1 zookeeper
+```
+
+Bring up the docker containers
+```bash
+cd ${HUDI_DIR}/docker
+./setup_demo.sh
+```
 
 Firstly, (re)-install a different connector that is configured to write the Hudi table to Hdfs instead of local filesystem.
 

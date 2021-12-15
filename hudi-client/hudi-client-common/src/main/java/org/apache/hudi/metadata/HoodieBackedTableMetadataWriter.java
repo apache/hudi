@@ -204,7 +204,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .archiveCommitsWith(minCommitsToKeep, maxCommitsToKeep)
             // we will trigger compaction manually, to control the instant times
             .withInlineCompaction(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
+            // we will trigger archive manually, to ensure only regular writer invokes it
+            .withAutoArchive(false).build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
         .withRollbackParallelism(parallelism)
@@ -462,6 +464,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Bootstrap: initializing metadata table by listing files and partitions");
     List<DirectoryInfo> dirInfoList = listAllPartitions(dataMetaClient);
 
     // During bootstrap, the list of files to be committed can be huge. So creating a HoodieCommitMetadata out of these
@@ -680,7 +683,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *      deltacommit.
    */
   protected void compactIfNecessary(AbstractHoodieWriteClient writeClient, String instantTime) {
-    String latestDeltacommitTime = metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
+    // finish off any pending compactions if any from previous attempt.
+    writeClient.runAnyPendingCompactions();
+
+    String latestDeltacommitTime = metadataMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant()
         .get().getTimestamp();
     List<HoodieInstant> pendingInstants = dataMetaClient.reloadActiveTimeline().filterInflightsAndRequested()
         .findInstantsBefore(latestDeltacommitTime).getInstants().collect(Collectors.toList());

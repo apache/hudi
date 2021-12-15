@@ -148,10 +148,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     HoodieLogFormat.LogFormatVersion currentLogFormatVersion =
         new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION);
 
-    FSDataOutputStream outputStream = getOutputStream();
-    long startPos = outputStream.getPos();
+    FSDataOutputStream originalOutputStream = getOutputStream();
+    long startPos = originalOutputStream.getPos();
     long sizeWritten = 0;
-
+    // HUDI-2655. here we wrap originalOutputStream to ensure huge blocks can be correctly written
+    FSDataOutputStream outputStream = new FSDataOutputStream(originalOutputStream, new FileSystem.Statistics(fs.getScheme()), startPos);
     for (HoodieLogBlock block: blocks) {
       long startSize = outputStream.size();
 
@@ -189,6 +190,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       outputStream.writeLong(outputStream.size() - startSize);
 
       // Fetch the size again, so it accounts also (9).
+
+      // HUDI-2655. Check the size written to avoid log blocks whose size overflow.
+      if (outputStream.size() == Integer.MAX_VALUE) {
+        throw new HoodieIOException("Blocks appended may overflow. Please decrease log block size or log block amount");
+      }
       sizeWritten +=  outputStream.size() - startSize;
     }
     // Flush all blocks to disk

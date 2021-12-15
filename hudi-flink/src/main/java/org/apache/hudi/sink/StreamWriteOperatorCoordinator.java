@@ -377,6 +377,9 @@ public class StreamWriteOperatorCoordinator
     if (allEventsReceived()) {
       // start to commit the instant.
       commitInstant(this.instant);
+      // The executor thread inherits the classloader of the #handleEventFromOperator
+      // caller, which is a AppClassLoader.
+      Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
       // sync Hive if is enabled in batch mode.
       syncHiveIfEnabled();
     }

@@ -143,7 +143,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
   @ValueSource(booleans = {true, false})
   void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build());
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
 

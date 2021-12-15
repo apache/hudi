@@ -117,7 +117,7 @@ class HoodieCatalogTable(val spark: SparkSession, val table: CatalogTable) exten
    * Make StructField nullable.
    */
   lazy val tableSchema: StructType = {
-    val originSchema = getTableSqlSchema(metaClient, includeMetadataFields = true).get
+    val originSchema = getTableSqlSchema(metaClient, includeMetadataFields = true).getOrElse(table.schema)
     StructType(originSchema.map(_.copy(nullable = true)))
   }
 

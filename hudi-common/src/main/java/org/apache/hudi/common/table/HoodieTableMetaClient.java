@@ -79,7 +79,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".aux";
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + Path.SEPARATOR + ".bootstrap";
   public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".heartbeat";
-  public static final String ZINDEX_NAME = ".zindex";
+  public static final String COLUMN_STATISTICS_INDEX_NAME = ".colstatsindex";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
       + Path.SEPARATOR + ".partitions";
   public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + Path.SEPARATOR
@@ -178,10 +178,10 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * @return z-index path
+   * @return Column Statistics index path
    */
-  public String getZindexPath() {
-    return new Path(metaPath, ZINDEX_NAME).toString();
+  public String getColumnStatsIndexPath() {
+    return new Path(metaPath, COLUMN_STATISTICS_INDEX_NAME).toString();
   }
 
   /**
