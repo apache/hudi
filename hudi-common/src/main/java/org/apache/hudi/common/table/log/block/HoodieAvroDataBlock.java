@@ -93,15 +93,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     return HoodieLogBlockType.AVRO_DATA_BLOCK;
   }
 
-  /**
-   * This constructor is retained to provide backwards compatibility to HoodieArchivedLogs which were written using
-   * HoodieLogFormat V1.
-   */
-  @Deprecated
-  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
-    super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
-  }
-
   @Override
   protected byte[] serializeRecords(List<IndexedRecord> records) throws IOException {
     Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
@@ -141,13 +132,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     output.close();
     return baos.toByteArray();
   }
-
-  //----------------------------------------------------------------------------------------
-  //                                  DEPRECATED METHODS
-  //
-  // These methods were only supported by HoodieAvroDataBlock and have been deprecated. Hence,
-  // these are only implemented here even though they duplicate the code from HoodieAvroDataBlock.
-  //----------------------------------------------------------------------------------------
 
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
   // TODO (na) - Implement a recordItr instead of recordList
@@ -190,6 +174,22 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     deflate();
 
     return records;
+  }
+
+  //----------------------------------------------------------------------------------------
+  //                                  DEPRECATED METHODS
+  //
+  // These methods were only supported by HoodieAvroDataBlock and have been deprecated. Hence,
+  // these are only implemented here even though they duplicate the code from HoodieAvroDataBlock.
+  //----------------------------------------------------------------------------------------
+
+  /**
+   * This constructor is retained to provide backwards compatibility to HoodieArchivedLogs which were written using
+   * HoodieLogFormat V1.
+   */
+  @Deprecated
+  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
+    super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   /**
