@@ -72,6 +72,8 @@ public abstract class ITTestBase {
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar";
   protected static final String HUDI_UTILITIES_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-utilities.jar";
+  protected static final String HUDI_INTEG_TEST_BUNDLE =
+          HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-integ-test-bundle.jar";
   protected static final String HIVE_SERVER_JDBC_URL = "jdbc:hive2://hiveserver:10000";
   protected static final String PRESTO_COORDINATOR_URL = "presto-coordinator-1:8090";
   protected static final String HADOOP_CONF_DIR = "/etc/hadoop";
