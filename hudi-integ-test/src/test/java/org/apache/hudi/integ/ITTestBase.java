@@ -133,7 +133,10 @@ public abstract class ITTestBase {
     DockerCmdExecFactory dockerCmdExecFactory = new JerseyDockerCmdExecFactory().withConnectTimeout(5000)
         .withMaxTotalConnections(100).withMaxPerRouteConnections(10);
     dockerClient = DockerClientBuilder.getInstance(config).withDockerCmdExecFactory(dockerCmdExecFactory).build();
+    LOG.info("Start waiting for all the containers to be up");
+    long currTs = System.currentTimeMillis();
     await().atMost(120, SECONDS).until(this::servicesUp);
+    LOG.info(String.format("Waiting for all the containers finishes in %d ms", System.currentTimeMillis() - currTs));
   }
 
   private boolean servicesUp() {
