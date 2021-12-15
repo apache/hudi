@@ -35,7 +35,7 @@ import java.io.OutputStream;
 /**
  * HoodieParquetStreamWriter wraps the ParquetWriter to assist in writing to OutputStream.
  */
-public class HoodieParquetStreamWriter<R extends IndexedRecord> {
+public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoCloseable {
 
   private final ParquetWriter<R> writer;
   private final HoodieAvroWriteSupport writeSupport;
@@ -60,6 +60,7 @@ public class HoodieParquetStreamWriter<R extends IndexedRecord> {
     writeSupport.add(key);
   }
 
+  @Override
   public void close() throws IOException {
     writer.close();
   }

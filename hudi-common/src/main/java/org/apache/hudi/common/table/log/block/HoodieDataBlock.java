@@ -50,9 +50,10 @@ import java.util.Map;
  */
 public abstract class HoodieDataBlock extends HoodieLogBlock {
 
-  protected final Schema readerSchema;
-  protected final String keyFieldRef;
+  private final String keyFieldRef;
   private List<IndexedRecord> records;
+
+  protected final Schema readerSchema;
 
   public HoodieDataBlock(
       @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
@@ -204,7 +205,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return Option.ofNullable(schema.getField(keyFieldRef));
   }
 
-  protected Option<String> getKey(IndexedRecord record) {
+  protected Option<String> getRecordKey(IndexedRecord record) {
     return getKeyField(record.getSchema()).map(keyField -> record.get(keyField.pos()).toString());
   }
 }

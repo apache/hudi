@@ -37,6 +37,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+
 /**
  * Abstract class defining a block in HoodieLogFile.
  */
@@ -232,6 +234,9 @@ public abstract class HoodieLogBlock {
    * When lazyReading of blocks is turned on, inflate the content of a log block from disk.
    */
   protected void inflate() throws HoodieIOException {
+    checkState(!content.isPresent(), "Block has already been inflated");
+    checkState(inputStream != null, "Block should have input-stream provided");
+
     try {
       content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
       inputStream.seek(this.getBlockContentLocation().get().getContentPositionInLogFile());

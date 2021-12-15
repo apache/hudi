@@ -30,7 +30,6 @@ import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 
 import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -105,7 +104,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     FSDataOutputStream ostream = new FSDataOutputStream(baos, null);
 
     // Use simple incrementing counter as a key
-    boolean useIntegerKey = !getKey(records.get(0)).isPresent();
+    boolean useIntegerKey = !getRecordKey(records.get(0)).isPresent();
     // This is set here to avoid re-computing this in the loop
     int keyWidth = useIntegerKey ? (int) Math.ceil(Math.log(records.size())) + 1 : -1;
 
@@ -120,7 +119,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       if (useIntegerKey) {
         recordKey = String.format("%" + keyWidth + "s", id++);
       } else {
-        recordKey = getKey(record).get();
+        recordKey = getRecordKey(record).get();
       }
 
       final byte[] recordBytes = serializeRecord(record);
@@ -159,7 +158,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     // ones requested
     HashSet<String> keySet = new HashSet<>(keys);
     return getRecords().stream()
-        .filter(record -> keySet.contains(getKey(record).get()))
+        .filter(record -> keySet.contains(getRecordKey(record).get()))
         .collect(Collectors.toList());
   }
 

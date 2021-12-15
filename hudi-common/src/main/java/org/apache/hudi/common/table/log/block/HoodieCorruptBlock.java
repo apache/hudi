@@ -40,7 +40,6 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
 
   @Override
   public byte[] getContentBytes() throws IOException {
-
     if (!getContent().isPresent() && readBlockLazily) {
       // read content from disk
       inflate();

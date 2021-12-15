@@ -73,7 +73,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
   private boolean reverseReader;
-  private boolean enableInlineReading;
+  private boolean enableRecordLookups;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
 
@@ -89,7 +89,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily, boolean reverseReader, boolean enableInlineReading,
+                             boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
                              String keyField) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     this.logFile = logFile;
@@ -97,7 +97,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
     this.reverseReader = reverseReader;
-    this.enableInlineReading = enableInlineReading;
+    this.enableRecordLookups = enableRecordLookups;
     this.keyField = keyField;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = logFile.getFileSize();
@@ -262,10 +262,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, readerSchema,
-            header, footer, enableInlineReading);
+            header, footer, enableRecordLookups);
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
-            contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
+            contentPosition, contentLength, blockEndPos, readerSchema, header, footer, keyField);
       case DELETE_BLOCK:
         return HoodieDeleteBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, header, footer);
