@@ -85,9 +85,7 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
       handles.put(partitionPath, handle);
     }
 
-    // If index requires a customized partitioner, cannot open a new file here since it might violate
-    // the distribution required by index.
-    if (!handle.canWrite(payload.record) && !hoodieTable.getIndex().needCustomizedPartitioner()) {
+    if (!handle.canWrite(payload.record)) {
       // Handle is full. Close the handle and add the WriteStatus
       statuses.addAll(handle.close());
       // Open new handle

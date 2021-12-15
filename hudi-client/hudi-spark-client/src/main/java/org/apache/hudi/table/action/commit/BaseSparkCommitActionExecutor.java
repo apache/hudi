@@ -216,10 +216,8 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   protected Partitioner getPartitioner(WorkloadProfile profile) {
-    Option<org.apache.hudi.table.action.commit.Partitioner> customizedPartitioner = table.getIndex()
-        .getCustomizedPartitioner(profile, context, table, config);
-    if (customizedPartitioner.isPresent()) {
-      return (Partitioner) customizedPartitioner.get();
+    if (table.getStorageLayout().isUniqueDistribution()) {
+      return getUniquePartitioner(profile);
     } else if (WriteOperationType.isChangingRecords(operationType)) {
       return getUpsertPartitioner(profile);
     } else {
@@ -396,6 +394,12 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   public Partitioner getInsertPartitioner(WorkloadProfile profile) {
     return getUpsertPartitioner(profile);
+  }
+
+  public Partitioner getUniquePartitioner(WorkloadProfile profile) {
+    return (Partitioner) ReflectionUtils.loadClass(table.getStorageLayout().getPartitioner(),
+        new Class[] { WorkloadProfile.class, HoodieEngineContext.class, HoodieTable.class, HoodieWriteConfig.class },
+        profile, context, table, config);
   }
 
   @Override

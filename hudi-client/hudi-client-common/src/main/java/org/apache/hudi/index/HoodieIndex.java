@@ -126,25 +126,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   public abstract boolean isImplicitWithStorage();
 
   /**
-   * An index might need customized partitioner other than general upsert and insert partitioner.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public Option<Partitioner> getCustomizedPartitioner(WorkloadProfile profile,
-      HoodieEngineContext context,
-      HoodieTable table,
-      HoodieWriteConfig writeConfig) {
-    return Option.empty();
-  }
-
-  /**
-   * If the `getCustomizedPartitioner` returns a partitioner, it has to be true.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public boolean needCustomizedPartitioner() {
-    return false;
-  }
-
-  /**
    * If the `getCustomizedPartitioner` returns a partitioner, it has to be true.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)

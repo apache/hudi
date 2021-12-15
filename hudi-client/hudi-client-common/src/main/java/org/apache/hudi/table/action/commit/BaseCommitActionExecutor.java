@@ -35,11 +35,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -78,9 +76,9 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link AbstractHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
     this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
-    if (this.config.getIndexType() == HoodieIndex.IndexType.BUCKET_INDEX
-        && !HoodieIndexConfig.BUCKET_INDEX_SUPPORTED_OPERATIONS.contains(operationType)) {
-      throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName() + " is not compatible with bucket index");
+    if (table.getStorageLayout().operationConstraint(operationType)) {
+      throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
+          + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
     }
   }
 

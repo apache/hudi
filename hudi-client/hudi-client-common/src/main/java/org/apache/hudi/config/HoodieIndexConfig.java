@@ -24,9 +24,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
@@ -38,9 +36,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Properties;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieHBaseIndexConfig.GET_BATCH_SIZE;
@@ -217,6 +213,7 @@ public class HoodieIndexConfig extends HoodieConfig {
    * 2. Bucket num change requires rewriting the partition.
    * 3. Predict the table size and future data growth well to set a reasonable bucket num.
    * 4. A bucket size is recommended less than 3GB and avoid bing too small.
+   * more details and progress see [HUDI-3039].
    */
   // Bucket num equals file groups num in each partition.
   // Bucket num can be set according to partition size and file group size.
@@ -237,19 +234,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue("JVMHash")
       .withDocumentation("Hash function. It is used to compute the index key hash value "
           + "Possible options are [JVMHash | HiveHash]. ");
-
-  public static final Set<WriteOperationType> BUCKET_INDEX_SUPPORTED_OPERATIONS = new HashSet<WriteOperationType>() {{
-      add(WriteOperationType.INSERT);
-      add(WriteOperationType.INSERT_PREPPED);
-      add(WriteOperationType.UPSERT);
-      add(WriteOperationType.UPSERT_PREPPED);
-      add(WriteOperationType.INSERT_OVERWRITE);
-      add(WriteOperationType.DELETE);
-      add(WriteOperationType.COMPACT);
-      add(WriteOperationType.DELETE_PARTITION);
-      // TODO: HUDI-2155 bulk insert support bucket index.
-      // TODO: HUDI-2156 cluster the table with bucket index.
-    }};
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.
