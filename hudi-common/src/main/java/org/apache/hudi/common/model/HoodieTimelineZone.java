@@ -22,12 +22,16 @@ package org.apache.hudi.common.model;
  * Hoodie TimelineZone.
  */
 public enum HoodieTimelineZone {
-    LOCAL("local"),
-    UTC("utc");
+  LOCAL("local"),
+  UTC("utc");
 
-    private final String timezone;
+  private final String timezone;
 
-    HoodieTimelineZone(String timezone) { this.timezone = timezone; }
+  HoodieTimelineZone(String timezone) {
+    this.timezone = timezone;
+  }
 
-    public String getTimezone() { return timezone; }
+  public String getTimezone() {
+    return timezone;
+  }
 }
