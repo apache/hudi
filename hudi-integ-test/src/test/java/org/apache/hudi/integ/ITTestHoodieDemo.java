@@ -159,11 +159,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void setupDemo() throws Exception {
-    List<String> cmds = CollectionUtils.createImmutableList("hdfs dfsadmin -report",
-        "hdfs fsck -list-corruptfileblocks",
-        "hdfs dfsadmin -safemode get",
-        "hdfs dfsadmin -safemode leave",
-        "hdfs dfsadmin -safemode wait",
+    List<String> cmds = CollectionUtils.createImmutableList("hdfs dfsadmin -safemode wait",
         "hdfs dfs -mkdir -p " + HDFS_DATA_DIR,
         "hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1,
         "/bin/bash " + DEMO_CONTAINER_SCRIPT);
@@ -183,8 +179,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void ingestFirstBatchAndHiveSync() throws Exception {
     List<String> cmds = CollectionUtils.createImmutableList(
         "spark-submit"
-            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
-            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type COPY_ON_WRITE "
             + " --base-file-format " + baseFileFormat.toString()
@@ -193,8 +188,6 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --props /var/demo/config/dfs-source.properties"
             + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider ",
         "spark-submit "
-            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
-            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
             + "--class org.apache.hudi.hive.HiveSyncTool " + HUDI_HIVE_SYNC_BUNDLE
             + " --database default"
             + " --table " + COW_TABLE_NAME
@@ -205,8 +198,7 @@ public class ITTestHoodieDemo extends ITTestBase {
             + " --jdbc-url jdbc:hive2://hiveserver:10000"
             + " --partitioned-by dt",
         ("spark-submit"
-            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
-            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
+            + " --conf \'spark.executor.extraJavaOptions=-Dlog4jspark.root.logger=WARN,console\'"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
             + " --table-type MERGE_ON_READ "
             + " --base-file-format " + baseFileFormat.toString()
@@ -220,8 +212,6 @@ public class ITTestHoodieDemo extends ITTestBase {
     executeSparkSQLCommand(SPARKSQL_BS_PREP_COMMANDS, true);
     List<String> bootstrapCmds = CollectionUtils.createImmutableList(
         "spark-submit "
-            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
-            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
         + " --table-type COPY_ON_WRITE "
         + " --run-bootstrap "
@@ -237,8 +227,6 @@ public class ITTestHoodieDemo extends ITTestBase {
         + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
         + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_BOOTSTRAPPED_TABLE_NAME),
         "spark-submit "
-            + " --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
-            + " --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file:/var/demo/config/log4j.properties"
             + " --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer " + HUDI_UTILITIES_BUNDLE
         + " --table-type MERGE_ON_READ "
         + " --run-bootstrap "

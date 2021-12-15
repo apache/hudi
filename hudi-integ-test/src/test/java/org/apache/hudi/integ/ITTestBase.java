@@ -135,7 +135,7 @@ public abstract class ITTestBase {
     dockerClient = DockerClientBuilder.getInstance(config).withDockerCmdExecFactory(dockerCmdExecFactory).build();
     await().atMost(60, SECONDS).until(this::servicesUp);
     try {
-      Thread.sleep(180000);
+      Thread.sleep(10000);
     } catch (InterruptedException e) {
       e.printStackTrace();
     }
