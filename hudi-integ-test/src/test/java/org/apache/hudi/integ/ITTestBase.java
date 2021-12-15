@@ -18,7 +18,6 @@
 
 package org.apache.hudi.integ;
 
-import java.util.concurrent.TimeoutException;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -42,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -144,6 +144,24 @@ public abstract class ITTestBase {
         return false;
       }
     }
+
+    try {
+      TestExecStartResultCallback resultCallback =
+          executeCommandStringInDocker(ADHOC_1_CONTAINER, "nc -z -v namenode 8020", true);
+      String stdoutString = resultCallback.getStdout().toString().trim();
+      LOG.info("Result: nc -z -v namenode 8020");
+      LOG.info("Stdout");
+      LOG.info(stdoutString);
+      LOG.info("Stderr");
+      LOG.info(resultCallback.getStderr().toString().trim());
+      if (stdoutString.contains("Connection refused")) {
+        Thread.sleep(1000);
+        return false;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+
     runningContainers = containerList.stream().map(c -> Pair.of(c.getNames()[0], c))
         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     return true;
