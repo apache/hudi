@@ -234,7 +234,7 @@ public abstract class ITTestBase {
 
   protected TestExecStartResultCallback executeCommandStringInDocker(
       String containerName, String cmd, boolean expectedToSucceed) throws Exception {
-    return executeCommandStringInDocker(containerName, cmd, false, expectedToSucceed);
+    return executeCommandStringInDocker(containerName, cmd, true, expectedToSucceed);
   }
 
   protected TestExecStartResultCallback executeCommandStringInDocker(
