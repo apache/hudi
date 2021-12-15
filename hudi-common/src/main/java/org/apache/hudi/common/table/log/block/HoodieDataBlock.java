@@ -18,26 +18,21 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.inline.InLineFSUtils;
-import org.apache.hudi.common.fs.inline.InLineFileSystem;
-import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FSDataInputStream;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * DataBlock contains a list of records serialized using formats compatible with the base file format.
@@ -50,6 +45,8 @@ import java.util.Map;
  */
 public abstract class HoodieDataBlock extends HoodieLogBlock {
 
+  // TODO rebase records/content to leverage Either to warrant
+  //      that they are mutex (used by read/write flows respectively)
   private List<IndexedRecord> records;
   private final String keyFieldRef;
 
@@ -128,11 +125,10 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     // In case this method is called before realizing records from content
     Option<byte[]> content = getContent();
 
+    checkState(content.isPresent() || records != null, "Block is in invalid state");
+
     if (content.isPresent()) {
       return content.get();
-    } else if (readBlockLazily && records == null) {
-      // read block lazily
-      readRecordsFromContent();
     }
 
     return serializeRecords(records);
