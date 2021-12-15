@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineZone;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -639,7 +640,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String keyGeneratorClassProp;
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
-    private Boolean isUTCTimezone;
+    private HoodieTimelineZone commitTimezone;
 
     private PropertyBuilder() {
 
@@ -728,11 +729,6 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setUTCTimeZone(Boolean isUTCTimezone) {
-      this.isUTCTimezone = isUTCTimezone;
-      return this;
-    }
-
     public PropertyBuilder setHiveStylePartitioningEnable(Boolean hiveStylePartitioningEnable) {
       this.hiveStylePartitioningEnable = hiveStylePartitioningEnable;
       return this;
@@ -740,6 +736,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setUrlEncodePartitioning(Boolean urlEncodePartitioning) {
       this.urlEncodePartitioning = urlEncodePartitioning;
+      return this;
+    }
+
+    public PropertyBuilder setCommitTimezone(HoodieTimelineZone commitTimezone) {
+      this.commitTimezone = commitTimezone;
       return this;
     }
 
@@ -879,8 +880,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != urlEncodePartitioning) {
         tableConfig.setValue(HoodieTableConfig.URL_ENCODE_PARTITIONING, Boolean.toString(urlEncodePartitioning));
       }
-      if (null != isUTCTimezone) {
-        tableConfig.setValue(HoodieTableConfig.TIMELINE_UTC_KEY, Boolean.toString(isUTCTimezone));
+      if (null != commitTimezone) {
+        tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimezone.toString());
       }
       return tableConfig.getProps();
     }

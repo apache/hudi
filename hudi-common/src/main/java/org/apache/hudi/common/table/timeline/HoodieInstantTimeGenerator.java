@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.model.HoodieTimelineZone;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -57,7 +58,7 @@ public class HoodieInstantTimeGenerator {
   // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
   private static final String DEFAULT_MILLIS_EXT = "999";
 
-  private static boolean isUTCTimezone = false;
+  private static String commitTimeZone;
 
   /**
    * Returns next instant time that adds N milliseconds to the current time.
@@ -69,7 +70,7 @@ public class HoodieInstantTimeGenerator {
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
-        if (isUTCTimezone()) {
+        if (commitTimeZone.equals(HoodieTimelineZone.UTC.toString())) {
           LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
           newCommitTime = now.format(MILLIS_INSTANT_TIME_FORMATTER);
         } else {
@@ -140,11 +141,7 @@ public class HoodieInstantTimeGenerator {
     return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
   }
 
-  public static boolean isUTCTimezone() {
-    return isUTCTimezone;
-  }
-
-  public static void setIsUTCTimezone(boolean isUTCTimezone) {
-    HoodieInstantTimeGenerator.isUTCTimezone = isUTCTimezone;
+  public static void setCommitTimeZone(String commitTimeZone) {
+    HoodieInstantTimeGenerator.commitTimeZone = commitTimeZone;
   }
 }

@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineZone;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -168,10 +169,10 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Key Generator class property for the hoodie table");
 
-  public static final ConfigProperty<String> TIMELINE_UTC_KEY = ConfigProperty
-      .key("hoodie.table.timeline.useutc")
-      .defaultValue("false")
-      .withDocumentation("timeline is or not utc timezone");
+  public static final ConfigProperty<HoodieTimelineZone> TIMELINE_TIMEZONE = ConfigProperty
+      .key("hoodie.table.timeline.zone")
+      .defaultValue(HoodieTimelineZone.LOCAL)
+      .withDocumentation("Set timeline timezone type");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -321,9 +322,9 @@ public class HoodieTableConfig extends HoodieConfig {
         // Use the default bootstrap index class.
         hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, getDefaultBootstrapIndexClass(properties));
       }
-      if (hoodieConfig.contains(TIMELINE_UTC_KEY)) {
+      if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         // set commit timeline timezone to utc
-        HoodieInstantTimeGenerator.setIsUTCTimezone(hoodieConfig.getBoolean(TIMELINE_UTC_KEY));
+        HoodieInstantTimeGenerator.setCommitTimeZone(hoodieConfig.getString(TIMELINE_TIMEZONE));
       }
       hoodieConfig.getProps().store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
