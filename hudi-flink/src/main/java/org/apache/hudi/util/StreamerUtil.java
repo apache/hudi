@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -145,21 +144,7 @@ public class StreamerUtil {
     return FlinkClientUtil.getHadoopConf();
   }
 
-  /**
-   * Mainly used for tests.
-   */
   public static HoodieWriteConfig getHoodieClientConfig(Configuration conf) {
-    return getHoodieClientConfig(conf, false, false);
-  }
-
-  public static HoodieWriteConfig getHoodieClientConfig(Configuration conf, boolean loadFsViewStorageConfig) {
-    return getHoodieClientConfig(conf, false, loadFsViewStorageConfig);
-  }
-
-  public static HoodieWriteConfig getHoodieClientConfig(
-      Configuration conf,
-      boolean enableEmbeddedTimelineService,
-      boolean loadFsViewStorageConfig) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
@@ -204,20 +189,13 @@ public class StreamerUtil {
                 .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
                 .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
                 .build())
-            .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 
-    HoodieWriteConfig writeConfig = builder.build();
-    if (loadFsViewStorageConfig) {
-      // do not use the builder to give a change for recovering the original fs view storage config
-      FileSystemViewStorageConfig viewStorageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH));
-      writeConfig.setViewStorageConfig(viewStorageConfig);
-    }
-    return writeConfig;
+    return builder.build();
   }
 
   /**
@@ -257,6 +235,7 @@ public class StreamerUtil {
     final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
+          .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
@@ -362,16 +341,15 @@ public class StreamerUtil {
 
   /**
    * Creates the Flink write client.
-   *
-   * <p>This expects to be used by client, the driver should start an embedded timeline server.
    */
+  @SuppressWarnings("rawtypes")
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext) {
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(
             new SerializableConfiguration(getHadoopConf()),
             new FlinkTaskContextSupplier(runtimeContext));
 
-    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true);
+    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf);
     return new HoodieFlinkWriteClient<>(context, writeConfig);
   }
 
@@ -382,16 +360,10 @@ public class StreamerUtil {
    *
    * <p>The task context supplier is a constant: the write token is always '0-1-0'.
    */
+  @SuppressWarnings("rawtypes")
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf) throws IOException {
-    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
-    // create the filesystem view storage properties for client
-    FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
-    // rebuild the view storage config with simplified options.
-    FileSystemViewStorageConfig rebuilt = FileSystemViewStorageConfig.newBuilder()
-        .withStorageType(viewStorageConfig.getStorageType())
-        .withRemoteServerHost(viewStorageConfig.getRemoteViewServerHost())
-        .withRemoteServerPort(viewStorageConfig.getRemoteViewServerPort()).build();
-    ViewStorageProperties.createProperties(conf.getString(FlinkOptions.PATH), rebuilt);
+    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf);
+    // build the write client to start the embedded timeline server
     return new HoodieFlinkWriteClient<>(HoodieFlinkEngineContext.DEFAULT, writeConfig);
   }
 

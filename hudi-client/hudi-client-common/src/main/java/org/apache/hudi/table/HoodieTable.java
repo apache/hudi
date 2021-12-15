@@ -246,7 +246,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
 
   /**
-   * Updates Metadata Indexes (like Z-Index)
+   * Updates Metadata Indexes (like Column Stats index)
    * TODO rebase onto metadata table (post RFC-27)
    *
    * @param context instance of {@link HoodieEngineContext}

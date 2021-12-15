@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.index.zorder;
+package org.apache.hudi.index.columnstats;
 
 import org.junit.jupiter.api.Test;
 
@@ -25,11 +25,11 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestZOrderingIndexHelper {
+public class TestColumnStatsIndexHelper {
 
   @Test
   public void testMergeSql() {
-    String q = ZOrderingIndexHelper.createIndexMergeSql("old", "new", Arrays.asList("file", "a", "b"));
+    String q = ColumnStatsIndexHelper.createIndexMergeSql("old", "new", Arrays.asList("file", "a", "b"));
     assertEquals(
         "SELECT "
             + "if (new.file is null, old.file, new.file) AS file, "

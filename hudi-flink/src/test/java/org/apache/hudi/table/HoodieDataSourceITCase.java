@@ -245,7 +245,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   @Test
   void testStreamWriteReadSkippingCompaction() throws Exception {
     // create filesystem table named source
-    String createSource = TestConfigurations.getFileSourceDDL("source");
+    String createSource = TestConfigurations.getFileSourceDDL("source", 4);
     streamTableEnv.executeSql(createSource);
 
     String hoodieTableDDL = sql("t1")
@@ -260,7 +260,12 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);
 
-    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
+    String instant = TestUtils.getNthCompleteInstant(tempFile.getAbsolutePath(), 2, true);
+
+    streamTableEnv.getConfig().getConfiguration()
+        .setBoolean("table.dynamic-table-options.enabled", true);
+    final String query = String.format("select * from t1/*+ options('read.start-commit'='%s')*/", instant);
+    List<Row> rows = execSelectSql(streamTableEnv, query, 10);
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
   }
 

@@ -235,7 +235,7 @@ public class TestHoodieMetadataBootstrap extends TestHoodieMetadataBase {
   }
 
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {
-    doWriteInsertAndUpsert(testTable, "0000100", "0000101");
+    doWriteInsertAndUpsert(testTable, "0000100", "0000101", false);
   }
 
   private HoodieWriteConfig getWriteConfig(int minArchivalCommits, int maxArchivalCommits) throws Exception {

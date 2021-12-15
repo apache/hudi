@@ -123,6 +123,14 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   /**
+   * Partition path has changed - drop the following partitions.
+   */
+  @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    ddlExecutor.dropPartitionsToTable(tableName, partitionsToDrop);
+  }
+
+  /**
    * Update the table properties to the table.
    */
   @Override
@@ -147,6 +155,14 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    * Generate a list of PartitionEvent based on the changes required.
    */
   List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions) {
+    return getPartitionEvents(tablePartitions, partitionStoragePartitions, false);
+  }
+
+  /**
+   * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
+   * Generate a list of PartitionEvent based on the changes required.
+   */
+  List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions, boolean isDropPartition) {
     Map<String, String> paths = new HashMap<>();
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
@@ -161,12 +177,17 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
-      if (!storagePartitionValues.isEmpty()) {
-        String storageValue = String.join(", ", storagePartitionValues);
-        if (!paths.containsKey(storageValue)) {
-          events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
-        } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
-          events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+
+      if (isDropPartition) {
+        events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
+      } else {
+        if (!storagePartitionValues.isEmpty()) {
+          String storageValue = String.join(", ", storagePartitionValues);
+          if (!paths.containsKey(storageValue)) {
+            events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
+          } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
+            events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+          }
         }
       }
     }

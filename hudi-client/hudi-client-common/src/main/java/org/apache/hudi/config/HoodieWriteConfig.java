@@ -32,7 +32,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -103,7 +103,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> WRITE_PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.payload.class")
-      .defaultValue(DefaultHoodieRecordPayload.class.getName())
+      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
@@ -1101,6 +1101,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
   }
 
+  public boolean isAutoArchive() {
+    return getBoolean(HoodieCompactionConfig.AUTO_ARCHIVE);
+  }
+
   public boolean isAsyncClean() {
     return getBoolean(HoodieCompactionConfig.ASYNC_CLEAN);
   }
@@ -1131,6 +1135,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Long getTargetIOPerCompactionInMB() {
     return getLong(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB);
+  }
+
+  public Long getCompactionLogFileSizeThreshold() {
+    return getLong(HoodieCompactionConfig.COMPACTION_LOG_FILE_SIZE_THRESHOLD);
   }
 
   public Boolean getCompactionLazyBlockReadEnabled() {
@@ -1620,6 +1628,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOBNAME_SUFFIX);
   }
 
+  public String getMetricReporterMetricsNamePrefix() {
+    return getStringOrDefault(HoodieMetricsConfig.METRICS_REPORTER_PREFIX);
+  }
+  
   /**
    * memory configs.
    */

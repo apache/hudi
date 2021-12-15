@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Bound
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.hudi.DataSkippingUtils.createZIndexLookupFilter
+import org.apache.spark.sql.hudi.DataSkippingUtils.createColumnStatsIndexFilterExpr
 import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
@@ -165,8 +165,8 @@ case class HoodieFileIndex(
 
   /**
    * Computes pruned list of candidate base-files' names based on provided list of {@link dataFilters}
-   * conditions, by leveraging custom Z-order index (Z-index) bearing "min", "max", "num_nulls" statistic
-   * for all clustered columns
+   * conditions, by leveraging custom Column Statistics index (col-stats-index) bearing "min", "max",
+   * "num_nulls" statistics for all clustered columns.
    *
    * NOTE: This method has to return complete set of candidate files, since only provided candidates will
    *       ultimately be scanned as part of query execution. Hence, this method has to maintain the
@@ -175,8 +175,8 @@ case class HoodieFileIndex(
    * @param queryFilters list of original data filters passed down from querying engine
    * @return list of pruned (data-skipped) candidate base-files' names
    */
-  private def lookupCandidateFilesInZIndex(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
-    val indexPath = metaClient.getZindexPath
+  private def lookupCandidateFilesInColStatsIndex(queryFilters: Seq[Expression]): Try[Option[Set[String]]] = Try {
+    val indexPath = metaClient.getColumnStatsIndexPath
     val fs = metaClient.getFs
 
     if (!enableDataSkipping() || !fs.exists(new Path(indexPath)) || queryFilters.isEmpty) {
@@ -203,14 +203,14 @@ case class HoodieFileIndex(
       Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
     } catch {
       case t: Throwable =>
-        logError("Failed to read Z-index; skipping", t)
+        logError("Failed to read col-stats index; skipping", t)
         None
     }
 
     dataFrameOpt.map(df => {
       val indexSchema = df.schema
       val indexFilter =
-        queryFilters.map(createZIndexLookupFilter(_, indexSchema))
+        queryFilters.map(createColumnStatsIndexFilterExpr(_, indexSchema))
           .reduce(And)
 
       logInfo(s"Index filter condition: $indexFilter")
@@ -232,13 +232,13 @@ case class HoodieFileIndex(
 
       df.unpersist()
 
-      // NOTE: Z-index isn't guaranteed to have complete set of statistics for every
+      // NOTE: Col-Stats Index isn't guaranteed to have complete set of statistics for every
       //       base-file: since it's bound to clustering, which could occur asynchronously
-      //       at arbitrary point in time, and is not likely to touching all of the base files.
+      //       at arbitrary point in time, and is not likely to be touching all of the base files.
       //
-      //       To close that gap, we manually compute the difference b/w all indexed (Z-index)
+      //       To close that gap, we manually compute the difference b/w all indexed (by col-stats-index)
       //       files and all outstanding base-files, and make sure that all base files not
-      //       represented w/in Z-index are included in the output of this method
+      //       represented w/in the index are included in the output of this method
       val notIndexedFileNames =
         lookupFileNamesMissingFromIndex(allIndexedFileNames)
 
@@ -260,12 +260,12 @@ case class HoodieFileIndex(
    */
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    // Look up candidate files names in the Z-index, if all of the following conditions are true
+    // Look up candidate files names in the col-stats index, if all of the following conditions are true
     //    - Data-skipping is enabled
-    //    - Z-index is present
+    //    - Col-Stats Index is present
     //    - List of predicates (filters) is present
     val candidateFilesNamesOpt: Option[Set[String]] =
-      lookupCandidateFilesInZIndex(dataFilters) match {
+      lookupCandidateFilesInColStatsIndex(dataFilters) match {
         case Success(opt) => opt
         case Failure(e) =>
           if (e.isInstanceOf[AnalysisException]) {
@@ -280,7 +280,7 @@ case class HoodieFileIndex(
 
     if (queryAsNonePartitionedTable) {
       // Read as Non-Partitioned table
-      // Filter in candidate files based on the Z-index lookup
+      // Filter in candidate files based on the col-stats index lookup
       val candidateFiles =
         allFiles.filter(fileStatus =>
           // NOTE: This predicate is true when {@code Option} is empty
@@ -305,7 +305,7 @@ case class HoodieFileIndex(
             .filter(_ != null)
             .map(_.getFileStatus)
 
-        // Filter in candidate files based on the Z-index lookup
+        // Filter in candidate files based on the col-stats index lookup
         val candidateFiles =
           baseFileStatuses.filter(fs =>
             // NOTE: This predicate is true when {@code Option} is empty

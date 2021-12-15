@@ -16,11 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.optimize;
+package org.apache.hudi.common.util;
 
 import java.nio.charset.Charset;
 
-public class ZOrderingUtil {
+public class BinaryUtil {
 
   /**
    * Lexicographically compare two arrays.

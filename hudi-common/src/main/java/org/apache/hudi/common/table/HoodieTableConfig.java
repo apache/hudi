@@ -466,7 +466,7 @@ public class HoodieTableConfig extends HoodieConfig {
     return getString(HIVE_STYLE_PARTITIONING_ENABLE);
   }
 
-  public String getUrlEncodePartitoning() {
+  public String getUrlEncodePartitioning() {
     return getString(URL_ENCODE_PARTITIONING);
   }
 

@@ -299,7 +299,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     val instantLength = queryInstant.length
     if (instantLength == 19 || instantLength == 23) { // for yyyy-MM-dd HH:mm:ss[.SSS]
       HoodieInstantTimeGenerator.getInstantForDateString(queryInstant)
-    } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_TIMESTAMP_FORMAT
+    } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH
       || instantLength  == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) { // for yyyyMMddHHmmss[SSS]
       HoodieActiveTimeline.parseDateFromInstantTime(queryInstant) // validate the format
       queryInstant

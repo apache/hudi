@@ -18,7 +18,10 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 
@@ -27,7 +30,15 @@ import com.amazonaws.services.dynamodbv2.model.BillingMode;
 
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
 
-public class AWSLockConfiguration {
+/**
+ * Hoodie Configs for Locks.
+ */
+@ConfigClassProperty(name = "DynamoDB based Locks Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configs that control DynamoDB based locking mechanisms required for concurrency control "
+        + " between writers to a Hudi table. Concurrency between Hudi's own table services "
+        + " are auto managed internally.")
+public class DynamoDbBasedLockConfig extends HoodieConfig {
 
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LOCK_PREFIX + "dynamodb.";

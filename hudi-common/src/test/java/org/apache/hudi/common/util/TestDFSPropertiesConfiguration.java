@@ -145,7 +145,7 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
-  public void testLocalFileSystemLoading() {
+  public void testLocalFileSystemLoading() throws IOException {
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), new Path(dfsBasePath + "/t1.props"));
 
     cfg.addPropsFromFile(
@@ -156,8 +156,7 @@ public class TestDFSPropertiesConfiguration {
                     .getResource("props/test.properties")
                     .getPath()
             )
-        )
-    );
+        ));
 
     TypedProperties props = cfg.getProps();
 

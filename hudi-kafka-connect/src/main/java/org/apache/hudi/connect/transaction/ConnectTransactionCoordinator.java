@@ -280,26 +280,56 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   private void onReceiveWriteStatus(ControlMessage message) {
     ControlMessage.ParticipantInfo participantInfo = message.getParticipantInfo();
-    int partition = message.getSenderPartition();
-    partitionsWriteStatusReceived.put(partition, KafkaConnectUtils.getWriteStatuses(participantInfo));
-    currentConsumedKafkaOffsets.put(partition, participantInfo.getKafkaOffset());
+    int partitionId = message.getSenderPartition();
+    partitionsWriteStatusReceived.put(partitionId, KafkaConnectUtils.getWriteStatuses(participantInfo));
+    currentConsumedKafkaOffsets.put(partitionId, participantInfo.getKafkaOffset());
     if (partitionsWriteStatusReceived.size() >= numPartitions
         && currentState.equals(State.ENDED_COMMIT)) {
       // Commit the kafka offsets to the commit file
       try {
         List<WriteStatus> allWriteStatuses = new ArrayList<>();
         partitionsWriteStatusReceived.forEach((key, value) -> allWriteStatuses.addAll(value));
-        // Commit the last write in Hudi, along with the latest kafka offset
-        if (!allWriteStatuses.isEmpty()) {
-          transactionServices.endCommit(currentCommitTime,
+
+        long totalErrorRecords = (long) allWriteStatuses.stream().mapToDouble(WriteStatus::getTotalErrorRecords).sum();
+        long totalRecords = (long) allWriteStatuses.stream().mapToDouble(WriteStatus::getTotalRecords).sum();
+        boolean hasErrors = totalErrorRecords > 0;
+
+        if ((!hasErrors || configs.allowCommitOnErrors()) && !allWriteStatuses.isEmpty()) {
+          boolean success = transactionServices.endCommit(currentCommitTime,
               allWriteStatuses,
               transformKafkaOffsets(currentConsumedKafkaOffsets));
+
+          if (success) {
+            LOG.info("Commit " + currentCommitTime + " successful!");
+            currentState = State.WRITE_STATUS_RCVD;
+            globalCommittedKafkaOffsets.putAll(currentConsumedKafkaOffsets);
+            submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.ACK_COMMIT,
+                message.getTopicName(),
+                currentCommitTime));
+            return;
+          } else {
+            LOG.error("Commit " + currentCommitTime + " failed!");
+          }
+        } else if (hasErrors) {
+          LOG.error("Coordinator found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
+          LOG.error("Printing out the top 100 errors");
+          allWriteStatuses.stream().filter(WriteStatus::hasErrors).limit(100).forEach(ws -> {
+            LOG.error("Global error :", ws.getGlobalError());
+            if (ws.getErrors().size() > 0) {
+              ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
+            }
+          });
+        } else {
+          LOG.warn("Empty write statuses were received from all Participants");
         }
-        currentState = State.WRITE_STATUS_RCVD;
-        globalCommittedKafkaOffsets.putAll(currentConsumedKafkaOffsets);
-        submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.ACK_COMMIT,
-            message.getTopicName(),
-            currentCommitTime));
+
+        // Submit the next start commit, that will rollback the current commit.
+        currentState = State.FAILED_COMMIT;
+        LOG.warn("Current commit " + currentCommitTime + " failed, so starting a new commit after recovery delay");
+        submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
+                partition.topic(),
+                StringUtils.EMPTY_STRING),
+            RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS);
       } catch (Exception exception) {
         LOG.error("Fatal error while committing file", exception);
       }
@@ -310,7 +340,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     // If we are still stuck in ENDED_STATE
     if (currentState.equals(State.ENDED_COMMIT)) {
       currentState = State.WRITE_STATUS_TIMEDOUT;
-      LOG.warn("Did not receive the Write Status from all partitions");
+      LOG.warn("Current commit " + currentCommitTime + " failed after a write status timeout, so starting a new commit after recovery delay");
       // Submit the next start commit
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
               partition.topic(),
@@ -365,6 +395,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     INIT,
     STARTED_COMMIT,
     ENDED_COMMIT,
+    FAILED_COMMIT,
     WRITE_STATUS_RCVD,
     WRITE_STATUS_TIMEDOUT,
     ACKED_COMMIT,

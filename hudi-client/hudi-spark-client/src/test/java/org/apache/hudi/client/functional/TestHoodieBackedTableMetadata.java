@@ -61,7 +61,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   }
 
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {
-    doWriteInsertAndUpsert(testTable, "0000001", "0000002");
+    doWriteInsertAndUpsert(testTable, "0000001", "0000002", false);
   }
 
   private void verifyBaseMetadataTable() throws IOException {
