@@ -96,7 +96,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       client.startCommitWithTime(commitTime1);
 
       List<HoodieRecord> records001 = dataGen.generateInserts(commitTime1, 200);
-      Stream<HoodieBaseFile> dataFiles = insertRecords(metaClient, records001, client, cfg, commitTime1);
+      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records001, client, cfg, commitTime1);
       assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       // verify only one base file shows up with commit time 001
@@ -118,7 +118,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       String updateTime = "004";
       client.startCommitWithTime(updateTime);
       List<HoodieRecord> records004 = dataGen.generateUpdates(updateTime, 100);
-      updateRecords(metaClient, records004, client, cfg, updateTime);
+      updateRecordsInMORTable(metaClient, records004, client, cfg, updateTime);
 
       // verify RO incremental reads - only one base file shows up because updates to into log files
       incrementalROFiles = getROIncrementalFiles(partitionPath, false);
@@ -145,7 +145,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       String insertsTime = "006";
       List<HoodieRecord> records006 = dataGen.generateInserts(insertsTime, 200);
       client.startCommitWithTime(insertsTime);
-      dataFiles = insertRecords(metaClient, records006, client, cfg, insertsTime);
+      dataFiles = insertRecordsToMORTable(metaClient, records006, client, cfg, insertsTime);
       assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       // verify new write shows up in snapshot mode even though there is pending compaction
