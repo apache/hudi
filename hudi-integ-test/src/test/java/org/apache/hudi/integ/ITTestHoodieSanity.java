@@ -20,12 +20,15 @@ package org.apache.hudi.integ;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,6 +53,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnSinglePartitionKeyCOWTable() throws Exception {
+    setupDemo();
     String hiveTableName = "docker_hoodie_single_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
         PartitionType.SINGLE_KEY_PARTITIONED);
@@ -64,6 +68,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * in hive console.
    */
   public void testRunHoodieJavaAppOnMultiPartitionKeysCOWTable() throws Exception {
+    setupDemo();
     String hiveTableName = "docker_hoodie_multi_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(HOODIE_JAVA_APP, hiveTableName, HoodieTableType.COPY_ON_WRITE.name(),
         PartitionType.MULTI_KEYS_PARTITIONED);
@@ -77,6 +82,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedCOWTable() throws Exception {
+    setupDemo();
     String hiveTableName = "docker_hoodie_non_partition_key_cow_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.COPY_ON_WRITE.name(), PartitionType.NON_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());
@@ -89,6 +95,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnSinglePartitionKeyMORTable() throws Exception {
+    setupDemo();
     String hiveTableName = "docker_hoodie_single_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.SINGLE_KEY_PARTITIONED);
@@ -103,6 +110,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * in hive console.
    */
   public void testRunHoodieJavaAppOnMultiPartitionKeysMORTable(String command) throws Exception {
+    setupDemo();
     String hiveTableName = "docker_hoodie_multi_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(command, hiveTableName, HoodieTableType.MERGE_ON_READ.name(),
         PartitionType.MULTI_KEYS_PARTITIONED);
@@ -116,6 +124,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedMORTable() throws Exception {
+    setupDemo();
     String hiveTableName = "docker_hoodie_non_partition_key_mor_test_" + HoodieActiveTimeline.createNewInstantTime();
     testRunHoodieJavaApp(hiveTableName, HoodieTableType.MERGE_ON_READ.name(), PartitionType.NON_PARTITIONED);
     dropHiveTables(hiveTableName, HoodieTableType.MERGE_ON_READ.name());
@@ -220,5 +229,19 @@ public class ITTestHoodieSanity extends ITTestBase {
     } else {
       executeHiveCommand("drop table if exists " + hiveTableName);
     }
+  }
+
+  private void setupDemo() throws Exception {
+    String HDFS_DATA_DIR = "/usr/hive/data/input";
+    String HDFS_BATCH_PATH1 = HDFS_DATA_DIR + "/batch_1.json";
+    String DEMO_CONTAINER_SCRIPT = HOODIE_WS_ROOT + "/docker/demo/setup_demo_container.sh";
+    String INPUT_BATCH_PATH1 = HOODIE_WS_ROOT + "/docker/demo/data/batch_1.json";
+
+    List<String> cmds = CollectionUtils.createImmutableList("hdfs dfsadmin -safemode wait",
+        "hdfs dfs -mkdir -p " + HDFS_DATA_DIR,
+        "hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1,
+        "/bin/bash " + DEMO_CONTAINER_SCRIPT);
+
+    executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
   }
 }
