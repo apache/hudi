@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -33,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Smoke tests to run as part of verification.
  */
+@Disabled
 public class ITTestHoodieSanity extends ITTestBase {
 
   private static final String HDFS_BASE_URL =  "hdfs://namenode";
