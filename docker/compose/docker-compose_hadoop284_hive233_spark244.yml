@@ -63,7 +63,8 @@ services:
     environment:
       - CLUSTER_NAME=hudi_hadoop284_hive232_spark244
     depends_on:
-      - "namenode"
+       namenode:
+        condition: service_healthy
     links:
       - "namenode"
     ports:
