@@ -32,7 +32,7 @@ services:
       test: ["CMD", "curl", "-f", "http://namenode:50070"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 6
 
   datanode1:
     image: apachehudi/hudi-hadoop_2.8.4-datanode:latest
