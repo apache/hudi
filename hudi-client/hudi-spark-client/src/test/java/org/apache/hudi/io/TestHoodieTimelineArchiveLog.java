@@ -140,9 +140,9 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                                                            int minArchivalCommits,
                                                            int maxArchivalCommits,
                                                            int maxDeltaCommitsMetadataTable,
-                                                           boolean enableArchiveClean,
+                                                           boolean enableArchiveTrim,
                                                            int archiveFilesToKeep) throws Exception {
-    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, enableArchiveClean, archiveFilesToKeep);
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, enableArchiveTrim, archiveFilesToKeep);
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
@@ -150,15 +150,15 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                                                            int maxArchivalCommits,
                                                            int maxDeltaCommitsMetadataTable,
                                                            HoodieTableType tableType,
-                                                           boolean enableArchiveClean,
+                                                           boolean enableArchiveTrim,
                                                            int archiveFilesToKeep) throws Exception {
     init(tableType);
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .retainCommits(1)
-            .withCleanArchiveFilesEnable(enableArchiveClean)
-            .archiveFilesToKeep(archiveFilesToKeep)
+            .withAutoTrimArchiveFiles(enableArchiveTrim)
+            .maxArchiveFilesToKeep(archiveFilesToKeep)
             .archiveCommitsWith(minArchivalCommits, maxArchivalCommits)
             .build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
@@ -218,21 +218,38 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("testArchiveTableWithArchivalCleanUp")
-  public void testArchiveTableWithArchivalCleanUp(boolean enableMetadata, boolean enableArchiveClean, int archiveFilesToKeep) throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 3, 2, enableArchiveClean, archiveFilesToKeep);
+  @MethodSource("testArchiveTableWithArchivalTrim")
+  public void testArchiveTableWithArchivalCleanUp(boolean enableMetadata, boolean enableArchiveTrim, int archiveFilesToKeep) throws Exception {
+    HashSet<String> archiveFilesExisted = new HashSet<>();
+    ArrayList<String> currentExistArchiveFiles = new ArrayList<>();
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 3, 2, enableArchiveTrim, archiveFilesToKeep);
+    String archivePath = metaClient.getArchivePath();
     for (int i = 1; i < 10; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       // trigger archival
       archiveAndGetCommitsList(writeConfig);
+      RemoteIterator<LocatedFileStatus> iter = metaClient.getFs().listFiles(new Path(archivePath), false);
+      ArrayList<String> files = new ArrayList<>();
+      while (iter.hasNext()) {
+        files.add(iter.next().getPath().toString());
+      }
+      archiveFilesExisted.addAll(files);
+      currentExistArchiveFiles = files;
     }
-    String archivePath = metaClient.getArchivePath();
-    RemoteIterator<LocatedFileStatus> iter = metaClient.getFs().listFiles(new Path(archivePath), false);
-    ArrayList<LocatedFileStatus> files = new ArrayList<>();
-    while (iter.hasNext()) {
-      files.add(iter.next());
+
+    assertEquals(archiveFilesToKeep, currentExistArchiveFiles.size());
+
+    if (enableArchiveTrim) {
+      // sort archive files path
+      List<String> sorted = archiveFilesExisted.stream().sorted().collect(Collectors.toList());
+      List<String> archiveFilesDeleted = sorted.subList(0, 3 - archiveFilesToKeep);
+      List<String> archiveFilesKept = sorted.subList(3 - archiveFilesToKeep, sorted.size());
+
+      // assert older archive files are deleted
+      assertFalse(currentExistArchiveFiles.containsAll(archiveFilesDeleted));
+      // assert most recent archive files are preserved
+      assertTrue(currentExistArchiveFiles.containsAll(archiveFilesKept));
     }
-    assertEquals(archiveFilesToKeep, files.size());
   }
 
   @ParameterizedTest
@@ -776,8 +793,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     return new HoodieInstant(inflight, "rollback", rollbackTime);
   }
 
-  private static Stream<Arguments> testArchiveTableWithArchivalCleanUp() {
-    // boolean enableMetadata, boolean enableArchiveClean, int archiveFilesToKeep
+  private static Stream<Arguments> testArchiveTableWithArchivalTrim() {
+    // boolean enableMetadata, boolean enableArchiveTrim, int archiveFilesToKeep
     return Stream.of(
         arguments(false, true, 1),
         arguments(false, false, 3),

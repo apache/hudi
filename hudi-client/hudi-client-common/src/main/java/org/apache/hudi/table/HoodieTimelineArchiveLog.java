@@ -81,7 +81,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   private Writer writer;
   private final int maxInstantsToKeep;
   private final int minInstantsToKeep;
-  private final int archiveFilesToKeep;
+  private final int maxArchiveFilesToKeep;
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
 
@@ -92,7 +92,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.maxInstantsToKeep = config.getMaxCommitsToKeep();
     this.minInstantsToKeep = config.getMinCommitsToKeep();
-    this.archiveFilesToKeep = config.getArchiveFilesToKeep();
+    this.maxArchiveFilesToKeep = config.getMaxArchiveFilesToKeep();
   }
 
   private Writer openWriter() {
@@ -133,8 +133,8 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         archive(context, instantsToArchive);
         LOG.info("Deleting archived instants " + instantsToArchive);
         success = deleteArchivedInstants(instantsToArchive, context);
-        if (config.getCleanArchiveEnable()) {
-          cleanArchiveFilesIfNecessary(context);
+        if (config.getAutoTrimArchiveFilesEnable()) {
+          trimArchiveFilesIfNecessary(context);
         }
       } else {
         LOG.info("No Instants to archive");
@@ -146,7 +146,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  private void cleanArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
+  private void trimArchiveFilesIfNecessary(HoodieEngineContext context) throws IOException {
     Stream<HoodieLogFile> allLogFiles = FSUtils.getAllLogFiles(metaClient.getFs(),
         archiveFilePath.getParent(),
         archiveFilePath.getName(),
@@ -154,7 +154,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         "");
     List<HoodieLogFile> sortedLogFilesList = allLogFiles.sorted(HoodieLogFile.getReverseLogFileComparator()).collect(Collectors.toList());
     if (!sortedLogFilesList.isEmpty()) {
-      List<String> skipped = sortedLogFilesList.stream().skip(archiveFilesToKeep).map(HoodieLogFile::getPath).map(Path::toString).collect(Collectors.toList());
+      List<String> skipped = sortedLogFilesList.stream().skip(maxArchiveFilesToKeep).map(HoodieLogFile::getPath).map(Path::toString).collect(Collectors.toList());
       if (!skipped.isEmpty()) {
         LOG.info("Deleting archive files :  " + skipped);
         context.setJobStatus(this.getClass().getSimpleName(), "Delete archive files");

@@ -249,15 +249,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
-  public static final ConfigProperty<String> ARCHIVE_FILES_TO_KEEP_PROP = ConfigProperty
-      .key("hoodie.keep.archive.files")
+  public static final ConfigProperty<String> MAX_ARCHIVE_FILES_TO_KEEP_PROP = ConfigProperty
+      .key("hoodie.max.archive.files")
       .defaultValue("10")
-      .withDocumentation("The numbers of kept archive files under archived");
+      .withDocumentation("The numbers of kept archive files under archived.");
 
-  public static final ConfigProperty<String> CLEAN_ARCHIVE_FILE_ENABLE_DROP = ConfigProperty
-      .key("hoodie.archive.clean.enable")
+  public static final ConfigProperty<String> AUTO_TRIM_ARCHIVE_FILES_DROP = ConfigProperty
+      .key("hoodie.auto.trim.archive.files")
       .defaultValue("false")
-      .withDocumentation("When enabled, hoodie will keep archive files in a fixed number");
+      .withDocumentation("When enabled, Hoodie will keep the most recent " + MAX_ARCHIVE_FILES_TO_KEEP_PROP.key()
+          + " archive files and delete older one which lose part of archived instants information.");
 
 
 
@@ -553,13 +554,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder archiveFilesToKeep(int number) {
-      compactionConfig.setValue(ARCHIVE_FILES_TO_KEEP_PROP, String.valueOf(number));
+    public Builder maxArchiveFilesToKeep(int number) {
+      compactionConfig.setValue(MAX_ARCHIVE_FILES_TO_KEEP_PROP, String.valueOf(number));
       return this;
     }
 
-    public Builder withCleanArchiveFilesEnable(boolean enable) {
-      compactionConfig.setValue(CLEAN_ARCHIVE_FILE_ENABLE_DROP, String.valueOf(enable));
+    public Builder withAutoTrimArchiveFiles(boolean enable) {
+      compactionConfig.setValue(AUTO_TRIM_ARCHIVE_FILES_DROP, String.valueOf(enable));
       return this;
     }
 
