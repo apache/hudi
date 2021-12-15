@@ -1279,7 +1279,7 @@
             <configuration combine.self="override">
               <skip>${skipITs}</skip>
               <includes>
-                <include>**/IntegTestHoodieDemo.java</include>
+                <include>**/IT*.java</include>
               </includes>
               <systemPropertyVariables>
                 <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
