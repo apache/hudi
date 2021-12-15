@@ -173,7 +173,7 @@ public abstract class AbstractSyncHoodieClient {
         return true;
       }
     } catch (Exception e) {
-      throw new HoodieSyncException("Failed to read data schema", e);
+      throw new HoodieSyncException("Failed to get commit metadata", e);
     }
     return false;
   }
