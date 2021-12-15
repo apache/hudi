@@ -159,7 +159,11 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void setupDemo() throws Exception {
-    List<String> cmds = CollectionUtils.createImmutableList("hdfs dfsadmin -safemode wait",
+    List<String> cmds = CollectionUtils.createImmutableList("hdfs dfsadmin -report",
+        "hdfs fsck -list-corruptfileblocks",
+        "hdfs dfsadmin -safemode get",
+        "hdfs dfsadmin -safemode leave",
+        "hdfs dfsadmin -safemode wait",
         "hdfs dfs -mkdir -p " + HDFS_DATA_DIR,
         "hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1,
         "/bin/bash " + DEMO_CONTAINER_SCRIPT);

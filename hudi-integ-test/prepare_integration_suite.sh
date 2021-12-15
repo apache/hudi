@@ -167,10 +167,6 @@ $move_to_root && $final_command
 # change back to original working directory
 cd $_CALLING_DIR
 
-printf "Docker stats start XXX "
-docker stats -a --no-stream
-printf "Docker stats end XXX "
-
 printf "A sample spark command to start the integration suite \n"
 get_spark_command
 
