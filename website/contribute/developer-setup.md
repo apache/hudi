@@ -40,6 +40,13 @@ To contribute, you would need to do the following
     * Click on + and add the style/checkstyle.xml file
 
       ![IDE_setup_checkstyle_4](/assets/images/contributing/IDE_setup_checkstyle_4.png)
+    * Open Preferences -> Editor -> Code Style -> Java
+    * Select "Project" as the "Scheme".  Then, go to the settings, open "Import Scheme" -> "CheckStyle Configuration", select `style/checkstyle.xml` to load
+
+      ![IDE_setup_code_style_java_before](/assets/images/contributing/IDE_setup_code_style_java_before.png)
+    * After loading the configuration, you should see that the "Indent" and "Continuation indent" become 2 and 4, from 4 and 8, respectively
+
+      ![IDE_setup_code_style_java_after](/assets/images/contributing/IDE_setup_code_style_java_after.png)
     * Apply/Save the changes
 - \[Recommended\] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
 

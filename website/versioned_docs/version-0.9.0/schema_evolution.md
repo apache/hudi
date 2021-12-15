@@ -87,11 +87,11 @@ scala> val data1 = Seq(Row("row_1", "part_0", 0L, "bob", "v_0", 0),
 scala> var dfFromData1 = spark.createDataFrame(data1, schema)
 scala> dfFromData1.write.format("hudi").
     |   options(getQuickstartWriteConfigs).
-    |   option(PRECOMBINE_FIELD_OPT_KEY.key, "preComb").
-    |   option(RECORDKEY_FIELD_OPT_KEY.key, "rowId").
-    |   option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionId").
+    |   option(PRECOMBINE_FIELD.key(), "preComb").
+    |   option(RECORDKEY_FIELD.key(), "rowId").
+    |   option(PARTITIONPATH_FIELD.key(), "partitionId").
     |   option("hoodie.index.type","SIMPLE").
-    |   option(TABLE_NAME.key, tableName).
+    |   option(TBL_NAME.key(), tableName).
     |   mode(Overwrite).
     |   save(basePath)
 
@@ -147,11 +147,11 @@ scala> val data2 = Seq(Row("row_2", "part_0", 5L, "john", "v_3", 3L, "newField_1
 scala> var dfFromData2 = spark.createDataFrame(data2, newSchema)
 scala> dfFromData2.write.format("hudi").
     |   options(getQuickstartWriteConfigs).
-    |   option(PRECOMBINE_FIELD_OPT_KEY.key, "preComb").
-    |   option(RECORDKEY_FIELD_OPT_KEY.key, "rowId").
-    |   option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionId").
+    |   option(PRECOMBINE_FIELD.key(), "preComb").
+    |   option(RECORDKEY_FIELD.key(), "rowId").
+    |   option(PARTITIONPATH_FIELD.key(), "partitionId").
     |   option("hoodie.index.type","SIMPLE").
-    |   option(TABLE_NAME.key, tableName).
+    |   option(TBL_NAME.key(), tableName).
     |   mode(Append).
     |   save(basePath)
 

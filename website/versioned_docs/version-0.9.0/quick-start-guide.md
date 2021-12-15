@@ -142,7 +142,7 @@ dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 
 :::tip
 The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
-can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark-datasource/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L58)
 :::
 
 ## Create Table
@@ -157,8 +157,8 @@ values={[
 <TabItem value="scala">
 
 ```scala
-# scala
- // No separate create table command required in spark. First batch of write to a table will create the table if not exists. 
+// scala
+// No separate create table command required in spark. First batch of write to a table will create the table if not exists. 
 ```
 
 </TabItem>
@@ -166,7 +166,7 @@ values={[
 
 ```python
 # pyspark
- // No separate create table command required in spark. First batch of write to a table will create the table if not exists.
+# No separate create table command required in spark. First batch of write to a table will create the table if not exists.
 ```
 
 </TabItem>
@@ -353,10 +353,10 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Overwrite).
   save(basePath)
 ```
@@ -584,10 +584,10 @@ val updates = convertToStringList(dataGen.generateUpdates(10))
 val df = spark.read.json(spark.sparkContext.parallelize(updates, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 ```
@@ -704,6 +704,11 @@ Hudi also provides capability to obtain a stream of records that changed since g
 This can be achieved using Hudi's incremental querying and providing a begin time from which changes need to be streamed. 
 We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
 
+:::note
+Note that the amount of data you can incrementally pull from a table depends on the amount of retained commits. 
+Hudi automatically cleans old commits, the amount of retained commits can be specified using `CLEAN_RETAIN_COMMITS` parameter. 
+:::
+
 <Tabs
 defaultValue="scala"
 values={[
@@ -726,8 +731,8 @@ val beginTime = commits(commits.length - 2) // commit time we are interested in
 
 // incrementally query data
 val tripsIncrementalDF = spark.read.format("hudi").
-  option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-  option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+  option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL).
+  option(BEGIN_INSTANTTIME.key(), beginTime).
   load(basePath)
 tripsIncrementalDF.createOrReplaceTempView("hudi_trips_incremental")
 
@@ -791,9 +796,9 @@ val endTime = commits(commits.length - 2) // commit time we are interested in
 
 //incrementally query data
 val tripsPointInTimeDF = spark.read.format("hudi").
-  option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-  option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
-  option(END_INSTANTTIME_OPT_KEY, endTime).
+  option(QUERY_TYPE.key(), QUERY_TYPE_INCREMENTAL_OPT_VAL).
+  option(BEGIN_INSTANTTIME.key(), beginTime).
+  option(END_INSTANTTIME.key(), endTime).
   load(basePath)
 tripsPointInTimeDF.createOrReplaceTempView("hudi_trips_point_in_time")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_trips_point_in_time where fare > 20.0").show()
@@ -837,6 +842,7 @@ values={[
 ]}>
 <TabItem value="scala">
 Delete records for the HoodieKeys passed in.<br/>
+
 ```scala
 // spark-shell
 // fetch total records count
@@ -850,11 +856,11 @@ val df = spark.read.json(spark.sparkContext.parallelize(deletes, 2))
 
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"delete").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(OPERATION.key(),"delete").
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 
@@ -960,11 +966,11 @@ val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"insert_overwrite_table").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(OPERATION.key(),"insert_overwrite_table").
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 
@@ -1018,11 +1024,11 @@ val df = spark.
   filter("partitionpath = 'americas/united_states/san_francisco'")
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"insert_overwrite").
-  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
-  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
-  option(TABLE_NAME, tableName).
+  option(OPERATION.key(),"insert_overwrite").
+  option(PRECOMBINE_FIELD.key(), "ts").
+  option(RECORDKEY_FIELD.key(), "uuid").
+  option(PARTITIONPATH_FIELD.key(), "partitionpath").
+  option(TBL_NAME.key(), tableName).
   mode(Append).
   save(basePath)
 

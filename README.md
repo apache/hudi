@@ -144,10 +144,13 @@ Each directory in `versioned_docs/` will represent a documentation version.
 You can update multiple docs versions at the same time because each directory in `versioned_docs/` represents specific routes when published.
 
 1. Edit any file.
-1. Commit and push changes.
-1. It will be published to the version.
+2. Commit and push changes.
+3. It will be published to the version.
 
 Example: When you change any file in `versioned_docs/version-0.7.0/`, it will only affect the docs for version `0.7.0`.
+
+## Configs
+Configs can be automatically updated by following these steps documented at ../hudi-utils/README.md
 
 ## Maintainer
 

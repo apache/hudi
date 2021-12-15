@@ -9,6 +9,15 @@ import classnames from "classnames";
 
 const AnchoredH2 = Heading("h2");
 
+function NewReleaseMessage() {
+return (
+      <div className="container">
+       <div className="wrapper">
+      <br/>
+    </div></div>
+  );
+}
+
 function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
   return (
@@ -20,7 +29,7 @@ function HomepageHeader() {
         <div className={styles.buttons}>
           <Link
             className="button button--secondary button--lg"
-            to="/releases/release-0.9.0">
+            to="/releases/release-0.10.0">
              Latest Releases
           </Link>
           <Link
@@ -121,6 +130,7 @@ export default function Home() {
     <Layout
       title={`Hello from ${siteConfig.title}`}
       description="Description will go into a meta tag in <head />">
+      <NewReleaseMessage />
       <HomepageHeader />
       <main>
         <DataLake />

@@ -47,6 +47,17 @@ module.exports = {
     [
       '@docusaurus/plugin-content-docs',
       {
+        id: 'community',
+        path: 'community',
+        routeBasePath: 'community',
+        sidebarPath: require.resolve('./sidebarsCommunity.js'),
+        showLastUpdateAuthor: false,
+        showLastUpdateTime: false,
+      },
+    ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
         id: 'releases',
         path: 'releases',
         routeBasePath: 'releases',
@@ -88,16 +99,20 @@ module.exports = {
         },
         redirects: [
           {
-            from: ['/docs/contribute', '/docs/next/contribute'],
-            to: '/contribute/get-involved',
+            from: ['/docs/contribute', '/docs/next/contribute', '/contribute/get-involved'],
+            to: '/community/get-involved',
+          },
+          {
+            from: ['/contribute/team'],
+            to: '/community/team',
           },
           {
             from: ['/docs/releases', '/docs/next/releases'],
-            to: '/releases/release-0.9.0',
+            to: '/releases/release-0.10.0',
           },
           {
             from: ['/releases'],
-            to: '/releases/release-0.9.0',
+            to: '/releases/release-0.10.0',
           },
           {
             from: ['/docs/learn'],
@@ -125,7 +140,7 @@ module.exports = {
       items: [
         {
           label: 'Docs',
-          to: '/docs/quick-start-guide',
+          to: '/docs/overview',
         },
         {
           label: 'Learn',
@@ -168,14 +183,6 @@ module.exports = {
           position: 'left',
           items: [
             {
-              label: 'Get Involved',
-              to: '/contribute/get-involved',
-            },
-            {
-              label: 'Team',
-              to: '/contribute/team',
-            },
-            {
               label: 'How to Contribute',
               to: '/contribute/how-to-contribute',
             },
@@ -194,6 +201,24 @@ module.exports = {
             {
               label: 'Report Issues',
               href: 'https://issues.apache.org/jira/projects/HUDI/summary',
+            }
+          ],
+        },
+        {
+          label: 'Community',
+          position: 'left',
+          items: [
+            {
+              label: 'Get Involved',
+              to: '/community/get-involved',
+            },
+            {
+              label: 'Community Syncs',
+              to: '/community/syncs',
+            },
+            {
+              label: 'Team',
+              to: '/community/team',
             }
           ],
         },
@@ -253,11 +278,11 @@ module.exports = {
             },
             {
               label: 'Team',
-              to: '/contribute/team',
+              to: '/community/team',
             },
             {
               label: 'Releases',
-              to: '/releases/release-0.9.0',
+              to: '/releases/release-0.10.0',
             },
             {
               label: 'Download',
@@ -420,8 +445,8 @@ module.exports = {
               path: 'next',
               banner: 'unreleased',
             },
-            '0.9.0': {
-              label: '0.9.0',
+            '0.10.0': {
+              label: '0.10.0',
               path: '',
             }
           },
@@ -429,8 +454,8 @@ module.exports = {
         blog: {
           editUrl:
             'https://github.com/apache/hudi/edit/asf-site/website/blog/',
-          blogTitle: 'Blog - Apache Hudi: User-Facing Analytics',
-          blogSidebarCount: 10,
+          blogTitle: 'Blog - Apache Hudi: Blogs',
+          blogSidebarCount: 15,
           blogSidebarTitle: 'Recent posts',
           /**
            * URL route for the blog section of your site.
@@ -438,7 +463,7 @@ module.exports = {
            */
           routeBasePath: 'blog',
           include: ['*.md', '*.mdx'],
-          postsPerPage: 10,
+          postsPerPage: 15,
           /**
            * Theme components used by the blog pages.
            */

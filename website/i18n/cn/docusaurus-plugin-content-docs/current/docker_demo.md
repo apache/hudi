@@ -6,18 +6,17 @@ last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
 
-## A Demo using docker containers
+## 一个使用 Docker 容器的 Demo
 
-Lets use a real world example to see how hudi works end to end. For this purpose, a self contained
-data infrastructure is brought up in a local docker cluster within your computer.
+我们来使用一个真实世界的案例，来看看 Hudi 是如何闭环运转的。 为了这个目的，在你的计算机中的本地 Docker 集群中组建了一个自包含的数据基础设施。
 
-The steps have been tested on a Mac laptop
+以下步骤已经在一台 Mac 笔记本电脑上测试过了。
 
-### Prerequisites
+### 前提条件
 
-  * Docker Setup :  For Mac, Please follow the steps as defined in [https://docs.docker.com/v17.12/docker-for-mac/install/]. For running Spark-SQL queries, please ensure atleast 6 GB and 4 CPUs are allocated to Docker (See Docker -> Preferences -> Advanced). Otherwise, spark-SQL queries could be killed because of memory issues.
-  * kafkacat : A command-line utility to publish/consume from kafka topics. Use `brew install kafkacat` to install kafkacat
-  * /etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
+  * Docker 安装 :  对于 Mac ，请依照 [https://docs.docker.com/v17.12/docker-for-mac/install/] 当中定义的步骤。 为了运行 Spark-SQL 查询，请确保至少分配给 Docker 6 GB 和 4 个 CPU 。（参见 Docker -> Preferences -> Advanced）。否则，Spark-SQL 查询可能被因为内存问题而被杀停。
+  * kafkacat : 一个用于发布/消费 Kafka Topic 的命令行工具集。使用 `brew install kafkacat` 来安装 kafkacat 。
+  * /etc/hosts : Demo 通过主机名引用了多个运行在容器中的服务。将下列设置添加到 /etc/hosts ：
 
 
 ```java
@@ -32,24 +31,24 @@ The steps have been tested on a Mac laptop
    127.0.0.1 zookeeper
 ```
 
-Also, this has not been tested on some environments like Docker on Windows.
+此外，这未在其它一些环境中进行测试，例如 Windows 上的 Docker 。
 
 
-## Setting up Docker Cluster
+## 设置 Docker 集群
 
 
-### Build Hudi
+### 构建 Hudi
 
-The first step is to build hudi
+构建 Hudi 的第一步：
 ```java
 cd <HUDI_WORKSPACE>
 mvn package -DskipTests
 ```
 
-### Bringing up Demo Cluster
+### 组建 Demo 集群
 
-The next step is to run the docker compose script and setup configs for bringing up the cluster.
-This should pull the docker images from docker hub and setup docker cluster.
+下一步是运行 Docker 安装脚本并设置配置项以便组建集群。
+这需要从 Docker 镜像库拉取 Docker 镜像，并设置 Docker 集群。
 
 ```java
 cd docker
@@ -84,29 +83,27 @@ Copying spark default config and setting up configs
 $ docker ps
 ```
 
-At this point, the docker cluster will be up and running. The demo cluster brings up the following services
+至此， Docker 集群将会启动并运行。 Demo 集群提供了下列服务：
 
-   * HDFS Services (NameNode, DataNode)
-   * Spark Master and Worker
-   * Hive Services (Metastore, HiveServer2 along with PostgresDB)
-   * Kafka Broker and a Zookeeper Node (Kafka will be used as upstream source for the demo)
-   * Adhoc containers to run Hudi/Hive CLI commands
+   * HDFS 服务（ NameNode, DataNode ）
+   * Spark Master 和 Worker
+   * Hive 服务（ Metastore, HiveServer2 以及 PostgresDB ）
+   * Kafka Broker 和一个 Zookeeper Node （ Kafka 将被用来当做 Demo 的上游数据源 ）
+   * 用来运行 Hudi/Hive CLI 命令的 Adhoc 容器
 
 ## Demo
 
-Stock Tracker data will be used to showcase both different Hudi Views and the effects of Compaction.
+Stock Tracker 数据将用来展示不同的 Hudi 视图以及压缩带来的影响。
 
-Take a look at the directory `docker/demo/data`. There are 2 batches of stock data - each at 1 minute granularity.
-The first batch contains stocker tracker data for some stock symbols during the first hour of trading window
-(9:30 a.m to 10:30 a.m). The second batch contains tracker data for next 30 mins (10:30 - 11 a.m). Hudi will
-be used to ingest these batches to a dataset which will contain the latest stock tracker data at hour level granularity.
-The batches are windowed intentionally so that the second batch contains updates to some of the rows in the first batch.
+看一下 `docker/demo/data` 目录。那里有 2 批股票数据——都是 1 分钟粒度的。
+第 1 批数据包含一些股票代码在交易窗口（9:30 a.m 至 10:30 a.m）的第一个小时里的行情数据数据。第 2 批包含接下来 30 分钟（10:30 - 11 a.m）的交易数据。 Hudi 将被用来将两个批次的数据采集到一个数据集中，这个数据集将会包含最新的小时级股票行情数据。
+两个批次被有意地按窗口切分，这样在第 2 批数据中包含了一些针对第 1 批数据条目的更新数据。
 
-### Step 1 : Publish the first batch to Kafka
+### Step 1 : 将第 1 批数据发布到 Kafka
 
-Upload the first batch to Kafka topic 'stock ticks' `cat docker/demo/data/batch_1.json | kafkacat -b kafkabroker -t stock_ticks -P`
+将第 1 批数据上传到 Kafka 的 Topic “stock ticks” 中 `cat docker/demo/data/batch_1.json | kafkacat -b kafkabroker -t stock_ticks -P`
 
-To check if the new topic shows up, use
+为了检查新的 Topic 是否出现，使用
 ```java
 kafkacat -b kafkabroker -L -J | jq .
 {
@@ -148,12 +145,9 @@ kafkacat -b kafkabroker -L -J | jq .
 
 ```
 
-### Step 2: Incrementally ingest data from Kafka topic
+### Step 2: 从 Kafka Topic 中增量采集数据
 
-Hudi comes with a tool named DeltaStreamer. This tool can connect to variety of data sources (including Kafka) to
-pull changes and apply to Hudi dataset using upsert/insert primitives. Here, we will use the tool to download
-json data from kafka topic and ingest to both COW and MOR tables we initialized in the previous step. This tool
-automatically initializes the datasets in the file-system if they do not exist yet.
+Hudi 自带一个名为 DeltaStreamer 的工具。 这个工具能连接多种数据源（包括 Kafka），以便拉取变更，并通过 upsert/insert 操作应用到 Hudi 数据集。此处，我们将使用这个工具从 Kafka Topic 下载 JSON 数据，并采集到前面步骤中初始化的 COW 和 MOR 表中。如果数据集不存在，这个工具将自动初始化数据集到文件系统中。
 
 ```java
 docker exec -it adhoc-2 /bin/bash
@@ -172,20 +166,18 @@ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer
 exit
 ```
 
-You can use HDFS web-browser to look at the datasets
+你可以使用 HDFS 的 Web 浏览器来查看数据集
 `http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_cow`.
 
-You can explore the new partition folder created in the dataset along with a "deltacommit"
-file under .hoodie which signals a successful commit.
+你可以浏览在数据集中新创建的分区文件夹，同时还有一个在 .hoodie 目录下的 deltacommit 文件。
 
-There will be a similar setup when you browse the MOR dataset
+在 MOR 数据集中也有类似的设置
 `http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_mor`
 
 
-### Step 3: Sync with Hive
+### Step 3: 与 Hive 同步
 
-At this step, the datasets are available in HDFS. We need to sync with Hive to create new Hive tables and add partitions
-inorder to run Hive queries against those datasets.
+到了这一步，数据集在 HDFS 中可用。我们需要与 Hive 同步来创建新 Hive 表并添加分区，以便在那些数据集上执行 Hive 查询。
 
 ```java
 docker exec -it adhoc-2 /bin/bash
@@ -205,18 +197,15 @@ docker exec -it adhoc-2 /bin/bash
 ....
 exit
 ```
-After executing the above command, you will notice
+执行了以上命令后，你会发现：
 
-1. A hive table named `stock_ticks_cow` created which provides Read-Optimized view for the Copy On Write dataset.
-2. Two new tables `stock_ticks_mor` and `stock_ticks_mor_rt` created for the Merge On Read dataset. The former
-provides the ReadOptimized view for the Hudi dataset and the later provides the realtime-view for the dataset.
+1. 一个名为 `stock_ticks_cow` 的 Hive 表被创建，它为写时复制数据集提供了读优化视图。
+2. 两个新表 `stock_ticks_mor` 和 `stock_ticks_mor_rt` 被创建用于读时合并数据集。 前者为 Hudi 数据集提供了读优化视图，而后者为数据集提供了实时视图。
 
 
-### Step 4 (a): Run Hive Queries
+### Step 4 (a): 运行 Hive 查询
 
-Run a hive query to find the latest timestamp ingested for stock symbol 'GOOG'. You will notice that both read-optimized
-(for both COW and MOR dataset)and realtime views (for MOR dataset)give the same value "10:29 a.m" as Hudi create a
-parquet file for the first batch of data.
+执行一个 Hive 查询来为股票 GOOG 找到采集到的最新时间戳。你会注意到读优化视图（ COW 和 MOR 数据集都是如此）和实时视图（仅对 MOR 数据集）给出了相同的值 “10:29 a.m”，这是因为 Hudi 为每个批次的数据创建了一个 Parquet 文件。
 
 ```java
 docker exec -it adhoc-2 /bin/bash
@@ -317,9 +306,8 @@ exit
 exit
 ```
 
-### Step 4 (b): Run Spark-SQL Queries
-Hudi support Spark as query processor just like Hive. Here are the same hive queries
-running in spark-sql
+### Step 4 (b): 执行 Spark-SQL 查询
+Hudi 支持以 Spark 作为类似 Hive 的查询引擎。这是在 Spartk-SQL 中执行与 Hive 相同的查询
 
 ```java
 docker exec -it adhoc-1 /bin/bash
@@ -415,9 +403,9 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 
 ```
 
-### Step 4 (c): Run Presto Queries
+### Step 4 (c): 执行 Presto 查询
 
-Here are the Presto queries for similar Hive and Spark queries. Currently, Hudi does not support Presto queries on realtime views.
+这是 Presto 查询，它们与 Hive 和 Spark 的查询类似。目前 Hudi 的实时视图不支持 Presto 。
 
 ```java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
@@ -506,10 +494,9 @@ Splits: 17 total, 17 done (100.00%)
 presto:default> exit
 ```
 
-### Step 5: Upload second batch to Kafka and run DeltaStreamer to ingest
+### Step 5: 将第 2 批次上传到 Kafka 并运行 DeltaStreamer 进行采集
 
-Upload the second batch of data and ingest this batch using delta-streamer. As this batch does not bring in any new
-partitions, there is no need to run hive-sync
+上传第 2 批次数据，并使用 DeltaStreamer 采集。由于这个批次不会引入任何新分区，因此不需要执行 Hive 同步。
 
 ```java
 cat docker/demo/data/batch_2.json | kafkacat -b kafkabroker -t stock_ticks -P
@@ -527,21 +514,17 @@ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer
 exit
 ```
 
-With Copy-On-Write table, the second ingestion by DeltaStreamer resulted in a new version of Parquet file getting created.
-See `http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_cow/2018/08/31`
+使用写时复制表， DeltaStreamer 的第 2 批数据采集将导致 Parquet 文件创建一个新版本。
+参考： `http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_cow/2018/08/31`
 
-With Merge-On-Read table, the second ingestion merely appended the batch to an unmerged delta (log) file.
-Take a look at the HDFS filesystem to get an idea: `http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_mor/2018/08/31`
+使用读时合并表, 第 2 批数据采集仅仅将数据追加到没有合并的 delta （日志） 文件中。看一下 HDFS 文件系统来了解这一点： `http://namenode:50070/explorer#/user/hive/warehouse/stock_ticks_mor/2018/08/31`
 
-### Step 6(a): Run Hive Queries
+### Step 6 (a): 执行 Hive 查询
 
-With Copy-On-Write table, the read-optimized view immediately sees the changes as part of second batch once the batch
-got committed as each ingestion creates newer versions of parquet files.
+使用写时复制表，在每一个批次被提交采集并创建新版本的 Parquet 文件时，读优化视图会立即发现变更，这些变更被当第 2 批次的一部分。
 
-With Merge-On-Read table, the second ingestion merely appended the batch to an unmerged delta (log) file.
-This is the time, when ReadOptimized and Realtime views will provide different results. ReadOptimized view will still
-return "10:29 am" as it will only read from the Parquet file. Realtime View will do on-the-fly merge and return
-latest committed data which is "10:59 a.m".
+使用读时合并表，第 2 批数据采集仅仅将数据追加到没有合并的 delta （日志） 文件中。
+此时，读优化视图和实时视图将提供不同的结果。读优化视图仍会返回“10:29 am”，因为它会只会从 Parquet 文件中读取。实时视图会做即时合并并返回最新提交的数据，即“10:59 a.m”。
 
 ```java
 docker exec -it adhoc-2 /bin/bash
@@ -610,9 +593,9 @@ exit
 exit
 ```
 
-### Step 6(b): Run Spark SQL Queries
+### Step 6 (b): 执行 Spark SQL 查询
 
-Running the same queries in Spark-SQL:
+以 Spark SQL 执行类似的查询：
 
 ```java
 docker exec -it adhoc-1 /bin/bash
@@ -678,9 +661,9 @@ exit
 exit
 ```
 
-### Step 6(c): Run Presto Queries
+### Step 6 (c): 执行 Presto 查询
 
-Running the same queries on Presto for ReadOptimized views. 
+在 Presto 中为读优化视图执行类似的查询：
 
 
 ```java
@@ -742,11 +725,11 @@ presto:default> exit
 ```
 
 
-### Step 7 : Incremental Query for COPY-ON-WRITE Table
+### Step 7 : 写时复制表的增量查询
 
-With 2 batches of data ingested, lets showcase the support for incremental queries in Hudi Copy-On-Write datasets
+使用采集的两个批次的数据，我们展示 Hudi 写时复制数据集中支持的增量查询。
 
-Lets take the same projection query example
+我们使用类似的工程查询样例：
 
 ```java
 docker exec -it adhoc-2 /bin/bash
@@ -761,16 +744,12 @@ beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache
 +----------------------+---------+----------------------+---------+------------+-----------+--+
 ```
 
-As you notice from the above queries, there are 2 commits - 20180924064621 and 20180924065039 in timeline order.
-When you follow the steps, you will be getting different timestamps for commits. Substitute them
-in place of the above timestamps.
+正如你在上面的查询中看到的，有两个提交——按时间线排列是 20180924064621 和 20180924065039 。
+当你按照这些步骤执行后，你的提交会得到不同的时间戳。将它们替换到上面时间戳的位置。
 
-To show the effects of incremental-query, let us assume that a reader has already seen the changes as part of
-ingesting first batch. Now, for the reader to see effect of the second batch, he/she has to keep the start timestamp to
-the commit time of the first batch (20180924064621) and run incremental query
+为了展示增量查询的影响，我们假设有一位读者已经在第 1 批数据中一部分看到了变化。那么，为了让读者看到第 2 批数据的影响，他/她需要保留第 1 批次提交时间中的开始时间（ 20180924064621 ）并执行增量查询：
 
-Hudi incremental mode provides efficient scanning for incremental queries by filtering out files that do not have any
-candidate rows using hudi-managed metadata.
+Hudi 的增量模式为增量查询提供了高效的扫描，通过 Hudi 管理的元数据，过滤掉了那些不包含候选记录的文件。
 
 ```java
 docker exec -it adhoc-2 /bin/bash
@@ -782,8 +761,8 @@ No rows affected (0.009 seconds)
 0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.start.timestamp=20180924064621;
 ```
 
-With the above setting, file-ids that do not have any updates from the commit 20180924065039 is filtered out without scanning.
-Here is the incremental query :
+使用上面的设置，那些在提交 20180924065039 之后没有任何更新的文件ID将被过滤掉，不进行扫描。
+以下是增量查询：
 
 ```java
 0: jdbc:hive2://hiveserver:10000>
@@ -797,7 +776,7 @@ Here is the incremental query :
 0: jdbc:hive2://hiveserver:10000>
 ```
 
-### Incremental Query with Spark SQL:
+### 使用 Spark SQL 做增量查询
 ```java
 docker exec -it adhoc-1 /bin/bash
 bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
@@ -835,10 +814,10 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 ```
 
 
-### Step 8: Schedule and Run Compaction for Merge-On-Read dataset
+### Step 8: 为读时合并数据集的调度并执行压缩
 
-Lets schedule and run a compaction to create a new version of columnar  file so that read-optimized readers will see fresher data.
-Again, You can use Hudi CLI to manually schedule and run compaction
+我们来调度并运行一个压缩来创建一个新版本的列式文件，以便读优化读取器能看到新数据。
+再次强调，你可以使用 Hudi CLI 来人工调度并执行压缩。
 
 ```java
 docker exec -it adhoc-1 /bin/bash
@@ -926,12 +905,11 @@ hoodie:stock_ticks->compactions show all
 
 ```
 
-### Step 9: Run Hive Queries including incremental queries
+### Step 9: 执行包含增量查询的 Hive 查询
 
-You will see that both ReadOptimized and Realtime Views will show the latest committed data.
-Lets also run the incremental query for MOR table.
-From looking at the below query output, it will be clear that the fist commit time for the MOR table is 20180924064636
-and the second commit time is 20180924070031
+你将看到读优化视图和实时视图都会展示最新提交的数据。
+让我们也对 MOR 表执行增量查询。
+通过查看下方的查询输出，能够明确 MOR 表的第一次提交时间是 20180924064636 而第二次提交时间是 20180924070031 。
 
 ```java
 docker exec -it adhoc-2 /bin/bash
@@ -992,7 +970,7 @@ exit
 exit
 ```
 
-### Step 10: Read Optimized and Realtime Views for MOR with Spark-SQL after compaction
+### Step 10: 压缩后在 MOR 的读优化视图与实时视图上使用 Spark-SQL
 
 ```java
 docker exec -it adhoc-1 /bin/bash
@@ -1032,7 +1010,7 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 +----------------------+---------+----------------------+---------+------------+-----------+--+
 ```
 
-### Step 11:  Presto queries over Read Optimized View on MOR dataset after compaction
+### Step 11:  压缩后在 MOR 数据集的读优化视图上进行 Presto 查询
 
 ```java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
@@ -1066,55 +1044,44 @@ presto:default>
 ```
 
 
-This brings the demo to an end.
+Demo 到此结束。
 
-## Testing Hudi in Local Docker environment
+## 在本地 Docker 环境中测试 Hudi
 
-You can bring up a hadoop docker environment containing Hadoop, Hive and Spark services with support for hudi.
+你可以组建一个包含 Hadoop 、 Hive 和 Spark 服务的 Hadoop Docker 环境，并支持 Hudi 。
 ```java
 $ mvn pre-integration-test -DskipTests
 ```
-The above command builds docker images for all the services with
-current Hudi source installed at /var/hoodie/ws and also brings up the services using a compose file. We
-currently use Hadoop (v2.8.4), Hive (v2.3.3) and Spark (v2.3.1) in docker images.
+上面的命令为所有的服务构建了 Docker 镜像，它带有当前安装在 /var/hoodie/ws 的 Hudi 源，并使用一个部署文件引入了这些服务。我们当前在 Docker 镜像中使用 Hadoop （v2.8.4）、 Hive （v2.3.3）和 Spark （v2.3.1）。
 
-To bring down the containers
+要销毁容器：
 ```java
 $ cd hudi-integ-test
 $ mvn docker-compose:down
 ```
 
-If you want to bring up the docker containers, use
+如果你想要组建 Docker 容器，使用：
 ```java
 $ cd hudi-integ-test
 $  mvn docker-compose:up -DdetachedMode=true
 ```
 
-Hudi is a library that is operated in a broader data analytics/ingestion environment
-involving Hadoop, Hive and Spark. Interoperability with all these systems is a key objective for us. We are
-actively adding integration-tests under __hudi-integ-test/src/test/java__ that makes use of this
-docker environment (See __hudi-integ-test/src/test/java/org/apache/hudi/integ/ITTestHoodieSanity.java__ )
+Hudi 是一个在包含 Hadoop 、 Hive 和 Spark 的海量数据分析/采集环境中使用的库。与这些系统的互用性是我们的一个关键目标。 我们在积极地向 __hudi-integ-test/src/test/java__ 添加集成测试，这些测试利用了这个 Docker 环境（参考： __hudi-integ-test/src/test/java/org/apache/hudi/integ/ITTestHoodieSanity.java__ ）。
 
 
-### Building Local Docker Containers:
+### 构建本地 Docker 容器:
 
-The docker images required for demo and running integration test are already in docker-hub. The docker images
-and compose scripts are carefully implemented so that they serve dual-purpose
+Demo 和执行集成测试所需要的 Docker 镜像已经在 Docker 源中。 Docker 镜像和部署脚本经过了谨慎的实现以便服务与多种目的：
 
-1. The docker images have inbuilt hudi jar files with environment variable pointing to those jars (HUDI_HADOOP_BUNDLE, ...)
-2. For running integration-tests, we need the jars generated locally to be used for running services within docker. The
-   docker-compose scripts (see `docker/compose/docker-compose_hadoop284_hive233_spark231.yml`) ensures local jars override
-   inbuilt jars by mounting local HUDI workspace over the docker location
-3. As these docker containers have mounted local HUDI workspace, any changes that happen in the workspace would automatically 
-   reflect in the containers. This is a convenient way for developing and verifying Hudi for
-   developers who do not own a distributed environment. Note that this is how integration tests are run.
+1. Docker 镜像有内建的 Hudi jar 包，它包含一些指向其他 jar 包的环境变量（ HUDI_HADOOP_BUNDLE 等）
+2. 为了执行集成测试，我们需要使用本地生成的 jar 包在 Docker 中运行服务。 Docker 部署脚本（参考 `docker/compose/docker-compose_hadoop284_hive233_spark231.yml`）能确保本地 jar 包通过挂载 Docker 地址上挂载本地 Hudi 工作空间，从而覆盖了内建的 jar 包。
+3. 当这些 Docker 容器挂载到本地 Hudi 工作空间之后，任何发生在工作空间中的变更将会自动反映到容器中。这对于开发者来说是一种开发和验证 Hudi 的简便方法，这些开发者没有分布式的环境。要注意的是，这是集成测试的执行方式。
 
-This helps avoid maintaining separate docker images and avoids the costly step of building HUDI docker images locally.
-But if users want to test hudi from locations with lower network bandwidth, they can still build local images
-run the script
-`docker/build_local_docker_images.sh` to build local docker images before running `docker/setup_demo.sh`
+这避免了维护分离的 Docker 镜像，也避免了本地构建 Docker 镜像的各个步骤的消耗。
+但是如果用户想要在有更低网络带宽的地方测试 Hudi ，他们仍可以构建本地镜像。
+在执行 `docker/setup_demo.sh` 之前执行脚本 `docker/build_local_docker_images.sh` 来构建本地 Docker 镜像。
 
-Here are the commands:
+以下是执行的命令:
 
 ```java
 cd docker

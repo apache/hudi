@@ -15,9 +15,21 @@
   limitations under the License.
 -->
 
+Execute these from hudi-utils dir <br/>
+Ensure you have hudi artifacts from latest master installed <br/> 
+If not, execute `mvn install -DskipTests` in your hudi repo  <br/>
+
+```shell
 mvn clean
 mvn install
+```
+Set the appropriate SNAPSHOT version and execute the below commands
+```shell
+VERSION=0.11.0
 
-java -cp target/hudi-utils-1.0-SNAPSHOT-jar-with-dependencies.jar:$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/0.10.0-SNAPSHOT/hudi-utilities-bundle_2.11-0.10.0-SNAPSHOT.jar:$HOME/.m2/repository/org/apache/hudi/hudi-spark-bundle_2.11/0.10.0-SNAPSHOT/hudi-spark-bundle_2.11-0.10.0-SNAPSHOT.jar:$HOME/.m2/repository/org/apache/hudi/hudi-flink-bundle_2.11/0.10.0-SNAPSHOT/hudi-flink-bundle_2.11-0.10.0-SNAPSHOT.jar org.apache.hudi.utils.HoodieConfigDocGenerator
+java -cp target/hudi-utils-1.0-SNAPSHOT-jar-with-dependencies.jar:$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/$VERSION-SNAPSHOT/hudi-utilities-bundle_2.11-$VERSION-SNAPSHOT.jar:$HOME/.m2/repository/org/apache/hudi/hudi-spark-bundle_2.11/$VERSION-SNAPSHOT/hudi-spark-bundle_2.11-$VERSION-SNAPSHOT.jar:$HOME/.m2/repository/org/apache/hudi/hudi-flink-bundle_2.11/$VERSION-SNAPSHOT/hudi-flink-bundle_2.11-$VERSION-SNAPSHOT.jar:$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION-SNAPSHOT/hudi-kafka-connect-bundle-$VERSION-SNAPSHOT.jar org.apache.hudi.utils.HoodieConfigDocGenerator
 
-cp /tmp/configurations.md $HUDI-DIR/website/docs/configurations.md 
+cp /tmp/configurations.md ../website/docs/configurations.md
+```
+
+Once complete, please put up a patch with latest configurations.

@@ -17,7 +17,7 @@ module.exports = {
     },
     {
       type: 'link',
-      label: 'Chat with us on Slack',
+      label: 'Join our Slack',
       href: 'https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE',
     },
   ],

@@ -222,28 +222,28 @@ The `hudi-spark` module offers the DataSource API to write (and read) a Spark Da
 
 **`DataSourceWriteOptions`**:
 
-**RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Record keys uniquely identify a record/row within each partition. If one wants to have a global uniqueness, there are two options. You could either make the dataset non-partitioned, or, you can leverage Global indexes to ensure record keys are unique irrespective of the partition path. Record keys can either be a single column or refer to multiple columns. `KEYGENERATOR_CLASS_OPT_KEY` property should be set accordingly based on whether it is a simple or complex key. For eg: `"col1"` for simple field, `"col1,col2,col3,etc"` for complex field. Nested fields can be specified using the dot notation eg: `a.b.c`. <br/>
+**RECORDKEY_FIELD** (Required): Primary key field(s). Record keys uniquely identify a record/row within each partition. If one wants to have a global uniqueness, there are two options. You could either make the dataset non-partitioned, or, you can leverage Global indexes to ensure record keys are unique irrespective of the partition path. Record keys can either be a single column or refer to multiple columns. `HoodieWriteConfig.KEYGENERATOR_CLASS_NAME` property should be set accordingly based on whether it is a simple or complex key. For eg: `"col1"` for simple field, `"col1,col2,col3,etc"` for complex field. Nested fields can be specified using the dot notation eg: `a.b.c`. <br/>
 Default value: `"uuid"`<br/>
 
-**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY`. If partition path needs to be url encoded, you can set `URL_ENCODE_PARTITIONING_OPT_KEY`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.`<br/>
+**PARTITIONPATH_FIELD** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `HoodieWriteConfig.KEYGENERATOR_CLASS_NAME`. If partition path needs to be url encoded, you can set `URL_ENCODE_PARTITIONING`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS.`<br/>
 Default value: `"partitionpath"`<br/>
 
-**PRECOMBINE_FIELD_OPT_KEY** (Required): When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD_OPT_KEY`. <br/>
+**PRECOMBINE_FIELD** (Required): When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD`. <br/>
 Default value: `"ts"`<br/>
 
-**OPERATION_OPT_KEY**: The [write operations](#write-operations) to use.<br/>
+**OPERATION**: The [write operations](#write-operations) to use.<br/>
 Available values:<br/>
 `UPSERT_OPERATION_OPT_VAL` (default), `BULK_INSERT_OPERATION_OPT_VAL`, `INSERT_OPERATION_OPT_VAL`, `DELETE_OPERATION_OPT_VAL`
 
-**TABLE_TYPE_OPT_KEY**: The [type of table](/docs/concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
+**TABLE_TYPE**: The [type of table](/docs/concepts#table-types) to write to. Note: After the initial creation of a table, this value must stay consistent when writing to (updating) the table using the Spark `SaveMode.Append` mode.<br/>
 Available values:<br/>
 [`COW_TABLE_TYPE_OPT_VAL`](/docs/concepts#copy-on-write-table) (default), [`MOR_TABLE_TYPE_OPT_VAL`](/docs/concepts#merge-on-read-table)
 
-**KEYGENERATOR_CLASS_OPT_KEY**: Refer to [Key Generation](#key-generation) section below.
+**HoodieWriteConfig.KEYGENERATOR_CLASS_NAME**: Refer to [Key Generation](#key-generation) section below.
 
-**HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY**: If using hive, specify if the table should or should not be partitioned.<br/>
+**HIVE_PARTITION_EXTRACTOR_CLASS**: If using hive, specify if the table should or should not be partitioned.<br/>
 Available values:<br/>
-`classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName` (default), `classOf[MultiPartKeysValueExtractor].getCanonicalName`, `classOf[TimestampBasedKeyGenerator].getCanonicalName`, `classOf[NonPartitionedExtractor].getCanonicalName`, `classOf[GlobalDeleteKeyGenerator].getCanonicalName` (to be used when `OPERATION_OPT_KEY` is set to `DELETE_OPERATION_OPT_VAL`)
+`classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName` (default), `classOf[MultiPartKeysValueExtractor].getCanonicalName`, `classOf[TimestampBasedKeyGenerator].getCanonicalName`, `classOf[NonPartitionedExtractor].getCanonicalName`, `classOf[GlobalDeleteKeyGenerator].getCanonicalName` (to be used when `OPERATION.key()` is set to `DELETE_OPERATION_OPT_VAL`)
 
 
 Example:
@@ -253,10 +253,10 @@ Upsert a DataFrame, specifying the necessary field names for `recordKey => _row_
 inputDF.write()
        .format("org.apache.hudi")
        .options(clientOpts) //Where clientOpts is of type Map[String, String]. clientOpts can include any other options necessary.
-       .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-       .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-       .option(HoodieWriteConfig.TABLE_NAME, tableName)
+       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "_row_key")
+       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "partition")
+       .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "timestamp")
+       .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
        .mode(SaveMode.Append)
        .save(basePath);
 ```
@@ -299,8 +299,8 @@ INSERT INTO hudi_table select ... from ...;
 
 Hudi maintains hoodie keys (record key + partition path) for uniquely identifying a particular record. Key generator class will extract these out of incoming record. Both the tools above have configs to specify the 
 `hoodie.datasource.write.keygenerator.class` property. For DeltaStreamer this would come from the property file specified in `--props` and 
-DataSource writer takes this config directly using `DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()`.
-The default value for this config is `SimpleKeyGenerator`. Note: A custom key generator class can be written/provided here as well. Primary key columns should be provided via `RECORDKEY_FIELD_OPT_KEY` option.<br/>
+DataSource writer takes this config directly using `HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key()`.
+The default value for this config is `SimpleKeyGenerator`. Note: A custom key generator class can be written/provided here as well. Primary key columns should be provided via `RECORDKEY_FIELD` option.<br/>
  
 Hudi currently supports different combinations of record keys and partition paths as below - 
 
@@ -389,9 +389,9 @@ For more info refer to [Delete support in Hudi](https://cwiki.apache.org/conflue
  
  - **Hard Deletes** : A stronger form of deletion is to physically remove any trace of the record from the table. This can be achieved in 3 different ways.
 
-   1) Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
+   1) Using DataSource, set `OPERATION.key()` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
    
-   2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
+   2) Using DataSource, set `HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
    
    3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
     
@@ -401,7 +401,7 @@ Example using hard delete method 2, remove all the records from the table that e
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey & usual params
-   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
+   .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), "org.apache.hudi.EmptyHoodieRecordPayload")
  
 ```
 

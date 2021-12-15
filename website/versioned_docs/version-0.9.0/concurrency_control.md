@@ -24,8 +24,8 @@ It may be helpful to understand the different guarantees provided by [write oper
 ## Single Writer Guarantees
 
  - *UPSERT Guarantee*: The target table will NEVER show duplicates.
- - *INSERT Guarantee*: The target table wilL NEVER have duplicates if [dedup](/docs/configurations#INSERT_DROP_DUPS_OPT_KEY) is enabled.
- - *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if [dedup](/docs/configurations#INSERT_DROP_DUPS_OPT_KEY) is enabled.
+ - *INSERT Guarantee*: The target table wilL NEVER have duplicates if [dedup](/docs/configurations#INSERT_DROP_DUPS) is enabled.
+ - *BULK_INSERT Guarantee*: The target table will NEVER have duplicates if [dedup](/docs/configurations#INSERT_DROP_DUPS) is enabled.
  - *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints are NEVER out of order.
 
 ## Multi Writer Guarantees
@@ -33,8 +33,8 @@ It may be helpful to understand the different guarantees provided by [write oper
 With multiple writers using OCC, some of the above guarantees change as follows
 
 - *UPSERT Guarantee*: The target table will NEVER show duplicates.
-- *INSERT Guarantee*: The target table MIGHT have duplicates even if [dedup](/docs/configurations#INSERT_DROP_DUPS_OPT_KEY) is enabled.
-- *BULK_INSERT Guarantee*: The target table MIGHT have duplicates even if [dedup](/docs/configurations#INSERT_DROP_DUPS_OPT_KEY) is enabled.
+- *INSERT Guarantee*: The target table MIGHT have duplicates even if [dedup](/docs/configurations#INSERT_DROP_DUPS) is enabled.
+- *BULK_INSERT Guarantee*: The target table MIGHT have duplicates even if [dedup](/docs/configurations#INSERT_DROP_DUPS) is enabled.
 - *INCREMENTAL PULL Guarantee*: Data consumption and checkpoints MIGHT be out of order due to multiple writer jobs finishing at different times.
 
 ## Enabling Multi Writing
@@ -78,16 +78,16 @@ Following is an example of how to use optimistic_concurrency_control via spark d
 ```java
 inputDF.write.format("hudi")
        .options(getQuickstartWriteConfigs)
-       .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
+       .option(PRECOMBINE_FIELD.key(), "ts")
        .option("hoodie.cleaner.policy.failed.writes", "LAZY")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
        .option("hoodie.write.lock.zookeeper.url", "zookeeper")
        .option("hoodie.write.lock.zookeeper.port", "2181")
        .option("hoodie.write.lock.zookeeper.lock_key", "test_table")
        .option("hoodie.write.lock.zookeeper.base_path", "/test")
-       .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
-       .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
-       .option(TABLE_NAME, tableName)
+       .option(RECORDKEY_FIELD.key(), "uuid")
+       .option(PARTITIONPATH_FIELD.key(), "partitionpath")
+       .option(TBL_NAME.key(), tableName)
        .mode(Overwrite)
        .save(basePath)
 ```
