@@ -21,7 +21,6 @@ package org.apache.hudi.integ;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
 import org.junit.jupiter.api.AfterEach;
@@ -159,7 +158,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void setupDemo() throws Exception {
-    List<String> cmds = CollectionUtils.createImmutableList("hdfs dfsadmin -safemode wait",
+    List<String> cmds = CollectionUtils.createImmutableList(
         "hdfs dfs -mkdir -p " + HDFS_DATA_DIR,
         "hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1,
         "/bin/bash " + DEMO_CONTAINER_SCRIPT);
