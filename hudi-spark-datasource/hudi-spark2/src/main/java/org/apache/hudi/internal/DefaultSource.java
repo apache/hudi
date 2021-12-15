@@ -23,9 +23,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.hudi.util.DataTypeUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.sources.DataSourceRegister;
 import org.apache.spark.sql.sources.v2.DataSourceOptions;
@@ -39,13 +36,13 @@ import org.apache.spark.sql.types.StructType;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.hudi.DataSourceUtils.autoModifyParquetWriteLegacyFormatParameter;
+
 /**
  * DataSource V2 implementation for managing internal write logic. Only called internally.
  */
 public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
     ReadSupport, WriteSupport, DataSourceRegister {
-
-  private static final Logger LOG = LogManager.getLogger(DefaultSource.class);
 
   @Override
   public String shortName() {
@@ -68,19 +65,13 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
     String instantTime = options.get(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY).get();
     String path = options.get("path").get();
     String tblName = options.get(HoodieWriteConfig.TBL_NAME.key()).get();
-    Map<String, String> parameters = options.asMap();
     boolean populateMetaFields = options.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
         Boolean.parseBoolean(HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()));
-    // Now by default ParquetWriteSupport will write DecimalType to parquet as int32/int64 when the scale of decimalType < Decimal.MAX_LONG_DIGITS(),
-    // but AvroParquetReader which used by HoodieParquetReader cannot support read int32/int64 as DecimalType.
-    // try to find current schema whether contains that DecimalType, and auto set the value of "hoodie.parquet.writeLegacyFormat.enabled"
-    if (DataTypeUtils.foundSmallPrecisionDecimalType(schema)
-        && !options.getBoolean("hoodie.parquet.writeLegacyFormat.enabled", false)) {
-      parameters.put("hoodie.parquet.writeLegacyFormat.enabled", "true");
-      LOG.warn("Small Decimal Type found in current schema, auto set the value of hoodie.parquet.writeLegacyFormat.enabled to true");
-    }
+    Map<String, String> properties = options.asMap();
+    // Auto set the value of "hoodie.parquet.writeLegacyFormat.enabled"
+    autoModifyParquetWriteLegacyFormatParameter(properties, schema);
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
-    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()).get(), path, tblName, parameters);
+    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()).get(), path, tblName, properties);
     boolean arePartitionRecordsSorted = HoodieInternalConfig.getBulkInsertIsPartitionRecordsSorted(
         options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).isPresent()
             ? options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).get() : null);

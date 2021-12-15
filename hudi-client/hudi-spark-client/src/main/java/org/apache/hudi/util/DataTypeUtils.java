@@ -141,7 +141,7 @@ public class DataTypeUtils {
       return foundSmallPrecisionDecimalType(((ArrayType) sparkType).elementType());
     } else if (sparkType instanceof DecimalType) {
       DecimalType decimalType = (DecimalType) sparkType;
-      return decimalType.scale() < Decimal.MAX_LONG_DIGITS();
+      return decimalType.precision() < Decimal.MAX_LONG_DIGITS();
     }
     return false;
   }
