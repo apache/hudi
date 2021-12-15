@@ -45,9 +45,9 @@ import java.util.Map;
  */
 public abstract class HoodieDataBlock extends HoodieLogBlock {
 
-  protected List<IndexedRecord> records;
-  protected Schema schema;
-  protected String keyField;
+  protected final Schema readerSchema;
+  protected final String keyField;
+  private List<IndexedRecord> records;
 
   public HoodieDataBlock(
       @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
@@ -57,14 +57,17 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
       @Nullable FSDataInputStream inputStream,
       boolean readBlockLazily) {
     super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
+    this.records = null;
+    this.readerSchema = null;
     this.keyField = HoodieRecord.RECORD_KEY_METADATA_FIELD;
   }
 
   public HoodieDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header,
                          @Nonnull Map<HeaderMetadataType, String> footer, String keyField) {
-    this(header, footer, Option.empty(), Option.empty(), null, false);
+    super(header, footer, Option.empty(), Option.empty(), null, false);
     this.records = records;
-    this.schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    // If no reader-schema has been provided assume writer-schema as one
+    this.readerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     this.keyField = keyField;
   }
 
@@ -72,8 +75,9 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
                             Option<HoodieLogBlockContentLocation> blockContentLocation, Schema readerSchema,
                             @Nonnull Map<HeaderMetadataType, String> headers, @Nonnull Map<HeaderMetadataType,
       String> footer, String keyField) {
-    this(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
-    this.schema = readerSchema;
+    super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    this.records = null;
+    this.readerSchema = readerSchema;
     this.keyField = keyField;
   }
 
@@ -107,7 +111,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(recordList, header, keyField);
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(recordList, header);
+        return new HoodieParquetDataBlock(recordList, header, keyField);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }
@@ -122,10 +126,10 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
       return content.get();
     } else if (readBlockLazily && records == null) {
       // read block lazily
-      createRecordsFromContentBytes();
+      readRecordsFromContent();
     }
 
-    return serializeRecords();
+    return serializeRecords(records);
   }
 
   public abstract HoodieLogBlockType getBlockType();
@@ -134,7 +138,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     if (records == null) {
       try {
         // in case records are absent, read content lazily and then convert to IndexedRecords
-        createRecordsFromContentBytes();
+        readRecordsFromContent();
       } catch (IOException io) {
         throw new HoodieIOException("Unable to convert content bytes to records", io);
       }
@@ -158,19 +162,19 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     if (records == null) {
       getRecords();
     }
-    return schema;
+    return readerSchema;
   }
 
-  protected void createRecordsFromContentBytes() throws IOException {
+  protected void readRecordsFromContent() throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();
     }
 
-    deserializeRecords();
+    records = deserializeRecords(getContent().get());
   }
 
-  protected abstract byte[] serializeRecords() throws IOException;
+  protected abstract byte[] serializeRecords(List<IndexedRecord> records) throws IOException;
 
-  protected abstract void deserializeRecords() throws IOException;
+  protected abstract List<IndexedRecord> deserializeRecords(byte[] content) throws IOException;
 }
