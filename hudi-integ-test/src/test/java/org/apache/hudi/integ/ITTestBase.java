@@ -18,7 +18,6 @@
 
 package org.apache.hudi.integ;
 
-import java.util.concurrent.TimeoutException;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -42,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -130,10 +130,10 @@ public abstract class ITTestBase {
     DockerClientConfig config =
         DefaultDockerClientConfig.createDefaultConfigBuilder().withDockerHost(dockerHost).build();
     // using jaxrs/jersey implementation here (netty impl is also available)
-    DockerCmdExecFactory dockerCmdExecFactory = new JerseyDockerCmdExecFactory().withConnectTimeout(1000)
+    DockerCmdExecFactory dockerCmdExecFactory = new JerseyDockerCmdExecFactory().withConnectTimeout(5000)
         .withMaxTotalConnections(100).withMaxPerRouteConnections(10);
     dockerClient = DockerClientBuilder.getInstance(config).withDockerCmdExecFactory(dockerCmdExecFactory).build();
-    await().atMost(60, SECONDS).until(this::servicesUp);
+    await().atMost(120, SECONDS).until(this::servicesUp);
   }
 
   private boolean servicesUp() {
