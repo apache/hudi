@@ -21,7 +21,6 @@ package org.apache.hudi.integ;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.DockerCmdExecFactory;
@@ -135,7 +134,11 @@ public abstract class ITTestBase {
     DockerCmdExecFactory dockerCmdExecFactory = new JerseyDockerCmdExecFactory().withConnectTimeout(10000)
         .withMaxTotalConnections(100).withMaxPerRouteConnections(50);
     dockerClient = DockerClientBuilder.getInstance(config).withDockerCmdExecFactory(dockerCmdExecFactory).build();
+    LOG.info("Start waiting for all the containers and services to be ready");
+    long currTs = System.currentTimeMillis();
     await().atMost(300, SECONDS).until(this::servicesUp);
+    LOG.info(String.format("Waiting for all the containers and services finishes in %d ms",
+        System.currentTimeMillis() - currTs));
   }
 
   private boolean servicesUp() {
@@ -152,16 +155,22 @@ public abstract class ITTestBase {
           .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     }
 
+    return checkHealth(ADHOC_1_CONTAINER, "namenode", 8020);
+  }
+
+  private boolean checkHealth(String fromContainerName, String hostname, int port) {
     try {
+      String command = String.format("nc -z -v %s %d", hostname, port);
       TestExecStartResultCallback resultCallback =
-          executeCommandStringInDocker(ADHOC_1_CONTAINER, "nc -z -v namenode 8020", true, true);
+          executeCommandStringInDocker(fromContainerName, command, false, true);
       String stderrString = resultCallback.getStderr().toString().trim();
       if (!stderrString.contains("open")) {
         Thread.sleep(1000);
         return false;
       }
     } catch (Exception e) {
-      throw new HoodieException("Exception thrown while wiating for namenode to be up ", e);
+      throw new HoodieException(String.format("Exception thrown while checking health from %s for %s:%d",
+          fromContainerName, hostname, port), e);
     }
     return true;
   }
@@ -172,12 +181,11 @@ public abstract class ITTestBase {
 
   private TestExecStartResultCallback executeCommandInDocker(
       String containerName, String[] command, boolean expectedToSucceed) throws Exception {
-    return executeCommandInDocker(containerName, command, expectedToSucceed, false);
+    return executeCommandInDocker(containerName, command, true, expectedToSucceed);
   }
 
   private TestExecStartResultCallback executeCommandInDocker(
-      String containerName, String[] command,
-      boolean expectedToSucceed, boolean skipResultCheck) throws Exception {
+      String containerName, String[] command, boolean checkIfSucceed, boolean expectedToSucceed) throws Exception {
     Container sparkWorkerContainer = runningContainers.get(containerName);
     ExecCreateCmd cmd = dockerClient.execCreateCmd(sparkWorkerContainer.getId()).withCmd(command).withAttachStdout(true)
         .withAttachStderr(true);
@@ -207,7 +215,7 @@ public abstract class ITTestBase {
     }
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
-    if (!skipResultCheck) {
+    if (checkIfSucceed) {
       if (expectedToSucceed) {
         assertEquals(0, exitCode, "Command (" + Arrays.toString(command) + ") expected to succeed. Exit (" + exitCode + ")");
       } else {
@@ -226,18 +234,18 @@ public abstract class ITTestBase {
 
   protected TestExecStartResultCallback executeCommandStringInDocker(
       String containerName, String cmd, boolean expectedToSucceed) throws Exception {
-    return executeCommandStringInDocker(containerName, cmd, expectedToSucceed, false);
+    return executeCommandStringInDocker(containerName, cmd, false, expectedToSucceed);
   }
 
   protected TestExecStartResultCallback executeCommandStringInDocker(
-      String containerName, String cmd, boolean expectedToSucceed, boolean skipResultCheck)
+      String containerName, String cmd, boolean checkIfSucceed, boolean expectedToSucceed)
       throws Exception {
     LOG.info("\n\n#################################################################################################");
     LOG.info("Container : " + containerName + ", Running command :" + cmd);
     LOG.info("\n#################################################################################################");
 
     String[] cmdSplits = singleSpace(cmd).split(" ");
-    return executeCommandInDocker(containerName, cmdSplits, expectedToSucceed, skipResultCheck);
+    return executeCommandInDocker(containerName, cmdSplits, checkIfSucceed, expectedToSucceed);
   }
 
   protected Pair<String, String> executeHiveCommand(String hiveCommand) throws Exception {
