@@ -209,11 +209,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     // Read the content
-    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(getContent().get());
+    HoodieHFileReader<IndexedRecord> reader = new HoodieHFileReader<>(content);
     List<Pair<String, IndexedRecord>> records = reader.readAllRecords(writerSchema, readerSchema);
-
-    // Free up content to be GC'd, deflate
-    deflate();
 
     return records.stream().map(Pair::getSecond).collect(Collectors.toList());
   }

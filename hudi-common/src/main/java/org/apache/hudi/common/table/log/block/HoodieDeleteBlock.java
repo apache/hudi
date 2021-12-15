@@ -55,11 +55,12 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
   @Override
   public byte[] getContentBytes() throws IOException {
+    Option<byte[]> content = getContent();
 
     // In case this method is called before realizing keys from content
-    if (getContent().isPresent()) {
-      return getContent().get();
-    } else if (readBlockLazily && !getContent().isPresent() && keysToDelete == null) {
+    if (content.isPresent()) {
+      return content.get();
+    } else if (readBlockLazily && keysToDelete == null) {
       // read block lazily
       getKeysToDelete();
     }

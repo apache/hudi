@@ -50,8 +50,8 @@ import java.util.Map;
  */
 public abstract class HoodieDataBlock extends HoodieLogBlock {
 
-  private final String keyFieldRef;
   private List<IndexedRecord> records;
+  private final String keyFieldRef;
 
   protected final Schema readerSchema;
 
@@ -138,24 +138,19 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return serializeRecords(records);
   }
 
-  public abstract HoodieLogBlockType getBlockType();
-
-  protected static FSDataInputStream createInlineFSStream(
-      HoodieLogFile logFile,
-      long contentPosInLogFile,
-      long blockSize
-  ) throws IOException {
-    Configuration inlineConf = new Configuration();
-    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-
-    Path inlinePath = InLineFSUtils.getInlineFilePath(
-        logFile.getPath(),
-        logFile.getPath().getFileSystem(inlineConf).getScheme(),
-        contentPosInLogFile,
-        blockSize);
-
-    return inlinePath.getFileSystem(inlineConf).open(inlinePath);
+  public final List<IndexedRecord> getRecords() {
+    if (records == null) {
+      try {
+        // in case records are absent, read content lazily and then convert to IndexedRecords
+        readRecordsFromContent();
+      } catch (IOException io) {
+        throw new HoodieIOException("Unable to convert content bytes to records", io);
+      }
+    }
+    return records;
   }
+
+  public abstract HoodieLogBlockType getBlockType();
 
   /**
    * Batch get of keys of interest. Implementation can choose to either do full scan and return matched entries or
@@ -169,10 +164,6 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   public Schema getSchema() {
-    // if getSchema was invoked before converting byte [] to records
-    if (records == null) {
-      getRecords();
-    }
     return readerSchema;
   }
 
@@ -183,23 +174,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
 
     records = deserializeRecords(getContent().get());
+    // Free up content to be GC'd, deflate
+    deflate();
   }
 
   protected abstract byte[] serializeRecords(List<IndexedRecord> records) throws IOException;
 
   protected abstract List<IndexedRecord> deserializeRecords(byte[] content) throws IOException;
-
-  public final List<IndexedRecord> getRecords() {
-    if (records == null) {
-      try {
-        // in case records are absent, read content lazily and then convert to IndexedRecords
-        readRecordsFromContent();
-      } catch (IOException io) {
-        throw new HoodieIOException("Unable to convert content bytes to records", io);
-      }
-    }
-    return records;
-  }
 
   protected Option<Schema.Field> getKeyField(Schema schema) {
     return Option.ofNullable(schema.getField(keyFieldRef));

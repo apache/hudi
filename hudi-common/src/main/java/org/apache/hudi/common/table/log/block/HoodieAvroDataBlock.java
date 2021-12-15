@@ -140,7 +140,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
     SizeAwareDataInputStream dis =
-        new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(getContent().get())));
+        new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
 
     // 1. Read version for this data block
     int version = dis.readInt();
@@ -161,7 +161,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     // 3. Read the content
     for (int i = 0; i < totalRecords; i++) {
       int recordLength = dis.readInt();
-      BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(getContent().get(), dis.getNumberOfBytesRead(),
+      BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(content, dis.getNumberOfBytesRead(),
           recordLength, decoderCache.get());
       decoderCache.set(decoder);
       IndexedRecord record = reader.read(null, decoder);
@@ -170,8 +170,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     }
 
     dis.close();
-    // Free up content to be GC'd, deflate
-    deflate();
 
     return records;
   }
