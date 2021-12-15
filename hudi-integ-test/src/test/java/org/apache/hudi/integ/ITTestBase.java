@@ -134,6 +134,11 @@ public abstract class ITTestBase {
         .withMaxTotalConnections(100).withMaxPerRouteConnections(10);
     dockerClient = DockerClientBuilder.getInstance(config).withDockerCmdExecFactory(dockerCmdExecFactory).build();
     await().atMost(60, SECONDS).until(this::servicesUp);
+    try {
+      Thread.sleep(180000);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
   }
 
   private boolean servicesUp() {
