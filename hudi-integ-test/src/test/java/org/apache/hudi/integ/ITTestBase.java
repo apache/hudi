@@ -20,6 +20,8 @@ package org.apache.hudi.integ;
 
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.DockerCmdExecFactory;
@@ -153,19 +155,13 @@ public abstract class ITTestBase {
     try {
       TestExecStartResultCallback resultCallback =
           executeCommandStringInDocker(ADHOC_1_CONTAINER, "nc -z -v namenode 8020", true, true);
-      String stdoutString = resultCallback.getStdout().toString().trim();
       String stderrString = resultCallback.getStderr().toString().trim();
-      LOG.info("Result: nc -z -v namenode 8020");
-      LOG.info("Stdout");
-      LOG.info(stdoutString);
-      LOG.info("Stderr");
-      LOG.info(stderrString);
       if (!stderrString.contains("open")) {
         Thread.sleep(1000);
         return false;
       }
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new HoodieException("Exception thrown while wiating for namenode to be up ", e);
     }
     return true;
   }
