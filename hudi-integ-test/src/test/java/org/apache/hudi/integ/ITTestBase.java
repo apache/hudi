@@ -124,7 +124,7 @@ public abstract class ITTestBase {
   }
 
   @BeforeEach
-  public void init() {
+  public void init() throws InterruptedException {
     String dockerHost = (OVERRIDDEN_DOCKER_HOST != null) ? OVERRIDDEN_DOCKER_HOST : DEFAULT_DOCKER_HOST;
     // Assuming insecure docker engine
     DockerClientConfig config =
@@ -134,6 +134,7 @@ public abstract class ITTestBase {
         .withMaxTotalConnections(100).withMaxPerRouteConnections(10);
     dockerClient = DockerClientBuilder.getInstance(config).withDockerCmdExecFactory(dockerCmdExecFactory).build();
     await().atMost(60, SECONDS).until(this::servicesUp);
+    Thread.sleep(120000);
   }
 
   private boolean servicesUp() {
