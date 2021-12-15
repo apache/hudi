@@ -13,7 +13,7 @@ Section below generally aids in debugging Hudi failures. Off the bat, the follow
 - **_hoodie_file_name** - Actual file name containing the record (super useful to triage duplicates)
 - **_hoodie_partition_path** - Path from basePath that identifies the partition containing this record
 
-For performance related issues, please refer to the [tuning guide](/docs/tuning-guide)
+For performance related issues, please refer to the [tuning guide](https://hudi.apache.org/docs/tuning-guide)
 
 
 ### Missing records
