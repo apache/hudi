@@ -367,7 +367,9 @@ public class FileCreateUtils {
     if (Files.notExists(basePath)) {
       return Collections.emptyList();
     }
-    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)).collect(Collectors.toList());
+    return Files.list(basePath).filter(entry -> (!entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
+        && !entry.getFileName().toString().contains("parquet") && !entry.getFileName().toString().contains("log"))
+        && !entry.getFileName().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)).collect(Collectors.toList());
   }
 
   /**

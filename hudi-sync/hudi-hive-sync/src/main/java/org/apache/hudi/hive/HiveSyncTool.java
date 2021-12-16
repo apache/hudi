@@ -28,7 +28,6 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.util.ConfigUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.hive.util.Parquet2SparkSchemaUtils;
-
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.AbstractSyncTool;
@@ -166,20 +165,28 @@ public class HiveSyncTool extends AbstractSyncTool {
     // Check if the necessary table exists
     boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
-    // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieHiveClient.getDataSchema();
+    // check if isDropPartition
+    boolean isDropPartition = hoodieHiveClient.isDropPartition();
 
-    // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
-    // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
-    // by the data source way (which will use the HoodieBootstrapRelation).
-    // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
-    if (hoodieHiveClient.isBootstrap()
-            && hoodieHiveClient.getTableType() == HoodieTableType.MERGE_ON_READ
-            && !readAsOptimized) {
-      cfg.syncAsSparkDataSourceTable = false;
+    // check if schemaChanged
+    boolean schemaChanged = false;
+
+    if (!isDropPartition) {
+      // Get the parquet schema for this table looking at the latest commit
+      MessageType schema = hoodieHiveClient.getDataSchema();
+
+      // Currently HoodieBootstrapRelation does support reading bootstrap MOR rt table,
+      // so we disable the syncAsSparkDataSourceTable here to avoid read such kind table
+      // by the data source way (which will use the HoodieBootstrapRelation).
+      // TODO after we support bootstrap MOR rt table in HoodieBootstrapRelation[HUDI-2071], we can remove this logical.
+      if (hoodieHiveClient.isBootstrap()
+          && hoodieHiveClient.getTableType() == HoodieTableType.MERGE_ON_READ
+          && !readAsOptimized) {
+        cfg.syncAsSparkDataSourceTable = false;
+      }
+      // Sync schema if needed
+      schemaChanged = syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
     }
-    // Sync schema if needed
-    boolean schemaChanged = syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
 
     LOG.info("Schema sync complete. Syncing partitions for " + tableName);
     // Get the last time we successfully synced partitions
@@ -192,7 +199,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
 
     // Sync the partitions if needed
-    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince);
+    boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, isDropPartition);
     boolean meetSyncConditions = schemaChanged || partitionsChanged;
     if (!cfg.isConditionalSync || meetSyncConditions) {
       hoodieHiveClient.updateLastCommitTimeSynced(tableName);
@@ -331,19 +338,32 @@ public class HiveSyncTool extends AbstractSyncTool {
    * Syncs the list of storage partitions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path).
    */
-  private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince) {
+  private boolean syncPartitions(String tableName, List<String> writtenPartitionsSince, boolean isDropPartition) {
     boolean partitionsChanged;
     try {
       List<Partition> hivePartitions = hoodieHiveClient.scanTablePartitions(tableName);
       List<PartitionEvent> partitionEvents =
-          hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
+          hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, isDropPartition);
+
       List<String> newPartitions = filterPartitions(partitionEvents, PartitionEventType.ADD);
-      LOG.info("New Partitions " + newPartitions);
-      hoodieHiveClient.addPartitionsToTable(tableName, newPartitions);
+      if (!newPartitions.isEmpty()) {
+        LOG.info("New Partitions " + newPartitions);
+        hoodieHiveClient.addPartitionsToTable(tableName, newPartitions);
+      }
+
       List<String> updatePartitions = filterPartitions(partitionEvents, PartitionEventType.UPDATE);
-      LOG.info("Changed Partitions " + updatePartitions);
-      hoodieHiveClient.updatePartitionsToTable(tableName, updatePartitions);
-      partitionsChanged = !updatePartitions.isEmpty() || !newPartitions.isEmpty();
+      if (!updatePartitions.isEmpty()) {
+        LOG.info("Changed Partitions " + updatePartitions);
+        hoodieHiveClient.updatePartitionsToTable(tableName, updatePartitions);
+      }
+
+      List<String> dropPartitions = filterPartitions(partitionEvents, PartitionEventType.DROP);
+      if (!dropPartitions.isEmpty()) {
+        LOG.info("Drop Partitions " + dropPartitions);
+        hoodieHiveClient.dropPartitionsToTable(tableName, dropPartitions);
+      }
+
+      partitionsChanged = !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to sync partitions for table " + tableName, e);
     }

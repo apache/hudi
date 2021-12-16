@@ -149,7 +149,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieBackedMetadata.class);
 
-  public static List<Arguments> bootstrapAndTableOperationTestArgs() {
+  public static List<Arguments> tableTypeAndEnableOperationArgs() {
     return asList(
         Arguments.of(COPY_ON_WRITE, true),
         Arguments.of(COPY_ON_WRITE, false),
@@ -162,7 +162,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Metadata Table bootstrap scenarios.
    */
   @ParameterizedTest
-  @MethodSource("bootstrapAndTableOperationTestArgs")
+  @MethodSource("tableTypeAndEnableOperationArgs")
   public void testMetadataTableBootstrap(HoodieTableType tableType, boolean addRollback) throws Exception {
     init(tableType, false);
     // bootstrap with few commits
@@ -243,7 +243,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * Test various table operations sync to Metadata Table correctly.
    */
   @ParameterizedTest
-  @MethodSource("bootstrapAndTableOperationTestArgs")
+  @MethodSource("tableTypeAndEnableOperationArgs")
   public void testTableOperations(HoodieTableType tableType, boolean enableFullScan) throws Exception {
     init(tableType, true, enableFullScan, false, false);
     doWriteInsertAndUpsert(testTable);
@@ -316,6 +316,16 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       doCompaction(testTable, "0000004");
     }
     doWriteOperation(testTable, "0000005");
+    validateMetadata(testTable, emptyList(), true);
+  }
+
+  @Test
+  public void testMetadataInsertUpsertCleanNonPartitioned() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType);
+    doWriteOperationNonPartitioned(testTable, "0000001", INSERT);
+    doWriteOperationNonPartitioned(testTable, "0000002", UPSERT);
+    testTable.doCleanBasedOnCommits("0000003", Arrays.asList("0000001"));
     validateMetadata(testTable, emptyList(), true);
   }
 
@@ -414,10 +424,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     });
   }
 
-
   /**
    * Tests that virtual key configs are honored in base files after compaction in metadata table.
-   *
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -509,7 +517,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteInsertAndUpsert(testTable);
 
     // trigger an upsert
-    doWriteOperationAndValidate(testTable, "0000003");
+    doWriteOperation(testTable, "0000003", UPSERT);
 
     // trigger a commit and rollback
     doWriteOperation(testTable, "0000004");
@@ -549,6 +557,27 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
   }
 
+  @Test
+  public void testRollbackOperationsNonPartitioned() throws Exception {
+    HoodieTableType tableType = COPY_ON_WRITE;
+    init(tableType);
+    doWriteInsertAndUpsertNonPartitioned(testTable);
+
+    // trigger an upsert
+    doWriteOperationNonPartitioned(testTable, "0000003", UPSERT);
+
+    // trigger a commit and rollback
+    doWriteOperationNonPartitioned(testTable, "0000004", UPSERT);
+    doRollback(testTable, "0000004", "0000005");
+    validateMetadata(testTable);
+
+    // trigger few upserts and validate
+    for (int i = 6; i < 10; i++) {
+      doWriteOperationNonPartitioned(testTable, "000000" + i, UPSERT);
+    }
+    validateMetadata(testTable);
+  }
+
   /**
    * Test that manual rollbacks work correctly and enough timeline history is maintained on the metadata table
    * timeline.
@@ -573,7 +602,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     initWriteConfigAndMetatableWriter(writeConfig, true);
-    doWriteInsertAndUpsert(testTable, "000001", "000002");
+    doWriteInsertAndUpsert(testTable, "000001", "000002", false);
 
     for (int i = 3; i < 10; i++) {
       doWriteOperation(testTable, "00000" + i);
@@ -674,8 +703,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType) throws Exception {
+  @MethodSource("tableTypeAndEnableOperationArgs")
+  public void testMetadataBootstrapLargeCommitList(HoodieTableType tableType, boolean nonPartitionedDataset) throws Exception {
     init(tableType, true, true, true, false);
     long baseCommitTime = Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
     for (int i = 1; i < 25; i += 7) {
@@ -687,17 +716,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       long commitTime6 = getNextCommitTime(commitTime5);
       long commitTime7 = getNextCommitTime(commitTime6);
       baseCommitTime = commitTime7;
-      doWriteOperation(testTable, Long.toString(commitTime1), INSERT);
-      doWriteOperation(testTable, Long.toString(commitTime2));
+      doWriteOperation(testTable, Long.toString(commitTime1), INSERT, nonPartitionedDataset);
+      doWriteOperation(testTable, Long.toString(commitTime2), UPSERT, nonPartitionedDataset);
       doClean(testTable, Long.toString(commitTime3), Arrays.asList(Long.toString(commitTime1)));
-      doWriteOperation(testTable, Long.toString(commitTime4));
+      doWriteOperation(testTable, Long.toString(commitTime4), UPSERT, nonPartitionedDataset);
       if (tableType == MERGE_ON_READ) {
-        doCompaction(testTable, Long.toString(commitTime5));
+        doCompaction(testTable, Long.toString(commitTime5), nonPartitionedDataset);
       }
-      doWriteOperation(testTable, Long.toString(commitTime6));
+      doWriteOperation(testTable, Long.toString(commitTime6), UPSERT, nonPartitionedDataset);
       doRollback(testTable, Long.toString(commitTime6), Long.toString(commitTime7));
     }
-    validateMetadata(testTable, emptyList(), true);
+    validateMetadata(testTable, emptyList(), nonPartitionedDataset);
   }
 
   // Some operations are not feasible with test table infra. hence using write client to test those cases.
@@ -1563,8 +1592,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable);
   }
 
+  private void doWriteInsertAndUpsertNonPartitioned(HoodieTestTable testTable) throws Exception {
+    doWriteInsertAndUpsert(testTable, "0000001", "0000002", true);
+  }
+
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {
-    doWriteInsertAndUpsert(testTable, "0000001", "0000002");
+    doWriteInsertAndUpsert(testTable, "0000001", "0000002", false);
   }
 
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts) {

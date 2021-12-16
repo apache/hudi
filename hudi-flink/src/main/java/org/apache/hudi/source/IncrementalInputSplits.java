@@ -286,7 +286,7 @@ public class IncrementalInputSplits implements Serializable {
     HoodieTimeline completedTimeline = commitTimeline.filterCompletedInstants();
     if (issuedInstant != null) {
       // returns early for streaming mode
-      return completedTimeline.getInstants()
+      return maySkipCompaction(completedTimeline.getInstants())
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
           .collect(Collectors.toList());
     }

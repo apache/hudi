@@ -464,6 +464,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Bootstrap: initializing metadata table by listing files and partitions");
     List<DirectoryInfo> dirInfoList = listAllPartitions(dataMetaClient);
 
     // During bootstrap, the list of files to be committed can be huge. So creating a HoodieCommitMetadata out of these
@@ -695,7 +696,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           pendingInstants.size(), latestDeltacommitTime, Arrays.toString(pendingInstants.toArray())));
       return;
     }
-
 
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the

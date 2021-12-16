@@ -24,13 +24,15 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -520,11 +522,15 @@ public class HoodieClusteringConfig extends HoodieConfig {
   }
 
   /**
-   * strategy types for build z-ordering/space-filling curves.
+   * Type of a strategy for building Z-order/Hilbert space-filling curves.
    */
   public enum BuildCurveStrategyType {
     DIRECT("direct"),
     SAMPLE("sample");
+
+    private static final Map<String, BuildCurveStrategyType> VALUE_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(BuildCurveStrategyType.class, e -> e.value);
+
     private final String value;
 
     BuildCurveStrategyType(String value) {
@@ -532,42 +538,39 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public static BuildCurveStrategyType fromValue(String value) {
-      switch (value.toLowerCase(Locale.ROOT)) {
-        case "direct":
-          return DIRECT;
-        case "sample":
-          return SAMPLE;
-        default:
-          throw new HoodieException("Invalid value of Type.");
+      BuildCurveStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
+      if (enumValue == null) {
+        throw new HoodieException(String.format("Invalid value (%s)", value));
       }
+
+      return enumValue;
     }
   }
 
   /**
-   * strategy types for optimize layout for hudi data.
+   * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
    */
-  public enum BuildLayoutOptimizationStrategy {
+  public enum LayoutOptimizationStrategy {
     ZORDER("z-order"),
     HILBERT("hilbert");
+
+    private static final Map<String, LayoutOptimizationStrategy> VALUE_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(LayoutOptimizationStrategy.class, e -> e.value);
+
     private final String value;
 
-    BuildLayoutOptimizationStrategy(String value) {
+    LayoutOptimizationStrategy(String value) {
       this.value = value;
     }
 
-    public String toCustomString() {
-      return value;
-    }
-
-    public static BuildLayoutOptimizationStrategy fromValue(String value) {
-      switch (value.toLowerCase(Locale.ROOT)) {
-        case "z-order":
-          return ZORDER;
-        case "hilbert":
-          return HILBERT;
-        default:
-          throw new HoodieException("Invalid value of Type.");
+    @Nonnull
+    public static LayoutOptimizationStrategy fromValue(String value) {
+      LayoutOptimizationStrategy enumValue = VALUE_TO_ENUM_MAP.get(value);
+      if (enumValue == null) {
+        throw new HoodieException(String.format("Invalid value (%s)", value));
       }
+
+      return enumValue;
     }
   }
 }
