@@ -216,8 +216,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
     // 5. Read the content length for the content
     // Fallback to full-block size if no content-length
+    // TODO replace w/ hasContentLength
     int contentLength =
-        nextBlockVersion.hasContentLength() ? (int) inputStream.readLong() : blockSize;
+        nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION ? (int) inputStream.readLong() : blockSize;
 
     // 6. Read the content or skip content based on IO vs Memory trade-off by client
     long contentPosition = inputStream.getPos();

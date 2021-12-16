@@ -53,7 +53,7 @@ final class HoodieLogFormatVersion extends HoodieLogFormat.LogFormatVersion {
   public boolean hasContentLength() {
     switch (super.getVersion()) {
       case DEFAULT_VERSION:
-        return false;
+        return true;
       default:
         return true;
     }
