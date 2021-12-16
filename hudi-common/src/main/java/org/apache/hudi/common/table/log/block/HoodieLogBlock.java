@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -115,7 +116,25 @@ public abstract class HoodieLogBlock {
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
-    COMMAND_BLOCK, DELETE_BLOCK, CORRUPT_BLOCK, AVRO_DATA_BLOCK, HFILE_DATA_BLOCK, PARQUET_DATA_BLOCK
+    COMMAND_BLOCK(":command"),
+    DELETE_BLOCK(":delete"),
+    CORRUPT_BLOCK(":corrupted"),
+    AVRO_DATA_BLOCK("avro"),
+    HFILE_DATA_BLOCK("hfile"),
+    PARQUET_DATA_BLOCK("parquet");
+
+    private static final Map<String, HoodieLogBlockType> ID_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(HoodieLogBlockType.class, e -> e.id);
+
+    private final String id;
+
+    HoodieLogBlockType(String id) {
+      this.id = id;
+    }
+
+    public static HoodieLogBlockType fromId(String id) {
+      return ID_TO_ENUM_MAP.get(id);
+    }
   }
 
   /**
