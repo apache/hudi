@@ -221,7 +221,7 @@ public abstract class HoodieLogBlock {
     if (readLazily) {
       // Seek to the end of the content block
       inputStream.seek(inputStream.getPos() + contentLength);
-      return null;
+      return Option.empty();
     }
 
     // TODO re-use buffer if stream is backed by buffer

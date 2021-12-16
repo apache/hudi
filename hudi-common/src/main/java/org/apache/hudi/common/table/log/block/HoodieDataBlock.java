@@ -183,6 +183,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   protected Option<String> getRecordKey(IndexedRecord record) {
-    return getKeyField(record.getSchema()).map(keyField -> record.get(keyField.pos()).toString());
+    return getKeyField(record.getSchema())
+        .map(keyField -> record.get(keyField.pos()))
+        .map(Object::toString);
   }
 }
