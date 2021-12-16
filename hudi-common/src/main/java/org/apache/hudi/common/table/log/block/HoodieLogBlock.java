@@ -216,18 +216,19 @@ public abstract class HoodieLogBlock {
    * Read or Skip block content of a log block in the log file. Depends on lazy reading enabled in
    * {@link HoodieMergedLogRecordScanner}
    */
-  public static byte[] readOrSkipContent(FSDataInputStream inputStream, Integer contentLength, boolean readBlockLazily)
+  public static Option<byte[]> tryReadContent(FSDataInputStream inputStream, Integer contentLength, boolean readLazily)
       throws IOException {
-    byte[] content = null;
-    if (!readBlockLazily) {
-      // Read the contents in memory
-      content = new byte[contentLength];
-      inputStream.readFully(content, 0, contentLength);
-    } else {
+    if (readLazily) {
       // Seek to the end of the content block
       inputStream.seek(inputStream.getPos() + contentLength);
+      return null;
     }
-    return content;
+
+    // TODO re-use buffer if stream is backed by buffer
+    // Read the contents in memory
+    byte[] content = new byte[contentLength];
+    inputStream.readFully(content, 0, contentLength);
+    return Option.of(content);
   }
 
   /**

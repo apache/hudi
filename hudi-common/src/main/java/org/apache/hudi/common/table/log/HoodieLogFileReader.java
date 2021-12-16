@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Scans a log file and provides block level iterator on the log file Loads the entire block contents in memory Can emit
@@ -219,10 +220,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         nextBlockVersion.hasContentLength() ? (int) inputStream.readLong() : blockSize;
 
     // 6. Read the content or skip content based on IO vs Memory trade-off by client
-    // TODO - have a max block size and reuse this buffer in the ByteBuffer
-    // (hard to guess max block size for now)
     long contentPosition = inputStream.getPos();
-    byte[] content = HoodieLogBlock.readOrSkipContent(inputStream, contentLength, readBlockLazily);
+    boolean shouldReadLazily = readBlockLazily && nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION;
+    Option<byte[]> content = HoodieLogBlock.tryReadContent(inputStream, contentLength, shouldReadLazily);
 
     // 7. Read footer if any
     Map<HeaderMetadataType, String> footer =
@@ -238,27 +238,36 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     long blockEndPos = inputStream.getPos();
 
     switch (Objects.requireNonNull(blockType)) {
-      // based on type read the block
       case AVRO_DATA_BLOCK:
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
-          return HoodieAvroDataBlock.getBlock(content, readerSchema);
+          return HoodieAvroDataBlock.getBlock(content.get(), readerSchema);
         } else {
-          return new HoodieAvroDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+          return new HoodieAvroDataBlock(logFile, inputStream, content, readBlockLazily,
               contentPosition, contentLength, blockEndPos, readerSchema, header, footer, keyField);
         }
+
       case HFILE_DATA_BLOCK:
-        return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+        checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
+            String.format("HFile block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
+
+        return new HoodieHFileDataBlock(logFile, inputStream, content, readBlockLazily,
             contentPosition, contentLength, blockEndPos, readerSchema,
             header, footer, enableRecordLookups);
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+        checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
+            String.format("Parquet block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
+
+        return new HoodieParquetDataBlock(logFile, inputStream, content, readBlockLazily,
             contentPosition, contentLength, blockEndPos, readerSchema, header, footer, keyField);
+
       case DELETE_BLOCK:
-        return HoodieDeleteBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+        return HoodieDeleteBlock.getBlock(logFile, inputStream, content, readBlockLazily,
             contentPosition, contentLength, blockEndPos, header, footer);
+
       case COMMAND_BLOCK:
-        return HoodieCommandBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+        return HoodieCommandBlock.getBlock(logFile, inputStream, content, readBlockLazily,
             contentPosition, contentLength, blockEndPos, header, footer);
+
       default:
         throw new HoodieNotSupportedException("Unsupported Block " + blockType);
     }
@@ -284,8 +293,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     LOG.info("Next available block in " + logFile + " starts at " + nextBlockOffset);
     int corruptedBlockSize = (int) (nextBlockOffset - currentPos);
     long contentPosition = inputStream.getPos();
-    byte[] corruptedBytes = HoodieLogBlock.readOrSkipContent(inputStream, corruptedBlockSize, readBlockLazily);
-    return HoodieCorruptBlock.getBlock(logFile, inputStream, Option.ofNullable(corruptedBytes), readBlockLazily,
+    Option<byte[]> corruptedBytes = HoodieLogBlock.tryReadContent(inputStream, corruptedBlockSize, readBlockLazily);
+    return HoodieCorruptBlock.getBlock(logFile, inputStream, corruptedBytes, readBlockLazily,
         contentPosition, corruptedBlockSize, nextBlockOffset, new HashMap<>(), new HashMap<>());
   }
 
