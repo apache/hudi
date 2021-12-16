@@ -46,6 +46,7 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -139,7 +140,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(names = { "AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK" })
+  @EnumSource(names = { "AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK", "PARQUET_DATA_BLOCK" })
   public void testBasicAppend(HoodieLogBlockType dataBlockType) throws IOException, InterruptedException, URISyntaxException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -171,7 +172,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     // Write out a block
     AppendResult firstAppend = writer.appendBlock(dataBlock);
     // Get the size of the block
@@ -186,7 +187,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).withSizeThreshold(size - 1).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
-    dataBlock = getDataBlock(records, header);
+    dataBlock = getDataBlock(dataBlockType, records, header);
     AppendResult secondAppend = writer.appendBlock(dataBlock);
 
     assertEquals(firstAppend.logFile(), secondAppend.logFile());
@@ -198,7 +199,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     // Write one more block, which should not go to the new log file.
     records = SchemaTestUtil.generateTestRecords(0, 100);
-    dataBlock = getDataBlock(records, header);
+    dataBlock = getDataBlock(dataBlockType, records, header);
     AppendResult rolloverAppend = writer.appendBlock(dataBlock);
 
     assertNotEquals(secondAppend.logFile(), rolloverAppend.logFile());
@@ -245,7 +246,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     Writer writer2 = builder2.build();
     writer2.appendBlock(dataBlock);
@@ -257,8 +258,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(logFile1.getLogVersion(), logFile2.getLogVersion() - 1, "Log Files must have different versions");
   }
 
-  @Test
-  public void testMultipleAppend() throws IOException, URISyntaxException, InterruptedException {
+  @ParameterizedTest
+  @EnumSource(names = { "AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK" })
+  public void testMultipleAppend(HoodieLogBlockType dataBlockType) throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
@@ -266,7 +268,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     long size1 = writer.getCurrentSize();
     writer.close();
@@ -276,7 +278,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    dataBlock = getDataBlock(records, header);
+    dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     long size2 = writer.getCurrentSize();
     assertTrue(size2 > size1, "We just wrote a new block - size2 should be > size1");
@@ -290,7 +292,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    dataBlock = getDataBlock(records, header);
+    dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     long size3 = writer.getCurrentSize();
     assertTrue(size3 > size2, "We just wrote a new block - size3 should be > size2");
@@ -344,7 +346,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
 
     for (int i = 0; i < 2; i++) {
       Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
@@ -371,7 +373,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -400,7 +402,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    byte[] dataBlockContentBytes = getDataBlock(records, header).getContentBytes();
+    byte[] dataBlockContentBytes = getDataBlock(dataBlockType, records, header).getContentBytes();
     HoodieDataBlock reusableDataBlock = new HoodieAvroDataBlock(null, null,
         Option.ofNullable(dataBlockContentBytes), false, 0, dataBlockContentBytes.length,
         0, getSimpleSchema(), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
@@ -447,8 +449,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     oversizeWriter.close();
   }
 
-  @Test
-  public void testBasicAppendAndRead() throws IOException, URISyntaxException, InterruptedException {
+  @ParameterizedTest
+  @EnumSource(names = { "AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK", "PARQUET_DATA_BLOCK" })
+  public void testBasicAppendAndRead(HoodieLogBlockType dataBlockType) throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
@@ -459,7 +462,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -470,7 +473,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> copyOfRecords2 = records2.stream()
         .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    dataBlock = getDataBlock(records2, header);
+    dataBlock = getDataBlock(dataBlockType, records2, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -482,7 +485,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> copyOfRecords3 = records3.stream()
         .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    dataBlock = getDataBlock(records3, header);
+    dataBlock = getDataBlock(dataBlockType, records3, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -538,7 +541,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
       allRecords.add(copyOfRecords1);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-      HoodieDataBlock dataBlock = getDataBlock(records1, header);
+      HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
       writer.appendBlock(dataBlock);
     }
     writer.close();
@@ -580,7 +583,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -606,7 +609,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                     .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 10);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    dataBlock = getDataBlock(records, header);
+    dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -644,7 +647,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    dataBlock = getDataBlock(records, header);
+    dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -674,7 +677,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -702,7 +705,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 10);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    dataBlock = getDataBlock(records, header);
+    dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -741,7 +744,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
 
     // Write 2
@@ -749,7 +752,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> copyOfRecords2 = records2.stream()
         .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = getDataBlock(records2, header);
+    dataBlock = getDataBlock(dataBlockType, records2, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -804,14 +807,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
 
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
 
     // Write 2
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
     List<IndexedRecord> records2 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = getDataBlock(records2, header);
+    dataBlock = getDataBlock(dataBlockType, records2, header);
     writer.appendBlock(dataBlock);
 
     // Rollback the last write
@@ -827,7 +830,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> copyOfRecords3 = records3.stream()
         .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = getDataBlock(records3, header);
+    dataBlock = getDataBlock(dataBlockType, records3, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -880,7 +883,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -914,7 +917,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
 
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = getDataBlock(records3, header);
+    dataBlock = getDataBlock(dataBlockType, records3, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -968,7 +971,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
 
     // Write 2
@@ -976,7 +979,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> records2 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords2 = records2.stream()
         .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
-    dataBlock = getDataBlock(records2, header);
+    dataBlock = getDataBlock(dataBlockType, records2, header);
     writer.appendBlock(dataBlock);
 
     copyOfRecords1.addAll(copyOfRecords2);
@@ -1089,13 +1092,13 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "100");
 
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
 
     // Write 2
     List<IndexedRecord> records2 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = getDataBlock(records2, header);
+    dataBlock = getDataBlock(dataBlockType, records2, header);
     writer.appendBlock(dataBlock);
 
     // Delete 50 keys
@@ -1173,7 +1176,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
 
     // Delete 50 keys
@@ -1232,7 +1235,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
 
     FileCreateUtils.createDeltaCommit(basePath, "100", fs);
@@ -1290,7 +1293,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
     writer.appendBlock(dataBlock);
     writer.appendBlock(dataBlock);
@@ -1354,7 +1357,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
     writer.appendBlock(dataBlock);
     writer.appendBlock(dataBlock);
@@ -1473,7 +1476,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-      HoodieDataBlock dataBlock = getDataBlock(records.subList(0, numRecordsInLog1), header);
+      HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records.subList(0, numRecordsInLog1), header);
       writer.appendBlock(dataBlock);
       // Get the size of the block
       long size = writer.getCurrentSize();
@@ -1487,7 +1490,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       Map<HoodieLogBlock.HeaderMetadataType, String> header2 = new HashMap<>();
       header2.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
       header2.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-      HoodieDataBlock dataBlock2 = getDataBlock(records2.subList(0, numRecordsInLog2), header2);
+      HoodieDataBlock dataBlock2 = getDataBlock(dataBlockType, records2.subList(0, numRecordsInLog2), header2);
       writer2.appendBlock(dataBlock2);
       // Get the size of the block
       writer2.close();
@@ -1574,7 +1577,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -1584,7 +1587,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> records2 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords2 = records2.stream()
         .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
-    dataBlock = getDataBlock(records2, header);
+    dataBlock = getDataBlock(dataBlockType, records2, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -1595,7 +1598,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<IndexedRecord> records3 = SchemaTestUtil.generateTestRecords(0, 100);
     List<IndexedRecord> copyOfRecords3 = records3.stream()
         .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
-    dataBlock = getDataBlock(records3, header);
+    dataBlock = getDataBlock(dataBlockType, records3, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -1646,7 +1649,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -1674,7 +1677,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
-    dataBlock = getDataBlock(records, header);
+    dataBlock = getDataBlock(dataBlockType, records, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -1708,7 +1711,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    HoodieDataBlock dataBlock = getDataBlock(records1, header);
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, records1, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -1716,7 +1719,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     List<IndexedRecord> records2 = SchemaTestUtil.generateTestRecords(0, 100);
-    dataBlock = getDataBlock(records2, header);
+    dataBlock = getDataBlock(dataBlockType, records2, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -1725,7 +1728,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     List<IndexedRecord> records3 = SchemaTestUtil.generateTestRecords(0, 100);
-    dataBlock = getDataBlock(records3, header);
+    dataBlock = getDataBlock(dataBlockType, records3, header);
     writer.appendBlock(dataBlock);
     writer.close();
 
@@ -1786,10 +1789,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     }
   }
 
-  private HoodieDataBlock getDataBlock(List<IndexedRecord> records, Map<HeaderMetadataType, String> header) {
-    return getDataBlock(dataBlockType, records, header);
-  }
-
   private HoodieDataBlock getDataBlock(HoodieLogBlockType dataBlockType, List<IndexedRecord> records,
                                        Map<HeaderMetadataType, String> header) {
     switch (dataBlockType) {
@@ -1797,6 +1796,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         return new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      case PARQUET_DATA_BLOCK:
+        return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }
