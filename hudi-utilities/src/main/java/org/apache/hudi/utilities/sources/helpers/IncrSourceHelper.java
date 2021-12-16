@@ -33,6 +33,16 @@ import java.util.Objects;
 public class IncrSourceHelper {
 
   /**
+   * Kafka reset offset strategies.
+   */
+  public enum MissingCheckpointStrategy {
+    // read from latest commit in hoodie source table
+    READ_LATEST,
+    // read everything until latest commit
+    READ_EVERYTHING_UNTIL_LATEST
+  }
+
+  /**
    * Get a timestamp which is the next value in a descending sequence.
    *
    * @param timestamp Timestamp
@@ -47,15 +57,15 @@ public class IncrSourceHelper {
   /**
    * Find begin and end instants to be set for the next fetch.
    *
-   * @param jssc Java Spark Context
-   * @param srcBasePath Base path of Hudi source table
-   * @param numInstantsPerFetch Max Instants per fetch
-   * @param beginInstant Last Checkpoint String
-   * @param readLatestOnMissingBeginInstant when begin instant is missing, allow reading from latest committed instant
+   * @param jssc                            Java Spark Context
+   * @param srcBasePath                     Base path of Hudi source table
+   * @param numInstantsPerFetch             Max Instants per fetch
+   * @param beginInstant                    Last Checkpoint String
+   * @param missingCheckpointStrategy when begin instant is missing, allow reading based on missing checkpoint strategy
    * @return begin and end instants
    */
   public static Pair<String, String> calculateBeginAndEndInstants(JavaSparkContext jssc, String srcBasePath,
-      int numInstantsPerFetch, Option<String> beginInstant, boolean readLatestOnMissingBeginInstant) {
+                                                                  int numInstantsPerFetch, Option<String> beginInstant, MissingCheckpointStrategy missingCheckpointStrategy) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
@@ -64,27 +74,38 @@ public class IncrSourceHelper {
         srcMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
 
     String beginInstantTime = beginInstant.orElseGet(() -> {
-      if (readLatestOnMissingBeginInstant) {
-        Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-        return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp())).orElse("000");
+      if (missingCheckpointStrategy != null) {
+        if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
+          Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
+          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp())).orElse("000");
+        } else {
+          return "000";
+        }
       } else {
         throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
-            + "committed instant set hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt to true");
+            + "committed instant set hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
       }
     });
 
-    Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
-        .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
-    return Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime));
+    if (!beginInstantTime.equals("000")) {
+      Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
+          .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
+      return Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime));
+    } else {
+      // if beginInstant is null,  MissingCheckpointStrategy should be set.
+      // when MissingCheckpointStrategy is set to read everything until latest.
+      Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
+      return Pair.of(beginInstantTime, lastInstant.get().getTimestamp());
+    }
   }
 
   /**
    * Validate instant time seen in the incoming row.
    *
-   * @param row Input Row
-   * @param instantTime Hoodie Instant time of the row
+   * @param row          Input Row
+   * @param instantTime  Hoodie Instant time of the row
    * @param sinceInstant begin instant of the batch
-   * @param endInstant end instant of the batch
+   * @param endInstant   end instant of the batch
    */
   public static void validateInstantTime(Row row, String instantTime, String sinceInstant, String endInstant) {
     Objects.requireNonNull(instantTime);
