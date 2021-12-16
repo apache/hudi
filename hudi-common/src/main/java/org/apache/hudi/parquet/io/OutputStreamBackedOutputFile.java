@@ -87,8 +87,8 @@ public class OutputStreamBackedOutputFile implements OutputFile {
 
     @Override
     public void close() {
-      // we do not actually close the internal stream here, to prevent that the finishing
-      // of the Parquet Writer closes the target output stream
+      // We're deliberately not closing the delegate stream here to allow caller
+      // to explicitly manage its lifecycle
     }
   }
 }
