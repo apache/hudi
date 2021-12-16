@@ -176,10 +176,19 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: IT
         steps:
+          - task: AzureCLI@2
+            displayName: Azure CLI
+            inputs:
+              azureSubscription: apachehudici-service-connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az --version
+                az account show
+                echo 'Downloading spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)'
+                az storage blob download -c ci-caches -n spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz -f $(Pipeline.Workspace)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz --account-name apachehudici
+                tar -xvf $(Pipeline.Workspace)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz -C $(Pipeline.Workspace)/
           - script: |
-              echo 'Downloading spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)'
-              wget https://archive.apache.org/dist/spark/spark-$(SPARK_VERSION)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz -O $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz
-              tar -xvf $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz -C $(Pipeline.Workspace)/
               mkdir /tmp/spark-events/
               mvn $(MAVEN_OPTS) -Pintegration-tests verify
             displayName: IT
