@@ -640,7 +640,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String keyGeneratorClassProp;
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
-    private HoodieTimelineTimeZone commitTimezone;
+    private HoodieTimelineTimeZone commitTimeZone;
 
     private PropertyBuilder() {
 
@@ -739,8 +739,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setCommitTimezone(HoodieTimelineTimeZone commitTimezone) {
-      this.commitTimezone = commitTimezone;
+    public PropertyBuilder setCommitTimezone(HoodieTimelineTimeZone setTimelineTimeZone) {
+      this.commitTimeZone = setTimelineTimeZone;
       return this;
     }
 
@@ -880,8 +880,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != urlEncodePartitioning) {
         tableConfig.setValue(HoodieTableConfig.URL_ENCODE_PARTITIONING, Boolean.toString(urlEncodePartitioning));
       }
-      if (null != commitTimezone) {
-        tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimezone.toString());
+      if (null != commitTimeZone) {
+        tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimeZone.toString());
       }
       return tableConfig.getProps();
     }
