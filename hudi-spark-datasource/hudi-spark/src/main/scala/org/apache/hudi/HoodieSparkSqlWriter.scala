@@ -231,7 +231,7 @@ object HoodieSparkSqlWriter {
             log.info(s"Registered avro schema : ${schema.toString(true)}")
             val columnSet = df.columns.toSet
             keyGenerator.getRecordKeyFieldNames.foreach(fieldName => if(!columnSet.contains(fieldName)) {
-              throw new Exception(s"record key '$fieldName' does not exist in existing table schema :  ${schema.toString(true)}")
+              throw new HoodieException(s"record key '$fieldName' does not exist in existing table schema: ${schema.toString(true)}")
             }
             )
             // Convert to RDD[HoodieRecord]
