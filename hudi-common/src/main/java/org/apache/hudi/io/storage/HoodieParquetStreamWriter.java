@@ -18,31 +18,30 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.io.OutputFile;
-import org.apache.parquet.io.PositionOutputStream;
 
 import java.io.IOException;
-import java.io.OutputStream;
 
-/**
- * HoodieParquetStreamWriter wraps the ParquetWriter to assist in writing to OutputStream.
- */
+// TODO unify w/ HoodieParquetWriter
 public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoCloseable {
 
   private final ParquetWriter<R> writer;
   private final HoodieAvroWriteSupport writeSupport;
 
-  public HoodieParquetStreamWriter(OutputStream bufferedOutputStream,
-                                   HoodieAvroParquetConfig parquetConfig) throws IOException {
-    writer = new Builder<R>(new ParquetBufferedWriter(bufferedOutputStream), parquetConfig.getWriteSupport())
+  public HoodieParquetStreamWriter(
+      FSDataOutputStream outputStream,
+      HoodieAvroParquetConfig parquetConfig) throws IOException {
+    this.writeSupport = parquetConfig.getWriteSupport();
+    this.writer = new Builder<R>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
         .withWriteMode(ParquetFileWriter.Mode.CREATE)
         .withCompressionCodec(parquetConfig.getCompressionCodecName())
         .withRowGroupSize(parquetConfig.getBlockSize())
@@ -50,9 +49,8 @@ public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoC
         .withDictionaryPageSize(parquetConfig.getPageSize())
         .withDictionaryEncoding(parquetConfig.dictionaryEnabled())
         .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
-        .withConf(parquetConfig.getHadoopConf()).build();
-
-    this.writeSupport = parquetConfig.getWriteSupport();
+        .withConf(parquetConfig.getHadoopConf())
+        .build();
   }
 
   public void writeAvro(String key, R object) throws IOException {
@@ -65,76 +63,7 @@ public class HoodieParquetStreamWriter<R extends IndexedRecord> implements AutoC
     writer.close();
   }
 
-  public long getDataSize() {
-    return writer.getDataSize();
-  }
-
-  // TODO: Need to understand if this is the right way to directly write data to output stream using Parquet writer
-  public static class ParquetBufferedWriter implements OutputFile {
-
-    private final OutputStream out;
-
-    public ParquetBufferedWriter(OutputStream out) {
-      this.out = out;
-    }
-
-    @Override
-    public PositionOutputStream create(long blockSizeHint) throws IOException {
-      return createPositionOutputStream();
-    }
-
-    private PositionOutputStream createPositionOutputStream() {
-      return new PositionOutputStream() {
-
-        int pos = 0;
-
-        @Override
-        public long getPos() throws IOException {
-          return pos;
-        }
-
-        @Override
-        public void flush() throws IOException {
-          out.flush();
-        }
-
-        @Override
-        public void close() throws IOException {
-          out.close();
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-          out.write(b);
-          pos++;
-        }
-
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-          out.write(b, off, len);
-          pos += len;
-        }
-      };
-    }
-
-    @Override
-    public PositionOutputStream createOrOverwrite(long blockSizeHint) throws IOException {
-      return createPositionOutputStream();
-    }
-
-    @Override
-    public boolean supportsBlockSize() {
-      return false;
-    }
-
-    @Override
-    public long defaultBlockSize() {
-      return 0;
-    }
-  }
-
   private static class Builder<T> extends ParquetWriter.Builder<T, Builder<T>> {
-
     private final WriteSupport<T> writeSupport;
 
     private Builder(Path file, WriteSupport<T> writeSupport) {
