@@ -29,6 +29,8 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 
+import javax.annotation.Nullable;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -62,6 +64,17 @@ public class TestUtils {
         .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
     return metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().firstInstant()
         .map(HoodieInstant::getTimestamp).orElse(null);
+  }
+
+  @Nullable
+  public static String getNthCompleteInstant(String basePath, int n, boolean isDelta) {
+    final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
+    return metaClient.getActiveTimeline()
+        .filterCompletedInstants()
+        .filter(instant -> isDelta ? HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()) : HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()))
+        .nthInstant(n).map(HoodieInstant::getTimestamp)
+        .orElse(null);
   }
 
   public static String getSplitPartitionPath(MergeOnReadInputSplit split) {
