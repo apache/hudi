@@ -226,6 +226,7 @@ object HoodieSparkSqlWriter {
             var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
             if (reconcileSchema) {
               schema = getLatestTableSchema(fs, basePath, sparkContext, schema)
+              log.warn("XXX... latest table schema " + schema.toString)
             }
             sparkContext.getConf.registerAvroSchemas(schema)
             log.info(s"Registered avro schema : ${schema.toString(true)}")
@@ -233,6 +234,10 @@ object HoodieSparkSqlWriter {
             // Convert to RDD[HoodieRecord]
             val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
               org.apache.hudi.common.util.Option.of(schema))
+            val genRecs = genericRecords.toJavaRDD().collect()
+            log.warn("XXX. Gen Rec " + genRecs.get(0).toString)
+            log.warn("XXX. Gen Rec schema " + genRecs.get(0).getSchema.toString)
+
             val shouldCombine = parameters(INSERT_DROP_DUPS.key()).toBoolean ||
               operation.equals(WriteOperationType.UPSERT) ||
               parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
@@ -320,6 +325,7 @@ object HoodieSparkSqlWriter {
       val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
       latestSchema = tableSchemaResolver.getLatestSchema(schema, false, null);
     }
+    log.warn("XXX Latest table schema " + latestSchema.toString)
     latestSchema
   }
 

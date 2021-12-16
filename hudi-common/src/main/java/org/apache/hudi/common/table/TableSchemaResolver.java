@@ -399,12 +399,12 @@ public class TableSchemaResolver {
         if (convertTableSchemaToAddNamespace && converterFn != null) {
           tableSchema = converterFn.apply(tableSchema);
         }
-        if (writeSchema.getFields().size() < tableSchema.getFields().size() && isSchemaCompatible(writeSchema, tableSchema)) {
-          // if incoming schema is a subset (old schema) compared to table schema. For eg, one of the
-          // ingestion pipeline is still producing events in old schema
-          latestSchema = tableSchema;
-          LOG.debug("Using latest table schema to rewrite incoming records " + tableSchema.toString());
-        }
+        //if (writeSchema.getFields().size() < tableSchema.getFields().size() && isSchemaCompatible(writeSchema, tableSchema)) {
+        // if incoming schema is a subset (old schema) compared to table schema. For eg, one of the
+        // ingestion pipeline is still producing events in old schema
+        latestSchema = tableSchema;
+        LOG.warn("Using latest table schema to rewrite incoming records " + tableSchema.toString());
+        //}
       }
     } catch (IllegalArgumentException | InvalidTableException e) {
       LOG.warn("Could not find any commits, falling back to using incoming batch's write schema");

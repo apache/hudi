@@ -19,12 +19,9 @@
 package org.apache.hudi
 
 import java.util.Properties
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-
 import org.apache.hadoop.fs.{FileSystem, Path}
-
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieRecord
@@ -32,7 +29,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
-
+import org.apache.hudi.util.SchemaUtil
+import org.apache.log4j.LogManager
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -48,6 +46,7 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 object HoodieSparkUtils extends SparkAdapterSupport {
 
   def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
+  private val log = LogManager.getLogger(getClass)
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -122,22 +121,31 @@ object HoodieSparkUtils extends SparkAdapterSupport {
     val dfWriteSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
     var writeSchema : Schema = null;
     var toReconcileSchema : Schema = null;
-    if (reconcileToLatestSchema && latestTableSchema.isPresent) {
-      // if reconcileToLatestSchema is set to true and latestSchema is present, then try to leverage latestTableSchema.
-      // this code path will handle situations where records are serialized in odl schema, but callers wish to convert
-      // to Rdd[GenericRecord] using different schema(could be evolved schema or could be latest table schema)
-      writeSchema = dfWriteSchema
-      toReconcileSchema = latestTableSchema.get()
+    var fullSchema : Schema = null;
+      if (reconcileToLatestSchema && latestTableSchema.isPresent) {
+        // if reconcileToLatestSchema is set to true and latestSchema is present, then try to leverage latestTableSchema.
+        // this code path will handle situations where records are serialized in odl schema, but callers wish to convert
+        // to Rdd[GenericRecord] using different schema(could be evolved schema or could be latest table schema)
+        writeSchema = dfWriteSchema
+        toReconcileSchema = latestTableSchema.get()
+        log.warn("XXX Write schema " + writeSchema.toString)
+        log.warn("XXX to reconcile schema : " + toReconcileSchema.toString)
+        fullSchema = SchemaUtil.merge(toReconcileSchema, writeSchema)
+        log.warn("XXX to FULL dynamic schema : " + fullSchema.toString)
     } else {
-      // there are paths where callers wish to use latestTableSchema to convert to Rdd[GenericRecords] and not use
-      // row's schema. So use latestTableSchema if present. if not available, fallback to using row's schema.
-      writeSchema = if (latestTableSchema.isPresent) { latestTableSchema.get()} else { dfWriteSchema}
+        log.warn("XXX should not come here" )
+        // there are paths where callers wish to use latestTableSchema to convert to Rdd[GenericRecords] and not use
+        // row's schema. So use latestTableSchema if present. if not available, fallback to using row's schema.
+        writeSchema = if (latestTableSchema.isPresent) { latestTableSchema.get()} else { dfWriteSchema}
     }
-    createRddInternal(df, writeSchema, toReconcileSchema, structName, recordNamespace)
+    createRddInternal(df, writeSchema, fullSchema, structName, recordNamespace)
   }
 
   def createRddInternal(df: DataFrame, writeSchema: Schema, latestTableSchema: Schema, structName: String, recordNamespace: String)
   : RDD[GenericRecord] = {
+    val inputRows = df.collectAsList()
+    log.warn("XXX. Input Row " + inputRows.get(0))
+    log.warn("XXX Input row schema " + df.schema.toString())
     // Use the write avro schema to derive the StructType which has the correct nullability information
     val writeDataType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
     val encoder = RowEncoder.apply(writeDataType).resolveAndBind()
