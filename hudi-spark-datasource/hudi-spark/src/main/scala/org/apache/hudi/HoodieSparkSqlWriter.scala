@@ -229,7 +229,11 @@ object HoodieSparkSqlWriter {
             }
             sparkContext.getConf.registerAvroSchemas(schema)
             log.info(s"Registered avro schema : ${schema.toString(true)}")
-
+            val columnSet = df.columns.toSet
+            if (keyGenerator.isInstanceOf[org.apache.hudi.keygen.SparkKeyGeneratorInterface]) {
+              keyGenerator.asInstanceOf[org.apache.hudi.keygen.SparkKeyGeneratorInterface]
+                  .validateKeyGenProps(df.schema);
+            }
             // Convert to RDD[HoodieRecord]
             val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
               org.apache.hudi.common.util.Option.of(schema))

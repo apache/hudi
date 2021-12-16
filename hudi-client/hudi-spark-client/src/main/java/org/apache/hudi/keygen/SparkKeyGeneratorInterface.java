@@ -22,6 +22,11 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 /**
  * Spark key generator interface.
  */
@@ -32,4 +37,18 @@ public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface {
   String getPartitionPath(Row row);
 
   String getPartitionPath(InternalRow internalRow, StructType structType);
+
+  /**
+   * validates record key
+   * @param schema schema of the internalRow
+   * @throws IllegalArgumentException
+   */
+  default void validateKeyGenProps(StructType schema) throws IllegalArgumentException {
+    Set<String> columnSet = new HashSet<>(Arrays.asList(schema.fieldNames()));
+    for (String recordKeyFieldName : getRecordKeyFieldNames()) {
+      if (!columnSet.contains(recordKeyFieldName)) {
+        throw new IllegalArgumentException("record key '" + recordKeyFieldName + "' does not exist in incoming dataframe schema: " + schema);
+      }
+    }
+  }
 }
