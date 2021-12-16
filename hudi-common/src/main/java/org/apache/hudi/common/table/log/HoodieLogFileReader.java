@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -47,12 +46,15 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nullable;
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Scans a log file and provides block level iterator on the log file Loads the entire block contents in memory Can emit
@@ -182,15 +184,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows
   // for max of Integer size
   private HoodieLogBlock readBlock() throws IOException {
-
-    int blocksize;
-    int type;
-    HoodieLogBlockType blockType = null;
-    Map<HeaderMetadataType, String> header = null;
-
+    int blockSize;
     try {
       // 1 Read the total size of the block
-      blocksize = (int) inputStream.readLong();
+      blockSize = (int) inputStream.readLong();
     } catch (EOFException | CorruptedLogFileException e) {
       // An exception reading any of the above indicates a corrupt block
       // Create a corrupt block by finding the next MAGIC marker or EOF
@@ -198,9 +195,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     }
 
     // We may have had a crash which could have written this block partially
-    // Skip blocksize in the stream and we should either find a sync marker (start of the next
+    // Skip blockSize in the stream and we should either find a sync marker (start of the next
     // block) or EOF. If we did not find either of it, then this block is a corrupted block.
-    boolean isCorrupted = isBlockCorrupt(blocksize);
+    boolean isCorrupted = isBlockCorrupted(blockSize);
     if (isCorrupted) {
       return createCorruptBlock();
     }
@@ -209,23 +206,17 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     HoodieLogFormat.LogFormatVersion nextBlockVersion = readVersion();
 
     // 3. Read the block type for a log block
-    if (nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION) {
-      type = inputStream.readInt();
-
-      ValidationUtils.checkArgument(type < HoodieLogBlockType.values().length, "Invalid block byte type found " + type);
-      blockType = HoodieLogBlockType.values()[type];
-    }
+    HoodieLogBlockType blockType = tryReadBlockType(nextBlockVersion);
 
     // 4. Read the header for a log block, if present
-    if (nextBlockVersion.hasHeader()) {
-      header = HoodieLogBlock.getLogMetadata(inputStream);
-    }
 
-    int contentLength = blocksize;
+    Map<HeaderMetadataType, String> header =
+        nextBlockVersion.hasHeader() ? HoodieLogBlock.getLogMetadata(inputStream) : null;
+
     // 5. Read the content length for the content
-    if (nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION) {
-      contentLength = (int) inputStream.readLong();
-    }
+    // Fallback to full-block size if no content-length
+    int contentLength =
+        nextBlockVersion.hasContentLength() ? (int) inputStream.readLong() : blockSize;
 
     // 6. Read the content or skip content based on IO vs Memory trade-off by client
     // TODO - have a max block size and reuse this buffer in the ByteBuffer
@@ -234,17 +225,13 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     byte[] content = HoodieLogBlock.readOrSkipContent(inputStream, contentLength, readBlockLazily);
 
     // 7. Read footer if any
-    Map<HeaderMetadataType, String> footer = null;
-    if (nextBlockVersion.hasFooter()) {
-      footer = HoodieLogBlock.getLogMetadata(inputStream);
-    }
+    Map<HeaderMetadataType, String> footer =
+        nextBlockVersion.hasFooter() ? HoodieLogBlock.getLogMetadata(inputStream) : null;
 
     // 8. Read log block length, if present. This acts as a reverse pointer when traversing a
     // log file in reverse
-    @SuppressWarnings("unused")
-    long logBlockLength = 0;
     if (nextBlockVersion.hasLogBlockLength()) {
-      logBlockLength = inputStream.readLong();
+      inputStream.readLong();
     }
 
     // 9. Read the log block end position in the log file
@@ -277,6 +264,17 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     }
   }
 
+  @Nullable
+  private HoodieLogBlockType tryReadBlockType(HoodieLogFormat.LogFormatVersion blockVersion) throws IOException {
+    if (blockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
+      return null;
+    }
+
+    int type = inputStream.readInt();
+    checkArgument(type < HoodieLogBlockType.values().length, "Invalid block byte type found " + type);
+    return HoodieLogBlockType.values()[type];
+  }
+
   private HoodieLogBlock createCorruptBlock() throws IOException {
     LOG.info("Log " + logFile + " has a corrupted block at " + inputStream.getPos());
     long currentPos = inputStream.getPos();
@@ -291,7 +289,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         contentPosition, corruptedBlockSize, nextBlockOffset, new HashMap<>(), new HashMap<>());
   }
 
-  private boolean isBlockCorrupt(int blocksize) throws IOException {
+  private boolean isBlockCorrupted(int blocksize) throws IOException {
     long currentPos = inputStream.getPos();
     try {
       inputStream.seek(currentPos + blocksize);
