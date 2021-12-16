@@ -23,15 +23,11 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -49,6 +45,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -128,19 +125,10 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
       return new byte[0];
     }
 
-    // TODO: Need to decide from where to fetch all config values required below. We can't re-use index config as the purpose is different.
-    // And these are very specific to data blocks. Once we have consensus, we might need to route them to log block constructors (
-    // as of now, log block constructors does not take in any configs in general).
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(
-        Integer.parseInt("60000"),//HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES.defaultValue()),
-        Double.parseDouble("0.000000001"),//HoodieIndexConfig.BLOOM_FILTER_FPP.defaultValue()),
-        Integer.parseInt("100000"),//HoodieIndexConfig.HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue()),
-        BloomFilterTypeCode.SIMPLE.name());//HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE.defaultValue());
-
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(writerSchema), writerSchema, Option.of(filter));
+        new AvroSchemaConverter().convert(writerSchema), writerSchema, Option.empty());
 
     HoodieAvroParquetConfig avroParquetConfig =
         new HoodieAvroParquetConfig(
@@ -157,17 +145,10 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
     try (DataOutputStream outputStream = new DataOutputStream(baos)) {
       try (HoodieParquetStreamWriter<IndexedRecord> parquetWriter = new HoodieParquetStreamWriter<>(outputStream, avroParquetConfig)) {
-        Iterator<IndexedRecord> itr = records.iterator();
-        if (getRecordKey(records.get(0)) == null) {
-          throw new HoodieIOException("Record key field missing from schema for records to be written to Parquet data block");
-        }
-
-        while (itr.hasNext()) {
-          IndexedRecord record = itr.next();
+        for (IndexedRecord record : records) {
           String recordKey = getRecordKey(record);
           parquetWriter.writeAvro(recordKey, record);
         }
-
         outputStream.flush();
       }
     }
@@ -177,11 +158,12 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
   @Override
   protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
-    Configuration conf = new Configuration();
+    if (content.length == 0) {
+      return Collections.emptyList();
+    }
 
     ArrayList<IndexedRecord> records = new ArrayList<>();
-
-    getParquetRecordsIterator(conf, readerSchema, new ByteBufferBackedInputFile(content))
+    getParquetRecordsIterator(new Configuration(), readerSchema, new ByteBufferBackedInputFile(content))
         .forEachRemaining(records::add);
 
     return records;
