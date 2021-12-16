@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.avro.model.HoodieActionInstant;
@@ -249,6 +250,9 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       assertFalse(currentExistArchiveFiles.containsAll(archiveFilesDeleted));
       // assert most recent archive files are preserved
       assertTrue(currentExistArchiveFiles.containsAll(archiveFilesKept));
+    } else {
+      // Disable archive files trim, so no archived files will be deleted.
+      assertTrue(CollectionUtils.isEqualCollection(archiveFilesExisted, currentExistArchiveFiles));
     }
   }
 

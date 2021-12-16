@@ -251,14 +251,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MAX_ARCHIVE_FILES_TO_KEEP_PROP = ConfigProperty
       .key("hoodie.max.archive.files")
-      .defaultValue("10")
+      .noDefaultValue()
       .withDocumentation("The numbers of kept archive files under archived.");
 
   public static final ConfigProperty<String> AUTO_TRIM_ARCHIVE_FILES_DROP = ConfigProperty
       .key("hoodie.auto.trim.archive.files")
       .defaultValue("false")
-      .withDocumentation("When enabled, Hoodie will keep the most recent " + MAX_ARCHIVE_FILES_TO_KEEP_PROP.key()
-          + " archive files and delete older one which lose part of archived instants information.");
+      .withDocumentation("WARNING: do not use this config unless you know what you're doing. "
+          + "If enabled, Hoodie will keep the most recent " + MAX_ARCHIVE_FILES_TO_KEEP_PROP.key() + " archive files and details of older archived instants will be deleted, "
+          + "resulting in information loss in the archived timeline, which may affect tools like CLI and repair. "
+          + "Only enable this if you hit severe performance issues for retrieving archived timeline.");
 
 
 

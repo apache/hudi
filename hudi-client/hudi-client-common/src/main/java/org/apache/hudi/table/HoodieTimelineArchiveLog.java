@@ -81,7 +81,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   private Writer writer;
   private final int maxInstantsToKeep;
   private final int minInstantsToKeep;
-  private final int maxArchiveFilesToKeep;
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
 
@@ -92,7 +91,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.maxInstantsToKeep = config.getMaxCommitsToKeep();
     this.minInstantsToKeep = config.getMinCommitsToKeep();
-    this.maxArchiveFilesToKeep = config.getMaxArchiveFilesToKeep();
   }
 
   private Writer openWriter() {
@@ -154,11 +152,12 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         "");
     List<HoodieLogFile> sortedLogFilesList = allLogFiles.sorted(HoodieLogFile.getReverseLogFileComparator()).collect(Collectors.toList());
     if (!sortedLogFilesList.isEmpty()) {
-      List<String> skipped = sortedLogFilesList.stream().skip(maxArchiveFilesToKeep).map(HoodieLogFile::getPath).map(Path::toString).collect(Collectors.toList());
-      if (!skipped.isEmpty()) {
-        LOG.info("Deleting archive files :  " + skipped);
+      int maxArchiveFilesToKeep = config.getMaxArchiveFilesToKeep();
+      List<String> archiveFilesToDelete = sortedLogFilesList.stream().skip(maxArchiveFilesToKeep).map(HoodieLogFile::getPath).map(Path::toString).collect(Collectors.toList());
+      if (!archiveFilesToDelete.isEmpty()) {
+        LOG.info("Deleting archive files :  " + archiveFilesToDelete);
         context.setJobStatus(this.getClass().getSimpleName(), "Delete archive files");
-        Map<String, Boolean> result = deleteFilesParallelize(metaClient, skipped, context, true);
+        deleteFilesParallelize(metaClient, archiveFilesToDelete, context, true);
       }
     }
   }
