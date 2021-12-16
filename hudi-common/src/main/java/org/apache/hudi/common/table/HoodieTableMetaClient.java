@@ -27,7 +27,7 @@ import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieTimelineZone;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -640,7 +640,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String keyGeneratorClassProp;
     private Boolean hiveStylePartitioningEnable;
     private Boolean urlEncodePartitioning;
-    private HoodieTimelineZone commitTimezone;
+    private HoodieTimelineTimeZone commitTimezone;
 
     private PropertyBuilder() {
 
@@ -739,7 +739,7 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setCommitTimezone(HoodieTimelineZone commitTimezone) {
+    public PropertyBuilder setCommitTimezone(HoodieTimelineTimeZone commitTimezone) {
       this.commitTimezone = commitTimezone;
       return this;
     }

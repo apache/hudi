@@ -28,7 +28,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, HoodieTimelineZone, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, HoodieTimelineTimeZone, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils, StringUtils}
@@ -142,7 +142,7 @@ object HoodieSparkSqlWriter {
           .setKeyGeneratorClassProp(HoodieWriterUtils.getOriginKeyGenerator(parameters))
           .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
-          .setCommitTimezone(HoodieTimelineZone.valueOf(hoodieConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE)))
+          .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE)))
           .initTable(sparkContext.hadoopConfiguration, path)
         tableConfig = tableMetaClient.getTableConfig
       }
@@ -393,7 +393,7 @@ object HoodieSparkSqlWriter {
         .setKeyGeneratorClassProp(keyGenProp)
         .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
         .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
-        .setCommitTimezone(HoodieTimelineZone.valueOf(hoodieConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE)))
+        .setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE)))
         .initTable(sparkContext.hadoopConfiguration, path)
     }
 
