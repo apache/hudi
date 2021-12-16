@@ -622,8 +622,8 @@ public class TestPriorityBasedFileSystemView {
   @Test
   public void testSync() {
     fsView.sync();
-    verify(primary, times(1)).reset();
-    verify(secondary, times(1)).reset();
+    verify(primary, times(1)).sync();
+    verify(secondary, times(1)).sync();
   }
 
   @Test

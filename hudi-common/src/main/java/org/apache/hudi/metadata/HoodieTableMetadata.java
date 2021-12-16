@@ -113,4 +113,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Returns the timestamp of the latest compaction.
    */
   Option<String> getLatestCompactionTime();
+
+  /**
+   * Clear the states of the table metadata.
+   */
+  void reset();
 }
