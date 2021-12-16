@@ -70,16 +70,24 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static int blockSize = 1 * 1024 * 1024;
   private boolean enablePointLookups = false;
 
-  public HoodieHFileDataBlock(HoodieLogFile logFile,
-                              FSDataInputStream inputStream,
-                              Option<byte[]> content,
-                              boolean readBlockLazily, long position, long blockSize, long blockEndPos,
-                              Schema readerSchema,
+  public HoodieHFileDataBlock(
+      HoodieLogFile logFile,
+      FSDataInputStream inputStream,
+      Option<byte[]> content,
+      boolean readBlockLazily,
+      long position, long blockSize, long blockEndPos,
+      Option<Schema> readerSchema,
                               Map<HeaderMetadataType, String> header,
                               Map<HeaderMetadataType, String> footer,
                               boolean enablePointLookups) {
-    super(content, inputStream, readBlockLazily, Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
-        readerSchema, header, footer, HoodieHFileReader.KEY_FIELD_NAME);
+    super(content,
+        inputStream,
+        readBlockLazily,
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
+        readerSchema,
+        header,
+        footer,
+        HoodieHFileReader.KEY_FIELD_NAME);
 
     this.enablePointLookups = enablePointLookups;
   }

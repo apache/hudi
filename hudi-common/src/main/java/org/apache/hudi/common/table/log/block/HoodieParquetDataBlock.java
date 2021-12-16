@@ -55,22 +55,11 @@ import java.util.Map;
 public class HoodieParquetDataBlock extends HoodieDataBlock {
 
   public HoodieParquetDataBlock(
-      @Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-      @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
-      @Nonnull Option<byte[]> content,
-      FSDataInputStream inputStream,
-      boolean readBlockLazily
-  ) {
-    super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
-  }
-
-  public HoodieParquetDataBlock(
       HoodieLogFile logFile,
       FSDataInputStream inputStream,
       Option<byte[]> content,
       boolean readBlockLazily, long position, long blockSize, long blockEndpos,
-      Schema readerSchema,
+      Option<Schema> readerSchema,
       Map<HeaderMetadataType, String> header,
       Map<HeaderMetadataType, String> footer,
       String keyField

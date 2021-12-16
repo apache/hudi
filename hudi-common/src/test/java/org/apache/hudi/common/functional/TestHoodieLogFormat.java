@@ -405,7 +405,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     byte[] dataBlockContentBytes = getDataBlock(dataBlockType, records, header).getContentBytes();
     HoodieDataBlock reusableDataBlock = new HoodieAvroDataBlock(null, null,
         Option.ofNullable(dataBlockContentBytes), false, 0, dataBlockContentBytes.length,
-        0, getSimpleSchema(), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        0, Option.ofNullable(getSimpleSchema()), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
     long writtenSize = 0;
     int logBlockWrittenNum = 0;
     while (writtenSize < Integer.MAX_VALUE) {
