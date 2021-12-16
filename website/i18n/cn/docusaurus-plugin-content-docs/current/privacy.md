@@ -1,23 +1,23 @@
 ---
-title: Privacy Policy
-keywords: [ hudi, privacy]
+title: 隐私协议
+keywords: [ hudi, privacy, 隐私]
 last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
 
-Information about your use of this website is collected using server access logs and a tracking cookie.
-The collected information consists of the following:
+关于你使用本网站的信息，将通过服务器访问日志和 Cookie 跟踪被收集。
+收集的信息由以下内容构成：
 
-* The IP address from which you access the website;
-* The type of browser and operating system you use to access our site;
-* The date and time you access our site;
-* The pages you visit;
-* The addresses of pages from where you followed a link to our site.
+* 你访问网站使用的 IP 地址；
+* 你访问我们的网站时使用的浏览器和操作系统；
+* 你访问我们的网站的日期和时间；
+* 你浏览的页面；
+* 引导你链接到我们的网站的页面地址；
 
-Part of this information is gathered using a tracking cookie set by the [Google Analytics](http://www.google.com/analytics) service and handled by Google as described in their [privacy policy](http://www.google.com/privacy). See your browser documentation for instructions on how to disable the cookie if you prefer not to share this data with Google.
+这些信息中的一部分将使用由 [Google Analytics](http://www.google.com/analytics) 服务设置的 Cookie 跟踪进行收集，并由 Google 按照在他们的 [隐私协议](http://www.google.com/privacy) 中描述的方式进行处理。如果你不希望与 Google 分享这些数据，请参考你的浏览器文档中关于如何禁用 Cookie 的说明。
 
-We use the gathered information to help us make our site more useful to visitors and to better understand how and when our site is used. We do not track or collect personally identifiable information or associate gathered data with any personally identifying information from other sources.
+我们使用收集的数据来帮助让我们的网站对访问者更有用，并更好地了解我们的网站是如何、在何时被使用的。我们不跟踪也不收集个人隐私信息，同时也不与任何收集包含个人隐私数据的数据源合作。
 
-By using this website, you consent to the collection of this data in the manner and for the purpose described above.
+使用本网站，即代表你许可以上述的方式和目的收集这些数据。
 
-The Hudi development community welcomes your questions or comments regarding this Privacy Policy. Send them to dev@hudi.apache.org
+Hudi 开发者社区欢迎你提出关于本隐私协议的问题或评论。请将他们发送至 dev@hudi.apache.org 。

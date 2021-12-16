@@ -1,26 +1,26 @@
 ---
-title: IBM Cloud Object Storage Filesystem
+title: IBM Cloud Object Storage 文件系统
 keywords: [ hudi, hive, ibm, cos, spark, presto]
-summary: In this page, we go over how to configure Hudi with IBM Cloud Object Storage filesystem.
+summary: 在本页中，我们讨论在 IBM Cloud Object Storage 文件系统中配置 Hudi 。
 last_modified_at: 2020-10-01T11:38:24-10:00
 language: cn
 ---
-In this page, we explain how to get your Hudi spark job to store into IBM Cloud Object Storage.
+在本页中，我们解释如何将你的 Hudi Spark 作业存储到 IBM Cloud Object Storage 当中。
 
-## IBM COS configs
+## IBM COS 配置
 
-There are two configurations required for Hudi-IBM Cloud Object Storage compatibility:
+Hudi 适配 IBM Cloud Object Storage 需要两项配置：
 
-- Adding IBM COS Credentials for Hudi
-- Adding required Jars to classpath
+- 为 Hudi 添加 IBM COS 凭证
+- 添加需要的 jar 包到类路径
 
-### IBM Cloud Object Storage Credentials
+### IBM Cloud Object Storage 凭证
 
-Simplest way to use Hudi with IBM Cloud Object Storage, is to configure your `SparkSession` or `SparkContext` with IBM Cloud Object Storage credentials using [Stocator](https://github.com/CODAIT/stocator) storage connector for Spark. Hudi will automatically pick this up and talk to IBM Cloud Object Storage.
+在 IBM Cloud Object Storage 上使用 Hudi 的最简单的办法，就是使用 [Stocator](https://github.com/CODAIT/stocator) 的 Spark 存储连接器为 `SparkSession` 或 `SparkContext` 配置 IBM Cloud Object Storage 凭证。 Hudi 将自动拾取配置并告知 IBM Cloud Object Storage 。
 
-Alternatively, add the required configs in your core-site.xml from where Hudi can fetch them. Replace the `fs.defaultFS` with your IBM Cloud Object Storage bucket name and Hudi should be able to read/write from the bucket.
+或者，向你的 core-site.xml 文件中添加必要的配置，Hudi 可以从那里获取这些配置。用你的 IBM Cloud Object Storage 的 Bucket 名称替换 `fs.defaultFS` 以便 Hudi 能够在 Bucket 中读取/写入。
 
-For example, using HMAC keys and service name `myCOS`:
+例如，使用 HMAC 密钥以及服务名 `myCOS` ：
 ```xml
   <property>
       <name>fs.defaultFS</name>
@@ -69,10 +69,10 @@ For example, using HMAC keys and service name `myCOS`:
 
 ```
 
-For more options see Stocator [documentation](https://github.com/CODAIT/stocator/blob/master/README.md).
+更多信息请参考 Stocator [文档](https://github.com/CODAIT/stocator/blob/master/README.md) 。
 
-### IBM Cloud Object Storage Libs
+### IBM Cloud Object Storage 库
 
-IBM Cloud Object Storage hadoop libraries to add to our classpath
+将 IBM Cloud Object Storage Hadoop 库添加到我们的类路径中：
 
  - com.ibm.stocator:stocator:1.1.3

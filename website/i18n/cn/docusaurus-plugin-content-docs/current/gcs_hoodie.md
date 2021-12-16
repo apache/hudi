@@ -1,22 +1,22 @@
 ---
-title: GCS Filesystem
-keywords: [ hudi, hive, google cloud, storage, spark, presto]
-summary: In this page, we go over how to configure hudi with Google Cloud Storage.
+title: GCS 文件系统
+keywords: [ hudi, hive, google cloud, storage, spark, presto, 存储 ]
+summary: 在本页中，我们探讨如何在 Google Cloud Storage 中配置 Hudi。
 last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
-For Hudi storage on GCS, **regional** buckets provide an DFS API with strong consistency.
+对于存储在 GCS 上的 Hudi ， **区域** Bucket 提供了带有强一致性的 DFS API 。
 
-## GCS Configs
+## GCS 配置
 
-There are two configurations required for Hudi GCS compatibility:
+Hudi 的 GCS 适配需要两项配置：
 
-- Adding GCS Credentials for Hudi
-- Adding required jars to classpath
+- 为 Hudi 添加 GCS 凭证
+- 将需要的 jar 包添加到类路径
 
-### GCS Credentials
+### GCS 凭证
 
-Add the required configs in your core-site.xml from where Hudi can fetch them. Replace the `fs.defaultFS` with your GCS bucket name and Hudi should be able to read/write from the bucket.
+在你的 core-site.xml 文件中添加必要的配置，Hudi 将从那里获取这些配置。 用你的 GCS 分区名称替换掉 `fs.defaultFS` ，以便 Hudi 能够在 Bucket 中读取/写入。
 
 ```xml
   <property>
@@ -54,8 +54,8 @@ Add the required configs in your core-site.xml from where Hudi can fetch them. R
   </property>
 ```
 
-### GCS Libs
+### GCS 库
 
-GCS hadoop libraries to add to our classpath
+将 GCS Hadoop 库添加到我们的类路径
 
 - com.google.cloud.bigdataoss:gcs-connector:1.6.0-hadoop2
