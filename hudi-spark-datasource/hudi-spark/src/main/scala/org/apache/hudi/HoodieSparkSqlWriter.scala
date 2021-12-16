@@ -229,7 +229,11 @@ object HoodieSparkSqlWriter {
             }
             sparkContext.getConf.registerAvroSchemas(schema)
             log.info(s"Registered avro schema : ${schema.toString(true)}")
-
+            val columnSet = df.columns.toSet
+            keyGenerator.getRecordKeyFieldNames.foreach(fieldName => if(!columnSet.contains(fieldName)) {
+              throw new Exception(s"record key '$fieldName' does not exist in existing table schema :  ${schema.toString(true)}")
+            }
+            )
             // Convert to RDD[HoodieRecord]
             val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace, reconcileSchema,
               org.apache.hudi.common.util.Option.of(schema))
