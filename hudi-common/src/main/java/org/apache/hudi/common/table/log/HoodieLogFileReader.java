@@ -254,12 +254,13 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         return new HoodieHFileDataBlock(logFile, inputStream, content, readBlockLazily,
             contentPosition, contentLength, blockEndPos, Option.ofNullable(readerSchema),
             header, footer, enableRecordLookups);
+
       case PARQUET_DATA_BLOCK:
         checkState(nextBlockVersion.getVersion() != HoodieLogFormatVersion.DEFAULT_VERSION,
             String.format("Parquet block could not be of version (%d)", HoodieLogFormatVersion.DEFAULT_VERSION));
 
         return new HoodieParquetDataBlock(logFile, inputStream, content, readBlockLazily,
-            contentPosition, contentLength, blockEndPos, Option.ofNullable(readerSchema), header, footer, keyField);
+            contentPosition, contentLength, blockEndPos, Option.ofNullable(readerSchema), header, footer, keyField, enableRecordLookups);
 
       case DELETE_BLOCK:
         return HoodieDeleteBlock.getBlock(logFile, inputStream, content, readBlockLazily,

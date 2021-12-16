@@ -71,7 +71,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       String keyField) {
     super(content, inputStream, readBlockLazily,
         Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), readerSchema, header,
-        footer, keyField);
+        footer, keyField, false);
   }
 
   public HoodieAvroDataBlock(

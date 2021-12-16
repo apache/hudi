@@ -62,7 +62,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
       Option<Schema> readerSchema,
       Map<HeaderMetadataType, String> header,
       Map<HeaderMetadataType, String> footer,
-      String keyField
+      String keyField,
+      boolean enablePointLookups
   ) {
     super(
         content,
@@ -72,7 +73,8 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         readerSchema,
         header,
         footer,
-        keyField);
+        keyField,
+        enablePointLookups);
   }
 
   public HoodieParquetDataBlock(

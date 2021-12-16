@@ -27,8 +27,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -46,10 +48,19 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   // TODO rebase records/content to leverage Either to warrant
   //      that they are mutex (used by read/write flows respectively)
   private List<IndexedRecord> records;
+
+  /**
+   * Dot-path notation reference to the key field w/in the record's schema
+   */
   private final String keyFieldRef;
+
+  private final boolean enablePointLookups;
 
   protected final Schema readerSchema;
 
+  /**
+   * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
+   */
   public HoodieDataBlock(
       List<IndexedRecord> records,
       Map<HeaderMetadataType, String> header,
@@ -61,8 +72,12 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.keyFieldRef = keyFieldRef;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = getWriterSchema(super.getLogBlockHeader());
+    this.enablePointLookups = false;
   }
 
+  /**
+   * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
+   */
   protected HoodieDataBlock(
       Option<byte[]> content,
       FSDataInputStream inputStream,
@@ -71,13 +86,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
       Option<Schema> readerSchema,
       Map<HeaderMetadataType, String> headers,
       Map<HeaderMetadataType, String> footer,
-      String keyFieldRef
+      String keyFieldRef,
+      boolean enablePointLookups
   ) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.records = null;
     this.keyFieldRef = keyFieldRef;
     // If no reader-schema has been provided assume writer-schema as one
     this.readerSchema = readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
+    this.enablePointLookups = enablePointLookups;
   }
 
   /**
@@ -130,6 +147,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return serializeRecords(records);
   }
 
+  protected static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
+    return new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA));
+  }
+
+  /**
+   * Returns all the records contained w/in this block
+   */
   public final List<IndexedRecord> getRecords() {
     if (records == null) {
       try {
@@ -142,14 +166,35 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return records;
   }
 
-  public abstract HoodieLogBlockType getBlockType();
-
-  private static Schema getWriterSchema(Map<HeaderMetadataType, String> logBlockHeader) {
-    return new Schema.Parser().parse(logBlockHeader.get(HeaderMetadataType.SCHEMA));
-  }
-
   public Schema getSchema() {
     return readerSchema;
+  }
+
+  /**
+   * Batch get of keys of interest. Implementation can choose to either do full scan and return matched entries or
+   * do a seek based parsing and return matched entries.
+   *
+   * @param keys keys of interest.
+   * @return List of IndexedRecords for the keys of interest.
+   * @throws IOException in case of failures encountered when reading/parsing records
+   */
+  public final List<IndexedRecord> getRecords(List<String> keys) throws IOException {
+    boolean fullScan = keys.isEmpty();
+    if (enablePointLookups && !fullScan) {
+      return lookupRecords(keys);
+    }
+
+    // Otherwise, we fetch all the records and filter out all the records, but the
+    // ones requested
+    List<IndexedRecord> allRecords = getRecords();
+    if (fullScan) {
+      return allRecords;
+    }
+
+    HashSet<String> keySet = new HashSet<>(keys);
+    return allRecords.stream()
+        .filter(record -> keySet.contains(getRecordKey(record)))
+        .collect(Collectors.toList());
   }
 
   protected void readRecordsFromContent() throws IOException {
@@ -163,9 +208,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     deflate();
   }
 
+  protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
+    throw new UnsupportedOperationException("Point-wise records lookups are not supported by this Data block type");
+  }
+
   protected abstract byte[] serializeRecords(List<IndexedRecord> records) throws IOException;
 
   protected abstract List<IndexedRecord> deserializeRecords(byte[] content) throws IOException;
+
+  public abstract HoodieLogBlockType getBlockType();
 
   protected Option<Schema.Field> getKeyField(Schema schema) {
     return Option.ofNullable(schema.getField(keyFieldRef));
@@ -175,17 +226,5 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     return getKeyField(record.getSchema())
         .map(keyField -> record.get(keyField.pos()))
         .map(Object::toString);
-  }
-
-  /**
-   * Batch get of keys of interest. Implementation can choose to either do full scan and return matched entries or
-   * do a seek based parsing and return matched entries.
-   *
-   * @param keys keys of interest.
-   * @return List of IndexedRecords for the keys of interest.
-   * @throws IOException
-   */
-  public List<IndexedRecord> getRecords(List<String> keys) throws IOException {
-    throw new UnsupportedOperationException("On demand batch get based on interested keys not supported");
   }
 }
