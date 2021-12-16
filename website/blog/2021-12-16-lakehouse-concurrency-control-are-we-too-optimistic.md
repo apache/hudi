@@ -1,7 +1,7 @@
 ---
 title: "Lakehouse Concurrency Control: Are we too optimistic?"
 excerpt: "Vinoth Chandar, Creator of Apache Hudi, dives into concurrency control mechanisms"
-author: Vinoth Chandar
+author: vinoth
 category: blog
 ---
 
@@ -22,7 +22,7 @@ Imagine a real-life scenario of two writer processes : an ingest writer job prod
 ![concurrency](/assets/images/blog/concurrency/ConcurrencyControlConflicts.png)
                 static/assets/images/blog/concurrency/ConcurrencyControlConflicts.png
 
-So, what's the alternative? Locking? Wikipedia also says - "_However, locking-based ("pessimistic") methods also can deliver poor performance because locking can drastically limit effective concurrency even when deadlocks are avoided."._ Here is where Hudi takes a different approach, that we believe is more apt for modern lake transactions which are typically long-running and even continuous. Data lake workloads share more characteristics with high throughput stream processing jobs, than they do to standard reads/writes from a database and this is where we build strength. In stream processing events are serialized into a single ordered log, avoiding any locks/concurrency bottlenecks and you can continuously process millions of events/sec. Hudi implements a file level, log based concurrency control protocol on the Hudi [timeline](https://hudi.apache.org/docs/timeline), which in-turn relies on bare minimum atomic puts to cloud storage. By building on an event log as the central piece for inter process coordination, Hudi is able to offer a few flexible deployment models that offer greater concurrency over pure OCC approaches.
+So, what's the alternative? Locking? Wikipedia also says - "_However, locking-based ("pessimistic") methods also can deliver poor performance because locking can drastically limit effective concurrency even when deadlocks are avoided."._ Here is where Hudi takes a different approach, that we believe is more apt for modern lake transactions which are typically long-running and even continuous. Data lake workloads share more characteristics with high throughput stream processing jobs, than they do to standard reads/writes from a database and this is where we borrow from. In stream processing events are serialized into a single ordered log, avoiding any locks/concurrency bottlenecks and you can continuously process millions of events/sec. Hudi implements a file level, log based concurrency control protocol on the Hudi [timeline](https://hudi.apache.org/docs/timeline), which in-turn relies on bare minimum atomic puts to cloud storage. By building on an event log as the central piece for inter process coordination, Hudi is able to offer a few flexible deployment models that offer greater concurrency over pure OCC approaches that just track table snapshots.
 
 # Model 1 : Single Writer, Inline Table Services
 
