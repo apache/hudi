@@ -156,7 +156,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
     try (DataOutputStream outputStream = new DataOutputStream(baos)) {
-      try (HoodieParquetStreamWriter<IndexedRecord> parquetWriter = new HoodieParquetStreamWriter<>(outputStream, avroParquetConfig)){
+      try (HoodieParquetStreamWriter<IndexedRecord> parquetWriter = new HoodieParquetStreamWriter<>(outputStream, avroParquetConfig)) {
         Iterator<IndexedRecord> itr = records.iterator();
         if (getRecordKey(records.get(0)) == null) {
           throw new HoodieIOException("Record key field missing from schema for records to be written to Parquet data block");
@@ -188,7 +188,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   }
 
   static class ByteBufferBackedInputFile implements InputFile {
-
     private final byte[] buffer;
     private final int offset;
     private final int length;

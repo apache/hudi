@@ -56,8 +56,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroDataBlock extends HoodieDataBlock {
 
-  private ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
-  private ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
+  private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
+  private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
   public HoodieAvroDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
                              @Nonnull Map<HeaderMetadataType, String> logBlockFooter,

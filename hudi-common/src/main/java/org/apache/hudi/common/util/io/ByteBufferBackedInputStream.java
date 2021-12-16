@@ -27,6 +27,7 @@ public class ByteBufferBackedInputStream extends InputStream {
     this.buffer.mark();
     this.bufferOffset = buffer.position();
   }
+
   public ByteBufferBackedInputStream(byte[] array) {
     this(array, 0, array.length);
   }
