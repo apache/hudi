@@ -195,6 +195,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .option("hoodie.keep.min.commits", "2")
       .option("hoodie.keep.max.commits", "3")
       .option("hoodie.cleaner.commits.retained", "1")
+      .option("hoodie.metadata.enable","false")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -224,6 +225,10 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .map(instant => instant.asInstanceOf[HoodieInstant].getAction)
     // assert replace commit is archived and not part of active timeline.
     assertFalse(commits.contains(HoodieTimeline.REPLACE_COMMIT_ACTION))
+    // assert that archival timeline has replace commit actions.
+    val archivedTimeline = metaClient.getArchivedTimeline();
+    assertTrue(archivedTimeline.getInstants.toArray.map(instant => instant.asInstanceOf[HoodieInstant].getAction)
+      .filter(action => action.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).size > 0)
   }
 
   def writeRecords(commitTime: Int, dataGen: HoodieTestDataGenerator, writeOperation: String, basePath: String): Unit = {
@@ -234,6 +239,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .option("hoodie.keep.min.commits", "2")
       .option("hoodie.keep.max.commits", "3")
       .option("hoodie.cleaner.commits.retained", "1")
+      .option("hoodie.metadata.enable","false")
       .option(DataSourceWriteOptions.OPERATION.key, writeOperation)
       .mode(SaveMode.Append)
       .save(basePath)
