@@ -154,7 +154,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       metadataMetaClient.reloadActiveTimeline();
       if (canTriggerTableService) {
         compactIfNecessary(writeClient, instantTime);
-        doClean(writeClient, instantTime);
+        cleanIfNecessary(writeClient, instantTime);
         writeClient.archive();
       }
     }
