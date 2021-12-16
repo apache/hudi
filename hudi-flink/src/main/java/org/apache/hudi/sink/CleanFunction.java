@@ -98,11 +98,4 @@ public class CleanFunction<T> extends AbstractRichFunction
   public void initializeState(FunctionInitializationContext context) throws Exception {
     // no operation
   }
-
-  @Override
-  public void close() throws Exception {
-    if (this.writeClient != null) {
-      this.writeClient.close();
-    }
-  }
 }

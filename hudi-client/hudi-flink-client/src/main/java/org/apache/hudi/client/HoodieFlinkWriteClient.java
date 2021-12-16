@@ -281,11 +281,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * checkpoint finish.
    */
   public void startAsyncCleaning() {
-    if (this.asyncCleanerService == null) {
-      this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
-    } else {
-      this.asyncCleanerService.start(null);
-    }
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
   }
 
   /**
