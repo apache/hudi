@@ -63,7 +63,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.DataSourceUtils.autoModifyParquetWriteLegacyFormatParameter;
+import static org.apache.hudi.DataSourceUtils.mayBeOverwriteParquetWriteLegacyFormatProp;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.hive.ddl.HiveSyncMode.HMS;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -302,7 +302,7 @@ public class TestDataSourceUtils {
     options.put("hoodie.parquet.writeLegacyFormat.enabled", String.valueOf(defaultWriteValue));
 
     // start test
-    autoModifyParquetWriteLegacyFormatParameter(options, structType);
+    mayBeOverwriteParquetWriteLegacyFormatProp(options, structType);
 
     // check result
     boolean res = Boolean.parseBoolean(options.get("hoodie.parquet.writeLegacyFormat.enabled"));
