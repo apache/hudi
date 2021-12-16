@@ -209,7 +209,9 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   }
 
   protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
-    throw new UnsupportedOperationException("Point-wise records lookups are not supported by this Data block type");
+    throw new UnsupportedOperationException(
+        String.format("Point-wise records lookups are not supported by this Data block type (%s)", getBlockType())
+    );
   }
 
   protected abstract byte[] serializeRecords(List<IndexedRecord> records) throws IOException;

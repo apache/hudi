@@ -62,8 +62,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
       Option<Schema> readerSchema,
       Map<HeaderMetadataType, String> header,
       Map<HeaderMetadataType, String> footer,
-      String keyField,
-      boolean enablePointLookups
+      String keyField
   ) {
     super(
         content,
@@ -74,7 +73,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         header,
         footer,
         keyField,
-        enablePointLookups);
+        false);
   }
 
   public HoodieParquetDataBlock(
@@ -95,17 +94,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   @Override
   public HoodieLogBlockType getBlockType() {
     return HoodieLogBlockType.PARQUET_DATA_BLOCK;
-  }
-
-  public static Iterator<IndexedRecord> getParquetRecordsIterator(
-      Configuration conf,
-      Schema schema,
-      InputFile inputFile
-  ) throws IOException {
-    AvroReadSupport.setAvroReadSchema(conf, schema);
-    ParquetReader<IndexedRecord> reader =
-        AvroParquetReader.<IndexedRecord>builder(inputFile).withConf(conf).build();
-    return new ParquetReaderIterator<>(reader);
   }
 
   @Override
@@ -156,5 +144,16 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         .forEachRemaining(records::add);
 
     return records;
+  }
+
+  public static Iterator<IndexedRecord> getParquetRecordsIterator(
+      Configuration conf,
+      Schema schema,
+      InputFile inputFile
+  ) throws IOException {
+    AvroReadSupport.setAvroReadSchema(conf, schema);
+    ParquetReader<IndexedRecord> reader =
+        AvroParquetReader.<IndexedRecord>builder(inputFile).withConf(conf).build();
+    return new ParquetReaderIterator<>(reader);
   }
 }
