@@ -128,7 +128,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
         requiredStructSchema,
         tableAvroSchema.toString,
         requiredAvroSchema.toString,
-        List(fileIndex),
+        fileIndex,
         preCombineField,
         Option.empty
       )

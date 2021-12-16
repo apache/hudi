@@ -41,13 +41,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.Try
 
-/**
- * Files a input task reads. Usually a file spilt corresponds to a task. For partitioned hudi table with bucket index,
- * a input task has multiple files with the same bucketId, which belong to different partition.
- * @param index
- * @param split
- */
-case class HoodieMergeOnReadPartition(index: Int, split: List[HoodieMergeOnReadFileSplit]) extends Partition
+case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,

@@ -111,11 +111,6 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
         .option("bucketSpec", bucketSpec)
         .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
-    val morRelation = hudiSnapshotDF1
-        .queryExecution
-        .optimizedPlan.asInstanceOf[LogicalRelation]
-        .relation.asInstanceOf[MergeOnReadSnapshotRelation]
-    assert(morRelation.bucketSpec.get.numBuckets == 8)
 
     // Second Operation:
     // Upsert the update to the default partitions with duplicate records. Produced a log file for each parquet.

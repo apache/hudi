@@ -29,7 +29,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 
 import org.apache.log4j.LogManager
-import org.apache.spark.sql.catalyst.catalog.BucketSpec
+
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -110,15 +110,6 @@ class DefaultSource extends RelationProvider
     val queryType = parameters(QUERY_TYPE.key)
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
-    val bucketSpec = optParams.get("bucketSpec").flatMap(specStr => specStr.split("\t") match {
-      case Array(numBuckets, bucketColumns, sortColumns) =>
-        Some(BucketSpec(numBuckets.toInt,
-          bucketColumns.split(","), sortColumns.split(",")))
-      case Array(numBuckets, bucketColumns) =>
-        Some(BucketSpec(numBuckets.toInt,
-          bucketColumns.split(","), Nil))
-      case _ => None
-    })
 
     (tableType, queryType, isBootstrappedTable) match {
       case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
@@ -131,7 +122,7 @@ class DefaultSource extends RelationProvider
         new IncrementalRelation(sqlContext, parameters, schema, metaClient)
 
       case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-        new MergeOnReadSnapshotRelation(sqlContext, parameters, schema, globPaths, metaClient, bucketSpec)
+        new MergeOnReadSnapshotRelation(sqlContext, parameters, schema, globPaths, metaClient)
 
       case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
         new MergeOnReadIncrementalRelation(sqlContext, parameters, schema, metaClient)
