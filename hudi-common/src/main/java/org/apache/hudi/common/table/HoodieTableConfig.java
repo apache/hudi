@@ -170,7 +170,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Key Generator class property for the hoodie table");
 
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
-      .key("hoodie.table.timeline.zone")
+      .key("hoodie.table.timeline.timezone")
       .defaultValue(HoodieTimelineTimeZone.LOCAL)
       .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local. local is default");
 
