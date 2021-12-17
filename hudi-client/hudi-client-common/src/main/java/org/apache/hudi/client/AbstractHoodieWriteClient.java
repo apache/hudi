@@ -425,11 +425,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-    if (null == this.asyncCleanerService) {
-      this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
-    } else {
-      this.asyncCleanerService.start(null);
-    }
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
   }
 
   /**
