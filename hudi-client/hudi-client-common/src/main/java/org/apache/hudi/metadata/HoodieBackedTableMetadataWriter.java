@@ -109,6 +109,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected boolean enabled;
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
+  protected final List<MetadataPartitionType> enabledPartitionTypes;
 
   /**
    * Hudi backed table metadata writer.
@@ -128,8 +129,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
+    this.metrics = Option.empty();
+    this.enabledPartitionTypes = new ArrayList<>();
 
     if (writeConfig.isMetadataTableEnabled()) {
+      this.enabledPartitionTypes.add(MetadataPartitionType.FILES);
+      if (writeConfig.getMetadataConfig().isMetaIndexBloomFilterEnabled()) {
+        this.enabledPartitionTypes.add(MetadataPartitionType.BLOOM_FILTERS);
+      }
+      if (writeConfig.getMetadataConfig().isMetaIndexColumnStatsEnabled()) {
+        this.enabledPartitionTypes.add(MetadataPartitionType.COLUMN_STATS);
+      }
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig);
       enabled = true;
@@ -152,7 +162,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       initTableMetadata();
     } else {
       enabled = false;
-      this.metrics = Option.empty();
     }
   }
 
@@ -257,8 +266,12 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     return metadataWriteConfig;
   }
 
-  public HoodieBackedTableMetadata metadata() {
+  public HoodieBackedTableMetadata getTableMetadata() {
     return metadata;
+  }
+
+  public List<MetadataPartitionType> getEnabledPartitionTypes() {
+    return this.enabledPartitionTypes;
   }
 
   /**
@@ -460,7 +473,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
 
     initTableMetadata();
-    initializeFileGroups(dataMetaClient, MetadataPartitionType.FILES, createInstantTime, 1);
+    initializeEnabledFileGroups(dataMetaClient, createInstantTime);
 
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + dataWriteConfig.getBasePath());
@@ -530,6 +543,20 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   /**
+   * Initialize file groups for all the enabled partition types.
+   *
+   * @param dataMetaClient    - Meta client for the data table
+   * @param createInstantTime - Metadata table create instant time
+   * @throws IOException
+   */
+  private void initializeEnabledFileGroups(HoodieTableMetaClient dataMetaClient, String createInstantTime) throws IOException {
+    for (MetadataPartitionType enabledPartitionType : this.enabledPartitionTypes) {
+      initializeFileGroups(dataMetaClient, enabledPartitionType, createInstantTime,
+          enabledPartitionType.getFileGroupCount());
+    }
+  }
+
+  /**
    * Initialize file groups for a partition. For file listing, we just have one file group.
    *
    * All FileGroups for a given metadata partition has a fixed prefix as per the {@link MetadataPartitionType#getFileIdPrefix()}.
@@ -577,7 +604,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Updates of different commit metadata uses the same method to convert to HoodieRecords and hence.
    */
   private interface ConvertMetadataFunction {
-    List<HoodieRecord> convertMetadata();
+    Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadata();
   }
 
   /**
@@ -589,8 +616,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private <T> void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction, boolean canTriggerTableService) {
     if (enabled && metadata != null) {
-      List<HoodieRecord> records = convertMetadataFunction.convertMetadata();
-      commit(engineContext.parallelize(records, 1), MetadataPartitionType.FILES.partitionPath(), instantTime, canTriggerTableService);
+      Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap = convertMetadataFunction.convertMetadata();
+      commit(instantTime, partitionRecordsMap, canTriggerTableService);
     }
   }
 
@@ -602,7 +629,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(commitMetadata, instantTime), !isTableServiceAction);
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
+        commitMetadata, dataMetaClient, instantTime), !isTableServiceAction);
   }
 
   /**
@@ -613,8 +641,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(cleanMetadata, instantTime),
-        false);
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
+        cleanMetadata, instantTime), false);
   }
 
   /**
@@ -625,8 +653,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   @Override
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(),
-        restoreMetadata, instantTime, metadata.getSyncedInstantTime()), false);
+    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
+        enabledPartitionTypes, metadataMetaClient.getActiveTimeline(), restoreMetadata, instantTime,
+        metadata.getSyncedInstantTime()), false);
   }
 
   /**
@@ -650,9 +679,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         }
       }
 
-      List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(metadataMetaClient.getActiveTimeline(), rollbackMetadata, instantTime,
-          metadata.getSyncedInstantTime(), wasSynced);
-      commit(engineContext.parallelize(records, 1), MetadataPartitionType.FILES.partitionPath(), instantTime, false);
+      Map<MetadataPartitionType, HoodieData<HoodieRecord>> records =
+          HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
+              metadataMetaClient.getActiveTimeline(), rollbackMetadata, instantTime,
+              metadata.getSyncedInstantTime(), wasSynced);
+      commit(instantTime, records, false);
     }
   }
 
@@ -665,12 +696,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
-   *  @param records The HoodieData of records to be written.
-   * @param partitionName The partition to which the records are to be written.
-   * @param instantTime The timestamp to use for the deltacommit.
+   *
+   * @param instantTime            - Action instant time for this commit
+   * @param partitionRecordsMap    - Map of partition name to its records to commit
    * @param canTriggerTableService true if table services can be scheduled and executed. false otherwise.
    */
-  protected abstract void commit(HoodieData<HoodieRecord> records, String partitionName, String instantTime, boolean canTriggerTableService);
+  protected abstract void commit(
+      String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap,
+      boolean canTriggerTableService);
 
   /**
    *  Perform a compaction on the Metadata Table.
@@ -735,14 +768,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     List<String> partitions = partitionInfoList.stream().map(p ->
         p.getRelativePath().isEmpty() ? NON_PARTITIONED_NAME : p.getRelativePath()).collect(Collectors.toList());
     final int totalFiles = partitionInfoList.stream().mapToInt(p -> p.getTotalFiles()).sum();
+    final Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
 
     // Record which saves the list of all partitions
     HoodieRecord allPartitionRecord = HoodieMetadataPayload.createPartitionListRecord(partitions);
     if (partitions.isEmpty()) {
-      // in case of boostrapping of a fresh table, there won't be any partitions, but we need to make a boostrap commit
-      commit(engineContext.parallelize(Collections.singletonList(allPartitionRecord), 1), MetadataPartitionType.FILES.partitionPath(), createInstantTime, false);
+      // in case of bootstrapping of a fresh table, there won't be any partitions, but we need to make a boostrap commit
+      final HoodieData<HoodieRecord> allPartitionRecordsRDD = engineContext.parallelize(
+          Collections.singletonList(allPartitionRecord), 1);
+      partitionToRecordsMap.put(MetadataPartitionType.FILES, allPartitionRecordsRDD);
+      commit(createInstantTime, partitionToRecordsMap, false);
       return;
     }
+
     HoodieData<HoodieRecord> partitionRecords = engineContext.parallelize(Arrays.asList(allPartitionRecord), 1);
     if (!partitionInfoList.isEmpty()) {
       HoodieData<HoodieRecord> fileListRecords = engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
@@ -762,7 +800,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
     LOG.info("Committing " + partitions.size() + " partitions and " + totalFiles + " files to metadata");
     ValidationUtils.checkState(partitionRecords.count() == (partitions.size() + 1));
-    commit(partitionRecords, MetadataPartitionType.FILES.partitionPath(), createInstantTime, false);
+    partitionToRecordsMap.put(MetadataPartitionType.FILES, partitionRecords);
+    commit(createInstantTime, partitionToRecordsMap, false);
   }
 
   /**

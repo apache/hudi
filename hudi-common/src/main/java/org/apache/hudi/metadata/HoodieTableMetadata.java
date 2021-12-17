@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieColumnStats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -25,9 +26,14 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.hash.FileIndexID;
+import org.apache.hudi.common.util.hash.PartitionIndexID;
+import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
@@ -103,6 +109,37 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Fetch all files for given partition paths.
    */
   Map<String, FileStatus[]> getAllFilesInPartitions(List<String> partitionPaths) throws IOException;
+
+  /**
+   * Get the bloom filter for the FileID from the metadata table.
+   *
+   * @param partitionIndexID
+   * @param fileIndexID      - FileID for which bloom filter needs to be retrieved
+   * @return BloomFilter byte buffer if available, otherwise empty
+   * @throws HoodieMetadataException
+   */
+  Option<ByteBuffer> getBloomFilter(final PartitionIndexID partitionIndexID, final FileIndexID fileIndexID)
+      throws HoodieMetadataException;
+
+  /**
+   * Get bloom filters for the list of FileIDs from the metadata table.
+   *
+   * @param partitionFileIndexIDList - List of FileIDs for which bloom filters need to be retrieved
+   * @return Map of FileID to its bloom filter byte buffer
+   * @throws HoodieMetadataException
+   */
+  Map<String, ByteBuffer> getBloomFilters(final List<Pair<PartitionIndexID, FileIndexID>> partitionFileIndexIDList)
+      throws HoodieMetadataException;
+
+  /**
+   * TODO: Comment.
+   *
+   * @param keyList
+   * @param keySet
+   * @return
+   * @throws HoodieMetadataException
+   */
+  Map<String, HoodieColumnStats> getColumnStats(final List<String> keySet) throws HoodieMetadataException;
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

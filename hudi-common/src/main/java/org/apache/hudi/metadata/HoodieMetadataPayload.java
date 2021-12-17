@@ -18,13 +18,21 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieColumnStatsMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.hash.ColumnIndexID;
+import org.apache.hudi.common.util.hash.FileIndexID;
+
+import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -34,9 +42,12 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.io.storage.HoodieHFileReader;
+import org.apache.parquet.io.api.Binary;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,36 +57,64 @@ import java.util.stream.Stream;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 
 /**
- * This is a payload which saves information about a single entry in the Metadata Table.
- *
- * The type of the entry is determined by the "type" saved within the record. The following types of entries are saved:
- *
- *   1. List of partitions: There is a single such record
- *         key="__all_partitions__"
- *
- *   2. List of files in a Partition: There is one such record for each partition
- *         key=Partition name
- *
- *  During compaction on the table, the deletions are merged with additions and hence pruned.
- *
- * Metadata Table records are saved with the schema defined in HoodieMetadata.avsc. This class encapsulates the
- * HoodieMetadataRecord for ease of operations.
+ * MetadataTable records are persisted with the schema defined in HoodieMetadata.avsc.
+ * This class represents the payload for the MetadataTable.
+ * <p>
+ * This single metadata payload is shared by all the partitions under the metadata table.
+ * The partition specific records are determined by the field "type" saved within the record.
+ * The following types are supported:
+ * <p>
+ * METADATA_TYPE_PARTITION_LIST (1):
+ * -- List of all partitions. There is a single such record
+ * -- key = @{@link HoodieTableMetadata.RECORDKEY_PARTITION_LIST}
+ * <p>
+ * METADATA_TYPE_FILE_LIST (2):
+ * -- List of all files in a partition. There is one such record for each partition
+ * -- key = partition name
+ * <p>
+ * METADATA_TYPE_COLUMN_STATS (3):
+ * -- This is an index for column stats in the table
+ * <p>
+ * METADATA_TYPE_BLOOM_FILTER (4):
+ * -- This is an index for base file bloom filters. This is a map of FileID to its BloomFilter byte[].
+ * <p>
+ * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
+
+  // Type of the record. This can be an enum in the schema but Avro1.8
+  // has a bug - https://issues.apache.org/jira/browse/AVRO-1810
+  protected static final int METADATA_TYPE_PARTITION_LIST = 1;
+  protected static final int METADATA_TYPE_FILE_LIST = 2;
+  protected static final int METADATA_TYPE_COLUMN_STATS = 3;
+  protected static final int METADATA_TYPE_BLOOM_FILTER = 4;
 
   // HoodieMetadata schema field ids
   public static final String KEY_FIELD_NAME = HoodieHFileReader.KEY_FIELD_NAME;
   public static final String SCHEMA_FIELD_NAME_TYPE = "type";
   public static final String SCHEMA_FIELD_NAME_METADATA = "filesystemMetadata";
+  private static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
+  private static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
 
-  // Type of the record
-  // This can be an enum in the schema but Avro 1.8 has a bug - https://issues.apache.org/jira/browse/AVRO-1810
-  private static final int PARTITION_LIST = 1;
-  private static final int FILE_LIST = 2;
+  // HoodieMetadata bloom filter payload field ids
+  private static final String BLOOM_FILTER_FIELD_TYPE = "type";
+  private static final String BLOOM_FILTER_FIELD_TIMESTAMP = "timestamp";
+  private static final String BLOOM_FILTER_FIELD_BLOOM_FILTER = "bloomFilter";
+  private static final String BLOOM_FILTER_FIELD_IS_DELETED = "isDeleted";
+  private static final String BLOOM_FILTER_FIELD_RESERVED = "reserved";
+
+  // HoodieMetadata column stats payload field ids
+  private static final String COLUMN_STATS_FIELD_MIN_VALUE = "minValue";
+  private static final String COLUMN_STATS_FIELD_MAX_VALUE = "maxValue";
+  private static final String COLUMN_STATS_FIELD_NULL_COUNT = "nullCount";
+  private static final String COLUMN_STATS_FIELD_IS_DELETED = "isDeleted";
+  private static final String COLUMN_STATS_FIELD_RESERVED = "reserved";
 
   private String key = null;
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
+  private HoodieMetadataBloomFilter bloomFilterMetadata = null;
+  private HoodieColumnStats columnStatMetadata = null;
 
   public HoodieMetadataPayload(GenericRecord record, Comparable<?> orderingVal) {
     this(Option.of(record));
@@ -94,13 +133,58 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           filesystemMetadata.put(k.toString(), new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
         });
       }
+
+      if (type == METADATA_TYPE_BLOOM_FILTER) {
+        final GenericRecord metadataRecord = (GenericRecord) record.get().get(SCHEMA_FIELD_ID_BLOOM_FILTER);
+        if (metadataRecord == null) {
+          throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_BLOOM_FILTER + " record expected for type: " + METADATA_TYPE_BLOOM_FILTER);
+        }
+        bloomFilterMetadata = new HoodieMetadataBloomFilter(
+            (String) metadataRecord.get(BLOOM_FILTER_FIELD_TYPE),
+            (String) metadataRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP),
+            (ByteBuffer) metadataRecord.get(BLOOM_FILTER_FIELD_BLOOM_FILTER),
+            (Boolean) metadataRecord.get(BLOOM_FILTER_FIELD_IS_DELETED),
+            (ByteBuffer) metadataRecord.get(BLOOM_FILTER_FIELD_RESERVED)
+        );
+      }
+
+      if (type == METADATA_TYPE_COLUMN_STATS) {
+        GenericRecord v = (GenericRecord) record.get().get(SCHEMA_FIELD_ID_COLUMN_STATS);
+        if (v == null) {
+          throw new HoodieMetadataException("Valid " + SCHEMA_FIELD_ID_COLUMN_STATS + " record expected for type: " + METADATA_TYPE_COLUMN_STATS);
+        }
+        columnStatMetadata = new HoodieColumnStats(
+            (String) v.get(COLUMN_STATS_FIELD_MIN_VALUE),
+            (String) v.get(COLUMN_STATS_FIELD_MAX_VALUE),
+            (Long) v.get(COLUMN_STATS_FIELD_NULL_COUNT),
+            (Boolean) v.get(COLUMN_STATS_FIELD_IS_DELETED),
+            (ByteBuffer) v.get(COLUMN_STATS_FIELD_RESERVED)
+        );
+      }
     }
   }
 
   private HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
+    this(key, type, filesystemMetadata, null, null);
+  }
+
+  private HoodieMetadataPayload(String key, int type, HoodieMetadataBloomFilter metadataBloomFilter) {
+    this(key, type, null, metadataBloomFilter, null);
+  }
+
+  private HoodieMetadataPayload(String key, int type, HoodieColumnStats columnStats) {
+    this(key, type, null, null, columnStats);
+  }
+
+  protected HoodieMetadataPayload(String key, int type,
+                                  Map<String, HoodieMetadataFileInfo> filesystemMetadata,
+                                  HoodieMetadataBloomFilter metadataBloomFilter,
+                                  HoodieColumnStats columnStats) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
+    this.bloomFilterMetadata = metadataBloomFilter;
+    this.columnStatMetadata = columnStats;
   }
 
   /**
@@ -110,55 +194,92 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
-    partitions.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L,  false)));
+    partitions.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L, false)));
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.partitionPath());
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), PARTITION_LIST, fileInfo);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
+        fileInfo);
     return new HoodieRecord<>(key, payload);
   }
 
   /**
    * Create and return a {@code HoodieMetadataPayload} to save list of files within a partition.
    *
-   * @param partition The name of the partition
-   * @param filesAdded Mapping of files to their sizes for files which have been added to this partition
+   * @param partition    The name of the partition
+   * @param filesAdded   Mapping of files to their sizes for files which have been added to this partition
    * @param filesDeleted List of files which have been deleted from this partition
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
-                                                                               Option<Map<String, Long>> filesAdded, Option<List<String>> filesDeleted) {
+                                                                               Option<Map<String, Long>> filesAdded,
+                                                                               Option<List<String>> filesDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
     filesAdded.ifPresent(
         m -> m.forEach((filename, size) -> fileInfo.put(filename, new HoodieMetadataFileInfo(size, false))));
     filesDeleted.ifPresent(
-        m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L,  true))));
+        m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L, true))));
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.partitionPath());
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), FILE_LIST, fileInfo);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
     return new HoodieRecord<>(key, payload);
+  }
+
+  /**
+   * Create bloom filter metadata record.
+   *
+   * @param fileID      - FileID for which the bloom filter needs to persisted
+   * @param timestamp   - Instant timestamp responsible for this record
+   * @param bloomFilter - Bloom filter for the File
+   * @param isDeleted   - Is the bloom filter no more valid
+   * @return Metadata payload containing the fileID and its bloom filter record
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createBloomFilterMetadataRecord(final PartitionIndexID partitionID,
+                                                                                    final FileIndexID fileID,
+                                                                                    final String timestamp,
+                                                                                    final ByteBuffer bloomFilter,
+                                                                                    final boolean isDeleted) {
+    final String bloomFilterKey = partitionID.asBase64EncodedString().concat(fileID.asBase64EncodedString());
+    HoodieKey key = new HoodieKey(bloomFilterKey, MetadataPartitionType.BLOOM_FILTERS.partitionPath());
+
+    // TODO: Get the bloom filter type from the file
+    HoodieMetadataBloomFilter metadataBloomFilter =
+        new HoodieMetadataBloomFilter(BloomFilterTypeCode.DYNAMIC_V0.name(),
+            timestamp, bloomFilter, isDeleted, ByteBuffer.allocate(0));
+    HoodieMetadataPayload metadataPayload = new HoodieMetadataPayload(key.getRecordKey(),
+        HoodieMetadataPayload.METADATA_TYPE_BLOOM_FILTER, metadataBloomFilter);
+    return new HoodieRecord<>(key, metadataPayload);
   }
 
   @Override
   public HoodieMetadataPayload preCombine(HoodieMetadataPayload previousRecord) {
     ValidationUtils.checkArgument(previousRecord.type == type,
-        "Cannot combine " + previousRecord.type  + " with " + type);
-
-    Map<String, HoodieMetadataFileInfo> combinedFileInfo = null;
+        "Cannot combine " + previousRecord.type + " with " + type);
 
     switch (type) {
-      case PARTITION_LIST:
-      case FILE_LIST:
-        combinedFileInfo = combineFilesystemMetadata(previousRecord);
-        break;
+      case METADATA_TYPE_PARTITION_LIST:
+      case METADATA_TYPE_FILE_LIST:
+        Map<String, HoodieMetadataFileInfo> combinedFileInfo = combineFilesystemMetadata(previousRecord);
+        return new HoodieMetadataPayload(key, type, combinedFileInfo);
+      case METADATA_TYPE_BLOOM_FILTER:
+        HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
+        return new HoodieMetadataPayload(key, type, combineBloomFilterMetadata);
+      case METADATA_TYPE_COLUMN_STATS:
+        return new HoodieMetadataPayload(key, type, combineColumnStats(previousRecord));
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
+  }
 
-    return new HoodieMetadataPayload(key, type, combinedFileInfo);
+  private HoodieMetadataBloomFilter combineBloomFilterMetadata(HoodieMetadataPayload previousRecord) {
+    return this.bloomFilterMetadata;
+  }
+
+  private HoodieColumnStats combineColumnStats(HoodieMetadataPayload previousRecord) {
+    return this.columnStatMetadata;
   }
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema) throws IOException {
-    HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord)oldRecord));
+    HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord));
     HoodieRecordPayload combinedPayload = preCombine(anotherPayload);
     return combinedPayload.getInsertValue(schema);
   }
@@ -169,7 +290,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata);
+    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
+        columnStatMetadata);
     return Option.of(record);
   }
 
@@ -185,6 +307,28 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public List<String> getDeletions() {
     return filterFileInfoEntries(true).map(Map.Entry::getKey).sorted().collect(Collectors.toList());
+  }
+
+  /**
+   * Get the bloom filter metadata from this payload.
+   */
+  public Option<HoodieMetadataBloomFilter> getBloomFilterMetadata() {
+    if (bloomFilterMetadata == null) {
+      return Option.empty();
+    }
+
+    return Option.of(bloomFilterMetadata);
+  }
+
+  /**
+   * Get the bloom filter metadata from this payload.
+   */
+  public Option<HoodieColumnStats> getColumnStatMetadata() {
+    if (columnStatMetadata == null) {
+      return Option.empty();
+    }
+
+    return Option.of(columnStatMetadata);
   }
 
   /**
@@ -233,6 +377,44 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     return combinedFileInfo;
+  }
+
+  public static Stream<HoodieRecord> createColumnStatsRecords(
+      Collection<HoodieColumnStatsMetadata<Comparable>> columnRangeInfo) {
+    return columnRangeInfo.stream().map(columnStatsMetadata -> {
+      HoodieKey key = new HoodieKey(getColumnStatsRecordKey(columnStatsMetadata),
+          MetadataPartitionType.COLUMN_STATS.partitionPath());
+
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_COLUMN_STATS,
+          HoodieColumnStats.newBuilder()
+              .setMinValue(columnStatsMetadata.getMinValue() == null ? null :
+                  new String(((Binary) columnStatsMetadata.getMinValue()).getBytes()))
+              .setMaxValue(columnStatsMetadata.getMaxValue() == null ? null :
+                  new String(((Binary) columnStatsMetadata.getMaxValue()).getBytes()))
+              .setNullCount(columnStatsMetadata.getNullCount())
+              .setIsDeleted(false)
+              .setReserved(ByteBuffer.allocate(0))
+              .build());
+
+      return new HoodieRecord<>(key, payload);
+    });
+  }
+
+  // get record key from column stats metadata
+  public static String getColumnStatsRecordKey(HoodieColumnStatsMetadata<Comparable> columnStatsMetadata) {
+    final ColumnIndexID columnID = new ColumnIndexID(columnStatsMetadata.getColumnName());
+    final PartitionIndexID partitionID = new PartitionIndexID(columnStatsMetadata.getPartitionPath());
+    final FileIndexID fileID = new FileIndexID(columnStatsMetadata.getFilePath());
+    return columnID.asBase64EncodedString()
+        .concat(partitionID.asBase64EncodedString())
+        .concat(fileID.asBase64EncodedString());
+  }
+
+  // parse attribute in record key. TODO: find better way to get this attribute instaed of parsing key
+  public static String getAttributeFromRecordKey(String recordKey, String attribute) {
+    final String columnIDBase64EncodedString = recordKey.substring(0, ColumnIndexID.ID_COLUMN_HASH_SIZE.bits());
+
+    return "";
   }
 
   @Override
