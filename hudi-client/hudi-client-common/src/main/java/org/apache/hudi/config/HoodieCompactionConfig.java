@@ -250,12 +250,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
   public static final ConfigProperty<String> MAX_ARCHIVE_FILES_TO_KEEP_PROP = ConfigProperty
-      .key("hoodie.max.archive.files")
+      .key("hoodie.archive.max.files")
       .noDefaultValue()
       .withDocumentation("The numbers of kept archive files under archived.");
 
   public static final ConfigProperty<String> AUTO_TRIM_ARCHIVE_FILES_DROP = ConfigProperty
-      .key("hoodie.auto.trim.archive.files")
+      .key("hoodie.archive.auto.trim.enable")
       .defaultValue("false")
       .withDocumentation("WARNING: do not use this config unless you know what you're doing. "
           + "If enabled, Hoodie will keep the most recent " + MAX_ARCHIVE_FILES_TO_KEEP_PROP.key() + " archive files and details of older archived instants will be deleted, "
