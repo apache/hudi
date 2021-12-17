@@ -69,16 +69,16 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   private static final int DEFAULT_BLOCK_SIZE = 1024 * 1024;
   private static final Compression.Algorithm DEFAULT_COMPRESSION_ALGO = Compression.Algorithm.GZ;
 
-  public HoodieHFileDataBlock(
-      HoodieLogFile logFile,
-      FSDataInputStream inputStream,
-      Option<byte[]> content,
-      boolean readBlockLazily,
-      long position, long blockSize, long blockEndPos,
-      Option<Schema> readerSchema,
-      Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer,
-      boolean enablePointLookups) {
+  public HoodieHFileDataBlock(HoodieLogFile logFile,
+                              FSDataInputStream inputStream,
+                              Option<byte[]> content,
+                              boolean readBlockLazily,
+                              long position, long blockSize, long blockEndPos,
+                              Option<Schema> readerSchema,
+                              Map<HeaderMetadataType, String> header,
+                              Map<HeaderMetadataType, String> footer,
+
+                              boolean enablePointLookups) {
     super(content,
         inputStream,
         readBlockLazily,

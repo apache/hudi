@@ -61,12 +61,10 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
-  public HoodieDataBlock(
-      List<IndexedRecord> records,
-      Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer,
-      String keyFieldRef
-  ) {
+  public HoodieDataBlock(List<IndexedRecord> records,
+                         Map<HeaderMetadataType, String> header,
+                         Map<HeaderMetadataType, String> footer,
+                         String keyFieldRef) {
     super(header, footer, Option.empty(), Option.empty(), null, false);
     this.records = records;
     this.keyFieldRef = keyFieldRef;
@@ -78,17 +76,15 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
    */
-  protected HoodieDataBlock(
-      Option<byte[]> content,
-      FSDataInputStream inputStream,
-      boolean readBlockLazily,
-      Option<HoodieLogBlockContentLocation> blockContentLocation,
-      Option<Schema> readerSchema,
-      Map<HeaderMetadataType, String> headers,
-      Map<HeaderMetadataType, String> footer,
-      String keyFieldRef,
-      boolean enablePointLookups
-  ) {
+  protected HoodieDataBlock(Option<byte[]> content,
+                            FSDataInputStream inputStream,
+                            boolean readBlockLazily,
+                            Option<HoodieLogBlockContentLocation> blockContentLocation,
+                            Option<Schema> readerSchema,
+                            Map<HeaderMetadataType, String> headers,
+                            Map<HeaderMetadataType, String> footer,
+                            String keyFieldRef,
+                            boolean enablePointLookups) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.records = null;
     this.keyFieldRef = keyFieldRef;
@@ -158,7 +154,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     if (records == null) {
       try {
         // in case records are absent, read content lazily and then convert to IndexedRecords
-        records = readRecordsFromContent();
+        records = readRecordsFromBlockPayload();
       } catch (IOException io) {
         throw new HoodieIOException("Unable to convert content bytes to records", io);
       }
@@ -197,7 +193,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         .collect(Collectors.toList());
   }
 
-  protected List<IndexedRecord> readRecordsFromContent() throws IOException {
+  protected List<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();

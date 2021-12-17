@@ -149,7 +149,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
    *       requested by the caller (providing projected Reader's schema)
    */
   @Override
-  protected List<IndexedRecord> readRecordsFromContent() throws IOException {
+  protected List<IndexedRecord> readRecordsFromBlockPayload() throws IOException {
     Configuration inlineConf = new Configuration();
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
 
