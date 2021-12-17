@@ -46,7 +46,7 @@ public class BucketIdentifierSuite {
     GenericRecord record = KeyGeneratorTestUtilities.getRecord();
     HoodieRecord hoodieRecord = new HoodieRecord(
         new HoodieKey(KeyGenUtils.getRecordKey(record, recordKeyField), ""), null);
-    int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8, "JVMHash");
+    int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8);
     assert bucketId == BucketIdentifier.getBucketId(
         Arrays.asList(record.get(indexKeyField).toString()), 8);
   }
@@ -58,7 +58,7 @@ public class BucketIdentifierSuite {
     GenericRecord record = KeyGeneratorTestUtilities.getRecord();
     HoodieRecord hoodieRecord = new HoodieRecord(
         new HoodieKey(KeyGenUtils.getRecordKey(record, recordKeyField), ""), null);
-    int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8, "JVMHash");
+    int bucketId = BucketIdentifier.getBucketId(hoodieRecord, indexKeyField, 8);
     assert bucketId == BucketIdentifier.getBucketId(
         Arrays.asList(record.get(indexKeyField).toString()), 8);
   }
