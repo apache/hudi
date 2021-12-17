@@ -35,6 +35,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -114,11 +115,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void resetViewState() {
-    this.fgIdToPendingCompaction = null;
-    this.partitionToFileGroupsMap = null;
-    this.fgIdToBootstrapBaseFile = null;
-    this.fgIdToReplaceInstants = null;
-    this.fgIdToPendingClustering = null;
+    this.fgIdToPendingCompaction = Collections.emptyMap();
+    this.partitionToFileGroupsMap = Collections.emptyMap();
+    this.fgIdToBootstrapBaseFile = Collections.emptyMap();
+    this.fgIdToReplaceInstants = Collections.emptyMap();
+    this.fgIdToPendingClustering = Collections.emptyMap();
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
