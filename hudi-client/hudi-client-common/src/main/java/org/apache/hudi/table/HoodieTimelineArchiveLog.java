@@ -131,7 +131,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         archive(context, instantsToArchive);
         LOG.info("Deleting archived instants " + instantsToArchive);
         success = deleteArchivedInstants(instantsToArchive, context);
-        if (config.getAutoTrimArchiveFilesEnable()) {
+        if (config.getArchiveAutoTrimEnable()) {
           trimArchiveFilesIfNecessary(context);
         }
       } else {

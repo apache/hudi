@@ -1074,7 +1074,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getMaxArchiveFilesToKeep() {
-    return getInt(HoodieCompactionConfig.MAX_ARCHIVE_FILES_TO_KEEP_PROP);
+    return getInt(HoodieCompactionConfig.ARCHIVE_MAX_FILES);
   }
 
   public int getParquetSmallFileLimit() {
@@ -1105,8 +1105,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.AUTO_CLEAN);
   }
 
-  public boolean getAutoTrimArchiveFilesEnable() {
-    return getBoolean(HoodieCompactionConfig.AUTO_TRIM_ARCHIVE_FILES_DROP);
+  public boolean getArchiveAutoTrimEnable() {
+    return getBoolean(HoodieCompactionConfig.ARCHIVE_AUTO_TRIM_ENABLE);
   }
 
   public boolean isAutoArchive() {

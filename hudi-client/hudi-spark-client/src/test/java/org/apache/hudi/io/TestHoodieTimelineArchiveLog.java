@@ -157,7 +157,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .retainCommits(1)
-            .withAutoTrimArchiveFiles(enableArchiveTrim)
+            .withArchiveAutoTrimEnable(enableArchiveTrim)
             .maxArchiveFilesToKeep(archiveFilesToKeep)
             .archiveCommitsWith(minArchivalCommits, maxArchivalCommits)
             .build())

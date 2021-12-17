@@ -249,16 +249,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
-  public static final ConfigProperty<String> MAX_ARCHIVE_FILES_TO_KEEP_PROP = ConfigProperty
+  public static final ConfigProperty<String> ARCHIVE_MAX_FILES = ConfigProperty
       .key("hoodie.archive.max.files")
       .noDefaultValue()
       .withDocumentation("The numbers of kept archive files under archived.");
 
-  public static final ConfigProperty<String> AUTO_TRIM_ARCHIVE_FILES_DROP = ConfigProperty
+  public static final ConfigProperty<String> ARCHIVE_AUTO_TRIM_ENABLE = ConfigProperty
       .key("hoodie.archive.auto.trim.enable")
       .defaultValue("false")
       .withDocumentation("WARNING: do not use this config unless you know what you're doing. "
-          + "If enabled, Hoodie will keep the most recent " + MAX_ARCHIVE_FILES_TO_KEEP_PROP.key() + " archive files and details of older archived instants will be deleted, "
+          + "If enabled, Hoodie will keep the most recent " + ARCHIVE_MAX_FILES.key() + " archive files and details of older archived instants will be deleted, "
           + "resulting in information loss in the archived timeline, which may affect tools like CLI and repair. "
           + "Only enable this if you hit severe performance issues for retrieving archived timeline.");
 
@@ -557,12 +557,12 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder maxArchiveFilesToKeep(int number) {
-      compactionConfig.setValue(MAX_ARCHIVE_FILES_TO_KEEP_PROP, String.valueOf(number));
+      compactionConfig.setValue(ARCHIVE_MAX_FILES, String.valueOf(number));
       return this;
     }
 
-    public Builder withAutoTrimArchiveFiles(boolean enable) {
-      compactionConfig.setValue(AUTO_TRIM_ARCHIVE_FILES_DROP, String.valueOf(enable));
+    public Builder withArchiveAutoTrimEnable(boolean enable) {
+      compactionConfig.setValue(ARCHIVE_AUTO_TRIM_ENABLE, String.valueOf(enable));
       return this;
     }
 
