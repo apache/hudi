@@ -725,9 +725,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
-    LOG.warn("waiting on condition " + condition.toString() + " for 360 secs for " + jobId);
     TestHelpers.waitTillCondition(condition, dsFuture, 360);
-    LOG.warn("XXX going to call shutdown gracefully for continuous job for " + jobId);
     ds.shutdownGracefully();
     dsFuture.get();
   }
