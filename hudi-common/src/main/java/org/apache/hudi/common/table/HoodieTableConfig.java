@@ -172,7 +172,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
       .defaultValue(HoodieTimelineTimeZone.LOCAL)
-      .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local. local is default");
+      .withDocumentation("User can set hoodie commit timeline timezone, such as utc, local and so on. local is default");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
