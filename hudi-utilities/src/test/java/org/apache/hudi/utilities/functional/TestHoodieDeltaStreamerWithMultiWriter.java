@@ -36,7 +36,6 @@ import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
