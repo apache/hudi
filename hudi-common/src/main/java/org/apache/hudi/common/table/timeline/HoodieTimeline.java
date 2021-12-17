@@ -334,6 +334,10 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
   }
 
+  static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
+    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
+  }
+
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit).

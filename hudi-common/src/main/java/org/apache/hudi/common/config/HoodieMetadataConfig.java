@@ -44,7 +44,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Enable the internal Metadata Table which saves file listings
   public static final ConfigProperty<Boolean> ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 

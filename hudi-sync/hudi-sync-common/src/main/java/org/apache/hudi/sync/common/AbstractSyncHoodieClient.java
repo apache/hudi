@@ -169,11 +169,11 @@ public abstract class AbstractSyncHoodieClient {
       }
 
       if (hoodieCommitMetadata.isPresent()
-          && hoodieCommitMetadata.get().getOperationType().equals(WriteOperationType.DELETE_PARTITION)) {
+          && WriteOperationType.DELETE_PARTITION.equals(hoodieCommitMetadata.get().getOperationType())) {
         return true;
       }
     } catch (Exception e) {
-      throw new HoodieSyncException("Failed to read data schema", e);
+      throw new HoodieSyncException("Failed to get commit metadata", e);
     }
     return false;
   }
