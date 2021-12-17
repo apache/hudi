@@ -363,7 +363,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
           ingestionJob.shutdownGracefully();
         }
       } else {
-        LOG.error("Conflict happened, but not expected " + e.getCause().getMessage());
+        LOG.error("Conflict happened, but not expected : " + e.getCause().getMessage());
         throw e;
       }
     }
