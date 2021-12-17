@@ -23,27 +23,29 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
-import org.apache.hudi.parquet.io.ByteBufferBackedInputFile;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.InputFile;
 
 import javax.annotation.Nonnull;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -54,21 +56,19 @@ import java.util.Map;
  */
 public class HoodieParquetDataBlock extends HoodieDataBlock {
 
-  public HoodieParquetDataBlock(
-      HoodieLogFile logFile,
-      FSDataInputStream inputStream,
-      Option<byte[]> content,
-      boolean readBlockLazily, long position, long blockSize, long blockEndpos,
-      Option<Schema> readerSchema,
-      Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer,
-      String keyField
-  ) {
-    super(
-        content,
+  public HoodieParquetDataBlock(HoodieLogFile logFile,
+                                FSDataInputStream inputStream,
+                                Option<byte[]> content,
+                                boolean readBlockLazily,
+                                long position, long blockSize, long blockEndPos,
+                                Option<Schema> readerSchema,
+                                Map<HeaderMetadataType, String> header,
+                                Map<HeaderMetadataType, String> footer,
+                                String keyField) {
+    super(content,
         inputStream,
         readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)),
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
         readerSchema,
         header,
         footer,
@@ -133,27 +133,48 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     return baos.toByteArray();
   }
 
+  public static Iterator<IndexedRecord> getProjectedParquetRecordsIterator(Configuration conf,
+                                                                           Schema readerSchema,
+                                                                           InputFile inputFile) throws IOException {
+    AvroReadSupport.setAvroReadSchema(conf, readerSchema);
+    AvroReadSupport.setRequestedProjection(conf, readerSchema);
+    ParquetReader<IndexedRecord> reader =
+        AvroParquetReader.<IndexedRecord>builder(inputFile).withConf(conf).build();
+    return new ParquetReaderIterator<>(reader);
+  }
+
+  /**
+   * NOTE: We're overriding the whole reading sequence to make sure we properly respect
+   *       the requested Reader's schema and only fetch the columns that have been explicitly
+   *       requested by the caller (providing projected Reader's schema)
+   */
   @Override
-  protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
-    if (content.length == 0) {
-      return Collections.emptyList();
-    }
+  protected List<IndexedRecord> readRecordsFromContent() throws IOException {
+    Configuration inlineConf = new Configuration();
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+
+    HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
+
+    Path inlineLogFilePath = InLineFSUtils.getInlineFilePath(
+        blockContentLoc.getLogFile().getPath(),
+        blockContentLoc.getLogFile().getPath().getFileSystem(inlineConf).getScheme(),
+        blockContentLoc.getContentPositionInLogFile(),
+        blockContentLoc.getBlockSize());
 
     ArrayList<IndexedRecord> records = new ArrayList<>();
-    getParquetRecordsIterator(new Configuration(), readerSchema, new ByteBufferBackedInputFile(content))
+
+    getProjectedParquetRecordsIterator(
+        inlineConf,
+        readerSchema,
+        HadoopInputFile.fromPath(inlineLogFilePath, inlineConf)
+    )
         .forEachRemaining(records::add);
 
     return records;
   }
 
-  public static Iterator<IndexedRecord> getParquetRecordsIterator(
-      Configuration conf,
-      Schema schema,
-      InputFile inputFile
-  ) throws IOException {
-    AvroReadSupport.setAvroReadSchema(conf, schema);
-    ParquetReader<IndexedRecord> reader =
-        AvroParquetReader.<IndexedRecord>builder(inputFile).withConf(conf).build();
-    return new ParquetReaderIterator<>(reader);
+  @Override
+  protected List<IndexedRecord> deserializeRecords(byte[] content) throws IOException {
+    throw new UnsupportedOperationException("Should not be invoked");
   }
 }

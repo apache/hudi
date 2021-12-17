@@ -158,7 +158,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     if (records == null) {
       try {
         // in case records are absent, read content lazily and then convert to IndexedRecords
-        readRecordsFromContent();
+        records = readRecordsFromContent();
       } catch (IOException io) {
         throw new HoodieIOException("Unable to convert content bytes to records", io);
       }
@@ -197,15 +197,18 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         .collect(Collectors.toList());
   }
 
-  protected void readRecordsFromContent() throws IOException {
+  protected List<IndexedRecord> readRecordsFromContent() throws IOException {
     if (readBlockLazily && !getContent().isPresent()) {
       // read log block contents from disk
       inflate();
     }
 
-    records = deserializeRecords(getContent().get());
-    // Free up content to be GC'd, deflate
-    deflate();
+    try {
+      return deserializeRecords(getContent().get());
+    } finally {
+      // Free up content to be GC'd by deflating the block
+      deflate();
+    }
   }
 
   protected List<IndexedRecord> lookupRecords(List<String> keys) throws IOException {
