@@ -4,9 +4,16 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi! Blog</description>
-        <lastBuildDate>Wed, 01 Sep 2021 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 16 Dec 2021 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Lakehouse Concurrency Control: Are we too optimistic?]]></title>
+            <link>https://hudi.apache.org/cn/blog/2021/12/16/lakehouse-concurrency-control-are-we-too-optimistic</link>
+            <guid>Lakehouse Concurrency Control: Are we too optimistic?</guid>
+            <pubDate>Thu, 16 Dec 2021 00:00:00 GMT</pubDate>
+            <description><![CDATA[Transactions on data lakes are now considered a key characteristic of a Lakehouse these days. But what has actually been accomplished so far? What are the current approaches? How do they fare in real-world scenarios? These questions are the focus of this blog.]]></description>
+        </item>
         <item>
             <title><![CDATA[Building an ExaByte-level Data Lake Using Apache Hudi at ByteDance]]></title>
             <link>https://hudi.apache.org/cn/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance</link>
