@@ -64,6 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
@@ -80,8 +81,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // should we reuse the open file handles, across calls
   private final boolean reuse;
 
-  // Readers for latest file slice corresponding to file groups in the metadata partition of interest
-  private Map<String, Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader>> partitionReaders = new ConcurrentHashMap<>();
+  // Readers for the latest file slice corresponding to file groups in the metadata partition
+  private Map<Pair<String, String>, Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader>> partitionReaders =
+      new ConcurrentHashMap<>();
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                    String datasetBasePath, String spillableMapDirectory) {
@@ -97,7 +99,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private void initIfNeeded() {
     this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(dataBasePath);
-    if (!enabled) {
+    if (!isMetadataTableEnabled) {
       if (!HoodieTableMetadata.isMetadataTable(metadataBasePath)) {
         LOG.info("Metadata table is disabled.");
       }
@@ -107,12 +109,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
-        this.enabled = false;
+        this.isMetadataTableEnabled = false;
         this.metadataMetaClient = null;
         this.metadataTableConfig = null;
       } catch (Exception e) {
         LOG.error("Failed to initialize metadata table at path " + metadataBasePath, e);
-        this.enabled = false;
+        this.isMetadataTableEnabled = false;
         this.metadataMetaClient = null;
         this.metadataTableConfig = null;
       }
@@ -125,30 +127,48 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return recordsByKeys.size() == 0 ? Option.empty() : recordsByKeys.get(0).getValue();
   }
 
-  protected List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys, String partitionName) {
-    Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers = openReadersIfNeeded(keys.get(0), partitionName);
-    try {
-      List<Long> timings = new ArrayList<>();
-      HoodieFileReader baseFileReader = readers.getKey();
-      HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
-
-      if (baseFileReader == null && logRecordScanner == null) {
-        return Collections.emptyList();
-      }
-
-      // local map to assist in merging with base file records
-      Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords = readLogRecords(logRecordScanner, keys, timings);
-      List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = readFromBaseAndMergeWithLogRecords(
-          baseFileReader, keys, logRecords, timings, partitionName);
-      LOG.info(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms", keys.size(), timings));
-      return result;
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " key : ", ioe);
-    } finally {
-      if (!reuse) {
-        close(partitionName);
-      }
+  @Override
+  protected List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> getRecordsByKeys(List<String> keys,
+                                                                                             String partitionName) {
+    Map<Pair<String, FileSlice>, List<String>> partitionFileSliceToKeysMap = new HashMap<>();
+    for (final String key : keys) {
+      final Pair<String, FileSlice> partitionFileSlicePair = getPartitionFileSlice(partitionName, key);
+      partitionFileSliceToKeysMap.computeIfAbsent(partitionFileSlicePair, k -> new ArrayList<>()).add(key);
     }
+
+    List<Pair<String, Option<HoodieRecord<HoodieMetadataPayload>>>> result = new ArrayList<>();
+    AtomicInteger fileSlicesKeysCount = new AtomicInteger();
+    partitionFileSliceToKeysMap.forEach((partitionFileSlicePair, fileSliceKeys) -> {
+      Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers = openReadersIfNeeded(partitionName,
+          partitionFileSlicePair.getRight());
+      try {
+        List<Long> timings = new ArrayList<>();
+        HoodieFileReader baseFileReader = readers.getKey();
+        HoodieMetadataMergedLogRecordReader logRecordScanner = readers.getRight();
+
+        if (baseFileReader == null && logRecordScanner == null) {
+          return;
+        }
+
+        // local map to assist in merging with base file records
+        Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> logRecords = readLogRecords(logRecordScanner,
+            fileSliceKeys, timings);
+        result.addAll(readFromBaseAndMergeWithLogRecords(baseFileReader, fileSliceKeys, logRecords,
+            timings, partitionName));
+        LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
+            fileSliceKeys.size(), timings));
+        fileSlicesKeysCount.addAndGet(fileSliceKeys.size());
+      } catch (IOException ioe) {
+        throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " key : ", ioe);
+      } finally {
+        if (!reuse) {
+          close(Pair.of(partitionFileSlicePair.getLeft(), partitionFileSlicePair.getRight().getFileId()));
+        }
+      }
+    });
+
+    ValidationUtils.checkState(keys.size() == fileSlicesKeysCount.get());
+    return result;
   }
 
   private Map<String, Option<HoodieRecord<HoodieMetadataPayload>>> readLogRecords(HoodieMetadataMergedLogRecordReader logRecordScanner,
@@ -233,38 +253,51 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   /**
-   * Returns a new pair of readers to the base and log files.
+   * Get the file slice details for the given key in a partition.
+   *
+   * @param partitionName - Metadata partition name
+   * @param key           - Key to get the file slice for
+   * @return Partition and file slice pair for the given key
    */
-  private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReadersIfNeeded(String key, String partitionName) {
-    return partitionReaders.computeIfAbsent(partitionName, k -> {
-      try {
-        final long baseFileOpenMs;
-        final long logScannerOpenMs;
-        HoodieFileReader baseFileReader = null;
-        HoodieMetadataMergedLogRecordReader logRecordScanner = null;
+  private Pair<String, FileSlice> getPartitionFileSlice(final String partitionName, final String key) {
+    // Metadata is in sync till the latest completed instant on the dataset
+    List<FileSlice> latestFileSlices =
+        HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
+    Option<MetadataPartitionType> partitionType = HoodieTableMetadataUtil.fromPartitionPath(partitionName);
+    ValidationUtils.checkArgument(partitionType.isPresent());
+    ValidationUtils.checkArgument(latestFileSlices.size() == partitionType.get().getFileGroupCount(),
+        String.format("Invalid number of file slices: found=%d, required=%d", latestFileSlices.size(),
+            partitionType.get().getFileGroupCount()));
+    final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key,
+        latestFileSlices.size()));
+    return Pair.of(partitionName, slice);
+  }
 
-        // Metadata is in sync till the latest completed instant on the dataset
+  /**
+   * Create a file reader and the record scanner for a given partition and file slice
+   * if readers are not already available.
+   *
+   * @param partitionName - Partition name
+   * @param slice         - The file slice to open readers for
+   * @return File reader and the record scanner pair for the requested file slice
+   */
+  private Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> openReadersIfNeeded(String partitionName, FileSlice slice) {
+    return partitionReaders.computeIfAbsent(Pair.of(partitionName, slice.getFileId()), k -> {
+      try {
         HoodieTimer timer = new HoodieTimer().startTimer();
-        List<FileSlice> latestFileSlices = HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, partitionName);
-        if (latestFileSlices.size() == 0) {
-          // empty partition
-          return Pair.of(null, null);
-        }
-        ValidationUtils.checkArgument(latestFileSlices.size() == 1, String.format("Invalid number of file slices: found=%d, required=%d", latestFileSlices.size(), 1));
-        final FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, latestFileSlices.size()));
 
         // Open base file reader
         Pair<HoodieFileReader, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
-        baseFileReader = baseFileReaderOpenTimePair.getKey();
-        baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
+        HoodieFileReader baseFileReader = baseFileReaderOpenTimePair.getKey();
+        final long baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
 
         // Open the log record scanner using the log files from the latest file slice
-        Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair = getLogRecordScanner(slice,
-            partitionName);
-        logRecordScanner = logRecordScannerOpenTimePair.getKey();
-        logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
+        Pair<HoodieMetadataMergedLogRecordReader, Long> logRecordScannerOpenTimePair = getLogRecordScanner(slice, partitionName);
+        HoodieMetadataMergedLogRecordReader logRecordScanner = logRecordScannerOpenTimePair.getKey();
+        final long logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
 
-        metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR, baseFileOpenMs + logScannerOpenMs));
+        metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR,
+            +baseFileOpenMs + logScannerOpenMs));
         return Pair.of(baseFileReader, logRecordScanner);
       } catch (IOException e) {
         throw new HoodieIOException("Error opening readers for metadata table partition " + partitionName, e);
@@ -382,14 +415,20 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public void close() {
-    for (String partitionName : partitionReaders.keySet()) {
-      close(partitionName);
+    for (Pair<String, String> partitionFileSlicePair : partitionReaders.keySet()) {
+      close(partitionFileSlicePair);
     }
     partitionReaders.clear();
   }
 
-  private synchronized void close(String partitionName) {
-    Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers = partitionReaders.remove(partitionName);
+  /**
+   * Close the file reader and the record scanner for the given file slice.
+   *
+   * @param partitionFileSlicePair - Partition and FileSlice
+   */
+  private synchronized void close(Pair<String, String> partitionFileSlicePair) {
+    Pair<HoodieFileReader, HoodieMetadataMergedLogRecordReader> readers =
+        partitionReaders.remove(partitionFileSlicePair);
     if (readers != null) {
       try {
         if (readers.getKey() != null) {
@@ -405,7 +444,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   public boolean enabled() {
-    return enabled;
+    return isMetadataTableEnabled;
   }
 
   public SerializableConfiguration getHadoopConf() {

@@ -41,6 +41,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
@@ -101,10 +102,20 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String partitionName, String instantTime, boolean canTriggerTableService) {
+  protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap,
+                        boolean canTriggerTableService) {
+    for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> partitionTypeHoodieDataEntry : partitionRecordsMap.entrySet()) {
+      commit(partitionTypeHoodieDataEntry.getValue(), partitionTypeHoodieDataEntry.getKey(),
+          instantTime, canTriggerTableService);
+    }
+  }
+
+  private void commit(HoodieData<HoodieRecord> hoodieDataRecords, MetadataPartitionType partitionType, String instantTime,
+                      boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
+    final String partitionName = partitionType.getPartitionPath();
     List<HoodieRecord> records = (List<HoodieRecord>) hoodieDataRecords.get();
-    List<HoodieRecord> recordList = prepRecords(records, partitionName, 1);
+    List<HoodieRecord> recordList = prepRecords(records, partitionName, partitionType.getFileGroupCount());
 
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig)) {
       if (!metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(instantTime)) {
@@ -154,11 +165,14 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * The record is tagged with respective file slice's location based on its record key.
    */
   private List<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int numFileGroups) {
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
-    ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
+    List<FileSlice> fileSlices =
+        HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
+    ValidationUtils.checkArgument(fileSlices.size() == numFileGroups,
+        String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
 
     return records.stream().map(r -> {
-      FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(), numFileGroups));
+      FileSlice slice = fileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
+          numFileGroups));
       final String instantTime = slice.isEmpty() ? "I" : "U";
       r.setCurrentLocation(new HoodieRecordLocation(instantTime, slice.getFileId()));
       return r;

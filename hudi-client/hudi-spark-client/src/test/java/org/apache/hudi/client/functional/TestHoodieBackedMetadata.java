@@ -222,7 +222,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     testTable.doWriteOperation("0000003", UPSERT, emptyList(), asList("p1", "p2"), 1, true);
     syncTableMetadata(writeConfig);
 
-    List<String> partitions = metadataWriter(writeConfig).metadata().getAllPartitionPaths();
+    List<String> partitions = metadataWriter(writeConfig).getTableMetadata().getAllPartitionPaths();
     assertFalse(partitions.contains(nonPartitionDirectory),
         "Must not contain the non-partition " + nonPartitionDirectory);
     assertTrue(partitions.contains("p1"), "Must contain partition p1");
@@ -378,6 +378,83 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableMetadata = metadata(writeConfig, context);
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
     assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000003001");
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testTableOperationsWithMetaIndexLazyLoad(HoodieTableType tableType) throws Exception {
+    initPath();
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .bloomIndexBucketizedChecking(false)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetaIndexBloomFilter(true)
+            .withMetaIndexBloomFilterBatchLoad(false)
+            .withMetaIndexColumnStats(true)
+            .build())
+        .build();
+    init(tableType, writeConfig);
+    testTableOperationsForMetaIndexImpl(writeConfig);
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testTableOperationsWithMetaIndexBatchLoad(HoodieTableType tableType) throws Exception {
+    initPath();
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .bloomIndexBucketizedChecking(false)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetaIndexBloomFilter(true)
+            .withMetaIndexBloomFilterBatchLoad(true)
+            .withMetaIndexColumnStats(true)
+            .build())
+        .build();
+    init(tableType, writeConfig);
+    testTableOperationsForMetaIndexImpl(writeConfig);
+  }
+
+  private void testTableOperationsForMetaIndexImpl(final HoodieWriteConfig writeConfig) throws Exception {
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // Write 1 (Bulk insert)
+      String newCommitTime = "0000001";
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      client.startCommitWithTime(newCommitTime);
+      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+
+      // Write 2 (inserts)
+      newCommitTime = "0000002";
+      client.startCommitWithTime(newCommitTime);
+      validateMetadata(client);
+
+      records = dataGen.generateInserts(newCommitTime, 20);
+      writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+
+      // Write 3 (updates)
+      newCommitTime = "0000003";
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateUniqueUpdates(newCommitTime, 10);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+
+      // Write 4 (updates and inserts)
+      newCommitTime = "0000004";
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateUpdates(newCommitTime, 10);
+      writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client);
+    }
   }
 
   /**
@@ -1931,7 +2008,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
         false, false);
-    assertEquals(MetadataPartitionType.values().length, metadataTablePartitions.size());
+    assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits

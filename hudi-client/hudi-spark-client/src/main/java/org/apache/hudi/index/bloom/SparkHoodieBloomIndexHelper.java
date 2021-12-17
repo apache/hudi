@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -78,7 +79,40 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     LOG.info("InputParallelism: ${" + inputParallelism + "}, IndexParallelism: ${"
         + config.getBloomIndexParallelism() + "}");
 
-    if (config.useBloomIndexBucketizedChecking()) {
+    if (config.isMetaIndexBloomFilterEnabled()) {
+      // Step 1: Transform the fileId to name/hash pairs
+      // fileId(uuid part of the file), HoodieKey => file_name, HoodieKey
+      fileComparisonsRDD = fileComparisonsRDD.map(entry -> new Tuple2<String, HoodieKey>(
+          hoodieTable.getBaseFileOnlyView().getLatestBaseFile(entry._2.getPartitionPath(), entry._1).get().getFileName(),
+          entry._2));
+
+      // Step 2: Sort by file hash
+      // <<fileName, hash>, key>
+      JavaRDD<Tuple2<Tuple2<String, String>, HoodieKey>> sortedFileNameHashAndKeyTuples =
+          fileComparisonsRDD.map(entry -> new Tuple2<Tuple2<String, String>, HoodieKey>(new Tuple2<>(entry._1,
+                  new FileIndexID(entry._1).asBase64EncodedString()), entry._2))
+              .sortBy(entry -> entry._1._2, true, joinParallelism);
+
+      // Step 3: Use bloom filter to filter and the actual log file to get the record location
+      final boolean isBloomFiltersBatchLoadEnabled = config.isMetaIndexBloomFilterBatchLoadEnabled();
+      if (isBloomFiltersBatchLoadEnabled) {
+        return HoodieJavaPairRDD.of(sortedFileNameHashAndKeyTuples.mapPartitionsWithIndex(
+                new HoodieBloomMetaIndexBatchCheckFunction(hoodieTable, config), true)
+            .flatMap(List::iterator).filter(lr -> lr.getMatchingRecordKeys().size() > 0)
+            .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
+                .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
+                    new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
+                .collect(Collectors.toList()).iterator()));
+      } else {
+        return HoodieJavaPairRDD.of(sortedFileNameHashAndKeyTuples.mapPartitionsWithIndex(
+                new HoodieBloomMetaIndexLazyCheckFunction(hoodieTable, config), true)
+            .flatMap(List::iterator).filter(lr -> lr.getMatchingRecordKeys().size() > 0)
+            .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
+                .map(recordKey -> new Tuple2<>(new HoodieKey(recordKey, lookupResult.getPartitionPath()),
+                    new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId())))
+                .collect(Collectors.toList()).iterator()));
+      }
+    } else if (config.useBloomIndexBucketizedChecking()) {
       Partitioner partitioner = new BucketizedBloomCheckPartitioner(joinParallelism, comparisonsPerFileGroup,
           config.getBloomIndexKeysPerBucket());
 

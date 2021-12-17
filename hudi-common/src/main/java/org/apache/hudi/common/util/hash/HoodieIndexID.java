@@ -24,9 +24,10 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import java.io.Serializable;
 
 /**
- * A serializable ID that can be used to identify any Hoodie table fields and resources.
+ * A serializable ID that can be used to identify any Hoodie table fields and
+ * resources in the on-disk index.
  */
-public abstract class HoodieID implements Serializable {
+public abstract class HoodieIndexID implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
@@ -49,6 +50,13 @@ public abstract class HoodieID implements Serializable {
       return "Type{name='" + name + "'}";
     }
   }
+
+  /**
+   * Get the resource name for which this index id is generated.
+   *
+   * @return The resource name
+   */
+  public abstract String getName();
 
   /**
    * Get the number of bits representing this ID in memory.
@@ -74,7 +82,7 @@ public abstract class HoodieID implements Serializable {
   public abstract String toString();
 
   /**
-   *
+   * Get the Base64 encoded version of the ID.
    */
   public String asBase64EncodedString() {
     throw new HoodieNotSupportedException("Unsupported hash for " + getType());

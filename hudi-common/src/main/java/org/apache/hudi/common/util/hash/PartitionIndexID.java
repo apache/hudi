@@ -22,21 +22,28 @@ package org.apache.hudi.common.util.hash;
 import org.apache.hudi.common.util.Base64CodecUtil;
 
 /**
- * Hoodie object ID representing any file.
+ * Hoodie object ID representing any partition.
  */
-public class FileID extends HoodieID {
+public class PartitionIndexID extends HoodieIndexID {
 
-  private static final Type TYPE = Type.FILE;
-  private static final HashID.Size ID_FILE_HASH_SIZE = HashID.Size.BITS_128;
+  private static final Type TYPE = Type.PARTITION;
+  private static final HashID.Size ID_PARTITION_HASH_SIZE = HashID.Size.BITS_64;
+  private final String partition;
   private final byte[] hash;
 
-  public FileID(final String message) {
-    this.hash = HashID.hash(message, ID_FILE_HASH_SIZE);
+  public PartitionIndexID(final String partition) {
+    this.partition = partition;
+    this.hash = HashID.hash(partition, ID_PARTITION_HASH_SIZE);
+  }
+
+  @Override
+  public String getName() {
+    return partition;
   }
 
   @Override
   public int bits() {
-    return ID_FILE_HASH_SIZE.byteSize();
+    return ID_PARTITION_HASH_SIZE.byteSize();
   }
 
   @Override
@@ -58,4 +65,5 @@ public class FileID extends HoodieID {
   protected Type getType() {
     return TYPE;
   }
+
 }
