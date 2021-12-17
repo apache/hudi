@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
@@ -35,6 +36,8 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -50,7 +53,9 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.FixtureUtils.prepareFixtureTable;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -73,6 +78,7 @@ import static org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource
 public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctionalTestHarness {
 
   private static final String COW_TEST_TABLE_NAME = "testtable_COPY_ON_WRITE";
+  private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamerWithMultiWriter.class);
 
   String basePath;
   String propsFilePath;
@@ -105,19 +111,37 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgBackfillJob.continuousMode = false;
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    LOG.warn("XXX total commits just before starting " + meta.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().count() + ", last :: "
+        + meta.getActiveTimeline().filterCompletedInstants().lastInstant().get().toString());
+    List<HoodieInstant> instants = meta.getActiveTimeline().filterCompletedInstants().getInstants().collect(Collectors.toList());
+    for (HoodieInstant instant: instants) {
+      LOG.warn("timeline instant " + instant.toString());
+    }
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
     cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
     HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
+    LOG.warn(":::: Checkpoint set for backfilling one time sync " + cfgBackfillJob.checkpoint);
 
     // re-init ingestion job to start sync service
     HoodieDeltaStreamer ingestionJob2 = new HoodieDeltaStreamer(cfgIngestionJob, jsc());
 
     // run ingestion & backfill in parallel, create conflict and fail one
     runJobsInParallel(tableBasePath, tableType, totalRecords, ingestionJob2,
-        cfgIngestionJob, backfillJob, cfgBackfillJob, true);
+        cfgIngestionJob, backfillJob, cfgBackfillJob, true, "batch111");
+
+    System.out.println("\n\n\nXXX Stage 1 complete ");
+
+    LOG.warn("YYY total commits after 1st stage" + meta.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().count() + ", last :: "
+        + meta.getActiveTimeline().filterCompletedInstants().lastInstant().get().toString());
+    instants = meta.getActiveTimeline().filterCompletedInstants().getInstants().collect(Collectors.toList());
+    for (HoodieInstant instant: instants) {
+      LOG.warn("timeline instant " + instant.toString());
+    }
 
     // create new ingestion & backfill job config to generate only INSERTS to avoid conflict
     props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
@@ -148,7 +172,15 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
     // run ingestion & backfill in parallel, avoid conflict and succeed both
     runJobsInParallel(tableBasePath, tableType, totalRecords, ingestionJob3,
-        cfgIngestionJob, backfillJob2, cfgBackfillJob, false);
+        cfgIngestionJob, backfillJob2, cfgBackfillJob, false, "batch222");
+
+    LOG.warn("ZZZ total commits after 2nd stage" + meta.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().count() + ", last :: "
+        + meta.getActiveTimeline().filterCompletedInstants().lastInstant().get().toString());
+    instants = meta.getActiveTimeline().filterCompletedInstants().getInstants().collect(Collectors.toList());
+    for (HoodieInstant instant: instants) {
+      LOG.warn("timeline instant " + instant.toString());
+    }
   }
 
   @ParameterizedTest
@@ -301,11 +333,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
   private void runJobsInParallel(String tableBasePath, HoodieTableType tableType, int totalRecords,
       HoodieDeltaStreamer ingestionJob, HoodieDeltaStreamer.Config cfgIngestionJob, HoodieDeltaStreamer backfillJob,
-      HoodieDeltaStreamer.Config cfgBackfillJob, boolean expectConflict) throws Exception {
+      HoodieDeltaStreamer.Config cfgBackfillJob, boolean expectConflict, String jobId) throws Exception {
     ExecutorService service = Executors.newFixedThreadPool(2);
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String lastSuccessfulCommit = timeline.lastInstant().get().getTimestamp();
+    LOG.warn("::: last successfull commit " + lastSuccessfulCommit + ", 3 expected more than this. ");
     // Condition for parallel ingestion job
     Function<Boolean, Boolean> conditionForRegularIngestion = (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
@@ -318,37 +351,90 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
       return true;
     };
 
+    AtomicBoolean continousFailed = new AtomicBoolean(false);
+    AtomicBoolean backfillFailed = new AtomicBoolean(false);
+    AtomicBoolean callShutdown = new AtomicBoolean(true);
     try {
       Future regularIngestionJobFuture = service.submit(() -> {
         try {
-          deltaStreamerTestRunner(ingestionJob, cfgIngestionJob, conditionForRegularIngestion);
-        } catch (Exception ex) {
+          deltaStreamerTestRunner(ingestionJob, cfgIngestionJob, conditionForRegularIngestion, jobId);
+        } catch (Throwable ex) {
+          continousFailed.set(true);
+          LOG.warn("XXX Continuous job failed " + ex.getMessage());
           throw new RuntimeException(ex);
         }
       });
       Future backfillJobFuture = service.submit(() -> {
         try {
+          // trigger backfill atleast after 1 requested entry is added to timline from continuous job. If not, there is a chance that backfill will complete even before
+          // continous job starts.
+          awaitCondition(new GetCommitsAfterInstant(tableBasePath, lastSuccessfulCommit));
           backfillJob.sync();
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
+          LOG.warn("XXX backfilling job failed " + ex.getMessage());
+          backfillFailed.set(true);
           throw new RuntimeException(ex);
         }
       });
       backfillJobFuture.get();
       regularIngestionJobFuture.get();
+      callShutdown.set(false);
       if (expectConflict) {
         Assertions.fail("Failed to handle concurrent writes");
       }
     } catch (Exception e) {
+      callShutdown.set(false);
       /*
        * Need to perform getMessage().contains since the exception coming
        * from {@link org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.DeltaSyncService} gets wrapped many times into RuntimeExceptions.
        */
       if (expectConflict && e.getCause().getMessage().contains(ConcurrentModificationException.class.getName())) {
         // expected ConcurrentModificationException since ingestion & backfill will have overlapping writes
+        LOG.warn("Expected conflict happend and hence no-op");
+        if (backfillFailed.get()) {
+          // if backfill job failed, shutdown the continuous job.
+          LOG.warn("Calling shutdown on ingestion job since the backfill job has failed for " + jobId);
+          ingestionJob.shutdownGracefully();
+        }
       } else {
+        LOG.warn("------ Conflict happend, but not expected " + e.getCause().getMessage());
         throw e;
       }
+    } finally {
+      LOG.warn("XXXX Continuous " + continousFailed.get() + ", backkfull  " + backfillFailed.get());
     }
+  }
+
+  class GetCommitsAfterInstant {
+
+    String basePath;
+    String lastSuccessfulCommit;
+    HoodieTableMetaClient meta;
+    GetCommitsAfterInstant(String basePath, String lastSuccessfulCommit) {
+      this.basePath = basePath;
+      this.lastSuccessfulCommit = lastSuccessfulCommit;
+      meta = HoodieTableMetaClient.builder().setConf(fs().getConf()).setBasePath(basePath).build();
+    }
+
+    long getCommitsAfterInstant() {
+      HoodieTimeline timeline1 = meta.reloadActiveTimeline().getAllCommitsTimeline().findInstantsAfter(lastSuccessfulCommit);
+      // LOG.info("Timeline Instants=" + meta1.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      return timeline1.getInstants().count();
+    }
+  }
+
+  private static void awaitCondition(GetCommitsAfterInstant callback) throws InterruptedException {
+    long startTime = System.currentTimeMillis();
+    long soFar = 0;
+    while (soFar <= 5000) {
+      if (callback.getCommitsAfterInstant() > 0) {
+        break;
+      } else {
+        Thread.sleep(500);
+        soFar += 500;
+      }
+    }
+    LOG.warn("Awaiting completed in " + (System.currentTimeMillis() - startTime));
   }
 
 }
