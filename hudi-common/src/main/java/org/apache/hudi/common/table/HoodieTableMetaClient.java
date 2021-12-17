@@ -739,8 +739,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setCommitTimezone(HoodieTimelineTimeZone setTimelineTimeZone) {
-      this.commitTimeZone = setTimelineTimeZone;
+    public PropertyBuilder setCommitTimezone(HoodieTimelineTimeZone timelineTimeZone) {
+      this.commitTimeZone = timelineTimeZone;
       return this;
     }
 
