@@ -87,6 +87,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
   public void testHoodieClientBasicMultiWriter(HoodieTableType tableType) throws Exception {
+    LOG.warn("Starting test");
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
     }
