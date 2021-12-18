@@ -32,7 +32,6 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
-        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         steps:
           - task: Cache@2
@@ -71,7 +70,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_2
-        condition: false
         displayName: FT client/spark-client
         steps:
           - task: Cache@2
@@ -125,7 +123,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Punit-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
+              options: -Punit-tests -pl hudi-cli,hudi-utilities
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
@@ -134,11 +132,12 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pfunctional-tests -pl hudi-client/hudi-client-common,hudi-client/hudi-flink-client,hudi-client/hudi-java-client,hudi-cli,hudi-utilities,hudi-sync/hudi-hive-sync
+              options: -Pfunctional-tests -pl hudi-utilities
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_4
+        condition: false
         displayName: UT FT other modules
         steps:
           - task: Cache@2
@@ -177,6 +176,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: IT
+        condition: false
         steps:
           - task: AzureCLI@2
             displayName: Azure CLI

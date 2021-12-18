@@ -38,6 +38,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -83,9 +84,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   String tableBasePath;
   int totalRecords;
 
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  void testUpsertsContinuousModeWithMultipleWritersForConflicts(HoodieTableType tableType) throws Exception {
+  //@ParameterizedTest
+  //@EnumSource(HoodieTableType.class)
+  @RepeatedTest(20)
+  void testUpsertsContinuousModeWithMultipleWritersForConflicts() throws Exception {
+    LOG.warn("\n\n++++ Starting a new test for testUpsertsContinuousModeWithMultipleWritersForConflicts ");
+    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
@@ -123,17 +127,20 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
         cfgIngestionJob, backfillJob, cfgBackfillJob, true, "batch1");
   }
 
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  void testUpsertsContinuousModeWithMultipleWritersWithoutConflicts(HoodieTableType tableType) throws Exception {
+  //@ParameterizedTest
+  //@EnumSource(HoodieTableType.class)
+  @RepeatedTest(20)
+  void testUpsertsContinuousModeWithMultipleWritersWithoutConflicts() throws Exception {
+    LOG.warn("\n\n++++ Starting a new test for testUpsertsContinuousModeWithMultipleWritersWithoutConflicts ");
+    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "3");
-    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "5000");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "15");
+    props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "250");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
     // create new ingestion & backfill job config to generate only INSERTS to avoid conflict
