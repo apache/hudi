@@ -302,12 +302,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     final HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime);
     try {
+      LOG.warn("Base path :: " + config.getBasePath());
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting a txn for " + compactionCommitTime + ", compaction ");
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting a txn for completeCompaction " + compactionCommitTime + ", compaction ");
       }
       this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting txn complete for " + compactionCommitTime + ", compaction ");
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting txn complete for completeCompaction " + compactionCommitTime + ", compaction ");
       }
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
@@ -316,11 +317,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending a txn for " + compactionCommitTime + ", compaction ");
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending a txn for completeCompaction " + compactionCommitTime + ", compaction ");
       }
       this.txnManager.endTransaction(Option.of(compactionInstant));
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending txn complete for " + compactionCommitTime + ", compaction ");
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending txn complete for completeCompaction " + compactionCommitTime + ", compaction ");
       }
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
@@ -392,12 +393,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     }
     final HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
     try {
+      LOG.warn("Base path :: " + config.getBasePath());
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting a txn for " + clusteringInstant + ", clustering ");
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting a txn for completeClustering " + clusteringInstant + ", clustering ");
       }
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting txn complete for " + clusteringCommitTime + ", clustering ");
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting txn complete for completeClustering " + clusteringCommitTime + ", clustering ");
       }
       finalizeWrite(table, clusteringCommitTime, writeStats);
       writeTableMetadataForTableServices(table, metadata,clusteringInstant);
@@ -414,11 +416,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending a txn for " + clusteringCommitTime + ", clustering");
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending a txn for completeClustering " + clusteringCommitTime + ", clustering");
       }
       this.txnManager.endTransaction(Option.of(clusteringInstant));
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB ending txn complete for " + clusteringCommitTime + ", clustering ");
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB ending txn complete for completeClustering " + clusteringCommitTime + ", clustering ");
       }
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
@@ -451,9 +453,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(
         metaClient, config, context, SparkUpgradeDowngradeHelper.getInstance());
     try {
-      LOG.warn("BBB Starting a txn for " + instantTime + ", " + operationType);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn("BBB Starting a txn for getTableAndInitCtx " + instantTime + ", " + operationType);
+      }
       this.txnManager.beginTransaction();
-      LOG.warn("BBB Starting txn complete for " + instantTime + ", " + operationType);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn("BBB Starting txn complete for getTableAndInitCtx " + instantTime + ", " + operationType);
+      }
       if (upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current())) {
         // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
         List<String> instantsToRollback = getInstantsToRollback(
@@ -468,9 +474,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         initializeMetadataTable(Option.of(instantTime));
       }
     } finally {
-      LOG.warn("BBB Ending a txn for " + instantTime + ", " + operationType);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn("BBB Ending a txn for getTableAndInitCtx " + instantTime + ", " + operationType);
+      }
       this.txnManager.endTransaction();
-      LOG.warn("BBB Ending txn complete for " + instantTime + ", " + operationType);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn("BBB Ending txn complete for getTableAndInitCtx " + instantTime + ", " + operationType);
+      }
     }
     metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);

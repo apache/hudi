@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
@@ -99,6 +101,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     }
     Properties properties = new Properties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY, "10");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "200");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "10");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,"200");
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
@@ -112,6 +118,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     ExecutorService executors = Executors.newFixedThreadPool(2);
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
     SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+    AtomicBoolean writer1Conflict = new AtomicBoolean(false);
+    AtomicBoolean writer2Conflict = new AtomicBoolean(false);
     Future future1 = executors.submit(() -> {
       String newCommitTime = "004";
       int numRecords = 100;
@@ -120,7 +128,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         createCommitWithUpserts(cfg, client1, "002", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
       } catch (Exception e1) {
         assertTrue(e1 instanceof HoodieWriteConflictException);
-        throw new RuntimeException(e1);
+        writer1Conflict.set(true);
+        //throw new RuntimeException(e1);
       }
     });
     Future future2 = executors.submit(() -> {
@@ -131,11 +140,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         createCommitWithUpserts(cfg, client2, "002", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
       } catch (Exception e2) {
         assertTrue(e2 instanceof HoodieWriteConflictException);
-        throw new RuntimeException(e2);
+        writer2Conflict.set(true);
+        //throw new RuntimeException(e2);
       }
     });
     future1.get();
     future2.get();
+    Assertions.assertTrue(writer1Conflict.get() || writer2Conflict.get());
   }
 
   @Test

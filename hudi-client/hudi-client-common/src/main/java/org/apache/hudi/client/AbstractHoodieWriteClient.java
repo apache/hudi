@@ -192,12 +192,12 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, table.getMetaClient().getCommitActionType(), instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     if (!config.getBasePath().endsWith("metadata")) {
-      LOG.warn("BBB Starting a txn for " + instantTime + ", " + operationType);
+      LOG.warn("BBB Starting a txn for commitStats " + instantTime + ", " + operationType);
     }
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     if (!config.getBasePath().endsWith("metadata")) {
-      LOG.warn("BBB Starting txn compelete for " + instantTime + ", " + operationType);
+      LOG.warn("BBB Starting txn compelete for commitStats " + instantTime + ", " + operationType);
     }
     try {
       preCommit(inflightInstant, metadata);
@@ -209,11 +209,11 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn("BBB Ending a txn for " + instantTime + ", " + operationType);
+        LOG.warn("BBB Ending a txn for commitStats " + instantTime + ", " + operationType);
       }
       this.txnManager.endTransaction(Option.of(inflightInstant));
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn("BBB ending txn complete for " + instantTime + ", " + operationType);
+        LOG.warn("BBB ending txn complete for commitStats " + instantTime + ", " + operationType);
       }
     }
     // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
@@ -1080,21 +1080,21 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         tableServiceType.getAction(), instantTime));
     try {
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn("BBB Starting a txn for " + instantTime + ", " + tableServiceType.getAction());
+        LOG.warn("BBB Starting a txn for scheduleTableService " + instantTime + ", " + tableServiceType.getAction());
       }
       this.txnManager.beginTransaction(inflightInstant, Option.empty());
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn("BBB Starting txn complete for " + instantTime + ", " + tableServiceType.getAction());
+        LOG.warn("BBB Starting txn complete for scheduleTableService " + instantTime + ", " + tableServiceType.getAction());
       }
       LOG.info("Scheduling table service " + tableServiceType);
       return scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
     } finally {
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn("BBB Ending a txn for " + instantTime + ", " + tableServiceType.getAction());
+        LOG.warn("BBB Ending a txn for scheduleTableService " + instantTime + ", " + tableServiceType.getAction());
       }
       this.txnManager.endTransaction(inflightInstant);
       if (!config.getBasePath().endsWith("metadata")) {
-        LOG.warn("BBB Ending txn complete for " + instantTime + ", " + tableServiceType.getAction());
+        LOG.warn("BBB Ending txn complete for scheduleTableService " + instantTime + ", " + tableServiceType.getAction());
       }
     }
   }
