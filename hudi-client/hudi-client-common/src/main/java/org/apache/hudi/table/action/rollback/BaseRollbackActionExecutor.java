@@ -266,7 +266,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
       if (!skipLocking) {
-        this.txnManager.endTransaction();
+        this.txnManager.endTransaction(Option.empty());
       }
     }
   }
