@@ -206,7 +206,13 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           cleanStats
       );
       if (!skipLocking) {
+        if (!config.getBasePath().endsWith("metadata")) {
+          LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting a txn for " + instantTime + ", clean ");
+        }
         this.txnManager.beginTransaction(Option.empty(), Option.empty());
+        if (!config.getBasePath().endsWith("metadata")) {
+          LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting txn complete for " + instantTime + ", clean ");
+        }
       }
       writeTableMetadata(metadata);
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
@@ -217,7 +223,13 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
+        if (!config.getBasePath().endsWith("metadata")) {
+          LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending a txn for " + instantTime + ", clean ");
+        }
         this.txnManager.endTransaction(Option.empty());
+        if (!config.getBasePath().endsWith("metadata")) {
+          LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending txn complete for " + instantTime + ", clean ");
+        }
       }
     }
   }

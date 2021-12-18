@@ -64,6 +64,10 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
 
   protected abstract AbstractCompactor createCompactor(AbstractHoodieWriteClient client);
 
+  public String getServiceName() {
+    return "AsyncCompaction";
+  }
+
   /**
    * Start Compaction Service.
    */

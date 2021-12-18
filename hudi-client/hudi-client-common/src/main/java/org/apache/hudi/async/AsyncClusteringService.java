@@ -58,6 +58,10 @@ public abstract class AsyncClusteringService extends HoodieAsyncService {
 
   protected abstract AbstractClusteringClient createClusteringClient(AbstractHoodieWriteClient client);
 
+  public String getServiceName() {
+    return "AsyncClustering";
+  }
+
   /**
    * Start clustering service.
    */

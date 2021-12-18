@@ -68,12 +68,12 @@ public class TransactionUtils {
         try {
           ConcurrentOperation otherOperation = new ConcurrentOperation(instant, table.getMetaClient());
           if (resolutionStrategy.hasConflict(thisOperation, otherOperation)) {
-            LOG.info("Conflict encountered between current instant = " + thisOperation + " and instant = "
+            LOG.warn("Conflict encountered between current instant = " + thisOperation + " and instant = "
                 + otherOperation + ", attempting to resolve it...");
             resolutionStrategy.resolveConflict(table, thisOperation, otherOperation);
           }
         } catch (IOException io) {
-          throw new HoodieWriteConflictException("Unable to resolve conflict, if present", io);
+          throw new HoodieWriteConflictException("Unable to resolve conflict, if present for " + thisOperation.toString(), io);
         }
       });
       LOG.info("Successfully resolved conflicts, if any");

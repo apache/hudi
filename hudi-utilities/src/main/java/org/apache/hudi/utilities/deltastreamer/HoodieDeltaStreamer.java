@@ -162,6 +162,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public void shutdownGracefully() {
+    LOG.warn("Shutting down gracefully ");
     deltaSyncService.ifPresent(ds -> ds.shutdown(false));
   }
 
@@ -176,6 +177,7 @@ public class HoodieDeltaStreamer implements Serializable {
       bootstrapExecutor.get().execute();
     } else {
       if (cfg.continuousMode) {
+        LOG.warn("CCC Calling deltaSyncService.start on continous mode :: ");
         deltaSyncService.ifPresent(ds -> {
           ds.start(this::onDeltaSyncShutdown);
           try {
@@ -187,6 +189,7 @@ public class HoodieDeltaStreamer implements Serializable {
         LOG.info("Delta Sync shutting down");
       } else {
         LOG.info("Delta Streamer running only single round");
+        LOG.warn("CCC Calling deltaSyncService.start on single once mode :: ");
         try {
           deltaSyncService.ifPresent(ds -> {
             try {
@@ -622,6 +625,7 @@ public class HoodieDeltaStreamer implements Serializable {
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(1);
       return Pair.of(CompletableFuture.supplyAsync(() -> {
+        LOG.warn("CCC Starting DeltaSync Service ");
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {
           // set Scheduler Pool.
@@ -670,6 +674,11 @@ public class HoodieDeltaStreamer implements Serializable {
       }, executor), executor);
     }
 
+    @Override
+    public String getServiceName() {
+      return "DeltaSyncService";
+    }
+
     private void handleUpsertException(HoodieUpsertException ue) {
       if (ue.getCause() instanceof HoodieClusteringUpdateException) {
         LOG.warn("Write rejected due to conflicts with pending clustering operation. Going to retry after 1 min with the hope "
@@ -713,6 +722,7 @@ public class HoodieDeltaStreamer implements Serializable {
           asyncCompactService.get().updateWriteClient(writeClient);
         } else {
           asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeClient));
+          LOG.warn("Instantiating async compaction service ");
           // Enqueue existing pending compactions first
           HoodieTableMetaClient meta =
               HoodieTableMetaClient.builder().setConf(new Configuration(jssc.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
@@ -735,6 +745,7 @@ public class HoodieDeltaStreamer implements Serializable {
         if (asyncClusteringService.isPresent()) {
           asyncClusteringService.get().updateWriteClient(writeClient);
         } else {
+          LOG.warn("Instantiating async clustering service ");
           asyncClusteringService = Option.ofNullable(new SparkAsyncClusteringService(writeClient));
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
               .setConf(new Configuration(jssc.hadoopConfiguration()))

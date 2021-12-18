@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
@@ -38,7 +39,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -54,6 +57,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.FixtureUtils.prepareFixtureTable;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -83,9 +87,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
   String tableBasePath;
   int totalRecords;
 
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  void testUpsertsContinuousModeWithMultipleWritersForConflicts(HoodieTableType tableType) throws Exception {
+  //@ParameterizedTest
+  //@EnumSource(HoodieTableType.class)
+  @RepeatedTest(10)
+  void testUpsertsContinuousModeWithMultipleWriters() throws Exception {
+    LOG.warn("Starting a new Test ++++++ ");
+    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
@@ -108,12 +115,20 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     cfgBackfillJob.continuousMode = false;
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
     HoodieTimeline timeline = meta.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    LOG.warn("XXX total commits just before starting " + meta.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().count() + ", last :: "
+        + meta.getActiveTimeline().filterCompletedInstants().lastInstant().get().toString());
+    List<HoodieInstant> instants = meta.getActiveTimeline().filterCompletedInstants().getInstants().collect(Collectors.toList());
+    for (HoodieInstant instant: instants) {
+      LOG.warn("timeline instant " + instant.toString());
+    }
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
     cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
     HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
+    LOG.warn(":::: Checkpoint set for backfilling one time sync " + cfgBackfillJob.checkpoint);
 
     // re-init ingestion job to start sync service
     HoodieDeltaStreamer ingestionJob2 = new HoodieDeltaStreamer(cfgIngestionJob, jsc());
@@ -123,12 +138,14 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
         cfgIngestionJob, backfillJob, cfgBackfillJob, true, "batch1");
   }
 
-  @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  void testUpsertsContinuousModeWithMultipleWritersWithoutConflicts(HoodieTableType tableType) throws Exception {
+  @RepeatedTest(5)
+  void testUpsertsContinuousModeWithMultipleWritersNoConflict() throws Exception {
+    LOG.warn("Starting a new Test ++++++ ");
+    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     // NOTE : Overriding the LockProvider to FileSystemBasedLockProviderTestClass since Zookeeper locks work in unit test but fail on Jenkins with connection timeouts
     setUpTestTable(tableType);
     prepareInitialConfigs(fs(), basePath, "foo");
+    // enable carrying forward latest checkpoint
     TypedProperties props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
@@ -136,36 +153,89 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     props.setProperty(LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "5000");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), propsFilePath);
 
+    /*HoodieDeltaStreamer.Config cfgIngestionJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
+        propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()));
+    cfgIngestionJob.continuousMode = true;
+    cfgIngestionJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
+    cfgIngestionJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
+
+    // create a backfill job
+    HoodieDeltaStreamer.Config cfgBackfillJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
+        propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()));
+    cfgBackfillJob.continuousMode = false;
+    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
+    HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    LOG.warn("XXX total commits just before starting " + meta.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().count() + ", last :: "
+        + meta.getActiveTimeline().filterCompletedInstants().lastInstant().get().toString());
+    List<HoodieInstant> instants = meta.getActiveTimeline().filterCompletedInstants().getInstants().collect(Collectors.toList());
+    for (HoodieInstant instant: instants) {
+      LOG.warn("timeline instant " + instant.toString());
+    }
+    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+        .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
+    cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
+    cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
+    cfgBackfillJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
+    HoodieDeltaStreamer backfillJob = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
+    LOG.warn(":::: Checkpoint set for backfilling one time sync " + cfgBackfillJob.checkpoint);
+
+    // re-init ingestion job to start sync service
+    HoodieDeltaStreamer ingestionJob2 = new HoodieDeltaStreamer(cfgIngestionJob, jsc());
+
+    // run ingestion & backfill in parallel, create conflict and fail one
+    runJobsInParallel(tableBasePath, tableType, totalRecords, ingestionJob2,
+        cfgIngestionJob, backfillJob, cfgBackfillJob, true, "batch111");
+
+    System.out.println("\n\n\nXXX Stage 1 complete ");*/
+
+    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
+    LOG.warn("YYY total commits after 1st stage" + meta.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().count() + ", last :: "
+        + meta.getActiveTimeline().filterCompletedInstants().lastInstant().get().toString());
+    List<HoodieInstant> instants = meta.getActiveTimeline().filterCompletedInstants().getInstants().collect(Collectors.toList());
+    for (HoodieInstant instant: instants) {
+      LOG.warn("timeline instant " + instant.toString());
+    }
+
     // create new ingestion & backfill job config to generate only INSERTS to avoid conflict
     props = prepareMultiWriterProps(fs(), basePath, propsFilePath);
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
     props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
     props.setProperty("hoodie.test.source.generate.inserts", "true");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, fs(), basePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
-    HoodieDeltaStreamer.Config cfgBackfillJob2 = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.INSERT,
+    HoodieDeltaStreamer.Config cfgBackfillJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.INSERT,
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TestIdentityTransformer.class.getName()));
-    cfgBackfillJob2.continuousMode = false;
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
+    cfgBackfillJob.continuousMode = false;
+    meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
-    cfgBackfillJob2.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
-    cfgBackfillJob2.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
-    cfgBackfillJob2.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
+    cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
+    cfgBackfillJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
+    cfgBackfillJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
 
-    HoodieDeltaStreamer.Config cfgIngestionJob2 = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
+    HoodieDeltaStreamer.Config cfgIngestionJob = getDeltaStreamerConfig(tableBasePath, tableType.name(), WriteOperationType.UPSERT,
         propsFilePath, Collections.singletonList(TestHoodieDeltaStreamer.TestIdentityTransformer.class.getName()));
-    cfgIngestionJob2.continuousMode = true;
-    cfgIngestionJob2.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
-    cfgIngestionJob2.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
+    cfgIngestionJob.continuousMode = true;
+    cfgIngestionJob.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
+    cfgIngestionJob.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN.key()));
     // re-init ingestion job
-    HoodieDeltaStreamer ingestionJob3 = new HoodieDeltaStreamer(cfgIngestionJob2, jsc());
+    HoodieDeltaStreamer ingestionJob3 = new HoodieDeltaStreamer(cfgIngestionJob, jsc());
     // re-init backfill job
-    HoodieDeltaStreamer backfillJob2 = new HoodieDeltaStreamer(cfgBackfillJob2, jsc());
+    HoodieDeltaStreamer backfillJob2 = new HoodieDeltaStreamer(cfgBackfillJob, jsc());
 
     // run ingestion & backfill in parallel, avoid conflict and succeed both
     runJobsInParallel(tableBasePath, tableType, totalRecords, ingestionJob3,
-        cfgIngestionJob2, backfillJob2, cfgBackfillJob2, false, "batch2");
+        cfgIngestionJob, backfillJob2, cfgBackfillJob, false, "batch222");
+
+    LOG.warn("ZZZ total commits after 2nd stage" + meta.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().count() + ", last :: "
+        + meta.getActiveTimeline().filterCompletedInstants().lastInstant().get().toString());
+    instants = meta.getActiveTimeline().filterCompletedInstants().getInstants().collect(Collectors.toList());
+    for (HoodieInstant instant: instants) {
+      LOG.warn("timeline instant " + instant.toString());
+    }
   }
 
   @ParameterizedTest
@@ -323,6 +393,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(hadoopConf()).setBasePath(tableBasePath).build();
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String lastSuccessfulCommit = timeline.lastInstant().get().getTimestamp();
+    LOG.warn("::: last successfull commit " + lastSuccessfulCommit + ", 3 expected more than this. ");
     // Condition for parallel ingestion job
     Function<Boolean, Boolean> conditionForRegularIngestion = (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
@@ -337,8 +408,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
 
     AtomicBoolean continousFailed = new AtomicBoolean(false);
     AtomicBoolean backfillFailed = new AtomicBoolean(false);
+    Future regularIngestionJobFuture = null;
+    Future backfillJobFuture = null;
     try {
-      Future regularIngestionJobFuture = service.submit(() -> {
+      regularIngestionJobFuture = service.submit(() -> {
         try {
           deltaStreamerTestRunner(ingestionJob, cfgIngestionJob, conditionForRegularIngestion, jobId);
         } catch (Throwable ex) {
@@ -347,7 +420,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
           throw new RuntimeException(ex);
         }
       });
-      Future backfillJobFuture = service.submit(() -> {
+      backfillJobFuture = service.submit(() -> {
         try {
           // trigger backfill atleast after 1 requested entry is added to timline from continuous job. If not, there is a chance that backfill will complete even before
           // continous job starts.
@@ -371,14 +444,24 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
        */
       if (expectConflict && e.getCause().getMessage().contains(ConcurrentModificationException.class.getName())) {
         // expected ConcurrentModificationException since ingestion & backfill will have overlapping writes
+        LOG.warn("Expected conflict happend and hence no-op");
         if (backfillFailed.get()) {
-          // if backfill job failed, shutdown the continuous job.
           LOG.warn("Calling shutdown on ingestion job since the backfill job has failed for " + jobId);
           ingestionJob.shutdownGracefully();
         }
       } else {
-        LOG.error("Conflict happened, but not expected " + e.getCause().getMessage());
+        LOG.warn("------ Conflict happend, but not expected " + e.getCause().getMessage());
         throw e;
+      }
+    } finally {
+      LOG.warn("XXXX Continuous " + continousFailed.get() + ", backkfull  " + backfillFailed.get());
+      if (regularIngestionJobFuture != null && backfillFailed.get()) {
+        LOG.warn("cancelling regular ingestion job as back fill failed ");
+        regularIngestionJobFuture.cancel(true);
+      }
+      if (backfillJobFuture != null && continousFailed.get()) {
+        LOG.warn("Killing backfill job as continuous ingestion job failed");
+        backfillJobFuture.cancel(true);
       }
     }
   }
@@ -412,7 +495,39 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
         soFar += 500;
       }
     }
-    LOG.warn("Awaiting completed in " + (System.currentTimeMillis() - startTime));
+    LOG.warn("Awiating completed in " + (System.currentTimeMillis() - startTime));
   }
+
+  /*class GetCommitsAfterInstant {
+
+    String basePath;
+    String lastSuccessfulCommit;
+    HoodieTableMetaClient meta;
+    GetCommitsAfterInstant(String basePath, String lastSuccessfulCommit) {
+      this.basePath = basePath;
+      this.lastSuccessfulCommit = lastSuccessfulCommit;
+      meta = HoodieTableMetaClient.builder().setConf(fs().getConf()).setBasePath(basePath).build();
+    }
+
+    long getCommitsAfterInstant() {
+      HoodieTimeline timeline1 = meta.reloadActiveTimeline().getAllCommitsTimeline().findInstantsAfter(lastSuccessfulCommit);
+      // LOG.info("Timeline Instants=" + meta1.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      return timeline1.getInstants().count();
+    }
+  }
+
+  private static void awaitCondition(GetCommitsAfterInstant callback) throws InterruptedException {
+    long startTime = System.currentTimeMillis();
+    long soFar = 0;
+    while (soFar <= 5000) {
+      if (callback.getCommitsAfterInstant() > 0) {
+        break;
+      } else {
+        Thread.sleep(500);
+        soFar += 500;
+      }
+    }
+    LOG.warn("Awaiting completed in " + (System.currentTimeMillis() - startTime));
+  }*/
 
 }

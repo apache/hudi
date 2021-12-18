@@ -47,38 +47,38 @@ public class TransactionManager implements Serializable {
 
   public void beginTransaction() {
     if (isOptimisticConcurrencyControlEnabled) {
-      LOG.info("Transaction starting without a transaction owner");
+      LOG.warn("TXN: Transaction starting without a transaction owner");
       lockManager.lock();
-      LOG.info("Transaction started without a transaction owner");
+      LOG.warn("TXN: Transaction started without a transaction owner");
     }
   }
 
   public void beginTransaction(Option<HoodieInstant> newTxnOwnerInstant,
                                Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
     if (isOptimisticConcurrencyControlEnabled) {
-      LOG.info("Transaction starting for " + newTxnOwnerInstant
+      LOG.warn("TXN: Transaction starting for " + newTxnOwnerInstant
           + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
       lockManager.lock();
       reset(currentTxnOwnerInstant, newTxnOwnerInstant, lastCompletedTxnOwnerInstant);
-      LOG.info("Transaction started for " + newTxnOwnerInstant
+      LOG.warn("TXN: Transaction started for " + newTxnOwnerInstant
           + " with latest completed transaction instant " + lastCompletedTxnOwnerInstant);
     }
   }
 
   public void endTransaction() {
     if (isOptimisticConcurrencyControlEnabled) {
-      LOG.info("Transaction ending without a transaction owner");
+      LOG.warn("TXN: Transaction ending without a transaction owner");
       lockManager.unlock();
-      LOG.info("Transaction ended without a transaction owner");
+      LOG.warn("TXN: Transaction ended without a transaction owner");
     }
   }
 
   public void endTransaction(Option<HoodieInstant> currentTxnOwnerInstant) {
     if (isOptimisticConcurrencyControlEnabled) {
-      LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
+      LOG.warn("TXN: Transaction ending with transaction owner " + currentTxnOwnerInstant);
       reset(currentTxnOwnerInstant, Option.empty(), Option.empty());
       lockManager.unlock();
-      LOG.info("Transaction ended with transaction owner " + currentTxnOwnerInstant);
+      LOG.warn("TXN: Transaction ended with transaction owner " + currentTxnOwnerInstant);
     }
   }
 
@@ -94,7 +94,7 @@ public class TransactionManager implements Serializable {
   public void close() {
     if (isOptimisticConcurrencyControlEnabled) {
       lockManager.close();
-      LOG.info("Transaction manager closed");
+      LOG.warn("TXN: Transaction manager closed");
     }
   }
 

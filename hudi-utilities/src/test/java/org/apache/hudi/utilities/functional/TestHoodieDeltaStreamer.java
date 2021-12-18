@@ -339,7 +339,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             Thread.sleep(3000);
             ret = condition.apply(true);
           } catch (Throwable error) {
-            LOG.warn("Got error :", error);
+            LOG.warn("Got error XXXXX :", error);
             ret = false;
           }
         }
@@ -712,21 +712,31 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
   }
 
+  /*static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition) throws Exception {
+    deltaStreamerTestRunner(ds, cfg, condition, new AtomicBoolean(true));
+  }*/
+
   static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition) throws Exception {
     deltaStreamerTestRunner(ds, cfg, condition, "single_ds_job");
   }
 
-  static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String jobId) throws Exception {
+  static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String str) throws Exception {
     Future dsFuture = Executors.newSingleThreadExecutor().submit(() -> {
       try {
         ds.sync();
       } catch (Exception ex) {
-        LOG.warn("DS continuous job failed, hence not proceeding with condition check for " + jobId);
+        LOG.warn("DS continuous job failed XXX, hence not proceeding with condition check " + str);
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
-    TestHelpers.waitTillCondition(condition, dsFuture, 360);
+    LOG.warn("waiting on condition " + condition.toString() + " for 360 secs for " + str);
+    TestHelpers.waitTillCondition(condition, dsFuture, 480);
+    //if (callShutdown.get()) {
+    LOG.warn("XXX going to call shutdown gracefully for continuous job for " + str);
     ds.shutdownGracefully();
+    //} else {
+    //LOG.warn("Not calling shutdown since other job failed ");
+    //}*/
     dsFuture.get();
   }
 

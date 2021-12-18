@@ -101,18 +101,25 @@ public abstract class HoodieAsyncService implements Serializable {
    * @param force Forcefully shutdown
    */
   public void shutdown(boolean force) {
+    // Thread.dumpStack();
+    LOG.warn(getServiceName() + " AAA Calling shutdown of async service with force value " + force);
     if (!shutdownRequested || force) {
+      LOG.warn(getServiceName() + " AAA shutdown requested set to true ");
       shutdownRequested = true;
       if (executor != null) {
         if (force) {
+          LOG.warn(getServiceName() + ", calling shutdownNOWWW of executor service explicitly");
           executor.shutdownNow();
         } else {
+          LOG.warn(getServiceName() + ", calling shutdown of executor service explicitly");
           executor.shutdown();
           try {
+            LOG.warn(getServiceName() + " AAA awaiting for executor service to shutdown after calling shutdown ");
             // Wait for some max time after requesting shutdown
             executor.awaitTermination(24, TimeUnit.HOURS);
+            LOG.warn(getServiceName() + " AAA awaiting complete :: ");
           } catch (InterruptedException ie) {
-            LOG.error("Interrupted while waiting for shutdown", ie);
+            LOG.error(getServiceName() + " AAA Interrupted while waiting for shutdown", ie);
           }
         }
       }
@@ -132,6 +139,8 @@ public abstract class HoodieAsyncService implements Serializable {
     started = true;
     monitorThreads(onShutdownCallback);
   }
+
+  public abstract String getServiceName();
 
   /**
    * Service implementation.
@@ -157,16 +166,20 @@ public abstract class HoodieAsyncService implements Serializable {
         LOG.info("Monitoring thread(s) !!");
         future.get();
       } catch (ExecutionException ex) {
-        LOG.error("Monitor noticed one or more threads failed. Requesting graceful shutdown of other threads", ex);
+        LOG.error(getServiceName() + " Monitor noticed one or more threads failed. Requesting graceful shutdown of other threads", ex);
         error = true;
       } catch (InterruptedException ie) {
-        LOG.error("Got interrupted Monitoring threads", ie);
+        LOG.error(getServiceName() + " Got interrupted Monitoring threads", ie);
         error = true;
       } finally {
         // Mark as shutdown
         shutdown = true;
+        LOG.warn(getServiceName() + " AAA Completed with error may be " + error);
         if (null != onShutdownCallback) {
+          LOG.warn(getServiceName() + " AAA calling callback with error " + error);
           onShutdownCallback.apply(error);
+        } else {
+          LOG.warn(getServiceName() + " No callback set ");
         }
         shutdown(false);
       }

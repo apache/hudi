@@ -149,14 +149,25 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected void autoCommit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result) {
     final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(State.INFLIGHT,
         HoodieTimeline.COMMIT_ACTION, instantTime));
-    this.txnManager.beginTransaction(inflightInstant,
-        lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
+    if (!config.getBasePath().endsWith("metadata")) {
+      LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting a txn for " + instantTime + ",  commit ");
+    }
+    this.txnManager.beginTransaction(inflightInstant, lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
+    if (!config.getBasePath().endsWith("metadata")) {
+      LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting txn complete for " + instantTime + ",  commit ");
+    }
     try {
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
           result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner());
       commit(extraMetadata, result);
     } finally {
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending a txn for " + instantTime + ",  commit ");
+      }
       this.txnManager.endTransaction(inflightInstant);
+      if (!config.getBasePath().endsWith("metadata")) {
+        LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending txn complete for " + instantTime + ",  commit ");
+      }
     }
   }
 
