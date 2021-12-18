@@ -76,7 +76,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
     try {
       int numRetries = 0;
       while (fs.exists(new Path(lockPath + "/" + LOCK_NAME))
-          && (numRetries <= lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY))) {
+          && (numRetries++ <= lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY))) {
         Thread.sleep(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY));
       }
       synchronized (LOCK_NAME) {
