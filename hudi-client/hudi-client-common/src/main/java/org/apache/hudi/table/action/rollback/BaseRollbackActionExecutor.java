@@ -256,7 +256,13 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
     try {
       if (!skipLocking) {
+        if (!config.getBasePath().endsWith("metadata")) {
+          LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting a txn for " + instantTime + ", rollback ");
+        }
         this.txnManager.beginTransaction(Option.empty(), Option.empty());
+        if (!config.getBasePath().endsWith("metadata")) {
+          LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Starting txn compete for " + instantTime + ", rollback ");
+        }
       }
       writeTableMetadata(rollbackMetadata);
       table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
@@ -266,7 +272,13 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     } finally {
       if (!skipLocking) {
+        if (!config.getBasePath().endsWith("metadata")) {
+          LOG.warn(config.getBasePath().endsWith("metadata") + " BBB Ending a txn for " + instantTime + ", rollback ");
+        }
         this.txnManager.endTransaction();
+        if (!config.getBasePath().endsWith("metadata")) {
+          LOG.warn(config.getBasePath().endsWith("metadata") + " BBB ending txn compelte for " + instantTime + ", rollback ");
+        }
       }
     }
   }

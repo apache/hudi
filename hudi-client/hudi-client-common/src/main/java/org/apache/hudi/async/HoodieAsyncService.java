@@ -29,6 +29,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -100,18 +101,25 @@ public abstract class HoodieAsyncService implements Serializable {
    * @param force Forcefully shutdown
    */
   public void shutdown(boolean force) {
+    // Thread.dumpStack();
+    LOG.warn(getServiceName() + " AAA Calling shutdown of async service with force value " + force);
     if (!shutdownRequested || force) {
+      LOG.warn(getServiceName() + " AAA shutdown requested set to true ");
       shutdownRequested = true;
       if (executor != null) {
         if (force) {
+          LOG.warn(getServiceName() + ", calling shutdownNOWWW of executor service explicitly");
           executor.shutdownNow();
         } else {
+          LOG.warn(getServiceName() + ", calling shutdown of executor service explicitly");
           executor.shutdown();
           try {
+            LOG.warn(getServiceName() + " AAA awaiting for executor service to shutdown after calling shutdown ");
             // Wait for some max time after requesting shutdown
             executor.awaitTermination(24, TimeUnit.HOURS);
+            LOG.warn(getServiceName() + " AAA awaiting complete :: ");
           } catch (InterruptedException ie) {
-            LOG.error("Interrupted while waiting for shutdown", ie);
+            LOG.error(getServiceName() + " AAA Interrupted while waiting for shutdown", ie);
           }
         }
       }
@@ -129,8 +137,10 @@ public abstract class HoodieAsyncService implements Serializable {
     future = res.getKey();
     executor = res.getValue();
     started = true;
-    shutdownCallback(onShutdownCallback);
+    monitorThreads(onShutdownCallback);
   }
+
+  public abstract String getServiceName();
 
   /**
    * Service implementation.
@@ -140,15 +150,38 @@ public abstract class HoodieAsyncService implements Serializable {
   protected abstract Pair<CompletableFuture, ExecutorService> startService();
 
   /**
-   * Add shutdown callback for the completable future.
+   * A monitor thread is started which would trigger a callback if the service is shutdown.
    * 
-   * @param callback The callback
+   * @param onShutdownCallback
    */
-  @SuppressWarnings("unchecked")
-  private void shutdownCallback(Function<Boolean, Boolean> callback) {
-    future.whenComplete((resp, error) -> {
-      if (null != callback) {
-        callback.apply(null != error);
+  private void monitorThreads(Function<Boolean, Boolean> onShutdownCallback) {
+    LOG.info("Submitting monitor thread !!");
+    Executors.newSingleThreadExecutor(r -> {
+      Thread t = new Thread(r, "Monitor Thread");
+      t.setDaemon(isRunInDaemonMode());
+      return t;
+    }).submit(() -> {
+      boolean error = false;
+      try {
+        LOG.info("Monitoring thread(s) !!");
+        future.get();
+      } catch (ExecutionException ex) {
+        LOG.error(getServiceName() + " Monitor noticed one or more threads failed. Requesting graceful shutdown of other threads", ex);
+        error = true;
+      } catch (InterruptedException ie) {
+        LOG.error(getServiceName() + " Got interrupted Monitoring threads", ie);
+        error = true;
+      } finally {
+        // Mark as shutdown
+        shutdown = true;
+        LOG.warn(getServiceName() + " AAA Completed with error may be " + error);
+        if (null != onShutdownCallback) {
+          LOG.warn(getServiceName() + " AAA calling callback with error " + error);
+          onShutdownCallback.apply(error);
+        } else {
+          LOG.warn(getServiceName() + " No callback set ");
+        }
+        shutdown(false);
       }
     });
   }

@@ -53,6 +53,11 @@ class AsyncCleanerService extends HoodieAsyncService {
     }, executor), executor);
   }
 
+  @Override
+  public String getServiceName() {
+    return "Cleaner";
+  }
+
   public static AsyncCleanerService startAsyncCleaningIfEnabled(AbstractHoodieWriteClient writeClient) {
     AsyncCleanerService asyncCleanerService = null;
     if (writeClient.getConfig().isAutoClean() && writeClient.getConfig().isAsyncClean()) {

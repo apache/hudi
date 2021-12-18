@@ -46,7 +46,7 @@ public class TransactionManager implements Serializable {
     this.supportsOptimisticConcurrency = config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl();
   }
 
-  public synchronized void beginTransaction() {
+  public void beginTransaction() {
     if (supportsOptimisticConcurrency) {
       LOG.info("Transaction starting without a transaction owner");
       lockManager.lock();
@@ -54,23 +54,23 @@ public class TransactionManager implements Serializable {
     }
   }
 
-  public synchronized void beginTransaction(Option<HoodieInstant> currentTxnOwnerInstant, Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
+  public void beginTransaction(Option<HoodieInstant> currentTxnOwnerInstant, Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
     if (supportsOptimisticConcurrency) {
       this.lastCompletedTxnOwnerInstant = lastCompletedTxnOwnerInstant;
       lockManager.setLatestCompletedWriteInstant(lastCompletedTxnOwnerInstant);
-      LOG.info("Latest completed transaction instant " + lastCompletedTxnOwnerInstant);
+      LOG.warn("Latest completed transaction instant " + lastCompletedTxnOwnerInstant);
       this.currentTxnOwnerInstant = currentTxnOwnerInstant;
       LOG.info("Transaction starting with transaction owner " + currentTxnOwnerInstant);
       lockManager.lock();
-      LOG.info("Transaction started");
+      LOG.warn("Transaction started");
     }
   }
 
-  public synchronized void endTransaction() {
+  public void endTransaction() {
     if (supportsOptimisticConcurrency) {
-      LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstant);
+      LOG.warn("Transaction ending with transaction owner " + currentTxnOwnerInstant);
       lockManager.unlock();
-      LOG.info("Transaction ended");
+      LOG.warn("Transaction ended");
       this.lastCompletedTxnOwnerInstant = Option.empty();
       lockManager.resetLatestCompletedWriteInstant();
     }
@@ -79,7 +79,7 @@ public class TransactionManager implements Serializable {
   public void close() {
     if (supportsOptimisticConcurrency) {
       lockManager.close();
-      LOG.info("Transaction manager closed");
+      LOG.warn("Transaction manager closed");
     }
   }
 
