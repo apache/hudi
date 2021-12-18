@@ -111,7 +111,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   }
 
   private String getLogMessage(LockState state) {
-    return StringUtils.join(String.valueOf(Thread.currentThread().getId()),
-        state.name(), " local process lock.");
+    return StringUtils.join("Thread ", String.valueOf(Thread.currentThread().getName()), " ",
+        state.name(), " in-process lock.");
   }
 }

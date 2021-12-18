@@ -112,7 +112,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
       this.txnManager.beginTransaction(Option.empty(), Option.empty());
       writeTableMetadata(restoreMetadata);
     } finally {
-      this.txnManager.endTransaction();
+      this.txnManager.endTransaction(Option.empty());
     }
   }
 }
