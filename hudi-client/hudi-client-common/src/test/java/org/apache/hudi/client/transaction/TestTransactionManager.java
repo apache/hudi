@@ -190,6 +190,22 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     transactionManager.endTransaction();
     Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
     Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
+
+    // 5. Transactions with new instants but with same timestamps should properly reset owners
+    transactionManager.beginTransaction(getInstant("0000005"), Option.empty());
+    Assertions.assertTrue(transactionManager.getCurrentTransactionOwner().isPresent());
+    Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
+    transactionManager.endTransaction(getInstant("0000005"));
+    Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
+    Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
+
+    // 6. Transactions with no owners should also go through
+    transactionManager.beginTransaction(Option.empty(), Option.empty());
+    Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
+    Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
+    transactionManager.endTransaction(Option.empty());
+    Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
+    Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
   }
 
   private Option<HoodieInstant> getInstant(String timestamp) {
