@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Local process level lock. This {@link LockProvider} implementation is to
+ * InProcess level lock. This {@link LockProvider} implementation is to
  * guard table from concurrent operations happening in the local JVM process.
  * <p>
  * Note: This Lock provider implementation doesn't allow lock reentrancy.
@@ -42,16 +42,15 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * HoodieLockException. Threads other than the current lock owner, will
  * block on lock() and return false on tryLock().
  */
-public class LocalProcessLockProvider implements LockProvider<ReentrantReadWriteLock> {
+public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock> {
 
   private static final Logger LOG = LogManager.getLogger(ZookeeperBasedLockProvider.class);
   private static final ReentrantReadWriteLock LOCK = new ReentrantReadWriteLock();
   private final long maxWaitTimeMillis;
 
-  public LocalProcessLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+  public InProcessLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     TypedProperties typedProperties = lockConfiguration.getConfig();
-    maxWaitTimeMillis = (typedProperties.containsKey(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY)
-        ? lockConfiguration.getConfig().getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY) :
+    maxWaitTimeMillis = typedProperties.getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
         LockConfiguration.DEFAULT_ACQUIRE_LOCK_WAIT_TIMEOUT_MS);
   }
 
@@ -91,10 +90,11 @@ public class LocalProcessLockProvider implements LockProvider<ReentrantReadWrite
   @Override
   public void unlock() {
     LOG.info(getLogMessage(LockState.RELEASING));
-    if (!LOCK.isWriteLockedByCurrentThread()) {
-      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE));
+    try {
+      LOCK.writeLock().unlock();
+    } catch (Exception e) {
+      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
     }
-    LOCK.writeLock().unlock();
     LOG.info(getLogMessage(LockState.RELEASED));
   }
 

@@ -19,7 +19,7 @@
 package org.apache.hudi.client.transaction;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.client.transaction.lock.LocalProcessLockProvider;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieLockException;
@@ -35,45 +35,45 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestLocalProcessLockProvider {
+public class TestInProcessLockProvider {
 
-  private static final Logger LOG = LogManager.getLogger(TestLocalProcessLockProvider.class);
+  private static final Logger LOG = LogManager.getLogger(TestInProcessLockProvider.class);
   private final Configuration hadoopConfiguration = new Configuration();
   private final LockConfiguration lockConfiguration = new LockConfiguration(new TypedProperties());
 
   @Test
   public void testLockAcquisition() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.lock();
+      inProcessLockProvider.lock();
     });
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
   }
 
   @Test
   public void testLockReAcquisitionBySameThread() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.lock();
+      inProcessLockProvider.lock();
     });
     assertThrows(HoodieLockException.class, () -> {
-      localProcessLockProvider.lock();
+      inProcessLockProvider.lock();
     });
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
   }
 
   @Test
   public void testLockReAcquisitionByDifferentThread() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     final AtomicBoolean writer2Completed = new AtomicBoolean(false);
 
     // Main test thread
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.lock();
+      inProcessLockProvider.lock();
     });
 
     // Another writer thread in parallel, should block
@@ -82,10 +82,10 @@ public class TestLocalProcessLockProvider {
       @Override
       public void run() {
         assertDoesNotThrow(() -> {
-          localProcessLockProvider.lock();
+          inProcessLockProvider.lock();
         });
         assertDoesNotThrow(() -> {
-          localProcessLockProvider.unlock();
+          inProcessLockProvider.unlock();
         });
         writer2Completed.set(true);
       }
@@ -93,7 +93,7 @@ public class TestLocalProcessLockProvider {
     writer2.start();
 
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
 
     try {
@@ -106,45 +106,45 @@ public class TestLocalProcessLockProvider {
 
   @Test
   public void testTryLockAcquisition() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
-    Assertions.assertTrue(localProcessLockProvider.tryLock());
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    Assertions.assertTrue(inProcessLockProvider.tryLock());
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
   }
 
   @Test
   public void testTryLockAcquisitionWithTimeout() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
-    Assertions.assertTrue(localProcessLockProvider.tryLock(1, TimeUnit.MILLISECONDS));
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    Assertions.assertTrue(inProcessLockProvider.tryLock(1, TimeUnit.MILLISECONDS));
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
   }
 
   @Test
   public void testTryLockReAcquisitionBySameThread() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
-    Assertions.assertTrue(localProcessLockProvider.tryLock());
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    Assertions.assertTrue(inProcessLockProvider.tryLock());
     assertThrows(HoodieLockException.class, () -> {
-      localProcessLockProvider.tryLock(1, TimeUnit.MILLISECONDS);
+      inProcessLockProvider.tryLock(1, TimeUnit.MILLISECONDS);
     });
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
   }
 
   @Test
   public void testTryLockReAcquisitionByDifferentThread() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     final AtomicBoolean writer2Completed = new AtomicBoolean(false);
 
     // Main test thread
-    Assertions.assertTrue(localProcessLockProvider.tryLock());
+    Assertions.assertTrue(inProcessLockProvider.tryLock());
 
     // Another writer thread
     Thread writer2 = new Thread(() -> {
-      Assertions.assertFalse(localProcessLockProvider.tryLock(100L, TimeUnit.MILLISECONDS));
+      Assertions.assertFalse(inProcessLockProvider.tryLock(100L, TimeUnit.MILLISECONDS));
       writer2Completed.set(true);
     });
     writer2.start();
@@ -154,15 +154,15 @@ public class TestLocalProcessLockProvider {
       //
     }
 
-    assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
-    });
     Assertions.assertTrue(writer2Completed.get());
+    assertDoesNotThrow(() -> {
+      inProcessLockProvider.unlock();
+    });
   }
 
   @Test
   public void testTryLockAcquisitionBeforeTimeOutFromTwoThreads() {
-    final LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    final InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     final int threadCount = 3;
     final long awaitMaxTimeoutMs = 2000L;
     final CountDownLatch latch = new CountDownLatch(threadCount);
@@ -172,7 +172,7 @@ public class TestLocalProcessLockProvider {
     // Let writer1 get the lock first, then wait for others
     // to join the sync up point.
     Thread writer1 = new Thread(() -> {
-      Assertions.assertTrue(localProcessLockProvider.tryLock());
+      Assertions.assertTrue(inProcessLockProvider.tryLock());
       latch.countDown();
       try {
         latch.await(awaitMaxTimeoutMs, TimeUnit.MILLISECONDS);
@@ -184,7 +184,7 @@ public class TestLocalProcessLockProvider {
         //
       }
       assertDoesNotThrow(() -> {
-        localProcessLockProvider.unlock();
+        inProcessLockProvider.unlock();
       });
       writer1Completed.set(true);
     });
@@ -194,9 +194,9 @@ public class TestLocalProcessLockProvider {
     // and will eventually get the lock before the timeout.
     Thread writer2 = new Thread(() -> {
       latch.countDown();
-      Assertions.assertTrue(localProcessLockProvider.tryLock(awaitMaxTimeoutMs, TimeUnit.MILLISECONDS));
+      Assertions.assertTrue(inProcessLockProvider.tryLock(awaitMaxTimeoutMs, TimeUnit.MILLISECONDS));
       assertDoesNotThrow(() -> {
-        localProcessLockProvider.unlock();
+        inProcessLockProvider.unlock();
       });
       writer2Completed.set(true);
     });
@@ -220,34 +220,34 @@ public class TestLocalProcessLockProvider {
 
   @Test
   public void testLockReleaseByClose() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.lock();
+      inProcessLockProvider.lock();
     });
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.close();
+      inProcessLockProvider.close();
     });
   }
 
   @Test
   public void testRedundantUnlock() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.lock();
+      inProcessLockProvider.lock();
     });
     assertDoesNotThrow(() -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
     assertThrows(HoodieLockException.class, () -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
   }
 
   @Test
   public void testUnlockWithoutLock() {
-    LocalProcessLockProvider localProcessLockProvider = new LocalProcessLockProvider(lockConfiguration, hadoopConfiguration);
+    InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration, hadoopConfiguration);
     assertThrows(HoodieLockException.class, () -> {
-      localProcessLockProvider.unlock();
+      inProcessLockProvider.unlock();
     });
   }
 }

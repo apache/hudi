@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -43,7 +44,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Enable the internal Metadata Table which saves file listings
   public static final ConfigProperty<Boolean> ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
