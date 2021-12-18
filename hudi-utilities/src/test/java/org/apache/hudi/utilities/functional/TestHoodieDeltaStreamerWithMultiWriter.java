@@ -41,7 +41,6 @@ import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -138,7 +137,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends SparkClientFunctiona
         cfgIngestionJob, backfillJob, cfgBackfillJob, true, "batch1");
   }
 
-  @RepeatedTest(5)
+  @RepeatedTest(10)
   void testUpsertsContinuousModeWithMultipleWritersNoConflict() throws Exception {
     LOG.warn("Starting a new Test ++++++ ");
     HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
