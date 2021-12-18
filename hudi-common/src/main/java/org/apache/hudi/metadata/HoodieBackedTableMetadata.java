@@ -441,4 +441,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
     return Option.empty();
   }
+
+  @Override
+  public void reset() {
+    initIfNeeded();
+    dataMetaClient.reloadActiveTimeline();
+  }
 }

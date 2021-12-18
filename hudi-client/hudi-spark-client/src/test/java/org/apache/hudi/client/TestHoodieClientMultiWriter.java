@@ -100,38 +100,33 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .build()).withAutoCommit(false).withProperties(properties).build();
     // Create the first commit
     createCommitWithInserts(cfg, getHoodieWriteClient(cfg), "000", "001", 200);
-    try {
-      ExecutorService executors = Executors.newFixedThreadPool(2);
-      SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
-      SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
-      Future future1 = executors.submit(() -> {
-        String newCommitTime = "004";
-        int numRecords = 100;
-        String commitTimeBetweenPrevAndNew = "002";
-        try {
-          createCommitWithUpserts(cfg, client1, "002", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
-        } catch (Exception e1) {
-          assertTrue(e1 instanceof HoodieWriteConflictException);
-          throw new RuntimeException(e1);
-        }
-      });
-      Future future2 = executors.submit(() -> {
-        String newCommitTime = "005";
-        int numRecords = 100;
-        String commitTimeBetweenPrevAndNew = "002";
-        try {
-          createCommitWithUpserts(cfg, client2, "002", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
-        } catch (Exception e2) {
-          assertTrue(e2 instanceof HoodieWriteConflictException);
-          throw new RuntimeException(e2);
-        }
-      });
-      future1.get();
-      future2.get();
-      fail("Should not reach here, this means concurrent writes were handled incorrectly");
-    } catch (Exception e) {
-      // Expected to fail due to overlapping commits
-    }
+    ExecutorService executors = Executors.newFixedThreadPool(2);
+    SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+    Future future1 = executors.submit(() -> {
+      String newCommitTime = "004";
+      int numRecords = 100;
+      String commitTimeBetweenPrevAndNew = "002";
+      try {
+        createCommitWithUpserts(cfg, client1, "002", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
+      } catch (Exception e1) {
+        assertTrue(e1 instanceof HoodieWriteConflictException);
+        throw new RuntimeException(e1);
+      }
+    });
+    Future future2 = executors.submit(() -> {
+      String newCommitTime = "005";
+      int numRecords = 100;
+      String commitTimeBetweenPrevAndNew = "002";
+      try {
+        createCommitWithUpserts(cfg, client2, "002", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
+      } catch (Exception e2) {
+        assertTrue(e2 instanceof HoodieWriteConflictException);
+        throw new RuntimeException(e2);
+      }
+    });
+    future1.get();
+    future2.get();
   }
 
   @Test
