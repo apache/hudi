@@ -32,6 +32,7 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
+        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         steps:
           - task: Cache@2
@@ -70,6 +71,7 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_2
+        condition: false
         displayName: FT client/spark-client
         steps:
           - task: Cache@2
