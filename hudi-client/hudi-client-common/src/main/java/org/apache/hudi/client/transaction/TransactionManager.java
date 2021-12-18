@@ -85,7 +85,7 @@ public class TransactionManager implements Serializable {
   private synchronized void reset(Option<HoodieInstant> callerInstant,
                                   Option<HoodieInstant> newTxnOwnerInstant,
                                   Option<HoodieInstant> lastCompletedTxnOwnerInstant) {
-    if (!this.currentTxnOwnerInstant.isPresent() || this.currentTxnOwnerInstant == callerInstant) {
+    if (!this.currentTxnOwnerInstant.isPresent() || this.currentTxnOwnerInstant.get().equals(callerInstant.get())) {
       this.currentTxnOwnerInstant = newTxnOwnerInstant;
       this.lastCompletedTxnOwnerInstant = lastCompletedTxnOwnerInstant;
     }
