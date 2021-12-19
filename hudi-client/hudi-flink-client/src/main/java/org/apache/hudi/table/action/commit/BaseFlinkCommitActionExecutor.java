@@ -147,7 +147,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
 
-      writeTableMetadata(metadata);
+      writeTableMetadata(metadata, actionType);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

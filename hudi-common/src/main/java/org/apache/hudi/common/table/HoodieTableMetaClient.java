@@ -79,6 +79,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".aux";
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + Path.SEPARATOR + ".bootstrap";
   public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".heartbeat";
+  public static final String COLUMN_STATISTICS_INDEX_NAME = ".colstatsindex";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
       + Path.SEPARATOR + ".partitions";
   public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + Path.SEPARATOR
@@ -174,6 +175,13 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getMetaPath() {
     return metaPath;
+  }
+
+  /**
+   * @return Column Statistics index path
+   */
+  public String getColumnStatsIndexPath() {
+    return new Path(metaPath, COLUMN_STATISTICS_INDEX_NAME).toString();
   }
 
   /**
@@ -369,7 +377,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     initializeBootstrapDirsIfNotExists(hadoopConf, basePath, fs);
-    HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
+    HoodieTableConfig.create(fs, metaPathDir, props);
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
@@ -629,6 +637,8 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
     private String keyGeneratorClassProp;
+    private Boolean hiveStylePartitioningEnable;
+    private Boolean urlEncodePartitioning;
 
     private PropertyBuilder() {
 
@@ -717,6 +727,16 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setHiveStylePartitioningEnable(Boolean hiveStylePartitioningEnable) {
+      this.hiveStylePartitioningEnable = hiveStylePartitioningEnable;
+      return this;
+    }
+
+    public PropertyBuilder setUrlEncodePartitioning(Boolean urlEncodePartitioning) {
+      this.urlEncodePartitioning = urlEncodePartitioning;
+      return this;
+    }
+
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
         .setTableName(metaClient.getTableConfig().getTableName())
@@ -777,6 +797,12 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
         setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)) {
+        setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.URL_ENCODE_PARTITIONING)) {
+        setUrlEncodePartitioning(hoodieConfig.getBoolean(HoodieTableConfig.URL_ENCODE_PARTITIONING));
       }
       return this;
     }
@@ -840,6 +866,12 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != keyGeneratorClassProp) {
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+      }
+      if (null != hiveStylePartitioningEnable) {
+        tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));
+      }
+      if (null != urlEncodePartitioning) {
+        tableConfig.setValue(HoodieTableConfig.URL_ENCODE_PARTITIONING, Boolean.toString(urlEncodePartitioning));
       }
       return tableConfig.getProps();
     }

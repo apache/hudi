@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 
@@ -36,6 +35,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long,
            |  dt string
            |) using hudi
+           | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
@@ -75,7 +75,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
-           | options (
+           | tblproperties (
            |  type = 'cow',
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
@@ -115,7 +115,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName2'
-           | options (
+           | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
@@ -146,6 +146,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long,
            |  dt string
            |) using hudi
+           | tblproperties (primaryKey = 'id')
            | partitioned by (dt)
            | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
@@ -191,6 +192,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  price double,
            |  ts long
            | ) using hudi
+           | tblproperties (primaryKey = 'id')
            | location '${tmp.getCanonicalPath}/$tblNonPartition'
          """.stripMargin)
       spark.sql(s"insert into $tblNonPartition select 1, 'a1', 10, 1000")
@@ -245,6 +247,7 @@ class TestInsertTable extends TestHoodieSqlBase {
              |  price double,
              |  dt $partitionType
              |) using hudi
+             | tblproperties (primaryKey = 'id')
              | partitioned by (dt)
              | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
@@ -261,10 +264,6 @@ class TestInsertTable extends TestHoodieSqlBase {
   test("Test insert for uppercase table name") {
     withTempDir{ tmp =>
       val tableName = s"H_$generateTableName"
-      HoodieTableMetaClient.withPropertyBuilder()
-        .setTableName(tableName)
-        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
-        .initTable(spark.sessionState.newHadoopConf(), tmp.getCanonicalPath)
 
       spark.sql(
         s"""
@@ -273,6 +272,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  name string,
            |  price double
            |) using hudi
+           | tblproperties (primaryKey = 'id')
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
 
@@ -280,6 +280,11 @@ class TestInsertTable extends TestHoodieSqlBase {
       checkAnswer(s"select id, name, price from $tableName")(
         Seq(1, "a1", 10.0)
       )
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tmp.getCanonicalPath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      assertResult(metaClient.getTableConfig.getTableName)(tableName)
     }
   }
 
@@ -293,6 +298,7 @@ class TestInsertTable extends TestHoodieSqlBase {
          |  price double,
          |  dt string
          |) using hudi
+         | tblproperties (primaryKey = 'id')
          | partitioned by (dt)
        """.stripMargin)
     checkException(s"insert into $tableName partition(dt = '2021-06-20')" +
@@ -305,7 +311,7 @@ class TestInsertTable extends TestHoodieSqlBase {
         " count: 3，columns: (1,a1,10)"
     )
     spark.sql("set hoodie.sql.bulk.insert.enable = true")
-    spark.sql("set hoodie.sql.insert.mode= strict")
+    spark.sql("set hoodie.sql.insert.mode = strict")
 
     val tableName2 = generateTableName
     spark.sql(
@@ -316,7 +322,7 @@ class TestInsertTable extends TestHoodieSqlBase {
          |  price double,
          |  ts long
          |) using hudi
-         | options (
+         | tblproperties (
          |   primaryKey = 'id',
          |   preCombineField = 'ts'
          | )
@@ -325,6 +331,7 @@ class TestInsertTable extends TestHoodieSqlBase {
       "Table with primaryKey can not use bulk insert in strict mode."
     )
 
+    spark.sql("set hoodie.sql.insert.mode = non-strict")
     val tableName3 = generateTableName
     spark.sql(
       s"""
@@ -334,16 +341,18 @@ class TestInsertTable extends TestHoodieSqlBase {
          |  price double,
          |  dt string
          |) using hudi
+         | tblproperties (primaryKey = 'id')
          | partitioned by (dt)
        """.stripMargin)
     checkException(s"insert overwrite table $tableName3 values(1, 'a1', 10, '2021-07-18')")(
       "Insert Overwrite Partition can not use bulk insert."
     )
     spark.sql("set hoodie.sql.bulk.insert.enable = false")
-    spark.sql("set hoodie.sql.insert.mode= upsert")
+    spark.sql("set hoodie.sql.insert.mode = upsert")
   }
 
   test("Test bulk insert") {
+    spark.sql("set hoodie.sql.insert.mode = non-strict")
     withTempDir { tmp =>
       Seq("cow", "mor").foreach {tableType =>
         // Test bulk insert for single partition
@@ -356,8 +365,9 @@ class TestInsertTable extends TestHoodieSqlBase {
              |  price double,
              |  dt string
              |) using hudi
-             | options (
-             |  type = '$tableType'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id'
              | )
              | partitioned by (dt)
              | location '${tmp.getCanonicalPath}/$tableName'
@@ -391,8 +401,9 @@ class TestInsertTable extends TestHoodieSqlBase {
              |  dt string,
              |  hh string
              |) using hudi
-             | options (
-             |  type = '$tableType'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id'
              | )
              | partitioned by (dt, hh)
              | location '${tmp.getCanonicalPath}/$tableMultiPartition'
@@ -423,8 +434,9 @@ class TestInsertTable extends TestHoodieSqlBase {
              |  name string,
              |  price double
              |) using hudi
-             | options (
-             |  type = '$tableType'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id'
              | )
              | location '${tmp.getCanonicalPath}/$nonPartitionedTable'
        """.stripMargin)
@@ -445,7 +457,7 @@ class TestInsertTable extends TestHoodieSqlBase {
           s"""
              |create table $tableName2
              |using hudi
-             |options(
+             |tblproperties(
              | type = '$tableType',
              | primaryKey = 'id'
              |)
@@ -459,9 +471,11 @@ class TestInsertTable extends TestHoodieSqlBase {
         )
       }
     }
+    spark.sql("set hoodie.sql.insert.mode = upsert")
   }
 
   test("Test combine before insert") {
+    spark.sql("set hoodie.sql.bulk.insert.enable = false")
     withTempDir{tmp =>
       val tableName = generateTableName
       spark.sql(
@@ -473,7 +487,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
-           | options (
+           | tblproperties (
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
            | )
@@ -495,6 +509,7 @@ class TestInsertTable extends TestHoodieSqlBase {
   }
 
   test("Test insert pk-table") {
+    spark.sql("set hoodie.sql.bulk.insert.enable = false")
     withTempDir{tmp =>
       val tableName = generateTableName
       spark.sql(
@@ -506,7 +521,7 @@ class TestInsertTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
-           | options (
+           | tblproperties (
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
            | )

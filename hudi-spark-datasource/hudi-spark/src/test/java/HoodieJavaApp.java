@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
@@ -206,7 +207,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.OPERATION().key(), "delete")
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "_row_key")
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
@@ -270,7 +271,9 @@ public class HoodieJavaApp {
             DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
             MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr");
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS().key(), "dateStr").option(
+            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(),
+            SlashEncodedDayPartitionValueExtractor.class.getCanonicalName());
       }
     }
     return writer;

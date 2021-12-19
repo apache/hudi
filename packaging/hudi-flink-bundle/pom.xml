@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.10.0-SNAPSHOT</version>
+    <version>0.11.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -81,6 +81,7 @@
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
+                  <include>org.apache.hudi:hudi-aws</include>
 
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.beust:jcommander</include>
@@ -106,6 +107,8 @@
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.core:jackson-core</include>
 
+                  <include>com.github.davidmoten:guava-mini</include>
+                  <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
@@ -127,7 +130,6 @@
                   <inclide>com.esotericsoftware:kryo-shaded</inclide>
 
                   <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
-                  <include>org.apache.flink:flink-avro</include>
                   <include>org.apache.flink:flink-json</include>
                   <include>org.apache.flink:flink-parquet_${scala.binary.version}</include>
 
@@ -205,6 +207,10 @@
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.ql.metadata.</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>org.apache.hadoop.hive.ql.optimizer.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.ql.optimizer.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>com.codahale.metrics.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}com.codahale.metrics.</shadedPattern>
                 </relocation>
@@ -215,6 +221,15 @@
                 <relocation>
                   <pattern>org.eclipse.jetty.</pattern>
                   <shadedPattern>${flink.bundle.shade.prefix}org.apache.jetty.</shadedPattern>
+                </relocation>
+                <!-- Shade kryo-shaded because it may conflict with kryo used by flink -->
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.esotericsoftware.kryo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.</pattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.fasterxml.jackson.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
@@ -319,12 +334,6 @@
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
-      <version>${flink.version}</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.flink</groupId>
-      <artifactId>flink-avro</artifactId>
       <version>${flink.version}</version>
       <scope>compile</scope>
     </dependency>
@@ -451,6 +460,10 @@
         <exclusion>
           <groupId>org.pentaho</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.esotericsoftware</groupId>
+          <artifactId>kryo-shaded</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -612,6 +625,14 @@
       <version>${hbase.version}</version>
       <scope>compile</scope>
       <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hbase</groupId>
+          <artifactId>hbase-common</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>

@@ -115,11 +115,6 @@ public abstract class AbstractStreamWriteFunction<I>
   protected List<WriteStatus> writeStatuses;
 
   /**
-   * Current checkpoint id.
-   */
-  private long checkpointId = -1;
-
-  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
@@ -152,7 +147,6 @@ public abstract class AbstractStreamWriteFunction<I>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
-    this.checkpointId = functionSnapshotContext.getCheckpointId();
     snapshotState();
     // Reload the snapshot state as the current state.
     reloadWriteMetaState();
@@ -216,10 +210,7 @@ public abstract class AbstractStreamWriteFunction<I>
   public void handleOperatorEvent(OperatorEvent event) {
     ValidationUtils.checkArgument(event instanceof CommitAckEvent,
         "The write function can only handle CommitAckEvent");
-    long checkpointId = ((CommitAckEvent) event).getCheckpointId();
-    if (checkpointId == -1 || checkpointId == this.checkpointId) {
-      this.confirming = false;
-    }
+    this.confirming = false;
   }
 
   /**
@@ -249,16 +240,9 @@ public abstract class AbstractStreamWriteFunction<I>
       // 2. the inflight instant does not change and the checkpoint has buffering data
       if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
         // sleep for a while
-        boolean timeout = timeWait.waitFor();
-        if (timeout && instant != null) {
-          // if the timeout threshold hits but the last instant still not commit,
-          // and the task does not receive commit ask event(no data or aborted checkpoint),
-          // assumes the checkpoint was canceled silently and unblock the data flushing
-          confirming = false;
-        } else {
-          // refresh the inflight instant
-          instant = lastPendingInstant();
-        }
+        timeWait.waitFor();
+        // refresh the inflight instant
+        instant = lastPendingInstant();
       } else {
         // the pending instant changed, that means the last instant was committed
         // successfully.

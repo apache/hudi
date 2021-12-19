@@ -48,7 +48,7 @@ public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, 
     }
     table.getMetaClient().reloadActiveTimeline();
     String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    table.scheduleRollback(context, newInstantTime, instantToRollback, false);
+    table.scheduleRollback(context, newInstantTime, instantToRollback, false, false);
     table.getMetaClient().reloadActiveTimeline();
     CopyOnWriteRollbackActionExecutor rollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(
         context,
@@ -58,6 +58,7 @@ public class CopyOnWriteRestoreActionExecutor<T extends HoodieRecordPayload, I, 
         instantToRollback,
         true,
         true,
+        false,
         false);
     return rollbackActionExecutor.execute();
   }

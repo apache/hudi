@@ -82,4 +82,8 @@ class Spark2Adapter extends SparkAdapter {
   override def createLike(left: Expression, right: Expression): Expression = {
     Like(left, right)
   }
+
+  override def parseMultipartIdentifier(parser: ParserInterface, sqlText: String): Seq[String] = {
+    throw new IllegalStateException(s"Should not call ParserInterface#parseMultipartIdentifier for spark2")
+  }
 }

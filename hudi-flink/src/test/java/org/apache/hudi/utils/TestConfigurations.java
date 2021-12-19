@@ -63,6 +63,17 @@ public class TestConfigurations {
   private static final List<String> FIELDS = ROW_TYPE.getFields().stream()
       .map(RowType.RowField::asSummaryString).collect(Collectors.toList());
 
+  public static final DataType ROW_DATA_TYPE_WIDER = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("salary", DataTypes.DOUBLE()),
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_WIDER = (RowType) ROW_DATA_TYPE_WIDER.getLogicalType();
+
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
     return getCreateHoodieTableDDL(tableName, options, true, "partition");
   }
@@ -92,8 +103,9 @@ public class TestConfigurations {
     if (havePartition) {
       builder.append("PARTITIONED BY (`").append(partitionField).append("`)\n");
     }
+    final String connector = options.computeIfAbsent("connector", k -> "hudi");
     builder.append("with (\n"
-        + "  'connector' = 'hudi'");
+        + "  'connector' = '").append(connector).append("'");
     options.forEach((k, v) -> builder.append(",\n")
         .append("  '").append(k).append("' = '").append(v).append("'"));
     builder.append("\n)");
@@ -232,6 +244,16 @@ public class TestConfigurations {
 
     public Sql option(ConfigOption<?> option, Object val) {
       this.options.put(option.key(), val.toString());
+      return this;
+    }
+
+    public Sql option(String key, Object val) {
+      this.options.put(key, val.toString());
+      return this;
+    }
+
+    public Sql options(Map<String, String> options) {
+      this.options.putAll(options);
       return this;
     }
 

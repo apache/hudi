@@ -28,8 +28,8 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -65,6 +65,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     initFileSystem();
     initTestDataGenerator();
     initMetaClient();
+    initTimelineService();
   }
 
   @AfterEach
@@ -75,7 +76,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testRowCreateHandle() throws Exception {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
+    HoodieWriteConfig cfg =
+        SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     List<String> fileNames = new ArrayList<>();
     List<String> fileAbsPaths = new ArrayList<>();
@@ -116,7 +118,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testGlobalFailure() throws Exception {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
+    HoodieWriteConfig cfg =
+        SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
@@ -124,7 +127,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     String fileId = UUID.randomUUID().toString();
     String instantTime = "000";
 
-    HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+    HoodieRowCreateHandle handle =
+        new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
     int size = 10 + RANDOM.nextInt(1000);
     int totalFailures = 5;
     // Generate first batch of valid rows
@@ -169,7 +173,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   @Test
   public void testInstantiationFailure() throws IOException {
     // init config and table
-    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+    HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withPath("/dummypath/abc/").build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
 

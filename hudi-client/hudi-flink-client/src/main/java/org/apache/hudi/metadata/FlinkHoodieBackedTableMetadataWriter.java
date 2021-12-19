@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
@@ -55,14 +56,23 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                                 HoodieWriteConfig writeConfig,
                                                                                 HoodieEngineContext context,
                                                                                 Option<T> actionMetadata) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata);
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata, Option.empty());
+  }
+
+  public static <T extends SpecificRecordBase> HoodieTableMetadataWriter create(Configuration conf,
+                                                                                HoodieWriteConfig writeConfig,
+                                                                                HoodieEngineContext context,
+                                                                                Option<T> actionMetadata,
+                                                                                Option<String> inFlightInstantTimestamp) {
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, context, actionMetadata, inFlightInstantTimestamp);
   }
 
   <T extends SpecificRecordBase> FlinkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
                                                                       HoodieWriteConfig writeConfig,
                                                                       HoodieEngineContext engineContext,
-                                                                      Option<T> actionMetadata) {
-    super(hadoopConf, writeConfig, engineContext, actionMetadata);
+                                                                      Option<T> actionMetadata,
+                                                                      Option<String> inFlightInstantTimestamp) {
+    super(hadoopConf, writeConfig, engineContext, actionMetadata, inFlightInstantTimestamp);
   }
 
   @Override
@@ -78,10 +88,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected <T extends SpecificRecordBase> void initialize(HoodieEngineContext engineContext,
-                                                           Option<T> actionMetadata) {
+                                                           Option<T> actionMetadata,
+                                                           Option<String> inflightInstantTimestamp) {
     try {
       if (enabled) {
-        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata);
+        bootstrapIfNeeded(engineContext, dataMetaClient, actionMetadata, inflightInstantTimestamp);
       }
     } catch (IOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
@@ -90,8 +101,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
+  protected void commit(HoodieData<HoodieRecord> hoodieDataRecords, String partitionName, String instantTime, boolean canTriggerTableService) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
+    List<HoodieRecord> records = (List<HoodieRecord>) hoodieDataRecords.get();
     List<HoodieRecord> recordList = prepRecords(records, partitionName, 1);
 
     try (HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(engineContext, metadataWriteConfig)) {
@@ -125,8 +137,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
       // reload timeline
       metadataMetaClient.reloadActiveTimeline();
-      compactIfNecessary(writeClient, instantTime);
-      doClean(writeClient, instantTime);
+      if (canTriggerTableService) {
+        compactIfNecessary(writeClient, instantTime);
+        doClean(writeClient, instantTime);
+        writeClient.archive();
+      }
     }
 
     // Update total size of the metadata and count of base/log files
@@ -139,7 +154,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    * The record is tagged with respective file slice's location based on its record key.
    */
   private List<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int numFileGroups) {
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.loadPartitionFileGroupsWithLatestFileSlices(metadataMetaClient, partitionName);
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, partitionName);
     ValidationUtils.checkArgument(fileSlices.size() == numFileGroups, String.format("Invalid number of file groups: found=%d, required=%d", fileSlices.size(), numFileGroups));
 
     return records.stream().map(r -> {

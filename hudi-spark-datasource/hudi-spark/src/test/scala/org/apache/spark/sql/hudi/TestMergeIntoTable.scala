@@ -35,7 +35,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}'
-           | options (
+           | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
            | )
@@ -137,7 +137,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}/$targetTable'
-           | options (
+           | tblproperties (
            |  primaryKey ='id',
            |  preCombineField = 'ts'
            | )
@@ -203,7 +203,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  ts long,
            |  dt string
            | ) using hudi
-           | options (
+           | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
@@ -313,7 +313,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  price double,
            |  dt string
            | ) using hudi
-           | options (
+           | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id'
            | )
@@ -369,7 +369,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |  v long,
              |  dt string
              | ) using hudi
-             | options (
+             | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'v'
@@ -439,7 +439,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              | price double,
              | _ts long
              |) using hudi
-             |options(
+             |tblproperties(
              | type ='$tableType',
              | primaryKey = 'id',
              | preCombineField = '_ts'
@@ -457,7 +457,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              | price double,
              | _ts long
              |) using hudi
-             |options(
+             |tblproperties(
              | type ='$tableType',
              | primaryKey = 'id',
              | preCombineField = '_ts'
@@ -553,7 +553,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |  c $dataType
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
-             | options (
+             | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'c'
              | )
@@ -604,7 +604,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
            |  ts long
            |) using hudi
            | location '${tmp.getCanonicalPath}'
-           | options (
+           | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
            |  preCombineField = 'ts',
@@ -665,7 +665,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |  ts long
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
-             | options (
+             | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'ts'
              | )
@@ -711,7 +711,7 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
              |  ts long
              |) using hudi
              | location '${tmp.getCanonicalPath}/$tableName'
-             | options (
+             | tblproperties (
              |  primaryKey ='id',
              |  preCombineField = 'ts'
              | )

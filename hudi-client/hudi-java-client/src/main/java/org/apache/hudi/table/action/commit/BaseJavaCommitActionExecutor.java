@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -125,12 +126,14 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     return result;
   }
 
-  protected void updateIndex(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
+  protected List<WriteStatus> updateIndex(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    List<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
+    List<WriteStatus> statuses = HoodieList.getList(
+        table.getIndex().updateLocation(HoodieList.of(writeStatuses), context, table));
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
+    return statuses;
   }
 
   @Override
@@ -206,7 +209,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
 
-      writeTableMetadata(metadata);
+      writeTableMetadata(metadata, actionType);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -329,7 +332,8 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   public void updateIndexAndCommitIfNeeded(List<WriteStatus> writeStatuses, HoodieWriteMetadata result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
-    List<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
+    List<WriteStatus> statuses = HoodieList.getList(
+        table.getIndex().updateLocation(HoodieList.of(writeStatuses), context, table));
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));

@@ -17,6 +17,8 @@
 
 package org.apache.hudi
 
+import java.util.Properties
+
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -57,7 +59,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
   )
 
-  @BeforeEach override def setUp() {
+  @BeforeEach
+  override def setUp() {
+    setTableName("hoodie_test")
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
@@ -71,6 +75,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testPartitionSchema(partitionEncode: Boolean): Unit = {
+    val props = new Properties()
+    props.setProperty(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, String.valueOf(partitionEncode))
+    initMetaClient(props)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 100)
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
     inputDF1.write.format("hudi")
@@ -128,6 +135,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testPartitionPruneWithPartitionEncode(partitionEncode: Boolean): Unit = {
+    val props = new Properties()
+    props.setProperty(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key, String.valueOf(partitionEncode))
+    initMetaClient(props)
     val partitions = Array("2021/03/08", "2021/03/09", "2021/03/10", "2021/03/11", "2021/03/12")
     val newDataGen =  new HoodieTestDataGenerator(partitions)
     val records1 = newDataGen.generateInsertsContainsAllPartitions("000", 100)

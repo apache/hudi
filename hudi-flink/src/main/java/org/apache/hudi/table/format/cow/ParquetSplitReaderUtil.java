@@ -24,7 +24,6 @@ import org.apache.flink.formats.parquet.vector.reader.ByteColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.BytesColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.DoubleColumnReader;
-import org.apache.flink.formats.parquet.vector.reader.FixedLenBytesColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.FloatColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.IntColumnReader;
 import org.apache.flink.formats.parquet.vector.reader.LongColumnReader;
@@ -108,9 +107,7 @@ public class ParquetSplitReaderUtil {
       for (int i = 0; i < vectors.length; i++) {
         String name = fullFieldNames[selectedFields[i]];
         LogicalType type = fullFieldTypes[selectedFields[i]].getLogicalType();
-        vectors[i] = partitionSpec.containsKey(name)
-            ? createVectorFromConstant(type, partitionSpec.get(name), batchSize)
-            : readVectors[selNonPartNames.indexOf(name)];
+        vectors[i] = createVector(readVectors, selNonPartNames, name, type, partitionSpec, batchSize);
       }
       return new VectorizedColumnBatch(vectors);
     };
@@ -128,6 +125,24 @@ public class ParquetSplitReaderUtil {
         new org.apache.hadoop.fs.Path(path.toUri()),
         splitStart,
         splitLength);
+  }
+
+  private static ColumnVector createVector(
+      ColumnVector[] readVectors,
+      List<String> selNonPartNames,
+      String name,
+      LogicalType type,
+      Map<String, Object> partitionSpec,
+      int batchSize) {
+    if (partitionSpec.containsKey(name)) {
+      return createVectorFromConstant(type, partitionSpec.get(name), batchSize);
+    }
+    ColumnVector readVector = readVectors[selNonPartNames.indexOf(name)];
+    if (readVector == null) {
+      // when the read vector is null, use a constant null vector instead
+      readVector = createVectorFromConstant(type, null, batchSize);
+    }
+    return readVector;
   }
 
   private static ColumnVector createVectorFromConstant(
@@ -350,7 +365,9 @@ public class ParquetSplitReaderUtil {
             "TIME_MICROS original type is not ");
         return new HeapTimestampVector(batchSize);
       case DECIMAL:
-        checkArgument(typeName == PrimitiveType.PrimitiveTypeName.BINARY
+        checkArgument(
+            (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+                || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
                 && primitiveType.getOriginalType() == OriginalType.DECIMAL,
             "Unexpected type: %s", typeName);
         return new HeapBytesVector(batchSize);

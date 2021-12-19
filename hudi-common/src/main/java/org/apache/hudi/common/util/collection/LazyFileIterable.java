@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.IOException;
@@ -53,7 +54,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   }
 
   @Override
-  public Iterator<R> iterator() {
+  public ClosableIterator<R> iterator() {
     try {
       return new LazyFileIterator<>(filePath, inMemoryMetadataOfSpilledData);
     } catch (IOException io) {
@@ -64,7 +65,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   /**
    * Iterator implementation for the iterable defined above.
    */
-  public class LazyFileIterator<T, R> implements Iterator<R> {
+  public class LazyFileIterator<T, R> implements ClosableIterator<R> {
 
     private final String filePath;
     private BufferedRandomAccessFile readOnlyFileHandle;
@@ -111,7 +112,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
       action.accept(next());
     }
 
-    private void close() {
+    public void close() {
       closeHandle();
       Runtime.getRuntime().removeShutdownHook(shutdownThread);
     }

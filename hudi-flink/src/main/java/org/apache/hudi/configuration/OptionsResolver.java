@@ -18,7 +18,9 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.table.format.FilePathUtils;
 
 import org.apache.flink.configuration.Configuration;
 
@@ -66,5 +68,46 @@ public class OptionsResolver {
     return conf.getString(FlinkOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+  }
+
+  /**
+   * Returns whether the payload clazz is {@link DefaultHoodieRecordPayload}.
+   */
+  public static boolean isDefaultHoodieRecordPayloadClazz(Configuration conf) {
+    return conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME).contains(DefaultHoodieRecordPayload.class.getSimpleName());
+  }
+
+  /**
+   * Returns the preCombine field
+   * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
+   */
+  public static String getPreCombineField(Configuration conf) {
+    final String preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
+    return preCombineField.equals(FlinkOptions.NO_PRE_COMBINE) ? null : preCombineField;
+  }
+
+  /**
+   * Returns whether the compaction strategy is based on elapsed delta time.
+   */
+  public static boolean isDeltaTimeCompaction(Configuration conf) {
+    final String strategy = conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toLowerCase(Locale.ROOT);
+    return FlinkOptions.TIME_ELAPSED.equals(strategy) || FlinkOptions.NUM_OR_TIME.equals(strategy);
+  }
+
+  /**
+   * Returns whether the table is partitioned.
+   */
+  public static boolean isPartitionedTable(Configuration conf) {
+    return FilePathUtils.extractPartitionKeys(conf).length > 0;
+  }
+
+  /**
+   * Returns whether the source should emit changelog.
+   *
+   * @return true if the source is read as streaming with changelog mode enabled
+   */
+  public static boolean emitChangelog(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
+        && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
   }
 }

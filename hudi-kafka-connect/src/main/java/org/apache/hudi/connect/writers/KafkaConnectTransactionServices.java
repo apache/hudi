@@ -18,30 +18,43 @@
 
 package org.apache.hudi.connect.writers;
 
+import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.sync.common.AbstractSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  * Implementation of Transaction service APIs used by
@@ -52,8 +65,10 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
   private static final Logger LOG = LogManager.getLogger(KafkaConnectTransactionServices.class);
 
+  private final KafkaConnectConfigs connectConfigs;
   private final Option<HoodieTableMetaClient> tableMetaClient;
   private final Configuration hadoopConf;
+  private final HoodieWriteConfig writeConfig;
   private final String tableBasePath;
   private final String tableName;
   private final HoodieEngineContext context;
@@ -61,12 +76,16 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
   private final HoodieJavaWriteClient<HoodieAvroPayload> javaClient;
 
   public KafkaConnectTransactionServices(KafkaConnectConfigs connectConfigs) throws HoodieException {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withProperties(connectConfigs.getProps()).build();
+    this.connectConfigs = connectConfigs;
+    // This is the writeConfig for the Transaction Coordinator
+    this.writeConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withProperties(connectConfigs.getProps())
+        .build();
 
     tableBasePath = writeConfig.getBasePath();
     tableName = writeConfig.getTableName();
-    hadoopConf = KafkaConnectUtils.getDefaultHadoopConf();
+    hadoopConf = KafkaConnectUtils.getDefaultHadoopConf(connectConfigs);
     context = new HoodieJavaEngineContext(hadoopConf);
 
     try {
@@ -95,6 +114,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     }
   }
 
+  @Override
   public String startCommit() {
     String newCommitTime = javaClient.startCommit();
     javaClient.transitionInflight(newCommitTime);
@@ -102,11 +122,27 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     return newCommitTime;
   }
 
-  public void endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
-    javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
-    LOG.info("Ending Hudi commit " + commitTime);
+  @Override
+  public boolean endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
+    boolean success = javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
+    if (success) {
+      LOG.info("Ending Hudi commit " + commitTime);
+
+      // Schedule clustering and compaction as needed.
+      if (writeConfig.isAsyncClusteringEnabled()) {
+        javaClient.scheduleClustering(Option.empty()).ifPresent(
+            instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
+      }
+      if (isAsyncCompactionEnabled()) {
+        javaClient.scheduleCompaction(Option.empty()).ifPresent(
+            instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
+      }
+      syncMeta();
+    }
+    return success;
   }
 
+  @Override
   public Map<String, String> fetchLatestExtraCommitMetadata() {
     if (tableMetaClient.isPresent()) {
       Option<HoodieCommitMetadata> metadata = KafkaConnectUtils.getCommitMetadataForLatestInstant(tableMetaClient.get());
@@ -118,5 +154,51 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       }
     }
     throw new HoodieException("Fatal error retrieving Hoodie Extra Metadata since Table Meta Client is absent");
+  }
+
+  private boolean isAsyncCompactionEnabled() {
+    return tableMetaClient.isPresent()
+        && HoodieTableType.MERGE_ON_READ.equals(tableMetaClient.get().getTableType())
+        && connectConfigs.isAsyncCompactEnabled();
+  }
+
+  private void syncMeta() {
+    Set<String> syncClientToolClasses = new HashSet<>(
+        Arrays.asList(connectConfigs.getMetaSyncClasses().split(",")));
+    if (connectConfigs.isMetaSyncEnabled()) {
+      for (String impl : syncClientToolClasses) {
+        impl = impl.trim();
+        switch (impl) {
+          case "org.apache.hudi.hive.HiveSyncTool":
+            syncHive();
+            break;
+          default:
+            FileSystem fs = FSUtils.getFs(tableBasePath, new Configuration());
+            Properties properties = new Properties();
+            properties.putAll(connectConfigs.getProps());
+            properties.put("basePath", tableBasePath);
+            AbstractSyncTool syncTool = (AbstractSyncTool) ReflectionUtils.loadClass(impl, new Class[] {Properties.class, FileSystem.class}, properties, fs);
+            syncTool.syncHoodieTable();
+        }
+      }
+    }
+  }
+
+  private void syncHive() {
+    HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(
+        new TypedProperties(connectConfigs.getProps()),
+        tableBasePath,
+        "PARQUET");
+    LOG.info("Syncing target hoodie table with hive table("
+        + hiveSyncConfig.tableName
+        + "). Hive metastore URL :"
+        + hiveSyncConfig.jdbcUrl
+        + ", basePath :" + tableBasePath);
+    LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
+    FileSystem fs = FSUtils.getFs(tableBasePath, hadoopConf);
+    HiveConf hiveConf = new HiveConf();
+    hiveConf.addResource(fs.getConf());
+    LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
+    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
   }
 }

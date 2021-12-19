@@ -22,8 +22,10 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -178,8 +180,7 @@ public class MergeOnReadInputFormat
       }
     } else if (!split.getBasePath().isPresent()) {
       // log files only
-      if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)
-          && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)) {
+      if (OptionsResolver.emitChangelog(conf)) {
         this.iterator = new LogFileOnlyIterator(getUnMergedLogFileIterator(split));
       } else {
         this.iterator = new LogFileOnlyIterator(getLogFileIterator(split));
@@ -447,12 +448,6 @@ public class MergeOnReadInputFormat
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
-
-  private interface ClosableIterator<E> extends Iterator<E>, AutoCloseable {
-    @Override
-    void close(); // override to not throw exception
-  }
-
   private interface RecordIterator {
     boolean reachedEnd() throws IOException;
 
@@ -688,13 +683,18 @@ public class MergeOnReadInputFormat
             // deleted
             continue;
           } else {
+            final RowKind rowKind = FormatUtils.getRowKindSafely(mergedAvroRecord.get(), this.operationPos);
+            if (!emitDelete && rowKind == RowKind.DELETE) {
+              // deleted
+              continue;
+            }
             GenericRecord avroRecord = buildAvroRecordBySchema(
                 mergedAvroRecord.get(),
                 requiredSchema,
                 requiredPos,
                 recordBuilder);
             this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
-            FormatUtils.setRowKind(this.currentRecord, mergedAvroRecord.get(), this.operationPos);
+            this.currentRecord.setRowKind(rowKind);
             return false;
           }
         }
@@ -751,9 +751,6 @@ public class MergeOnReadInputFormat
         RowData curRow,
         String curKey) throws IOException {
       final HoodieRecord<?> record = scanner.getRecords().get(curKey);
-      if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
-        return Option.empty();
-      }
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
     }

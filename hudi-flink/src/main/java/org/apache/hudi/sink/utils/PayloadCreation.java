@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
@@ -55,13 +56,14 @@ public class PayloadCreation implements Serializable {
   }
 
   public static PayloadCreation instance(Configuration conf) throws Exception {
-    boolean shouldCombine = conf.getBoolean(FlinkOptions.PRE_COMBINE)
+    String preCombineField = OptionsResolver.getPreCombineField(conf);
+    boolean needCombine = conf.getBoolean(FlinkOptions.PRE_COMBINE)
         || WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
-    String preCombineField = null;
+    boolean shouldCombine = needCombine && preCombineField != null;
+
     final Class<?>[] argTypes;
     final Constructor<?> constructor;
     if (shouldCombine) {
-      preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
       argTypes = new Class<?>[] {GenericRecord.class, Comparable.class};
     } else {
       argTypes = new Class<?>[] {Option.class};

@@ -81,9 +81,7 @@ hadoop-annotations/org.apache.hadoop/2.7.3//hadoop-annotations-2.7.3.jar
 hadoop-auth/org.apache.hadoop/2.7.3//hadoop-auth-2.7.3.jar
 hadoop-client/org.apache.hadoop/2.7.3//hadoop-client-2.7.3.jar
 hadoop-common/org.apache.hadoop/2.7.3//hadoop-common-2.7.3.jar
-hadoop-common/org.apache.hadoop/2.7.3/tests/hadoop-common-2.7.3-tests.jar
 hadoop-hdfs/org.apache.hadoop/2.7.3//hadoop-hdfs-2.7.3.jar
-hadoop-hdfs/org.apache.hadoop/2.7.3/tests/hadoop-hdfs-2.7.3-tests.jar
 hadoop-mapreduce-client-app/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-app-2.7.3.jar
 hadoop-mapreduce-client-common/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-common-2.7.3.jar
 hadoop-mapreduce-client-core/org.apache.hadoop/2.7.3//hadoop-mapreduce-client-core-2.7.3.jar
@@ -101,7 +99,6 @@ hamcrest-core/org.hamcrest/1.3//hamcrest-core-1.3.jar
 hbase-annotations/org.apache.hbase/1.2.3//hbase-annotations-1.2.3.jar
 hbase-client/org.apache.hbase/1.2.3//hbase-client-1.2.3.jar
 hbase-common/org.apache.hbase/1.2.3//hbase-common-1.2.3.jar
-hbase-common/org.apache.hbase/1.2.3/tests/hbase-common-1.2.3-tests.jar
 hbase-hadoop-compat/org.apache.hbase/1.2.3//hbase-hadoop-compat-1.2.3.jar
 hbase-hadoop2-compat/org.apache.hbase/1.2.3//hbase-hadoop2-compat-1.2.3.jar
 hbase-prefix-tree/org.apache.hbase/1.2.3//hbase-prefix-tree-1.2.3.jar
@@ -232,7 +229,7 @@ simpleclient_dropwizard/io.prometheus/0.8.0//simpleclient_dropwizard-0.8.0.jar
 simpleclient_httpserver/io.prometheus/0.8.0//simpleclient_httpserver-0.8.0.jar
 simpleclient_pushgateway/io.prometheus/0.8.0//simpleclient_pushgateway-0.8.0.jar
 slf4j-api/org.slf4j/1.7.10//slf4j-api-1.7.10.jar
-slf4j-log4j12/org.slf4j/1.7.10//slf4j-log4j12-1.7.10.jar
+slf4j-log4j12/org.slf4j/1.6.1//slf4j-log4j12-1.6.1.jar
 slider-core/org.apache.slider/0.90.2-incubating//slider-core-0.90.2-incubating.jar
 snappy-java/org.xerial.snappy/1.1.2.6//snappy-java-1.1.2.6.jar
 spark-avro_2.12/org.apache.spark/2.4.4//spark-avro_2.12-2.4.4.jar

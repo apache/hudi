@@ -60,10 +60,16 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(CleanActionExecutor.class);
   private final TransactionManager txnManager;
+  private final boolean skipLocking;
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
+    this(context, config, table, instantTime, false);
+  }
+
+  public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime, boolean skipLocking) {
     super(context, config, table, instantTime);
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.skipLocking = skipLocking;
   }
 
   static Boolean deleteFileAndGetResult(FileSystem fs, String deletePathStr) throws IOException {
@@ -199,26 +205,20 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
           Option.of(timer.endTimer()),
           cleanStats
       );
-      writeMetadata(metadata);
+      if (!skipLocking) {
+        this.txnManager.beginTransaction(Option.empty(), Option.empty());
+      }
+      writeTableMetadata(metadata);
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");
       return metadata;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to clean up after commit", e);
-    }
-  }
-
-  /**
-   * Update metadata table if available. Any update to metadata table happens within data table lock.
-   * @param cleanMetadata instance of {@link HoodieCleanMetadata} to be applied to metadata.
-   */
-  private void writeMetadata(HoodieCleanMetadata cleanMetadata) {
-    try {
-      this.txnManager.beginTransaction(Option.empty(), Option.empty());
-      writeTableMetadata(cleanMetadata);
     } finally {
-      this.txnManager.endTransaction();
+      if (!skipLocking) {
+        this.txnManager.endTransaction(Option.empty());
+      }
     }
   }
 

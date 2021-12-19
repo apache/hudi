@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieList;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -80,9 +81,14 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
   }
 
   @Override
-  public List<HoodieRecord<T>> deduplicateRecords(List<HoodieRecord<T>> records,
-                                                  HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> index,
-                                                  int parallelism) {
+  protected List<HoodieRecord<T>> tag(List<HoodieRecord<T>> dedupedRecords, HoodieEngineContext context, HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table) {
+    return HoodieList.getList(
+        table.getIndex().tagLocation(HoodieList.of(dedupedRecords), context, table));
+  }
+
+  @Override
+  public List<HoodieRecord<T>> deduplicateRecords(
+      List<HoodieRecord<T>> records, HoodieIndex<T, ?, ?, ?> index, int parallelism) {
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
       // If index used is global, then records are expected to differ in their partitionPath
       final Object key = record.getKey().getRecordKey();

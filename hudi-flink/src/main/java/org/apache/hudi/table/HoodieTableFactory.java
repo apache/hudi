@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -38,7 +40,6 @@ import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
-import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.hadoop.fs.Path;
@@ -60,10 +61,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
-    FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
-    helper.validate();
-
-    Configuration conf = (Configuration) helper.getOptions();
+    Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
@@ -117,20 +115,41 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // validate record key in pk absence.
     if (!schema.getPrimaryKey().isPresent()) {
-      Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
+      String[] recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      if (recordKeys.length == 1
+          && FlinkOptions.RECORD_KEY_FIELD.defaultValue().equals(recordKeys[0])
+          && !fields.contains(recordKeys[0])) {
+        throw new HoodieValidationException("Primary key definition is required, use either PRIMARY KEY syntax "
+            + "or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+      }
+
+      Arrays.stream(recordKeys)
           .filter(field -> !fields.contains(field))
           .findAny()
           .ifPresent(f -> {
-            throw new ValidationException("Field '" + f + "' does not exist in the table schema."
-                + "Please define primary key or modify 'hoodie.datasource.write.recordkey.field' option.");
+            throw new HoodieValidationException("Field '" + f + "' specified in option "
+                + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
     }
 
     // validate pre_combine key
     String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
     if (!fields.contains(preCombineField)) {
-      throw new ValidationException("Field " + preCombineField + " does not exist in the table schema."
-          + "Please check 'write.precombine.field' option.");
+      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
+        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
+            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
+      }
+      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
+        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+      } else {
+        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
+            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
+      }
+    } else if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PAYLOAD_CLASS_NAME)) {
+      // if precombine field is specified but payload clazz is default,
+      // use DefaultHoodieRecordPayload to make sure the precombine field is always taken for
+      // comparing.
+      conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, EventTimeAvroPayload.class.getName());
     }
   }
 

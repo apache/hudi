@@ -151,8 +151,9 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       // Load files from the global paths if it has defined to be compatible with the original mode
       val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths.get)
       val fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getActiveTimeline.getCommitsTimeline
-          .filterCompletedInstants, inMemoryFileIndex.allFiles().toArray)
+        // file-slice after pending compaction-requested instant-time is also considered valid
+        metaClient.getCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants,
+        inMemoryFileIndex.allFiles().toArray)
       val partitionPaths = fsView.getLatestBaseFiles.iterator().asScala.toList.map(_.getFileStatus.getPath.getParent)
 
 

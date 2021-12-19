@@ -21,6 +21,7 @@ package org.apache.hudi.index.hbase;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -35,9 +36,10 @@ import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieDependentSystemUnavailableException;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.index.SparkHoodieIndex;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
@@ -83,7 +85,8 @@ import scala.Tuple2;
 /**
  * Hoodie Index implementation backed by HBase.
  */
-public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkHoodieIndex<T> {
+public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload<T>>
+    extends HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   public static final String DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME = "spark.executor.instances";
   public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME = "spark.dynamicAllocation.enabled";
@@ -291,10 +294,11 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-                                              HoodieEngineContext context,
-                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
-    return recordRDD.mapPartitionsWithIndex(locationTagFunction(hoodieTable.getMetaClient()), true);
+  public HoodieData<HoodieRecord<T>> tagLocation(
+      HoodieData<HoodieRecord<T>> records, HoodieEngineContext context,
+      HoodieTable hoodieTable) {
+    return HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(records)
+        .mapPartitionsWithIndex(locationTagFunction(hoodieTable.getMetaClient()), true));
   }
 
   private Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>> updateLocationFunction() {
@@ -395,16 +399,17 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   }
 
   @Override
-  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, HoodieEngineContext context,
-                                             HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>,
-                                                            JavaRDD<WriteStatus>> hoodieTable) {
-    final Option<Float> desiredQPSFraction =  calculateQPSFraction(writeStatusRDD);
+  public HoodieData<WriteStatus> updateLocation(
+      HoodieData<WriteStatus> writeStatus, HoodieEngineContext context,
+      HoodieTable hoodieTable) {
+    JavaRDD<WriteStatus> writeStatusRDD = HoodieJavaRDD.getJavaRDD(writeStatus);
+    final Option<Float> desiredQPSFraction = calculateQPSFraction(writeStatusRDD);
     final Map<String, Integer> fileIdPartitionMap = mapFileWithInsertsToUniquePartition(writeStatusRDD);
     JavaRDD<WriteStatus> partitionedRDD = this.numWriteStatusWithInserts == 0 ? writeStatusRDD :
-                                          writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
-                                              .partitionBy(new WriteStatusPartitioner(fileIdPartitionMap,
-                                                  this.numWriteStatusWithInserts))
-                                              .map(w -> w._2());
+        writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
+            .partitionBy(new WriteStatusPartitioner(fileIdPartitionMap,
+                this.numWriteStatusWithInserts))
+            .map(w -> w._2());
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     acquireQPSResourcesAndSetBatchSize(desiredQPSFraction, jsc);
     JavaRDD<WriteStatus> writeStatusJavaRDD = partitionedRDD.mapPartitionsWithIndex(updateLocationFunction(),
@@ -414,7 +419,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     // force trigger update location(hbase puts)
     writeStatusJavaRDD.count();
     this.hBaseIndexQPSResourceAllocator.releaseQPSResources();
-    return writeStatusJavaRDD;
+    return HoodieJavaRDD.of(writeStatusJavaRDD);
   }
 
   private Option<Float> calculateQPSFraction(JavaRDD<WriteStatus> writeStatusRDD) {
@@ -562,7 +567,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
          BufferedMutator mutator = hbaseConnection.getBufferedMutator(TableName.valueOf(tableName))) {
       final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
 
-      Long rollbackTime = HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime();
+      Long rollbackTime = HoodieActiveTimeline.parseDateFromInstantTime(instantTime).getTime();
       Long currentTime = new Date().getTime();
       Scan scan = new Scan();
       scan.addFamily(SYSTEM_COLUMN_FAMILY);

@@ -126,7 +126,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final int serverPort;
   private final String basePath;
   private final HoodieTableMetaClient metaClient;
-  private final HoodieTimeline timeline;
+  private HoodieTimeline timeline;
   private final ObjectMapper mapper;
   private final int timeoutSecs;
 
@@ -413,6 +413,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public boolean refresh() {
     Map<String, String> paramsMap = getParams();
     try {
+      // refresh the local timeline first.
+      this.timeline = metaClient.reloadActiveTimeline().filterCompletedAndCompactionInstants();
       return executeRequest(REFRESH_TABLE, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);

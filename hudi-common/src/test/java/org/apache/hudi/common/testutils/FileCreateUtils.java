@@ -340,6 +340,20 @@ public class FileCreateUtils {
     removeMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION);
   }
 
+  public static void deleteRollbackCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION);
+  }
+
+  public static java.nio.file.Path renameFileToTemp(java.nio.file.Path sourcePath, String instantTime) throws IOException {
+    java.nio.file.Path dummyFilePath = sourcePath.getParent().resolve(instantTime + ".temp");
+    Files.move(sourcePath, dummyFilePath);
+    return dummyFilePath;
+  }
+
+  public static void renameTempToMetaFile(java.nio.file.Path tempFilePath, java.nio.file.Path destPath) throws IOException {
+    Files.move(tempFilePath, destPath);
+  }
+
   public static long getTotalMarkerFileCount(String basePath, String partitionPath, String instantTime, IOType ioType) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
     if (Files.notExists(parentPath)) {
@@ -353,7 +367,9 @@ public class FileCreateUtils {
     if (Files.notExists(basePath)) {
       return Collections.emptyList();
     }
-    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)).collect(Collectors.toList());
+    return Files.list(basePath).filter(entry -> (!entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
+        && !entry.getFileName().toString().contains("parquet") && !entry.getFileName().toString().contains("log"))
+        && !entry.getFileName().toString().endsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)).collect(Collectors.toList());
   }
 
   /**
