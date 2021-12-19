@@ -416,7 +416,7 @@ public abstract class AbstractHoodieLogRecordReader {
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
                                              Option<List<String>> keys) throws Exception {
     while (!logBlocks.isEmpty()) {
-      LOG.info("Number of remaining logblocks to merge " + logBlocks.size());
+      LOG.debug("Number of remaining logblocks to merge " + logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
       HoodieLogBlock lastBlock = logBlocks.pollLast();
       switch (lastBlock.getBlockType()) {
