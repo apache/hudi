@@ -32,7 +32,6 @@ stages:
   - stage: test
     jobs:
       - job: UT_FT_1
-        condition: false
         displayName: UT FT common & flink & UT client/spark-client
         steps:
           - task: Cache@2
@@ -100,7 +99,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_3
-        condition: false
         displayName: UT FT clients & cli & utilities & sync/hive-sync
         steps:
           - task: Cache@2
@@ -139,7 +137,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_4
-        condition: false
         displayName: UT FT other modules
         steps:
           - task: Cache@2
@@ -178,7 +175,6 @@ stages:
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: IT
-        condition: false
         steps:
           - task: AzureCLI@2
             displayName: Prepare for IT

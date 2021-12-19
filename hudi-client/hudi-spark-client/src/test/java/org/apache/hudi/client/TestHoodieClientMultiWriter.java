@@ -16,12 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.functional;
+package org.apache.hudi.client;
 
 import org.apache.hadoop.fs.Path;
-
-import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -44,8 +41,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.RepeatedTest;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -71,7 +66,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Tag("functional")
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   public void setUpMORTestTable() throws IOException {
@@ -90,12 +84,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     cleanupResources();
   }
 
-  //@ParameterizedTest
-  //@EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  @RepeatedTest(10)
-  public void testHoodieClientBasicMultiWriter() throws Exception {
-    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
-    LOG.warn("++++ Starting a new test +++ for " + tableType);
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
+  public void testHoodieClientBasicMultiWriter(HoodieTableType tableType) throws Exception {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
     }
