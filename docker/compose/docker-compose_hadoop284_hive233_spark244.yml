@@ -33,7 +33,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
- 
+
   datanode1:
     image: apachehudi/hudi-hadoop_2.8.4-datanode:latest
     container_name: datanode1
@@ -84,7 +84,7 @@ services:
       - hive-metastore-postgresql:/var/lib/postgresql
     hostname: hive-metastore-postgresql
     container_name: hive-metastore-postgresql
- 
+
   hivemetastore:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
     hostname: hivemetastore
@@ -220,6 +220,15 @@ services:
       volumes:
         - ${HUDI_WS}:/var/hoodie/ws
       command: worker
+
+  graphite:
+    container_name: graphite
+    hostname: graphite
+    image: graphiteapp/graphite-statsd
+    ports:
+      - 80:80
+      - 2003-2004:2003-2004
+      - 8126:8126
 
   adhoc-1:
     image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest

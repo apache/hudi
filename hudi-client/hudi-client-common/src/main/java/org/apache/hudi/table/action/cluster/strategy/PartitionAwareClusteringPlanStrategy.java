@@ -74,13 +74,17 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
       return Option.empty();
     }
 
-    List<HoodieClusteringGroup> clusteringGroups = getEngineContext().flatMap(partitionPaths,
-        partitionPath -> {
-          List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
-          return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
-        },
-        partitionPaths.size())
-        .stream().limit(getWriteConfig().getClusteringMaxNumGroups()).collect(Collectors.toList());
+    List<HoodieClusteringGroup> clusteringGroups = getEngineContext()
+        .flatMap(
+            partitionPaths,
+            partitionPath -> {
+              List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
+              return buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible).limit(getWriteConfig().getClusteringMaxNumGroups());
+            },
+            partitionPaths.size())
+        .stream()
+        .limit(getWriteConfig().getClusteringMaxNumGroups())
+        .collect(Collectors.toList());
 
     if (clusteringGroups.isEmpty()) {
       LOG.info("No data available to cluster");

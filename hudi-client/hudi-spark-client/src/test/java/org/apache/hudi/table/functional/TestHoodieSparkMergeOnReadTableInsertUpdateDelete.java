@@ -95,7 +95,8 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       client.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      insertRecords(metaClient, records, client, cfg, newCommitTime);
+      Stream<HoodieBaseFile> dataFiles = insertRecords(metaClient, records, client, cfg, newCommitTime);
+      assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
        * Write 2 (updates)
@@ -109,6 +110,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       client.compact(compactionCommitTime);
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      hoodieTable.getHoodieView().sync();
       FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = tableView.getLatestBaseFiles();
@@ -238,6 +240,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       writeClient.commit(newCommitTime, statuses);
 
       HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+      table.getHoodieView().sync();
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
 
       long numLogFiles = 0;

@@ -19,20 +19,17 @@
 package org.apache.hudi
 
 import org.apache.avro.generic.GenericRecord
-
-import java.io.File
-import java.nio.file.Paths
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.sql.avro.IncompatibleSchemaException
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue, fail}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 
-import java.util
+import java.io.File
+import java.nio.file.Paths
 import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
@@ -41,14 +38,18 @@ class TestHoodieSparkUtils {
   def testGlobPaths(@TempDir tempDir: File): Unit = {
     val folders: Seq[Path] = Seq(
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri)
+      new Path(Paths.get(tempDir.getAbsolutePath, "folder2").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie", "metadata").toUri)
     )
 
     val files: Seq[Path] = Seq(
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file1").toUri),
       new Path(Paths.get(tempDir.getAbsolutePath, "folder1", "file2").toUri),
       new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file3").toUri),
-      new Path(Paths.get(tempDir.getAbsolutePath, "folder2", "file4").toUri)
+      new Path(Paths.get(tempDir.getAbsolutePath, "folder2","file4").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file5").toUri),
+      new Path(Paths.get(tempDir.getAbsolutePath, ".hoodie","metadata", "file6").toUri)
     )
 
     folders.foreach(folder => new File(folder.toUri).mkdir())
@@ -57,12 +58,14 @@ class TestHoodieSparkUtils {
     var paths = Seq(tempDir.getAbsolutePath + "/*")
     var globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(folders.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+    assertEquals(folders.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/*/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
 
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
@@ -79,7 +82,8 @@ class TestHoodieSparkUtils {
     paths = Seq(tempDir.getAbsolutePath + "/folder1/*", tempDir.getAbsolutePath + "/folder2/*")
     globbedPaths = HoodieSparkUtils.checkAndGlobPathIfNecessary(paths,
       new Path(paths.head).getFileSystem(new Configuration()))
-    assertEquals(files.sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
+    assertEquals(files.filterNot(entry => entry.toString.contains(".hoodie"))
+      .sortWith(_.toString < _.toString), globbedPaths.sortWith(_.toString < _.toString))
   }
 
   @Test
@@ -228,6 +232,6 @@ class TestHoodieSparkUtils {
     spark.stop()
   }
 
-  def convertRowListToSeq(inputList: util.List[Row]): Seq[Row] =
+  def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
     JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 }

@@ -33,4 +33,10 @@ public class HoodieAvroParquetConfig extends HoodieBaseParquetConfig<HoodieAvroW
                                  double compressionRatio) {
     super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio);
   }
+
+  public HoodieAvroParquetConfig(HoodieAvroWriteSupport writeSupport, CompressionCodecName compressionCodecName,
+      int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf,
+      double compressionRatio, boolean directoryEnabled) {
+    super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio, directoryEnabled);
+  }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.append.AppendWriteFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
@@ -36,6 +35,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
+import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventGateway;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
@@ -47,7 +47,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <I> Input type
  */
-public class InsertFunctionWrapper<I> {
+public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final Configuration conf;
   private final RowType rowType;
 
@@ -98,16 +98,11 @@ public class InsertFunctionWrapper<I> {
     return this.gateway.getNextEvent();
   }
 
-  @SuppressWarnings("rawtypes")
-  public HoodieFlinkWriteClient getWriteClient() {
-    return this.writeFunction.getWriteClient();
-  }
-
   public void checkpointFunction(long checkpointId) throws Exception {
     // checkpoint the coordinator first
     this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
 
-    writeFunction.snapshotState(null);
+    writeFunction.snapshotState(new MockFunctionSnapshotContext(checkpointId));
     stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
   }
 
@@ -118,6 +113,11 @@ public class InsertFunctionWrapper<I> {
 
   public StreamWriteOperatorCoordinator getCoordinator() {
     return coordinator;
+  }
+
+  @Override
+  public void close() throws Exception {
+    this.coordinator.close();
   }
 
   public BulkInsertWriterHelper getWriterHelper() {

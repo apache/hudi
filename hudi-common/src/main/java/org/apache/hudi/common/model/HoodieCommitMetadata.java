@@ -27,6 +27,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -104,8 +105,8 @@ public class HoodieCommitMetadata implements Serializable {
   public HashMap<String, String> getFileIdAndRelativePaths() {
     HashMap<String, String> filePaths = new HashMap<>();
     // list all partitions paths
-    for (Map.Entry<String, List<HoodieWriteStat>> entry : getPartitionToWriteStats().entrySet()) {
-      for (HoodieWriteStat stat : entry.getValue()) {
+    for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
+      for (HoodieWriteStat stat : stats) {
         filePaths.put(stat.getFileId(), stat.getPath());
       }
     }
@@ -140,6 +141,60 @@ public class HoodieCommitMetadata implements Serializable {
       }
     }
     return fileGroupIdToFullPaths;
+  }
+
+  /**
+   * Extract the file status of all affected files from the commit metadata. If a file has
+   * been touched multiple times in the given commits, the return value will keep the one
+   * from the latest commit.
+   *
+   * @param basePath The base path
+   * @return the file full path to file status mapping
+   */
+  public Map<String, FileStatus> getFullPathToFileStatus(String basePath) {
+    Map<String, FileStatus> fullPathToFileStatus = new HashMap<>();
+    for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
+      // Iterate through all the written files.
+      for (HoodieWriteStat stat : stats) {
+        String relativeFilePath = stat.getPath();
+        Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+        if (fullPath != null) {
+          FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, 0,
+              0, fullPath);
+          fullPathToFileStatus.put(fullPath.getName(), fileStatus);
+        }
+      }
+    }
+    return fullPathToFileStatus;
+  }
+
+  /**
+   * Extract the file status of all affected files from the commit metadata. If a file has
+   * been touched multiple times in the given commits, the return value will keep the one
+   * from the latest commit by file group ID.
+   *
+   * <p>Note: different with {@link #getFullPathToFileStatus(String)},
+   * only the latest commit file for a file group is returned,
+   * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
+   *
+   * @param basePath The base path
+   * @return the file ID to file status mapping
+   */
+  public Map<String, FileStatus> getFileIdToFileStatus(String basePath) {
+    Map<String, FileStatus> fileIdToFileStatus = new HashMap<>();
+    for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
+      // Iterate through all the written files.
+      for (HoodieWriteStat stat : stats) {
+        String relativeFilePath = stat.getPath();
+        Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+        if (fullPath != null) {
+          FileStatus fileStatus = new FileStatus(stat.getFileSizeInBytes(), false, 0, 0,
+              0, fullPath);
+          fileIdToFileStatus.put(stat.getFileId(), fileStatus);
+        }
+      }
+    }
+    return fileIdToFileStatus;
   }
 
   public String toJsonString() throws IOException {

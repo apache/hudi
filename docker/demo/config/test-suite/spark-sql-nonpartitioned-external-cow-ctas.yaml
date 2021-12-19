@@ -1,0 +1,45 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+dag_name: spark-sql-nonpartitioned-managed-cow-ctas.yaml
+dag_rounds: 1
+dag_intermittent_delay_mins: 1
+dag_content:
+  create_table:
+    config:
+      table_type: cow
+      is_external: true
+      primary_key: _row_key
+      pre_combine_field: test_suite_source_ordering_field
+      use_ctas: true
+      record_size: 1000
+      num_partitions_insert: 1
+      repeat_count: 1
+      num_records_insert: 1000
+    type: spark.sql.SparkSqlCreateTableNode
+    deps: none
+  insert_records:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      repeat_count: 1
+      num_records_insert: 1000
+    type: spark.sql.SparkSqlInsertNode
+    deps: create_table
+  validate:
+    config:
+      delete_input_data: true
+    type: spark.sql.SparkSqlValidateDatasetNode
+    deps: insert_records

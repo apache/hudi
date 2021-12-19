@@ -28,8 +28,10 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -62,6 +64,8 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+    timelineService = HoodieClientTestUtils.initTimelineService(
+        context, basePath(), FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue());
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     //Create some commits files and base files
     HoodieTestTable.of(metaClient)

@@ -149,7 +149,7 @@ public class TableSchemaResolver {
     }
   }
 
-  private Schema getTableAvroSchemaFromDataFile() throws Exception {
+  public Schema getTableAvroSchemaFromDataFile() throws Exception {
     return convertParquetSchemaToAvro(getTableParquetSchemaFromDataFile());
   }
 
@@ -412,6 +412,25 @@ public class TableSchemaResolver {
       LOG.warn("Unknown exception thrown " + e.getMessage() + ", Falling back to using incoming batch's write schema");
     }
     return latestSchema;
+  }
+
+
+  /**
+   * Get Last commit's Metadata.
+   */
+  public Option<HoodieCommitMetadata> getLatestCommitMetadata() {
+    try {
+      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      if (timeline.lastInstant().isPresent()) {
+        HoodieInstant instant = timeline.lastInstant().get();
+        byte[] data = timeline.getInstantDetails(instant).get();
+        return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
+      } else {
+        return Option.empty();
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get commit metadata", e);
+    }
   }
 
   /**

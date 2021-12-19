@@ -38,19 +38,17 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
-import org.apache.hudi.io.storage.HoodieConcatHandle;
+import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -78,6 +76,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.Map;
+
+import static org.apache.hudi.common.util.ClusteringUtils.getAllFileGroupsInPendingClusteringPlans;
 
 public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayload> extends
     BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata> {
@@ -115,15 +115,32 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   private JavaRDD<HoodieRecord<T>> clusteringHandleUpdate(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
-    if (config.isClusteringEnabled()) {
-      Set<HoodieFileGroupId> fileGroupsInPendingClustering =
-          table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
-      UpdateStrategy updateStrategy = (UpdateStrategy)ReflectionUtils
-          .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
-      return (JavaRDD<HoodieRecord<T>>)updateStrategy.handleUpdate(inputRecordsRDD);
-    } else {
-      return inputRecordsRDD;
+    context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering");
+    Set<HoodieFileGroupId> fileGroupsInPendingClustering =
+        table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
+    UpdateStrategy updateStrategy = (UpdateStrategy) ReflectionUtils
+        .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
+    Pair<JavaRDD<HoodieRecord<T>>, Set<HoodieFileGroupId>> recordsAndPendingClusteringFileGroups =
+        (Pair<JavaRDD<HoodieRecord<T>>, Set<HoodieFileGroupId>>) updateStrategy.handleUpdate(inputRecordsRDD);
+    Set<HoodieFileGroupId> fileGroupsWithUpdatesAndPendingClustering = recordsAndPendingClusteringFileGroups.getRight();
+    if (fileGroupsWithUpdatesAndPendingClustering.isEmpty()) {
+      return recordsAndPendingClusteringFileGroups.getLeft();
     }
+    // there are filegroups pending clustering and receiving updates, so rollback the pending clustering instants
+    // there could be race condition, for example, if the clustering completes after instants are fetched but before rollback completed
+    if (config.isRollbackPendingClustering()) {
+      Set<HoodieInstant> pendingClusteringInstantsToRollback = getAllFileGroupsInPendingClusteringPlans(table.getMetaClient()).entrySet().stream()
+          .filter(e -> fileGroupsWithUpdatesAndPendingClustering.contains(e.getKey()))
+          .map(Map.Entry::getValue)
+          .collect(Collectors.toSet());
+      pendingClusteringInstantsToRollback.forEach(instant -> {
+        String commitTime = HoodieActiveTimeline.createNewInstantTime();
+        table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers());
+        table.rollback(context, commitTime, instant, true, true);
+      });
+      table.getMetaClient().reloadActiveTimeline();
+    }
+    return recordsAndPendingClusteringFileGroups.getLeft();
   }
 
   @Override
@@ -150,6 +167,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(profile);
+    context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data");
     JavaRDD<HoodieRecord<T>> partitionedRecords = partition(inputRecordsRDDWithClusteringUpdate, partitioner);
     JavaRDD<WriteStatus> writeStatusRDD = partitionedRecords.mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
@@ -234,12 +252,13 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     writeStatusRDD = writeStatusRDD.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
     Instant indexStartTime = Instant.now();
     // Update the index back
-    JavaRDD<WriteStatus> statuses = table.getIndex().updateLocation(writeStatusRDD, context, table);
+    JavaRDD<WriteStatus> statuses = HoodieJavaRDD.getJavaRDD(
+        table.getIndex().updateLocation(HoodieJavaRDD.of(writeStatusRDD), context, table));
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     return statuses;
   }
-  
+
   protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
     updateIndex(writeStatusRDD, result);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
@@ -259,18 +278,16 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<JavaRDD<WriteStatus>> result, List<HoodieWriteStat> writeStats) {
     String actionType = getCommitActionType();
-    LOG.info("Committing " + instantTime + ", action Type " + actionType);
+    LOG.info("Committing " + instantTime + ", action Type " + actionType + ", operation Type " + operationType);
     result.setCommitted(true);
     result.setWriteStats(writeStats);
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
-    syncTableMetadata();
     try {
-      LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
-
+      writeTableMetadata(metadata, actionType);
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       LOG.info("Committed " + instantTime);
@@ -351,17 +368,6 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       return new HoodieConcatHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     } else {
       return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    }
-  }
-
-  @Override
-  public void syncTableMetadata() {
-    // Open up the metadata table again, for syncing
-    try (HoodieTableMetadataWriter writer =
-             SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
-      LOG.info("Successfully synced to metadata table");
-    } catch (Exception e) {
-      throw new HoodieMetadataException("Error syncing to metadata table.", e);
     }
   }
 

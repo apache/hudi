@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -25,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -62,6 +64,7 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -74,6 +77,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -98,7 +102,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
-  protected final HoodieIndex<T, I, K, O> index;
+  protected final HoodieIndex<T, ?, ?, ?> index;
   private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
   private final HoodieTableMetadata metadata;
@@ -122,7 +126,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
-  protected abstract HoodieIndex<T, I, K, O> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
+  protected abstract HoodieIndex<T, ?, ?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
@@ -241,6 +245,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
 
+  /**
+   * Updates Metadata Indexes (like Column Stats index)
+   * TODO rebase onto metadata table (post RFC-27)
+   *
+   * @param context instance of {@link HoodieEngineContext}
+   * @param instantTime instant of the carried operation triggering the update
+   */
+  public abstract void updateMetadataIndexes(
+      @Nonnull HoodieEngineContext context,
+      @Nonnull List<HoodieWriteStat> stats,
+      @Nonnull String instantTime
+  ) throws Exception;
+
   public HoodieWriteConfig getConfig() {
     return config;
   }
@@ -317,6 +334,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * Get rollback timeline.
+   */
+  public HoodieTimeline getRollbackTimeline() {
+    return getActiveTimeline().getRollbackTimeline();
+  }
+
+  /**
    * Get only the completed (no-inflights) savepoint timeline.
    */
   public HoodieTimeline getCompletedSavepointTimeline() {
@@ -337,7 +361,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Return the index.
    */
-  public HoodieIndex<T, I, K, O> getIndex() {
+  public HoodieIndex<T, ?, ?, ?> getIndex() {
     return index;
   }
 
@@ -356,12 +380,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access.
    *
-   * @param context HoodieEngineContext
+   * @param context               HoodieEngineContext
    * @param compactionInstantTime Instant Time
    */
   public abstract HoodieWriteMetadata<O> compact(HoodieEngineContext context,
-                                              String compactionInstantTime);
-
+                                                 String compactionInstantTime);
 
   /**
    * Schedule clustering for the instant time.
@@ -415,8 +438,22 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    *
    * @return information on cleaned file slices
    */
-  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime);
+  public abstract HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime, boolean skipLocking);
 
+  /**
+   * Schedule rollback for the instant time.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for scheduling rollback
+   * @param instantToRollback instant to be rolled back
+   * @param shouldRollbackUsingMarkers uses marker based rollback strategy when set to true. uses list based rollback when false.
+   * @return HoodieRollbackPlan containing info on rollback.
+   */
+  public abstract Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
+                                                              String instantTime,
+                                                              HoodieInstant instantToRollback,
+                                                              boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers);
+  
   /**
    * Rollback the (inflight/committed) record changes with the given commit time.
    * <pre>
@@ -430,7 +467,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieRollbackMetadata rollback(HoodieEngineContext context,
                                                   String rollbackInstantTime,
                                                   HoodieInstant commitInstant,
-                                                  boolean deleteInstants);
+                                                  boolean deleteInstants,
+                                                  boolean skipLocking);
 
   /**
    * Create a savepoint at the specified instant, so that the table can be restored
@@ -450,10 +488,23 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
                                                 String instantToRestore);
 
   /**
+   * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file
+   * to the .requested file.
+   *
+   * @param inflightInstant Inflight Compaction Instant
+   */
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers());
+    rollback(context, commitTime, inflightInstant, false, false);
+    getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
+  }
+
+  /**
    * Finalize the written data onto storage. Perform any final cleanups.
    *
    * @param context HoodieEngineContext
-   * @param stats List of HoodieWriteStats
+   * @param stats   List of HoodieWriteStats
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
@@ -682,4 +733,42 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // to engine context, and it ends up being null (as its not serializable and marked transient here).
     return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
   }
+
+  /**
+   * Get Table metadata writer.
+   *
+   * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
+   * @return instance of {@link HoodieTableMetadataWriter
+   */
+  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
+    return getMetadataWriter(triggeringInstantTimestamp, Option.empty());
+  }
+
+  /**
+   * Check if action type is a table service.
+   * @param actionType action type of interest.
+   * @return true if action represents a table service. false otherwise.
+   */
+  public abstract boolean isTableServiceAction(String actionType);
+
+  /**
+   * Get Table metadata writer.
+   * <p>
+   * Note:
+   * Get the metadata writer for the conf. If the metadata table doesn't exist,
+   * this wil trigger the creation of the table and the initial bootstrapping.
+   * Since this call is under the transaction lock, other concurrent writers
+   * are blocked from doing the similar initial metadata table creation and
+   * the bootstrapping.
+   *
+   * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  public <T extends SpecificRecordBase> Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                                            Option<T> actionMetadata) {
+    // Each engine is expected to override this and
+    // provide the actual metadata writer, if enabled.
+    return Option.empty();
+  }
+
 }

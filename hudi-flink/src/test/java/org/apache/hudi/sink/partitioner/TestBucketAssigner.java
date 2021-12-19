@@ -22,9 +22,6 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
@@ -51,9 +48,9 @@ import java.util.Map;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -358,11 +355,11 @@ public class TestBucketAssigner {
     assertTrue(smallFiles1.isEmpty(), "Should have no small files");
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    Option<String> instantOption = getLastCompleteInstant(writeProfile);
-    assertFalse(instantOption.isPresent());
+    String instantOption = getLastCompleteInstant(writeProfile);
+    assertNull(instantOption);
 
     writeProfile.reload(1);
-    String instant1 = getLastCompleteInstant(writeProfile).orElse(null);
+    String instant1 = getLastCompleteInstant(writeProfile);
     assertNotNull(instant1);
     List<SmallFile> smallFiles2 = writeProfile.getSmallFiles("par1");
     assertThat("Should have 1 small file", smallFiles2.size(), is(1));
@@ -376,7 +373,7 @@ public class TestBucketAssigner {
         smallFiles3.get(0).location.getInstantTime(), is(instant1));
 
     writeProfile.reload(2);
-    String instant2 = getLastCompleteInstant(writeProfile).orElse(null);
+    String instant2 = getLastCompleteInstant(writeProfile);
     assertNotEquals(instant2, instant1, "Should have new complete instant");
     List<SmallFile> smallFiles4 = writeProfile.getSmallFiles("par1");
     assertThat("Should have 1 small file", smallFiles4.size(), is(1));
@@ -389,12 +386,11 @@ public class TestBucketAssigner {
     WriteProfile writeProfile = new WriteProfile(writeConfig, context);
     assertTrue(writeProfile.getMetadataCache().isEmpty(), "Empty table should no have any instant metadata");
 
-    HoodieTimeline emptyTimeline = writeProfile.getTable().getActiveTimeline();
-
     // write 3 instants of data
     for (int i = 0; i < 3; i++) {
       TestData.writeData(TestData.DATA_SET_INSERT, conf);
     }
+    // the record profile triggers the metadata loading
     writeProfile.reload(1);
     assertThat("Metadata cache should have same number entries as timeline instants",
         writeProfile.getMetadataCache().size(), is(3));
@@ -402,15 +398,10 @@ public class TestBucketAssigner {
     writeProfile.getSmallFiles("par1");
     assertThat("The metadata should be reused",
         writeProfile.getMetadataCache().size(), is(3));
-
-    writeProfile.reload(2);
-    writeProfile.initFSViewIfNecessary(emptyTimeline);
-    assertTrue(writeProfile.getMetadataCache().isEmpty(), "Metadata cache should be all cleaned");
   }
 
-  private static Option<String> getLastCompleteInstant(WriteProfile profile) {
-    return profile.getTable().getMetaClient().getCommitsTimeline()
-        .filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp);
+  private static String getLastCompleteInstant(WriteProfile profile) {
+    return StreamerUtil.getLastCompletedInstant(profile.getMetaClient());
   }
 
   private void assertBucketEquals(

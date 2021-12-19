@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
+
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
 import org.apache.hudi.common.util.{Option => HOption}
@@ -27,29 +28,32 @@ import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.sql.InsertMode
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
+
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
-import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 
 import java.util.Properties
 
+import scala.collection.JavaConverters._
+
 /**
  * Command for insert into hoodie table.
  */
 case class InsertIntoHoodieTableCommand(
-                                         logicalRelation: LogicalRelation,
-                                         query: LogicalPlan,
-                                         partition: Map[String, Option[String]],
-                                         overwrite: Boolean)
+    logicalRelation: LogicalRelation,
+    query: LogicalPlan,
+    partition: Map[String, Option[String]],
+    overwrite: Boolean)
   extends RunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
@@ -76,23 +80,26 @@ object InsertIntoHoodieTableCommand extends Logging {
    * @param refreshTable Whether to refresh the table after insert finished.
    * @param extraOptions Extra options for insert.
    */
-  def run(sparkSession: SparkSession, table: CatalogTable, query: LogicalPlan,
-          insertPartitions: Map[String, Option[String]],
-          overwrite: Boolean, refreshTable: Boolean = true,
-          extraOptions: Map[String, String] = Map.empty): Boolean = {
+  def run(sparkSession: SparkSession,
+      table: CatalogTable,
+      query: LogicalPlan,
+      insertPartitions: Map[String, Option[String]],
+      overwrite: Boolean,
+      refreshTable: Boolean = true,
+      extraOptions: Map[String, String] = Map.empty): Boolean = {
 
-    val config = buildHoodieInsertConfig(table, sparkSession, overwrite, insertPartitions, extraOptions)
+    val hoodieCatalogTable = new HoodieCatalogTable(sparkSession, table)
+    val config = buildHoodieInsertConfig(hoodieCatalogTable, sparkSession, overwrite, insertPartitions, extraOptions)
 
-    val mode = if (overwrite && table.partitionColumnNames.isEmpty) {
+    val mode = if (overwrite && hoodieCatalogTable.partitionFields.isEmpty) {
       // insert overwrite non-partition table
       SaveMode.Overwrite
     } else {
       // for insert into or insert overwrite partition we use append mode.
       SaveMode.Append
     }
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(config)
     val conf = sparkSession.sessionState.conf
-    val alignedQuery = alignOutputFields(query, table, insertPartitions, conf)
+    val alignedQuery = alignOutputFields(query, hoodieCatalogTable, insertPartitions, conf)
     // If we create dataframe using the Dataset.ofRows(sparkSession, alignedQuery),
     // The nullable attribute of fields will lost.
     // In order to pass the nullable attribute to the inputDF, we specify the schema
@@ -100,7 +107,7 @@ object InsertIntoHoodieTableCommand extends Logging {
     val inputDF = sparkSession.createDataFrame(
       Dataset.ofRows(sparkSession, alignedQuery).rdd, alignedQuery.schema)
     val success =
-      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, parameters, inputDF)._1
+      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, inputDF)._1
     if (success) {
       if (refreshTable) {
         sparkSession.catalog.refreshTable(table.identifier.unquotedString)
@@ -114,18 +121,18 @@ object InsertIntoHoodieTableCommand extends Logging {
   /**
    * Aligned the type and name of query's output fields with the result table's fields.
    * @param query The insert query which to aligned.
-   * @param table The result table.
+   * @param hoodieCatalogTable The result hoodie catalog table.
    * @param insertPartitions The insert partition map.
    * @param conf The SQLConf.
    * @return
    */
   private def alignOutputFields(
     query: LogicalPlan,
-    table: CatalogTable,
+    hoodieCatalogTable: HoodieCatalogTable,
     insertPartitions: Map[String, Option[String]],
     conf: SQLConf): LogicalPlan = {
 
-    val targetPartitionSchema = table.partitionSchema
+    val targetPartitionSchema = hoodieCatalogTable.partitionSchema
 
     val staticPartitionValues = insertPartitions.filter(p => p._2.isDefined).mapValues(_.get)
     assert(staticPartitionValues.isEmpty ||
@@ -133,20 +140,22 @@ object InsertIntoHoodieTableCommand extends Logging {
       s"Required partition columns is: ${targetPartitionSchema.json}, Current static partitions " +
         s"is: ${staticPartitionValues.mkString("," + "")}")
 
-    assert(staticPartitionValues.size + query.output.size == table.schema.size,
-      s"Required select columns count: ${removeMetaFields(table.schema).size}, " +
+    val queryOutputWithoutMetaFields = removeMetaFields(query.output)
+    assert(staticPartitionValues.size + queryOutputWithoutMetaFields.size
+        == hoodieCatalogTable.tableSchemaWithoutMetaFields.size,
+      s"Required select columns count: ${hoodieCatalogTable.tableSchemaWithoutMetaFields.size}, " +
         s"Current select columns(including static partition column) count: " +
-        s"${staticPartitionValues.size + removeMetaFields(query.output).size}，columns: " +
-        s"(${(removeMetaFields(query.output).map(_.name) ++ staticPartitionValues.keys).mkString(",")})")
-    val queryDataFields = if (staticPartitionValues.isEmpty) { // insert dynamic partition
-      query.output.dropRight(targetPartitionSchema.fields.length)
+        s"${staticPartitionValues.size + queryOutputWithoutMetaFields.size}，columns: " +
+        s"(${(queryOutputWithoutMetaFields.map(_.name) ++ staticPartitionValues.keys).mkString(",")})")
+
+    val queryDataFieldsWithoutMetaFields = if (staticPartitionValues.isEmpty) { // insert dynamic partition
+      queryOutputWithoutMetaFields.dropRight(targetPartitionSchema.fields.length)
     } else { // insert static partition
-      query.output
+      queryOutputWithoutMetaFields
     }
-    val targetDataSchema = table.dataSchema
     // Align for the data fields of the query
-    val dataProjects = queryDataFields.zip(targetDataSchema.fields).map {
-      case (dataAttr, targetField) =>
+    val dataProjectsWithputMetaFields = queryDataFieldsWithoutMetaFields.zip(
+      hoodieCatalogTable.dataSchemaWithoutMetaFields.fields).map { case (dataAttr, targetField) =>
         val castAttr = castIfNeeded(dataAttr.withNullability(targetField.nullable),
           targetField.dataType, conf)
         Alias(castAttr, targetField.name)()
@@ -155,9 +164,9 @@ object InsertIntoHoodieTableCommand extends Logging {
     val partitionProjects = if (staticPartitionValues.isEmpty) { // insert dynamic partitions
       // The partition attributes is followed the data attributes in the query
       // So we init the partitionAttrPosition with the data schema size.
-      var partitionAttrPosition = targetDataSchema.size
+      var partitionAttrPosition = hoodieCatalogTable.dataSchemaWithoutMetaFields.size
       targetPartitionSchema.fields.map(f => {
-        val partitionAttr = query.output(partitionAttrPosition)
+        val partitionAttr = queryOutputWithoutMetaFields(partitionAttrPosition)
         partitionAttrPosition = partitionAttrPosition + 1
         val castAttr = castIfNeeded(partitionAttr.withNullability(f.nullable), f.dataType, conf)
         Alias(castAttr, f.name)()
@@ -170,9 +179,7 @@ object InsertIntoHoodieTableCommand extends Logging {
         Alias(castAttr, f.name)()
       })
     }
-    // Remove the hoodie meta fields from the projects as we do not need these to write
-    val withoutMetaFieldDataProjects = dataProjects.filter(c => !HoodieSqlUtils.isMetaField(c.name))
-    val alignedProjects = withoutMetaFieldDataProjects ++ partitionProjects
+    val alignedProjects = dataProjectsWithputMetaFields ++ partitionProjects
     Project(alignedProjects, query)
   }
 
@@ -181,72 +188,65 @@ object InsertIntoHoodieTableCommand extends Logging {
    * @return
    */
   private def buildHoodieInsertConfig(
-      table: CatalogTable,
+      hoodieCatalogTable: HoodieCatalogTable,
       sparkSession: SparkSession,
       isOverwrite: Boolean,
       insertPartitions: Map[String, Option[String]] = Map.empty,
       extraOptions: Map[String, String]): Map[String, String] = {
 
     if (insertPartitions.nonEmpty &&
-      (insertPartitions.keys.toSet != table.partitionColumnNames.toSet)) {
+      (insertPartitions.keys.toSet != hoodieCatalogTable.partitionFields.toSet)) {
       throw new IllegalArgumentException(s"Insert partition fields" +
         s"[${insertPartitions.keys.mkString(" " )}]" +
-        s" not equal to the defined partition in table[${table.partitionColumnNames.mkString(",")}]")
+        s" not equal to the defined partition in table[${hoodieCatalogTable.partitionFields.mkString(",")}]")
     }
-    val options = table.storage.properties ++ extraOptions
+    val path = hoodieCatalogTable.tableLocation
+    val tableType = hoodieCatalogTable.tableTypeName
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val tableSchema = hoodieCatalogTable.tableSchema
+
+    val options = hoodieCatalogTable.catalogProperties ++ tableConfig.getProps.asScala.toMap ++ extraOptions
     val parameters = withSparkConf(sparkSession, options)()
 
-    val tableType = parameters.getOrElse(TABLE_TYPE.key, TABLE_TYPE.defaultValue)
+    val preCombineColumn = hoodieCatalogTable.preCombineKey.getOrElse("")
+    val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
 
-    val partitionFields = table.partitionColumnNames.mkString(",")
-    val path = getTableLocation(table, sparkSession)
-
-    val tableSchema = table.schema
-
-    val primaryColumns = HoodieOptionConfig.getPrimaryColumns(options)
-
-    val keyGenClass = if (primaryColumns.nonEmpty) {
-      classOf[SqlKeyGenerator].getCanonicalName
-    } else {
-      classOf[UuidKeyGenerator].getName
-    }
-
-    val dropDuplicate = sparkSession.conf
-      .getOption(INSERT_DROP_DUPS.key)
-      .getOrElse(INSERT_DROP_DUPS.defaultValue)
-      .toBoolean
+    val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
+    val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
+    val keyGeneratorClassName = Option(tableConfig.getKeyGeneratorClassName)
+      .getOrElse(classOf[ComplexKeyGenerator].getCanonicalName)
 
     val enableBulkInsert = parameters.getOrElse(DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.key,
       DataSourceWriteOptions.SQL_ENABLE_BULK_INSERT.defaultValue()).toBoolean
-    val isPartitionedTable = table.partitionColumnNames.nonEmpty
-    val isPrimaryKeyTable = primaryColumns.nonEmpty
+    val dropDuplicate = sparkSession.conf
+      .getOption(INSERT_DROP_DUPS.key).getOrElse(INSERT_DROP_DUPS.defaultValue).toBoolean
+
     val insertMode = InsertMode.of(parameters.getOrElse(DataSourceWriteOptions.SQL_INSERT_MODE.key,
       DataSourceWriteOptions.SQL_INSERT_MODE.defaultValue()))
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
-
+    val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
+    val hasPrecombineColumn = preCombineColumn.nonEmpty
     val operation =
-      (isPrimaryKeyTable, enableBulkInsert, isOverwrite, dropDuplicate) match {
-        case (true, true, _, _) if !isNonStrictMode =>
+      (enableBulkInsert, isOverwrite, dropDuplicate, isNonStrictMode, isPartitionedTable) match {
+        case (true, _, _, false, _) =>
           throw new IllegalArgumentException(s"Table with primaryKey can not use bulk insert in ${insertMode.value()} mode.")
-        case (_, true, true, _) if isPartitionedTable =>
+        case (true, true, _, _, true) =>
           throw new IllegalArgumentException(s"Insert Overwrite Partition can not use bulk insert.")
-        case (_, true, _, true) =>
+        case (true, _, true, _, _) =>
           throw new IllegalArgumentException(s"Bulk insert cannot support drop duplication." +
             s" Please disable $INSERT_DROP_DUPS and try again.")
         // if enableBulkInsert is true, use bulk insert for the insert overwrite non-partitioned table.
-        case (_, true, true, _) if !isPartitionedTable => BULK_INSERT_OPERATION_OPT_VAL
-        // insert overwrite partition
-        case (_, _, true, _) if isPartitionedTable => INSERT_OVERWRITE_OPERATION_OPT_VAL
+        case (true, true, _, _, false) => BULK_INSERT_OPERATION_OPT_VAL
         // insert overwrite table
-        case (_, _, true, _) if !isPartitionedTable => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
-        // if it is pk table and the dropDuplicate has disable, use the upsert operation for strict and upsert mode.
-        case (true, false, false, false) if !isNonStrictMode => UPSERT_OPERATION_OPT_VAL
-        // if enableBulkInsert is true and the table is non-primaryKeyed, use the bulk insert operation
-        case (false, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL
+        case (false, true, _, _, false) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+        // insert overwrite partition
+        case (_, true, _, _, true) => INSERT_OVERWRITE_OPERATION_OPT_VAL
+        // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
+        case (false, false, false, false, _) if hasPrecombineColumn => UPSERT_OPERATION_OPT_VAL
         // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
-        case (true, true, _, _) if isNonStrictMode => BULK_INSERT_OPERATION_OPT_VAL
+        case (true, _, _, true, _) => BULK_INSERT_OPERATION_OPT_VAL
         // for the rest case, use the insert operation
-        case (_, _, _, _) => INSERT_OPERATION_OPT_VAL
+        case _ => INSERT_OPERATION_OPT_VAL
       }
 
     val payloadClassName = if (operation ==  UPSERT_OPERATION_OPT_VAL &&
@@ -264,28 +264,29 @@ object InsertIntoHoodieTableCommand extends Logging {
       Map(
         "path" -> path,
         TABLE_TYPE.key -> tableType,
-        TBL_NAME.key -> table.identifier.table,
-        PRECOMBINE_FIELD.key -> tableSchema.fields.last.name,
+        TBL_NAME.key -> hoodieCatalogTable.tableName,
+        PRECOMBINE_FIELD.key -> preCombineColumn,
         OPERATION.key -> operation,
-        KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
-        RECORDKEY_FIELD.key -> primaryColumns.mkString(","),
+        HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
+        URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
+        KEYGENERATOR_CLASS_NAME.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME -> keyGeneratorClassName,
+        RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         PARTITIONPATH_FIELD.key -> partitionFields,
         PAYLOAD_CLASS_NAME.key -> payloadClassName,
         ENABLE_ROW_WRITER.key -> enableBulkInsert.toString,
-        HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> isPrimaryKeyTable.toString,
+        HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> String.valueOf(hasPrecombineColumn),
         META_SYNC_ENABLED.key -> enableHive.toString,
         HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
         HIVE_USE_JDBC.key -> "false",
-        HIVE_DATABASE.key -> table.identifier.database.getOrElse("default"),
-        HIVE_TABLE.key -> table.identifier.table,
+        HIVE_DATABASE.key -> hoodieCatalogTable.table.identifier.database.getOrElse("default"),
+        HIVE_TABLE.key -> hoodieCatalogTable.table.identifier.table,
         HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
-        HIVE_STYLE_PARTITIONING.key -> "true",
         HIVE_PARTITION_FIELDS.key -> partitionFields,
         HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-        URL_ENCODE_PARTITIONING.key -> "true",
         HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "200",
         HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key -> "200",
-        SqlKeyGenerator.PARTITION_SCHEMA -> table.partitionSchema.toDDL
+        SqlKeyGenerator.PARTITION_SCHEMA -> hoodieCatalogTable.partitionSchema.toDDL
       )
     }
   }
@@ -303,7 +304,7 @@ class ValidateDuplicateKeyPayload(record: GenericRecord, orderingVal: Comparable
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
-                               schema: Schema, properties: Properties): HOption[IndexedRecord] = {
+      schema: Schema, properties: Properties): HOption[IndexedRecord] = {
     val key = currentValue.asInstanceOf[GenericRecord].get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
     throw new HoodieDuplicateKeyException(key)
   }

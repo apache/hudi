@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ.testsuite;
 
+import java.io.IOException;
 import java.io.Serializable;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -236,7 +237,7 @@ public class HoodieTestSuiteWriter implements Serializable {
 
   public Option<String> scheduleCompaction(Option<Map<String, String>> previousCommitExtraMetadata) throws
       Exception {
-    if (!cfg.useDeltaStreamer) {
+    if (cfg.useDeltaStreamer) {
       deltaStreamerWrapper.scheduleCompact();
       return Option.empty();
     } else {
@@ -251,11 +252,26 @@ public class HoodieTestSuiteWriter implements Serializable {
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
       extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
-      if (generatedDataStats != null) {
+      if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
       }
       writeClient.commit(instantTime.get(), records, Option.of(extraMetadata));
+    }
+  }
+
+  public void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
+                     Option<String> instantTime) throws IOException {
+    if (!cfg.useDeltaStreamer) {
+      Map<String, String> extraMetadata = new HashMap<>();
+      /** Store the checkpoint in the commit metadata just like
+       * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
+      extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
+      if (generatedDataStats != null && generatedDataStats.count() > 1) {
+        // Just stores the path where this batch of data is generated to
+        extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
+      }
+      writeClient.commitCompaction(instantTime.get(), records, Option.of(extraMetadata));
     }
   }
 

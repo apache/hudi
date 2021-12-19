@@ -181,7 +181,7 @@ public class BulkInsertWriterHelper {
       return getHoodieWriteStatuses().stream()
           .map(BulkInsertWriterHelper::toWriteStatus).collect(Collectors.toList());
     } catch (IOException e) {
-      throw new HoodieException("Error collect the write status for task [" + taskID + "]");
+      throw new HoodieException("Error collect the write status for task [" + taskID + "]", e);
     }
   }
 

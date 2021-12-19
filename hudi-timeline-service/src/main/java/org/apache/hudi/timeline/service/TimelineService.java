@@ -321,8 +321,10 @@ public class TimelineService {
     if (requestHandler != null) {
       this.requestHandler.stop();
     }
-    this.app.stop();
-    this.app = null;
+    if (this.app != null) {
+      this.app.stop();
+      this.app = null;
+    }
     this.fsViewsManager.close();
     LOG.info("Closed Timeline Service");
   }

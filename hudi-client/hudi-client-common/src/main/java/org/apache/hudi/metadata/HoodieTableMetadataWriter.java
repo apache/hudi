@@ -19,7 +19,6 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -31,13 +30,34 @@ import java.io.Serializable;
  */
 public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
-  void update(HoodieCommitMetadata commitMetadata, String instantTime);
+  /**
+   * Update the metadata table due to a COMMIT operation.
+   * @param commitMetadata commit metadata of the operation of interest.
+   * @param instantTime instant time of the commit.
+   * @param isTableServiceAction true if caller is a table service. false otherwise. Only regular write operations can trigger metadata table services and this argument
+   *                       will assist in this.
+   */
+  void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction);
 
-  void update(HoodieCleanerPlan cleanerPlan, String instantTime);
-
+  /**
+   * Update the metadata table due to a CLEAN operation.
+   * @param cleanMetadata clean metadata of the operation of interest.
+   * @param instantTime instant time of the commit.
+   */
   void update(HoodieCleanMetadata cleanMetadata, String instantTime);
 
+  /**
+   * Update the metadata table due to a RESTORE operation.
+   * @param restoreMetadata restore metadata of the operation of interest.
+   * @param instantTime instant time of the commit.
+   */
   void update(HoodieRestoreMetadata restoreMetadata, String instantTime);
 
+  /**
+   * Update the metadata table due to a ROLLBACK operation.
+   * @param rollbackMetadata rollback metadata of the operation of interest.
+   * @param instantTime instant time of the commit.
+   */
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
+
 }

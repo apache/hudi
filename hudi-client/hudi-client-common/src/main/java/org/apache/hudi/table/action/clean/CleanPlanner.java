@@ -443,7 +443,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
     } else if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
       Instant instant = Instant.now();
       ZonedDateTime commitDateTime = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault());
-      String retainInstantsAfter = HoodieActiveTimeline.COMMIT_FORMATTER.format(Date.from(commitDateTime.minusHours(hoursRetained).toInstant()));
+      String retainInstantsAfter = HoodieActiveTimeline.formatDate(Date.from(commitDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(commitTimeline.getInstants().filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(),
               HoodieTimeline.GREATER_THAN_OR_EQUALS, retainInstantsAfter)).findFirst());
     }

@@ -48,6 +48,6 @@ public class CommitUtil {
 
   public static String getTimeDaysAgo(int numberOfDays) {
     Date date = Date.from(ZonedDateTime.now().minusDays(numberOfDays).toInstant());
-    return HoodieActiveTimeline.COMMIT_FORMATTER.format(date);
+    return HoodieActiveTimeline.formatDate(date);
   }
 }

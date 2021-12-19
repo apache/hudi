@@ -44,6 +44,7 @@ import org.apache.hudi.integ.testsuite.converter.UpdateConverter;
 import org.apache.hudi.integ.testsuite.reader.DFSAvroDeltaInputReader;
 import org.apache.hudi.integ.testsuite.reader.DFSHoodieDatasetInputReader;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputReader;
+import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter;
@@ -75,7 +76,7 @@ public class DeltaGenerator implements Serializable {
   private int batchId;
 
   public DeltaGenerator(DFSDeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
-      String schemaStr, BuiltinKeyGenerator keyGenerator) {
+                        String schemaStr, BuiltinKeyGenerator keyGenerator) {
     this.deltaOutputConfig = deltaOutputConfig;
     this.jsc = jsc;
     this.sparkSession = sparkSession;
@@ -123,7 +124,11 @@ public class DeltaGenerator implements Serializable {
         .mapPartitionsWithIndex((index, p) -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
               minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions, startPartition));
-        }, true);
+        }, true)
+        .map(record -> {
+          record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
+          return record;
+        });
 
     if (deltaOutputConfig.getInputParallelism() < numPartitions) {
       inputBatch = inputBatch.coalesce(deltaOutputConfig.getInputParallelism());
@@ -167,7 +172,11 @@ public class DeltaGenerator implements Serializable {
         log.info("Repartitioning records done for updates");
         UpdateConverter converter = new UpdateConverter(schemaStr, config.getRecordSize(),
             partitionPathFieldNames, recordRowKeyFieldNames);
-        JavaRDD<GenericRecord> updates = converter.convert(adjustedRDD);
+        JavaRDD<GenericRecord> convertedRecords = converter.convert(adjustedRDD);
+        JavaRDD<GenericRecord> updates = convertedRecords.map(record -> {
+          record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
+          return record;
+        });
         updates.persist(StorageLevel.DISK_ONLY());
         if (inserts == null) {
           inserts = updates;
@@ -205,11 +214,16 @@ public class DeltaGenerator implements Serializable {
               .getNumRecordsDelete());
         }
       }
+
       log.info("Repartitioning records for delete");
       // persist this since we will make multiple passes over this
       adjustedRDD = adjustedRDD.repartition(jsc.defaultParallelism());
       Converter converter = new DeleteConverter(schemaStr, config.getRecordSize());
-      JavaRDD<GenericRecord> deletes = converter.convert(adjustedRDD);
+      JavaRDD<GenericRecord> convertedRecords = converter.convert(adjustedRDD);
+      JavaRDD<GenericRecord> deletes = convertedRecords.map(record -> {
+        record.put(SchemaUtils.SOURCE_ORDERING_FIELD, batchId);
+        return record;
+      });
       deletes.persist(StorageLevel.DISK_ONLY());
       return deletes;
     } else {

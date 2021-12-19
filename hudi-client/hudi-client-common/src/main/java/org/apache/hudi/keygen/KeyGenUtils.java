@@ -40,7 +40,7 @@ public class KeyGenUtils {
   protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
   protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
-  protected static final String DEFAULT_PARTITION_PATH = "default";
+  protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
 
   /**
@@ -121,8 +121,8 @@ public class KeyGenUtils {
     for (String partitionPathField : partitionPathFields) {
       String fieldVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true);
       if (fieldVal == null || fieldVal.isEmpty()) {
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + DEFAULT_PARTITION_PATH
-            : DEFAULT_PARTITION_PATH);
+        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + HUDI_DEFAULT_PARTITION_PATH
+            : HUDI_DEFAULT_PARTITION_PATH);
       } else {
         if (encodePartitionPath) {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
@@ -147,7 +147,7 @@ public class KeyGenUtils {
       boolean hiveStylePartitioning, boolean encodePartitionPath) {
     String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true);
     if (partitionPath == null || partitionPath.isEmpty()) {
-      partitionPath = DEFAULT_PARTITION_PATH;
+      partitionPath = HUDI_DEFAULT_PARTITION_PATH;
     }
     if (encodePartitionPath) {
       partitionPath = PartitionPathEncodeUtils.escapePathName(partitionPath);

@@ -18,12 +18,6 @@
 
 package org.apache.hudi.integ.testsuite.job;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.util.UUID;
-import java.util.stream.Stream;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -37,20 +31,30 @@ import org.apache.hudi.integ.testsuite.dag.HiveSyncDagGeneratorMOR;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator;
 import org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
+import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
+import org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.AvroDFSSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.UUID;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Unit test against {@link HoodieTestSuiteJob}.
@@ -71,6 +75,9 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
 
   private static final String COW_DAG_FILE_NAME_SPARK_DATASOURCE_NODES = "unit-test-cow-dag-spark-datasource.yaml";
   private static final String COW_DAG_SPARK_DATASOURCE_NODES_RELATIVE_PATH = "/hudi-integ-test/src/test/resources/unit-test-cow-dag-spark-datasource.yaml";
+
+  private static final String SPARK_SQL_DAG_FILE_NAME = "unit-test-spark-sql-dag.yaml";
+  private static final String SPARK_SQL_DAG_SOURCE_PATH = "/hudi-integ-test/src/test/resources/" + SPARK_SQL_DAG_FILE_NAME;
 
   public static Stream<Arguments> configParams() {
     Object[][] data =
@@ -102,6 +109,8 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
         + COW_DAG_SPARK_DATASOURCE_NODES_RELATIVE_PATH, dfs, dfsBasePath + "/" + COW_DAG_FILE_NAME_SPARK_DATASOURCE_NODES);
     UtilitiesTestBase.Helpers.savePropsToDFS(getProperties(), dfs, dfsBasePath + "/test-source"
         + ".properties");
+    UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(System.getProperty("user.dir") + "/.."
+        + SPARK_SQL_DAG_SOURCE_PATH, dfs, dfsBasePath + "/" + SPARK_SQL_DAG_FILE_NAME);
 
     // Properties used for the delta-streamer which incrementally pulls from upstream DFS Avro source and
     // writes to downstream hudi table
@@ -269,22 +278,35 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 3);
   }
 
+  @Test
+  public void testSparkSqlDag() throws Exception {
+    boolean useDeltaStreamer = false;
+    this.cleanDFSDirs();
+    String inputBasePath = dfsBasePath + "/input";
+    String outputBasePath = dfsBasePath + "/result";
+    HoodieTestSuiteConfig cfg = makeConfig(inputBasePath, outputBasePath, useDeltaStreamer, HoodieTableType
+        .COPY_ON_WRITE.name());
+    cfg.workloadYamlPath = dfsBasePath + "/" + SPARK_SQL_DAG_FILE_NAME;
+    HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
+    hoodieTestSuiteJob.runTestSuite();
+  }
+
   protected HoodieTestSuiteConfig makeConfig(String inputBasePath, String outputBasePath, boolean useDeltaStream,
-      String tableType) {
+                                             String tableType) {
     HoodieTestSuiteConfig cfg = new HoodieTestSuiteConfig();
     cfg.targetBasePath = outputBasePath;
     cfg.inputBasePath = inputBasePath;
     cfg.targetTableName = "table1";
     cfg.tableType = tableType;
     cfg.sourceClassName = AvroDFSSource.class.getName();
-    cfg.sourceOrderingField = "timestamp";
+    cfg.sourceOrderingField = SchemaUtils.SOURCE_ORDERING_FIELD;
     cfg.propsFilePath = dfsBasePath + "/test-source.properties";
     cfg.outputTypeName = DeltaOutputMode.DFS.name();
     cfg.inputFormatName = DeltaInputType.AVRO.name();
     cfg.limitFileSize = 1024 * 1024L;
     cfg.sourceLimit = 20000000;
     cfg.workloadDagGenerator = WorkflowDagGenerator.class.getName();
-    cfg.schemaProviderClassName = FilebasedSchemaProvider.class.getName();
+    cfg.schemaProviderClassName = TestSuiteFileBasedSchemaProvider.class.getName();
     cfg.useDeltaStreamer = useDeltaStream;
     return cfg;
   }

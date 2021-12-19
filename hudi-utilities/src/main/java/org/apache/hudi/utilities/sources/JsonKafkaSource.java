@@ -69,7 +69,11 @@ public class JsonKafkaSource extends JsonSource {
 
   private JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {
     return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-            LocationStrategies.PreferConsistent()).map(x -> (String) x.value());
+            LocationStrategies.PreferConsistent()).filter(x -> {
+              String msgValue = (String) x.value();
+              //Filter null messages from Kafka to prevent Exceptions
+              return msgValue != null;
+            }).map(x -> (String) x.value());
   }
 
   @Override

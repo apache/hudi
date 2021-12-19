@@ -32,10 +32,13 @@ public interface UpgradeHandler {
   /**
    * to be invoked to upgrade hoodie table from one version to a higher version.
    *
-   * @param config instance of {@link HoodieWriteConfig} to be used.
-   * @param context instance of {@link HoodieEngineContext} to be used.
-   * @param instantTime current instant time that should not be touched.
+   * @param config                 instance of {@link HoodieWriteConfig} to be used.
+   * @param context                instance of {@link HoodieEngineContext} to be used.
+   * @param instantTime            current instant time that should not be touched.
+   * @param upgradeDowngradeHelper instance of {@link BaseUpgradeDowngradeHelper} to be used.
    * @return Map of config properties and its values to be added to table properties.
    */
-  Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime);
+  Map<ConfigProperty, String> upgrade(
+      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
+      BaseUpgradeDowngradeHelper upgradeDowngradeHelper);
 }

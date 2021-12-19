@@ -153,7 +153,7 @@ public class HoodieSnapshotExporter {
   }
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg) {
-    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false, false);
+    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {

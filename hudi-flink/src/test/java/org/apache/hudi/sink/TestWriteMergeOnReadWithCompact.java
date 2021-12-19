@@ -38,6 +38,11 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   }
 
   @Override
+  public void testInsertClustering() {
+    // insert clustering is only valid for cow table.
+  }
+
+  @Override
   protected Map<String, String> getExpectedBeforeCheckpointComplete() {
     return EXPECTED1;
   }

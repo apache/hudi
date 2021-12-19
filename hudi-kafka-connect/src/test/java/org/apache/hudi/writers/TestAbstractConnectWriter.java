@@ -148,7 +148,7 @@ public class TestAbstractConnectWriter {
     private List<HoodieRecord> writtenRecords;
 
     public AbstractHudiConnectWriterTestWrapper(KafkaConnectConfigs connectConfigs, KeyGenerator keyGenerator, SchemaProvider schemaProvider) {
-      super(connectConfigs, keyGenerator, schemaProvider);
+      super(connectConfigs, keyGenerator, schemaProvider, "000");
       writtenRecords = new ArrayList<>();
     }
 
@@ -157,12 +157,12 @@ public class TestAbstractConnectWriter {
     }
 
     @Override
-    protected void writeHudiRecord(HoodieRecord<HoodieAvroPayload> record) {
+    protected void writeHudiRecord(HoodieRecord<?> record) {
       writtenRecords.add(record);
     }
 
     @Override
-    protected List<WriteStatus> flushHudiRecords() {
+    protected List<WriteStatus> flushRecords() {
       return null;
     }
   }

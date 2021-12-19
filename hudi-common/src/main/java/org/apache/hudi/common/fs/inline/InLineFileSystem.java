@@ -63,7 +63,7 @@ public class InLineFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path inlinePath, int bufferSize) throws IOException {
-    Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath);
+    Path outerPath = InLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FSDataInputStream outerStream = outerFs.open(outerPath, bufferSize);
     return new InLineFsDataInputStream(InLineFSUtils.startOffset(inlinePath), outerStream, InLineFSUtils.length(inlinePath));
@@ -80,7 +80,7 @@ public class InLineFileSystem extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path inlinePath) throws IOException {
-    Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath);
+    Path outerPath = InLineFSUtils.getOuterFilePathFromInlinePath(inlinePath);
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FileStatus status = outerFs.getFileStatus(outerPath);
     FileStatus toReturn = new FileStatus(InLineFSUtils.length(inlinePath), status.isDirectory(), status.getReplication(), status.getBlockSize(),

@@ -18,16 +18,13 @@
 
 package org.apache.hudi.connect.kafka;
 
-import org.apache.hudi.connect.transaction.ControlEvent;
+import org.apache.hudi.connect.ControlMessage;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -45,7 +42,7 @@ public class KafkaControlProducer {
 
   private final String bootstrapServers;
   private final String controlTopicName;
-  private Producer<String, ControlEvent> producer;
+  private Producer<String, byte[]> producer;
 
   public KafkaControlProducer(String bootstrapServers, String controlTopicName) {
     this.bootstrapServers = bootstrapServers;
@@ -57,12 +54,12 @@ public class KafkaControlProducer {
     Properties props = new Properties();
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaJsonSerializer.class);
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
 
     producer = new KafkaProducer<>(
         props,
         new StringSerializer(),
-        new KafkaJsonSerializer()
+        new ByteArraySerializer()
     );
   }
 
@@ -70,28 +67,9 @@ public class KafkaControlProducer {
     producer.close();
   }
 
-  public void publishMessage(ControlEvent message) {
-    ProducerRecord<String, ControlEvent> record
-        = new ProducerRecord<>(controlTopicName, message.key(), message);
+  public void publishMessage(ControlMessage message) {
+    ProducerRecord<String, byte[]> record
+        = new ProducerRecord<>(controlTopicName, message.getType().name(), message.toByteArray());
     producer.send(record);
-  }
-
-  public static class KafkaJsonSerializer implements Serializer<ControlEvent> {
-
-    private static final Logger LOG = LogManager.getLogger(KafkaJsonSerializer.class);
-
-    @Override
-    public byte[] serialize(String topic, ControlEvent data) {
-      byte[] retVal = null;
-      ObjectMapper objectMapper = new ObjectMapper();
-      objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-
-      try {
-        retVal = objectMapper.writeValueAsBytes(data);
-      } catch (Exception e) {
-        LOG.error("Fatal error during serialization of Kafka Control Message ", e);
-      }
-      return retVal;
-    }
   }
 }

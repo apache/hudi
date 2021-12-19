@@ -28,6 +28,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
+import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -57,6 +58,11 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.apache.orc.OrcFile;
+import org.apache.orc.TypeDescription;
+import org.apache.orc.Writer;
+import org.apache.orc.storage.ql.exec.vector.ColumnVector;
+import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetFileWriter.Mode;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -314,6 +320,27 @@ public class UtilitiesTestBase {
       }
     }
 
+    public static void saveORCToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
+      saveORCToDFS(records, targetFile, HoodieTestDataGenerator.ORC_SCHEMA);
+    }
+
+    public static void saveORCToDFS(List<GenericRecord> records, Path targetFile, TypeDescription schema) throws IOException {
+      OrcFile.WriterOptions options = OrcFile.writerOptions(HoodieTestUtils.getDefaultHadoopConf()).setSchema(schema);
+      try (Writer writer = OrcFile.createWriter(targetFile, options)) {
+        VectorizedRowBatch batch = schema.createRowBatch();
+        for (GenericRecord record : records) {
+          addAvroRecord(batch, record, schema);
+          batch.size++;
+          if (batch.size % records.size() == 0 || batch.size == batch.getMaxSize()) {
+            writer.addRowBatch(batch);
+            batch.reset();
+            batch.size = 0;
+          }
+        }
+        writer.addRowBatch(batch);
+      }
+    }
+
     public static TypedProperties setupSchemaOnDFS() throws IOException {
       return setupSchemaOnDFS("delta-streamer-config", "source.avsc");
     }
@@ -363,6 +390,22 @@ public class UtilitiesTestBase {
 
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
+    }
+
+    private static void addAvroRecord(
+            VectorizedRowBatch batch,
+            GenericRecord record,
+            TypeDescription orcSchema
+    ) {
+      for (int c = 0; c < batch.numCols; c++) {
+        ColumnVector colVector = batch.cols[c];
+        final String thisField = orcSchema.getFieldNames().get(c);
+        final TypeDescription type = orcSchema.getChildren().get(c);
+
+        Object fieldValue = record.get(thisField);
+        Schema.Field avroField = record.getSchema().getField(thisField);
+        AvroOrcUtils.addToVector(type, colVector, avroField.schema(), fieldValue, batch.size);
+      }
     }
   }
 }

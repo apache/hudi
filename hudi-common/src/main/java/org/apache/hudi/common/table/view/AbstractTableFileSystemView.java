@@ -125,7 +125,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
-  protected List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
+  public List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
     HoodieTimer timer = new HoodieTimer().startTimer();
     List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
@@ -243,24 +243,38 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         + replacedFileGroups.size() + " replaced file groups");
   }
 
+  @Override
+  public void close() {
+    try {
+      writeLock.lock();
+      clear();
+    } finally {
+      writeLock.unlock();
+    }
+  }
+
   /**
    * Clears the partition Map and reset view states.
    */
   @Override
-  public final void reset() {
+  public void reset() {
     try {
       writeLock.lock();
-
-      addedPartitions.clear();
-      resetViewState();
-
-      bootstrapIndex = null;
-
+      clear();
       // Initialize with new Hoodie timeline.
       init(metaClient, getTimeline());
     } finally {
       writeLock.unlock();
     }
+  }
+
+  /**
+   * Clear the resource.
+   */
+  private void clear() {
+    addedPartitions.clear();
+    resetViewState();
+    bootstrapIndex = null;
   }
 
   /**
@@ -285,9 +299,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         try {
           LOG.info("Building file system view for partition (" + partitionPathStr + ")");
 
-          // Create the path if it does not exist already
           Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
-          FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
           long beginLsTs = System.currentTimeMillis();
           FileStatus[] statuses = listPartition(partitionPath);
           long endLsTs = System.currentTimeMillis();
@@ -317,7 +329,18 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @throws IOException
    */
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    return metaClient.getFs().listStatus(partitionPath);
+    try {
+      return metaClient.getFs().listStatus(partitionPath);
+    } catch (IOException e) {
+      // Create the path if it does not exist already
+      if (!metaClient.getFs().exists(partitionPath)) {
+        metaClient.getFs().mkdirs(partitionPath);
+        return new FileStatus[0];
+      } else {
+        // in case the partition path was created by another caller
+        return metaClient.getFs().listStatus(partitionPath);
+      }
+    }
   }
 
   /**
@@ -921,7 +944,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Default implementation for fetching latest base-files for the partition-path.
    */
-  Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
+  public Stream<HoodieBaseFile> fetchLatestBaseFiles(final String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath)
         .map(fg -> Pair.of(fg.getFileGroupId(), getLatestBaseFile(fg)))
         .filter(p -> p.getValue().isPresent())
@@ -1112,8 +1135,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
     refreshTimeline(newTimeline);
-    addedPartitions.clear();
-    resetViewState();
+    clear();
     // Initialize with new Hoodie timeline.
     init(metaClient, newTimeline);
   }

@@ -19,10 +19,13 @@ package org.apache.spark.sql.hudi.command.payload
 
 import java.util.{Base64, Properties}
 import java.util.concurrent.Callable
-import scala.collection.JavaConverters._
+
 import com.google.common.cache.CacheBuilder
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+
+import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
@@ -31,12 +34,14 @@ import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
-import org.apache.spark.sql.avro.{AvroSerializer, SchemaConverters}
+
+import org.apache.spark.sql.avro.{AvroSerializer, HoodieAvroSerializer, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.getEvaluator
 import org.apache.spark.sql.types.{StructField, StructType}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -309,8 +314,8 @@ object ExpressionPayload {
                 SchemaConverters.toAvroType(conditionType), false)
               val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition), conditionSerializer)
 
-              val assignSqlType = SchemaConverters.toSqlType(writeSchema).dataType.asInstanceOf[StructType]
-              val assignSerializer = new AvroSerializer(assignSqlType, writeSchema, false)
+              val assignSqlType = AvroConversionUtils.convertAvroSchemaToStructType(writeSchema)
+              val assignSerializer = new HoodieAvroSerializer(assignSqlType, writeSchema, false)
               val assignmentEvaluator = ExpressionCodeGen.doCodeGen(assignments, assignSerializer)
               conditionEvaluator -> assignmentEvaluator
           }

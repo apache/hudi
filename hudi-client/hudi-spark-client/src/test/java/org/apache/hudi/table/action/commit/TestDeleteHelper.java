@@ -23,7 +23,8 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.index.bloom.SparkHoodieBloomIndex;
+import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -64,13 +65,20 @@ public class TestDeleteHelper {
   private static final boolean WITHOUT_COMBINE = false;
   private static final int DELETE_PARALLELISM = 200;
 
-  @Mock private SparkHoodieBloomIndex index;
-  @Mock private HoodieTable<EmptyHoodieRecordPayload,JavaRDD<HoodieRecord>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table;
-  @Mock private BaseSparkCommitActionExecutor<EmptyHoodieRecordPayload> executor;
-  @Mock private HoodieWriteMetadata metadata;
-  @Mock private JavaPairRDD keyPairs;
-  @Mock private JavaSparkContext jsc;
-  @Mock private HoodieSparkEngineContext context;
+  @Mock
+  private HoodieBloomIndex index;
+  @Mock
+  private HoodieTable<EmptyHoodieRecordPayload, JavaRDD<HoodieRecord>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table;
+  @Mock
+  private BaseSparkCommitActionExecutor<EmptyHoodieRecordPayload> executor;
+  @Mock
+  private HoodieWriteMetadata metadata;
+  @Mock
+  private JavaPairRDD keyPairs;
+  @Mock
+  private JavaSparkContext jsc;
+  @Mock
+  private HoodieSparkEngineContext context;
 
   private JavaRDD<HoodieKey> rddToDelete;
   private HoodieWriteConfig config;
@@ -149,7 +157,7 @@ public class TestDeleteHelper {
     JavaRDD recordsRdd = mock(JavaRDD.class);
     when(recordsRdd.filter(any())).thenReturn(recordsRdd);
     when(recordsRdd.isEmpty()).thenReturn(howMany <= 0);
-    when(index.tagLocation(any(), any(), any())).thenReturn(recordsRdd);
+    when(index.tagLocation(any(), any(), any())).thenReturn(HoodieJavaRDD.of(recordsRdd));
 
     if (combineMode == CombineTestMode.GlobalIndex) {
       when(keyPairs.reduceByKey(any(), anyInt())).thenReturn(keyPairs);
@@ -175,7 +183,7 @@ public class TestDeleteHelper {
     doReturn(Collections.emptyList()).when(emptyRdd).partitions();
     doReturn(emptyRdd).when(emptyRdd).map(any());
 
-    doReturn(emptyRdd).when(index).tagLocation(any(), any(), any());
+    doReturn(HoodieJavaRDD.of(emptyRdd)).when(index).tagLocation(any(), any(), any());
     doReturn(emptyRdd).when(emptyRdd).filter(any());
 
     doNothing().when(executor).saveWorkloadProfileMetadataToInflight(any(), anyString());

@@ -59,10 +59,10 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   @Test
   public void checkSerDe() {
     // check if this object is serialized and de-serialized, we are able to read from the file system
-    HoodieTableMetaClient deseralizedMetaClient =
+    HoodieTableMetaClient deserializedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
-    assertNotNull(deseralizedMetaClient);
-    HoodieActiveTimeline commitTimeline = deseralizedMetaClient.getActiveTimeline();
+    assertNotNull(deserializedMetaClient);
+    HoodieActiveTimeline commitTimeline = deserializedMetaClient.getActiveTimeline();
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createNewInstant(instant);
     commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));

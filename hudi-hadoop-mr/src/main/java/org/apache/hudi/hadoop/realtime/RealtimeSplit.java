@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.InputSplitUtils;
 
@@ -40,6 +41,8 @@ public interface RealtimeSplit extends InputSplitWithLocationInfo {
    * @return
    */
   List<String> getDeltaLogPaths();
+
+  List<HoodieLogFile> getDeltaLogFiles();
 
   /**
    * Return Max Instant Time.

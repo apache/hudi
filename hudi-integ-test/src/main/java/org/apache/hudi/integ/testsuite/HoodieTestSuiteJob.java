@@ -101,9 +101,9 @@ public class HoodieTestSuiteJob {
     this.cfg = cfg;
     this.jsc = jsc;
     cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
-    this.sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
+    this.sparkSession = SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
     this.fs = FSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
-    this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    this.props = UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
     log.info("Creating workload generator with configs : {}", props.toString());
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
     this.keyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);

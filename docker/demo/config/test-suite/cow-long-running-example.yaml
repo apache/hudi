@@ -49,7 +49,7 @@ dag_content:
     deps: third_insert
   first_validate:
     config:
-      validate_hive: true
+      validate_hive: false
     type: ValidateDatasetNode
     deps: first_hive_sync
   first_upsert:
@@ -76,7 +76,7 @@ dag_content:
     deps: first_delete
   second_validate:
     config:
-      validate_hive: true
+      validate_hive: false
       delete_input_data: true
     type: ValidateDatasetNode
     deps: second_hive_sync

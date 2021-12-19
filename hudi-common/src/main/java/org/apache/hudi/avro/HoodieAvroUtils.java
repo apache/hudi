@@ -18,10 +18,10 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.avro.specific.SpecificRecordBase;
-
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -49,12 +49,14 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
+import org.apache.avro.specific.SpecificRecordBase;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -228,10 +230,10 @@ public class HoodieAvroUtils {
 
   public static Schema removeFields(Schema schema, List<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
-                                              .stream()
-                                              .filter(field -> !fieldsToRemove.contains(field.name()))
-                                              .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
-                                              .collect(Collectors.toList());
+        .stream()
+        .filter(field -> !fieldsToRemove.contains(field.name()))
+        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+        .collect(Collectors.toList());
     Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
     filteredSchema.setFields(filteredFields);
     return filteredSchema;
@@ -288,7 +290,7 @@ public class HoodieAvroUtils {
   }
 
   public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
-      String fileName) {
+                                                   String fileName) {
     record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
     record.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
     record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
@@ -546,8 +548,11 @@ public class HoodieAvroUtils {
         return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
             LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
       } else if (fieldSchema.getType() == Schema.Type.BYTES) {
-        return decimalConversion.fromBytes((ByteBuffer) fieldValue, fieldSchema,
+        ByteBuffer byteBuffer = (ByteBuffer) fieldValue;
+        BigDecimal convertedValue = decimalConversion.fromBytes(byteBuffer, fieldSchema,
             LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+        byteBuffer.rewind();
+        return convertedValue;
       }
     }
     return fieldValue;
@@ -564,9 +569,51 @@ public class HoodieAvroUtils {
    * @return sanitized name
    */
   public static String sanitizeName(String name) {
-    if (name.substring(0,1).matches(INVALID_AVRO_FIRST_CHAR_IN_NAMES)) {
+    if (name.substring(0, 1).matches(INVALID_AVRO_FIRST_CHAR_IN_NAMES)) {
       name = name.replaceFirst(INVALID_AVRO_FIRST_CHAR_IN_NAMES, MASK_FOR_INVALID_CHARS_IN_NAMES);
     }
     return name.replaceAll(INVALID_AVRO_CHARS_IN_NAMES, MASK_FOR_INVALID_CHARS_IN_NAMES);
+  }
+
+  /**
+   * Gets record column values into one object.
+   *
+   * @param record  Hoodie record.
+   * @param columns Names of the columns to get values.
+   * @param schema  {@link Schema} instance.
+   * @return Column value if a single column, or concatenated String values by comma.
+   */
+  public static Object getRecordColumnValues(HoodieRecord<? extends HoodieRecordPayload> record,
+                                             String[] columns,
+                                             Schema schema) {
+    try {
+      GenericRecord genericRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
+      if (columns.length == 1) {
+        return HoodieAvroUtils.getNestedFieldVal(genericRecord, columns[0], true);
+      } else {
+        StringBuilder sb = new StringBuilder();
+        for (String col : columns) {
+          sb.append(HoodieAvroUtils.getNestedFieldValAsString(genericRecord, col, true));
+        }
+
+        return sb.toString();
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
+    }
+  }
+
+  /**
+   * Gets record column values into one object.
+   *
+   * @param record  Hoodie record.
+   * @param columns Names of the columns to get values.
+   * @param schema  {@link SerializableSchema} instance.
+   * @return Column value if a single column, or concatenated String values by comma.
+   */
+  public static Object getRecordColumnValues(HoodieRecord<? extends HoodieRecordPayload> record,
+                                             String[] columns,
+                                             SerializableSchema schema) {
+    return getRecordColumnValues(record, columns, schema.get());
   }
 }

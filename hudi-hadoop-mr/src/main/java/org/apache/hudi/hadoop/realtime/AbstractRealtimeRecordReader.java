@@ -82,7 +82,7 @@ public abstract class AbstractRealtimeRecordReader {
    * job conf.
    */
   private void init() throws IOException {
-    Schema schemaFromLogFile = LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
+    Schema schemaFromLogFile = LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogFiles(), jobConf);
     if (schemaFromLogFile == null) {
       writerSchema = InputSplitUtils.getBaseFileSchema((FileSplit)split, jobConf);
       LOG.info("Writer Schema From Parquet => " + writerSchema.getFields());

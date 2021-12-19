@@ -201,6 +201,7 @@ public class WriteStatus implements Serializable {
   public String toString() {
     final StringBuilder sb = new StringBuilder("WriteStatus {");
     sb.append("fileId=").append(fileId);
+    sb.append(", writeStat=").append(stat);
     sb.append(", globalError='").append(globalError).append('\'');
     sb.append(", hasErrors='").append(hasErrors()).append('\'');
     sb.append(", errorCount='").append(totalErrorRecords).append('\'');

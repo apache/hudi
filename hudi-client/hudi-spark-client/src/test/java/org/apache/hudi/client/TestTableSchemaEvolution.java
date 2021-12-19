@@ -303,7 +303,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Insert with original schema is allowed now
     insertBatch(hoodieWriteConfig, client, "009", "008", numRecords, SparkRDDWriteClient::insert,
-        false, false, 0, 0, 0);
+        false, false, 0, 0, 0, Option.empty());
     checkLatestDeltaCommit("009");
     checkReadRecords("000", 3 * numRecords);
   }
@@ -316,7 +316,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       .setTimelineLayoutVersion(VERSION_1)
       .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
-    HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
+    HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA).withRollbackUsingMarkers(false).build();
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
     // Initial inserts with TRIP_EXAMPLE_SCHEMA
@@ -438,7 +438,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Insert with original schema is allowed now
     insertBatch(hoodieWriteConfig, client, "007", "003", numRecords, SparkRDDWriteClient::insert,
-        false, true, numRecords, 2 * numRecords, 1);
+        false, true, numRecords, 2 * numRecords, 1, Option.empty());
     checkReadRecords("000", 2 * numRecords);
 
     // Update with original schema is allowed now
@@ -507,11 +507,14 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   }
 
   private HoodieWriteConfig getWriteConfig(String schema) {
+    return getWriteConfigBuilder(schema).build();
+  }
+
+  private HoodieWriteConfig.Builder getWriteConfigBuilder(String schema) {
     return getConfigBuilder(schema)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.INMEMORY).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withAvroSchemaValidate(true)
-        .build();
+        .withAvroSchemaValidate(true);
   }
 
   @Override

@@ -23,9 +23,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -35,8 +36,6 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +44,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -70,9 +68,9 @@ public class WriteProfile {
   private final Path basePath;
 
   /**
-   * The hoodie table.
+   * The meta client.
    */
-  protected final HoodieTable<?, ?, ?, ?> table;
+  protected final HoodieTableMetaClient metaClient;
 
   /**
    * The average record size.
@@ -98,26 +96,27 @@ public class WriteProfile {
   /**
    * The file system view cache for one checkpoint interval.
    */
-  protected HoodieTableFileSystemView fsView;
-
-  /**
-   * Hadoop configuration.
-   */
-  private final Configuration hadoopConf;
+  protected SyncableFileSystemView fsView;
 
   /**
    * Metadata cache to reduce IO of metadata files.
    */
   private final Map<String, HoodieCommitMetadata> metadataCache;
 
+  /**
+   * The engine context.
+   */
+  private final HoodieFlinkEngineContext context;
+
   public WriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     this.config = config;
+    this.context = context;
     this.basePath = new Path(config.getBasePath());
     this.smallFilesMap = new HashMap<>();
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
-    this.table = HoodieFlinkTable.create(config, context);
-    this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.metaClient = StreamerUtil.createMetaClient(config.getBasePath(), context.getHadoopConf().get());
     this.metadataCache = new HashMap<>();
+    this.fsView = getFileSystemView();
     // profile the record statistics on construction
     recordProfile();
   }
@@ -130,8 +129,12 @@ public class WriteProfile {
     return recordsPerBucket;
   }
 
-  public HoodieTable<?, ?, ?, ?> getTable() {
-    return table;
+  public HoodieTableMetaClient getMetaClient() {
+    return this.metaClient;
+  }
+
+  protected HoodieTable<?, ?, ?, ?> getTable() {
+    return HoodieFlinkTable.create(config, context);
   }
 
   /**
@@ -141,7 +144,7 @@ public class WriteProfile {
   private long averageBytesPerRecord() {
     long avgSize = config.getCopyOnWriteRecordSizeEstimate();
     long fileSizeThreshold = (long) (config.getRecordSizeEstimationThreshold() * config.getParquetSmallFileLimit());
-    HoodieTimeline commitTimeline = table.getMetaClient().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     if (!commitTimeline.empty()) {
       // Go over the reverse ordered commits to get a more recent estimate of average record size.
       Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
@@ -189,12 +192,10 @@ public class WriteProfile {
     // smallFiles only for partitionPath
     List<SmallFile> smallFileLocations = new ArrayList<>();
 
-    HoodieTimeline commitTimeline = table.getMetaClient().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
 
     if (!commitTimeline.empty()) { // if we have some commits
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-      // initialize the filesystem view based on the commit metadata
-      initFSViewIfNecessary(commitTimeline);
       List<HoodieBaseFile> allFiles = fsView
           .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
 
@@ -213,21 +214,8 @@ public class WriteProfile {
     return smallFileLocations;
   }
 
-  @VisibleForTesting
-  public void initFSViewIfNecessary(HoodieTimeline commitTimeline) {
-    if (fsView == null) {
-      cleanMetadataCache(commitTimeline.getInstants());
-      List<HoodieCommitMetadata> metadataList = commitTimeline.getInstants()
-          .map(instant ->
-              this.metadataCache.computeIfAbsent(
-                  instant.getTimestamp(),
-                  k -> WriteProfiles.getCommitMetadataSafely(config.getTableName(), basePath, instant, commitTimeline)
-                      .orElse(null)))
-          .filter(Objects::nonNull)
-          .collect(Collectors.toList());
-      FileStatus[] commitFiles = WriteProfiles.getWritePathsOfInstants(basePath, hadoopConf, metadataList);
-      fsView = new HoodieTableFileSystemView(table.getMetaClient(), commitTimeline, commitFiles);
-    }
+  protected SyncableFileSystemView getFileSystemView() {
+    return (SyncableFileSystemView) getTable().getBaseFileOnlyView();
   }
 
   /**
@@ -260,9 +248,10 @@ public class WriteProfile {
       // already reloaded
       return;
     }
-    this.table.getMetaClient().reloadActiveTimeline();
+    this.metaClient.reloadActiveTimeline();
+    this.fsView.sync();
     recordProfile();
-    this.fsView = null;
+    cleanMetadataCache(this.metaClient.getCommitsTimeline().filterCompletedInstants().getInstants());
     this.smallFilesMap.clear();
     this.reloadedCheckpointId = checkpointId;
   }

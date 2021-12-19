@@ -20,9 +20,7 @@ package org.apache.hudi.sink.common;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
@@ -71,6 +69,11 @@ public abstract class AbstractStreamWriteFunction<I>
   protected int taskID;
 
   /**
+   * Meta Client.
+   */
+  protected transient HoodieTableMetaClient metaClient;
+
+  /**
    * Write Client.
    */
   protected transient HoodieFlinkWriteClient writeClient;
@@ -84,11 +87,6 @@ public abstract class AbstractStreamWriteFunction<I>
    * Gateway to send operator events to the operator coordinator.
    */
   protected transient OperatorEventGateway eventGateway;
-
-  /**
-   * Commit action type.
-   */
-  protected transient String actionType;
 
   /**
    * Flag saying whether the write task is waiting for the checkpoint success notification
@@ -128,11 +126,8 @@ public abstract class AbstractStreamWriteFunction<I>
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.metaClient = StreamerUtil.createMetaClient(this.config);
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
-        HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
-
     this.writeStatuses = new ArrayList<>();
     this.writeMetadataState = context.getOperatorStateStore().getListState(
         new ListStateDescriptor<>(
@@ -140,7 +135,7 @@ public abstract class AbstractStreamWriteFunction<I>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
-    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
+    this.currentInstant = lastPendingInstant();
     if (context.isRestored()) {
       restoreWriteMetadata();
     } else {
@@ -163,12 +158,6 @@ public abstract class AbstractStreamWriteFunction<I>
   //  Getter/Setter
   // -------------------------------------------------------------------------
   @VisibleForTesting
-  @SuppressWarnings("rawtypes")
-  public HoodieFlinkWriteClient getWriteClient() {
-    return writeClient;
-  }
-
-  @VisibleForTesting
   public boolean isConfirming() {
     return this.confirming;
   }
@@ -182,7 +171,7 @@ public abstract class AbstractStreamWriteFunction<I>
   // -------------------------------------------------------------------------
 
   private void restoreWriteMetadata() throws Exception {
-    String lastInflight = this.writeClient.getLastPendingInstant(this.actionType);
+    String lastInflight = lastPendingInstant();
     boolean eventSent = false;
     for (WriteMetadataEvent event : this.writeMetadataState.get()) {
       if (Objects.equals(lastInflight, event.getInstantTime())) {
@@ -225,13 +214,20 @@ public abstract class AbstractStreamWriteFunction<I>
   }
 
   /**
+   * Returns the last pending instant time.
+   */
+  protected String lastPendingInstant() {
+    return StreamerUtil.getLastPendingInstant(this.metaClient);
+  }
+
+  /**
    * Prepares the instant time to write with for next checkpoint.
    *
    * @param hasData Whether the task has buffering data
    * @return The instant time
    */
   protected String instantToWrite(boolean hasData) {
-    String instant = this.writeClient.getLastPendingInstant(this.actionType);
+    String instant = lastPendingInstant();
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
     TimeWait timeWait = TimeWait.builder()
@@ -246,9 +242,9 @@ public abstract class AbstractStreamWriteFunction<I>
         // sleep for a while
         timeWait.waitFor();
         // refresh the inflight instant
-        instant = this.writeClient.getLastPendingInstant(this.actionType);
+        instant = lastPendingInstant();
       } else {
-        // the inflight instant changed, which means the last instant was committed
+        // the pending instant changed, that means the last instant was committed
         // successfully.
         confirming = false;
       }
