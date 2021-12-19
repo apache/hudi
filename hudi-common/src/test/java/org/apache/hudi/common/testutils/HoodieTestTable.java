@@ -142,6 +142,10 @@ public class HoodieTestTable {
     return String.format("%09d", sequence);
   }
 
+  public static String makeNewCommitTimeInHudiFormat(int sequence) {
+    return String.format("%014d", sequence);
+  }
+
   public static String makeNewCommitTime() {
     return makeNewCommitTime(Instant.now());
   }

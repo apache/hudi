@@ -77,7 +77,7 @@ public class CleanPlanActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
   }
 
   private boolean needCleaning(CleaningTriggerStrategy strategy) {
-    boolean cleaningNeeded = false;
+    boolean cleaningNeeded;
     if (strategy == CleaningTriggerStrategy.NUM_COMMITS) {
       int numberOfCommits = getCommitInfo();
       int maxInlineCommitsForNextClean = config.getInlineCleaningMaxCommits();
