@@ -144,7 +144,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       try {
         final String nextCommitTime = "003";
 
-        // Wait for the 1st writer to make progress with the commit
+        // Wait for the 1st writer to make progress with the commit.
         cyclicBarrier.await(60, TimeUnit.SECONDS);
         final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client2, nextCommitTime, 100);
 
