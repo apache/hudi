@@ -41,8 +41,6 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -88,11 +86,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     cleanupResources();
   }
 
-  //@ParameterizedTest
-  //@EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  @RepeatedTest(20)
-  public void testHoodieClientBasicMultiWriter() throws Exception {
-    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
+  public void testHoodieClientBasicMultiWriter(HoodieTableType tableType) throws Exception {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       setUpMORTestTable();
     }
@@ -129,7 +125,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client1, nextCommitTime, 100);
 
         // Wait for the 2nd writer to start the commit
-        cyclicBarrier.await();
+        cyclicBarrier.await(60, TimeUnit.SECONDS);
 
         // Commit the update before the 2nd writer
         assertDoesNotThrow(() -> {
@@ -137,7 +133,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         });
 
         // Signal the 2nd writer to go ahead for his commit
-        cyclicBarrier.await();
+        cyclicBarrier.await(60, TimeUnit.SECONDS);
         writer1Completed.set(true);
       } catch (Exception e) {
         writer1Completed.set(false);
@@ -148,12 +144,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       try {
         final String nextCommitTime = "003";
 
-        // Wait for the 1st writer to start the commit
-        cyclicBarrier.await();
+        // Wait for the 1st writer to make progress with the commit
+        cyclicBarrier.await(60, TimeUnit.SECONDS);
         final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client2, nextCommitTime, 100);
 
         // Wait for the 1st writer to complete the commit
-        cyclicBarrier.await();
+        cyclicBarrier.await(60, TimeUnit.SECONDS);
         assertThrows(HoodieWriteConflictException.class, () -> {
           client2.commit(nextCommitTime, writeStatusList);
         });
@@ -166,8 +162,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future1.get();
     future2.get();
 
-    assertTrue(writer1Completed.get());
-    assertTrue(writer2Completed.get());
+    // both should have been completed successfully. I mean, we already assert for conflict for writer2 at L155.
+    assertTrue(writer1Completed.get() && writer2Completed.get());
   }
 
   @Test
