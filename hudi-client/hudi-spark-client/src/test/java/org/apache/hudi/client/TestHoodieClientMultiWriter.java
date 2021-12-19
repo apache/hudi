@@ -109,6 +109,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     ExecutorService executors = Executors.newFixedThreadPool(2);
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
     SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+    CountDownLatch countDownLatch = new CountDownLatch(2);
     AtomicBoolean writer1Conflict = new AtomicBoolean(false);
     AtomicBoolean writer2Conflict = new AtomicBoolean(false);
     Future future1 = executors.submit(() -> {
@@ -116,6 +117,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       int numRecords = 100;
       String commitTimeBetweenPrevAndNew = "002";
       try {
+        countDownLatch.countDown();
+        countDownLatch.await();
         createCommitWithUpserts(cfg, client1, "002", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
       } catch (Exception e1) {
         assertTrue(e1 instanceof HoodieWriteConflictException);
@@ -127,6 +130,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       int numRecords = 100;
       String commitTimeBetweenPrevAndNew = "002";
       try {
+        countDownLatch.countDown();
+        countDownLatch.await();
         createCommitWithUpserts(cfg, client2, "002", commitTimeBetweenPrevAndNew, newCommitTime, numRecords);
       } catch (Exception e2) {
         assertTrue(e2 instanceof HoodieWriteConflictException);
