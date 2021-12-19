@@ -21,8 +21,8 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 
 /**
  * A utility class for network.
@@ -30,23 +30,13 @@ import java.net.Socket;
 public class NetworkUtils {
 
   public static synchronized String getHostname() {
-    Socket s = null;
-    try {
-      s = new Socket();
+    try (DatagramSocket s = new DatagramSocket()) {
       // see https://stackoverflow.com/questions/9481865/getting-the-ip-address-of-the-current-machine-using-java
       // for details.
-      s.connect(new InetSocketAddress("google.com", 80));
+      s.connect(InetAddress.getByName("8.8.8.8"), 10002);
       return s.getLocalAddress().getHostAddress();
     } catch (IOException e) {
       throw new HoodieException("Unable to find server port", e);
-    } finally {
-      if (null != s) {
-        try {
-          s.close();
-        } catch (IOException e) {
-          throw new HoodieException("Unable to close server port", e);
-        }
-      }
     }
   }
 }
