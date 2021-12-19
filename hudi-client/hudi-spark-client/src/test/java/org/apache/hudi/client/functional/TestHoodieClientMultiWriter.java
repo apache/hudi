@@ -92,7 +92,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   //@ParameterizedTest
   //@EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
-  @RepeatedTest(20)
+  @RepeatedTest(10)
   public void testHoodieClientBasicMultiWriter() throws Exception {
     HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     LOG.warn("++++ Starting a new test +++ for " + tableType);
