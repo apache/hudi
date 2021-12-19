@@ -33,7 +33,11 @@ import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
 
 /**
  * The only difference with {@link DefaultHoodieRecordPayload} is that support update partial fields
- * in latest record to old record instead of all fields.
+ * in latest record which value is not null to existing record instead of all fields.
+ *
+ * <p> Assuming a {@link GenericRecord} has three fields: a int , b int, c int. The first record value: 1, 2, 3.
+ * The second record value is: 4, 5, null, the field c value is null. After call the combineAndGetUpdateValue method,
+ * we will get final record value: 4, 5, 3, field c value will not be overwritten because its value is null in latest record.
  */
 public class PartialUpdateWithLatestAvroPayload extends DefaultHoodieRecordPayload {
 
