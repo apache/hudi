@@ -384,8 +384,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return config.getParquetMaxFileSize() >= estimatedNumberOfBytesWritten
-        * config.getLogFileToParquetCompressionRatio();
+    return true;
   }
 
   @Override
