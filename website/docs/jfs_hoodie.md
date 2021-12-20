@@ -19,7 +19,7 @@ There are three configurations required for Hudi-JuiceFS compatibility:
 
 ### Creating JuiceFS file system
 
-JuiceFS supports multiple [metadata engines](https://github.com/juicedata/juicefs/blob/main/docs/en/databases_for_metadata.md) such as Redis, MySQL, SQLite, and TiKV. And supports almost all [object storage](https://github.com/juicedata/juicefs/blob/main/docs/en/how_to_setup_object_storage.md#supported-object-storage) as data storage, e.g. Amazon S3, Google Cloud Storage, Azure Blob Storage.
+JuiceFS supports multiple [metadata engines](https://juicefs.com/docs/community/databases_for_metadata) such as Redis, MySQL, SQLite, and TiKV. And supports almost all [object storage](https://juicefs.com/docs/community/how_to_setup_object_storage#supported-object-storage) as data storage, e.g. Amazon S3, Google Cloud Storage, Azure Blob Storage.
 
 The following example uses Redis as "Metadata Engine" and Amazon S3 as "Data Storage" in Linux environment.
 
@@ -49,7 +49,7 @@ $ juicefs format \
     myjfs
 ```
 
-For more information, please refer to ["JuiceFS Quick Start Guide"](https://github.com/juicedata/juicefs/blob/main/docs/en/quick_start_guide.md).
+For more information, please refer to ["JuiceFS Quick Start Guide"](https://juicefs.com/docs/community/quick_start_guide).
 
 ### Adding JuiceFS configuration for Hudi
 
@@ -91,6 +91,6 @@ You can visit [here](https://github.com/juicedata/juicefs/blob/main/docs/en/hado
 
 ### Adding JuiceFS Hadoop Java SDK
 
-You can download latest JuiceFS Hadoop Java SDK from [here](http://github.com/juicedata/juicefs/releases/latest) (download the file called like `juicefs-hadoop-X.Y.Z-linux-amd64.jar`), and place it to the `classpath`. You can also [compile](https://github.com/juicedata/juicefs/blob/main/docs/en/hadoop_java_sdk.md#client-compilation) it by yourself.
+You can download latest JuiceFS Hadoop Java SDK from [here](http://github.com/juicedata/juicefs/releases/latest) (download the file called like `juicefs-hadoop-X.Y.Z-linux-amd64.jar`), and place it to the `classpath`. You can also [compile](https://juicefs.com/docs/community/hadoop_java_sdk#client-compilation) it by yourself.
 
 For example, if you use Hudi in Spark, please put the JAR in `$SPARK_HOME/jars`.
