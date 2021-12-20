@@ -1,0 +1,41 @@
+name: asf-site CI
+
+on:
+  push:
+    branches: [ asf-site ]
+  pull_request:
+    branches: [ asf-site ]
+
+jobs:
+  hudi-asf-site-ci:
+    name: "Apache Hudi asf-site CI"
+    runs-on: ubuntu-latest
+    env:
+      DOCS_ROOT: "./website"
+    steps:
+      - uses: actions/checkout@v2
+      - name: Prepare branch
+        run: |
+          git config --global user.name "CI BOT"
+          git config --global user.email "cibot@hudi.apache.org"
+          git remote add hudi https://${{ secrets.GITHUB_TOKEN }}@github.com/apache/hudi.git
+          git checkout -b pr
+          git pull --rebase hudi asf-site
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - name: Build website
+        run: |
+          pushd ${{ env.DOCS_ROOT }}
+          npm install
+          npm run build
+          popd
+      - name: Publish website
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          echo "pushing build result ..."
+          rm -rf content
+          cp -R ${{ env.DOCS_ROOT }}/build content
+          git add -A
+          git commit -am "GitHub Actions build asf-site"
+          git push hudi pr:asf-site
