@@ -217,7 +217,7 @@ public class CleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends
       throw new HoodieIOException("Failed to clean up after commit", e);
     } finally {
       if (!skipLocking) {
-        this.txnManager.endTransaction();
+        this.txnManager.endTransaction(Option.empty());
       }
     }
   }
