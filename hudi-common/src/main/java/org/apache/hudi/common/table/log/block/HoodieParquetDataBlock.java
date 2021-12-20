@@ -138,6 +138,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
                                                                            InputFile inputFile) throws IOException {
     AvroReadSupport.setAvroReadSchema(conf, readerSchema);
     AvroReadSupport.setRequestedProjection(conf, readerSchema);
+
     ParquetReader<IndexedRecord> reader =
         AvroParquetReader.<IndexedRecord>builder(inputFile).withConf(conf).build();
     return new ParquetReaderIterator<>(reader);

@@ -1807,7 +1807,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @EnumSource(names = {"AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK", "PARQUET_DATA_BLOCK"})
-  public void testParquetDataBlockFormat(HoodieLogBlockType dataBlockType) throws IOException, URISyntaxException, InterruptedException {
+  public void testDataBlockFormatAppendAndReadWithProjectedSchema(
+      HoodieLogBlockType dataBlockType
+  ) throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
