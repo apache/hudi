@@ -18,12 +18,16 @@
 
 package org.apache.hudi.util;
 
+import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.ByteType$;
 import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.Decimal;
+import org.apache.spark.sql.types.DecimalType;
 import org.apache.spark.sql.types.DoubleType$;
 import org.apache.spark.sql.types.FloatType$;
 import org.apache.spark.sql.types.IntegerType$;
 import org.apache.spark.sql.types.LongType$;
+import org.apache.spark.sql.types.MapType;
 import org.apache.spark.sql.types.ShortType$;
 import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
@@ -118,5 +122,27 @@ public class DataTypeUtils {
 
   private static <T> HashSet<T> newHashSet(T... ts) {
     return new HashSet<>(Arrays.asList(ts));
+  }
+
+  /**
+   * Try to find current sparktype whether contains that DecimalType which's scale < Decimal.MAX_LONG_DIGITS().
+   *
+   * @param sparkType spark schema.
+   * @return found result.
+   */
+  public static boolean foundSmallPrecisionDecimalType(DataType sparkType) {
+    if (sparkType instanceof StructType) {
+      StructField[] fields = ((StructType) sparkType).fields();
+      return Arrays.stream(fields).anyMatch(f -> foundSmallPrecisionDecimalType(f.dataType()));
+    } else if (sparkType instanceof MapType) {
+      MapType map = (MapType) sparkType;
+      return foundSmallPrecisionDecimalType(map.keyType()) || foundSmallPrecisionDecimalType(map.valueType());
+    } else if (sparkType instanceof ArrayType) {
+      return foundSmallPrecisionDecimalType(((ArrayType) sparkType).elementType());
+    } else if (sparkType instanceof DecimalType) {
+      DecimalType decimalType = (DecimalType) sparkType;
+      return decimalType.precision() < Decimal.MAX_LONG_DIGITS();
+    }
+    return false;
   }
 }
