@@ -29,7 +29,6 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -42,12 +41,17 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -203,7 +207,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     int schemaLength = dis.readInt();
     byte[] compressedSchema = new byte[schemaLength];
     dis.readFully(compressedSchema, 0, schemaLength);
-    Schema writerSchema = new Schema.Parser().parse(HoodieAvroUtils.decompress(compressedSchema));
+    Schema writerSchema = new Schema.Parser().parse(decompress(compressedSchema));
 
     if (readerSchema == null) {
       readerSchema = writerSchema;
@@ -226,6 +230,33 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     return new HoodieAvroDataBlock(records, readerSchema);
   }
 
+  private static byte[] compress(String text) {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    try {
+      OutputStream out = new DeflaterOutputStream(baos);
+      out.write(text.getBytes(StandardCharsets.UTF_8));
+      out.close();
+    } catch (IOException e) {
+      throw new HoodieIOException("IOException while compressing text " + text, e);
+    }
+    return baos.toByteArray();
+  }
+
+  private static String decompress(byte[] bytes) {
+    InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes));
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    try {
+      byte[] buffer = new byte[8192];
+      int len;
+      while ((len = in.read(buffer)) > 0) {
+        baos.write(buffer, 0, len);
+      }
+      return new String(baos.toByteArray(), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new HoodieIOException("IOException while decompressing text", e);
+    }
+  }
+
   @Deprecated
   public byte[] getBytes(Schema schema) throws IOException {
 
@@ -234,7 +265,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     DataOutputStream output = new DataOutputStream(baos);
 
     // 2. Compress and Write schema out
-    byte[] schemaContent = HoodieAvroUtils.compress(schema.toString());
+    byte[] schemaContent = compress(schema.toString());
     output.writeInt(schemaContent.length);
     output.write(schemaContent);
 
