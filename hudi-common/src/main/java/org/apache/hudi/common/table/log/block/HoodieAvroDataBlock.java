@@ -128,7 +128,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         output.writeInt(size);
         // Write the content
         output.write(temp.toByteArray());
-        itr.remove();
       } catch (IOException e) {
         throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
       }
