@@ -51,7 +51,7 @@ import org.apache.spark.sql.types.StructType$;
 import org.apache.spark.sql.types.TimestampType;
 import org.davidmoten.hilbert.HilbertCurve;
 import scala.collection.JavaConversions;
-import scala.reflect.ClassTag;
+import scala.collection.mutable.WrappedArray;
 
 import javax.annotation.Nonnull;
 import java.util.Arrays;
@@ -197,7 +197,9 @@ public class SpaceCurveSortingHelper {
   }
 
   private static Row appendToRow(Row row, Object value) {
-    Object[] currentValues = (Object[]) row.toSeq().toArray(ClassTag.Object());
+    // NOTE: This is an ugly hack to avoid array re-allocation --
+    //       Spark's {@code Row#toSeq} returns array of Objects
+    Object[] currentValues = (Object[]) ((WrappedArray<Object>) row.toSeq()).array();
     return RowFactory.create(CollectionUtils.append(currentValues, value));
   }
 
