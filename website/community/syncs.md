@@ -10,9 +10,13 @@ last_modified_at: 2020-09-01T15:59:57-04:00
 We have setup the following regular syncs for community users and developers to meet, interact and exchange ideas. 
 Meetings will be recorded and made available, on a best-effort basis.
 
+### Schedules
+
+Refer to the [Apache Hudi events calendar](https://calendar.google.com/calendar/embed?src=rgpb1ta2mgp5au38fr2834poa8%40group.calendar.google.com&ctz=America%2FLos_Angeles).
+
 ## Monthly Community Call
-ZOOM LINK TO JOIN:
-[https://zoom.us/j/96743829685?pwd=S3pxRVVKTDljWVFVWW1IU1UvY0JEUT09](https://zoom.us/j/96743829685?pwd=S3pxRVVKTDljWVFVWW1IU1UvY0JEUT09)
+
+**[ZOOM LINK TO JOIN](https://zoom.us/j/96743829685?pwd=S3pxRVVKTDljWVFVWW1IU1UvY0JEUT09)**
 
 Every month on the Last Wed, 07:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=5368361&date=2021-11-24&sln=7-8&hf=1))
 
@@ -28,18 +32,10 @@ Here are some upcoming calls for convenience.
 
 ![Upcoming calls](/assets/images/upcoming-community-calls.png)
 
-**Zoom** [link](https://zoom.us/j/96743829685?pwd=S3pxRVVKTDljWVFVWW1IU1UvY0JEUT09),
-**Google Calendar** [link](https://zoom.us/meeting/tJIqc-qgrDIsEtEso_PzwrlCn1SF58G9E4MY/calendar/google/add),
-**Outlook/ics** [link](https://zoom.us/meeting/tJIqc-qgrDIsEtEso_PzwrlCn1SF58G9E4MY/ics)
-
 ## Weekly Office Hours
-ZOOM LINK TO JOIN:
-[https://zoom.us/j/95710395048](https://zoom.us/j/95710395048)
+
+**[ZOOM LINK TO JOIN](https://zoom.us/j/95710395048)**
 
 When every week on Thu, 08:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=5368361&date=2021-11-24&sln=8-9&hf=1))
 
 One of the PMC members/committers will hold office hours to help answer questions interactively, on a first-come first-serve basis.
-
-**Zoom** [link](https://zoom.us/j/95710395048),
-**Google Calendar** [link](https://zoom.us/meeting/tJEqdumrpz4qHtx_-K3NdI1qYg_yoXsPDycH/calendar/google/add),
-**Outlook/ics** [link](https://zoom.us/meeting/tJEqdumrpz4qHtx_-K3NdI1qYg_yoXsPDycH/ics)
