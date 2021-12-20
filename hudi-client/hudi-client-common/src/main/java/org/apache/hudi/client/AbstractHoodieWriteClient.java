@@ -201,7 +201,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
-      this.txnManager.endTransaction();
+      this.txnManager.endTransaction(Option.of(inflightInstant));
     }
     // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
     runTableServicesInline(table, metadata, extraMetadata);
@@ -1063,13 +1063,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   public Option<String> scheduleTableService(String instantTime, Option<Map<String, String>> extraMetadata,
                                              TableServiceType tableServiceType) {
     // A lock is required to guard against race conditions between an on-going writer and scheduling a table service.
+    final Option<HoodieInstant> inflightInstant = Option.of(new HoodieInstant(HoodieInstant.State.REQUESTED,
+        tableServiceType.getAction(), instantTime));
     try {
-      this.txnManager.beginTransaction(Option.of(new HoodieInstant(HoodieInstant.State.REQUESTED,
-          tableServiceType.getAction(), instantTime)), Option.empty());
+      this.txnManager.beginTransaction(inflightInstant, Option.empty());
       LOG.info("Scheduling table service " + tableServiceType);
       return scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
     } finally {
-      this.txnManager.endTransaction();
+      this.txnManager.endTransaction(inflightInstant);
     }
   }
 
