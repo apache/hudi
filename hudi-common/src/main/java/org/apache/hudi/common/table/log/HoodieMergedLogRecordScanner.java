@@ -142,9 +142,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordReader
       HoodieRecord<? extends HoodieRecordPayload> oldRecord = records.get(key);
       HoodieRecordPayload oldValue = oldRecord.getData();
       HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(oldValue);
-      boolean choosePrev = combinedValue.equals(oldValue);
-      HoodieOperation operation = choosePrev ? oldRecord.getOperation() : hoodieRecord.getOperation();
-      records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
+      // If combinedValue is oldValue, no need rePut oldRecord
+      if (!combinedValue.equals(oldValue)) {
+        HoodieOperation operation = hoodieRecord.getOperation();
+        records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue, operation));
+      }
     } else {
       // Put the record as is
       records.put(key, hoodieRecord);
