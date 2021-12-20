@@ -15,6 +15,15 @@ After each write operation we will also show how to read the data both snapshot 
 ## Setup
 
 Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads) for setting up spark.
+
+**Spark 3 Support Matrix**
+
+| Hudi            | Supported Spark 3 version    |
+|-----------------|------------------------------|
+| 0.10.0          | 3.1.x (default build), 3.0.x |
+| 0.7.0 - 0.9.0   | 3.0.x                        |
+| 0.6.0 and prior | not supported                |
+
 As of 0.9.0 release, Spark SQL DML support has been added and is experimental.
 
 <Tabs
