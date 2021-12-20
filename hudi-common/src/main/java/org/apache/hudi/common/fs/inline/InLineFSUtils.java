@@ -118,7 +118,6 @@ public class InLineFSUtils {
 
   private static void assertInlineFSPath(Path inlinePath) {
     String scheme = inlinePath.toUri().getScheme();
-
     checkArgument(InLineFileSystem.SCHEME.equals(scheme));
   }
 }
