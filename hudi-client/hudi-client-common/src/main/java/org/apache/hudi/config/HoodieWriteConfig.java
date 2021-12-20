@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
@@ -1834,8 +1835,22 @@ public class HoodieWriteConfig extends HoodieConfig {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE));
   }
 
-  public Boolean inlineTableServices() {
+  /**
+   * Are any table services configured to run inline?
+   *
+   * @return True if any table services are configured to run inline, false otherwise.
+   */
+  public Boolean isAnyTableServicesInline() {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
+  }
+
+  /**
+   * Are any table services configured to run async?
+   *
+   * @return True if any table services are configured to run async, false otherwise.
+   */
+  public Boolean isAnyTableServicesAsync() {
+    return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
   }
 
   public String getPreCommitValidators() {
@@ -2267,13 +2282,19 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodiePayloadConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isMetadataConfigSet,
           HoodieMetadataConfig.newBuilder().withEngineType(engineType).fromProperties(writeConfig.getProps()).build());
-      writeConfig.setDefaultOnCondition(!isLockConfigSet,
-          HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
           HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isLayoutConfigSet,
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+
+      if (!isLockConfigSet) {
+        HoodieLockConfig.Builder lockConfigBuilder = HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps());
+        if (writeConfig.isAnyTableServicesAsync()) {
+          lockConfigBuilder.withLockProvider(InProcessLockProvider.class);
+        }
+        writeConfig.setDefault(lockConfigBuilder.build());
+      }
     }
 
     private void validate() {
