@@ -169,7 +169,7 @@ public class TestHiveSyncTool {
 
     hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
     List<Partition> hivePartitions = hiveClient.scanTablePartitions(hiveSyncConfig.tableName);
-    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.empty());
+    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.empty(),false);
     //writtenPartitionsSince.add(newPartition.get(0));
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");

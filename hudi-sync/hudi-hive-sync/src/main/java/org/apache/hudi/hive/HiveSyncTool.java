@@ -127,13 +127,13 @@ public class HiveSyncTool extends AbstractSyncTool {
   protected void doSync() {
     switch (hoodieHiveClient.getTableType()) {
       case COPY_ON_WRITE:
-        syncHoodieTable(snapshotTableName, false, false);
+        syncHoodieTable(snapshotTableName, false, false, cfg.syncAllPartitions);
         break;
       case MERGE_ON_READ:
         // sync a RO table for MOR
-        syncHoodieTable(roTableName.get(), false, true);
+        syncHoodieTable(roTableName.get(), false, true, cfg.syncAllPartitions);
         // sync a RT table for MOR
-        syncHoodieTable(snapshotTableName, true, false);
+        syncHoodieTable(snapshotTableName, true, false, cfg.syncAllPartitions);
         break;
       default:
         LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
@@ -142,7 +142,7 @@ public class HiveSyncTool extends AbstractSyncTool {
   }
 
   protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
-                               boolean readAsOptimized) {
+                               boolean readAsOptimized,boolean syncAllPartitions) {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
 
@@ -195,8 +195,9 @@ public class HiveSyncTool extends AbstractSyncTool {
       lastCommitTimeSynced = hoodieHiveClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
-    List<String> writtenPartitionsSince = hoodieHiveClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
+    List<String> writtenPartitionsSince = hoodieHiveClient.getPartitionsWrittenToSince(lastCommitTimeSynced, true);
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
+    System.out.println("total partitions before sync" + writtenPartitionsSince.size());
 
     // Sync the partitions if needed
     boolean partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, isDropPartition);

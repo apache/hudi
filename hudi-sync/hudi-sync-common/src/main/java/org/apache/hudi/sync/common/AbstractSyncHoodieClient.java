@@ -178,17 +178,25 @@ public abstract class AbstractSyncHoodieClient {
     return false;
   }
 
-  @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
-    if (!lastCommitTimeSynced.isPresent()) {
+    return getPartitionsWrittenToSince(lastCommitTimeSynced,false);
+  }
+
+  @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+  public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced, boolean syncAllPartitions) {
+    if (syncAllPartitions || !lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in " + basePath + ",FS :" + fs);
-      HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
-      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, assumeDatePartitioning);
+      return getAllPartitions();
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
           .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE));
     }
+  }
+
+  public List<String> getAllPartitions() {
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, assumeDatePartitioning);
   }
 
   public abstract static class TypeConverter implements Serializable {

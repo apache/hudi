@@ -123,6 +123,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--conditional-sync"}, description = "If true, only sync on conditions like schema change or partition change.")
   public Boolean isConditionalSync = false;
 
+  @Parameter(names = {"--sync-all-partitions"}, description = "If true, sync all partitions")
+  public Boolean syncAllPartitions = false;
+
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -147,6 +150,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
     newConfig.withOperationField = cfg.withOperationField;
     newConfig.isConditionalSync = cfg.isConditionalSync;
+    newConfig.syncAllPartitions = cfg.syncAllPartitions;
     return newConfig;
   }
 
@@ -179,6 +183,8 @@ public class HiveSyncConfig implements Serializable {
       + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + ", withOperationField=" + withOperationField
       + ", isConditionalSync=" + isConditionalSync
+      + ", syncAllPartitions=" + syncAllPartitions
       + '}';
+
   }
 }
