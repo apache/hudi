@@ -48,6 +48,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.HadoopMapRedUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -55,8 +56,8 @@ import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.CorruptedLogFileException;
-
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.parquet.hadoop.util.counters.BenchmarkCounter;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -1801,6 +1802,66 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(readRecords.size(), recordsCopy.size());
     for (int i = 0; i < recordsCopy.size(); ++i) {
       assertEquals(recordsCopy.get(i), readRecords.get(i));
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(names = {"AVRO_DATA_BLOCK", "HFILE_DATA_BLOCK", "PARQUET_DATA_BLOCK"})
+  public void testParquetDataBlockFormat(HoodieLogBlockType dataBlockType) throws IOException, URISyntaxException, InterruptedException {
+    Writer writer = HoodieLogFormat.newWriterBuilder()
+        .onParentPath(partitionPath)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withFileId("test-fileid1")
+        .overBaseCommit("100")
+        .withFs(fs)
+        .build();
+
+    List<GenericRecord> records = SchemaTestUtil.generateTestGenericRecords(0, 1000);
+
+    Schema schema = getSimpleSchema();
+
+    Map<HoodieLogBlock.HeaderMetadataType, String> header =
+        new HashMap<HoodieLogBlock.HeaderMetadataType, String>() {{
+          put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+          put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+        }};
+
+    // Init Benchmark to report number of bytes actually read from the Block
+    BenchmarkCounter.initCounterFromReporter(HadoopMapRedUtils.createTestReporter(), fs.getConf());
+
+    // NOTE: Have to use this ugly hack since List generic is not covariant in its type param
+    HoodieDataBlock dataBlock = getDataBlock(dataBlockType, (List<IndexedRecord>)(List) records, header);
+
+    writer.appendBlock(dataBlock);
+    writer.close();
+
+    Schema projectedSchema = HoodieAvroUtils.generateProjectionSchema(schema, Collections.singletonList("name"));
+
+    List<GenericRecord> projectedRecords = HoodieAvroUtils.rewriteRecords(records, projectedSchema);
+
+    try (Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), projectedSchema, true, false)) {
+      assertTrue(reader.hasNext(), "First block should be available");
+
+      HoodieLogBlock nextBlock = reader.next();
+
+      HoodieDataBlock dataBlockRead = (HoodieDataBlock) nextBlock;
+
+      Map<HoodieLogBlockType, Integer> expectedReadBytes =
+          new HashMap<HoodieLogBlockType, Integer>() {{
+            put(HoodieLogBlockType.AVRO_DATA_BLOCK, 0); // not supported
+            put(HoodieLogBlockType.HFILE_DATA_BLOCK, 0); // not supported
+            put(HoodieLogBlockType.PARQUET_DATA_BLOCK, 2605);
+          }};
+
+      assertEquals(projectedRecords.size(), dataBlockRead.getRecords().size(),
+          "Read records size should be equal to the written records size");
+      assertEquals(projectedRecords, dataBlockRead.getRecords(),
+          "Both records lists should be the same. (ordering guaranteed)");
+      assertEquals(dataBlockRead.getSchema(), projectedSchema);
+
+      int bytesRead = (int) BenchmarkCounter.getBytesRead();
+
+      assertEquals(expectedReadBytes.get(dataBlockType), bytesRead, "Read bytes have to match");
     }
   }
 
