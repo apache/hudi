@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -32,12 +33,18 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public abstract class AbstractBaseTestSource extends AvroSource {
@@ -47,7 +54,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
   public static final int DEFAULT_PARTITION_NUM = 0;
 
   // Static instance, helps with reuse across a test.
-  protected static transient Map<Integer, HoodieTestDataGenerator> dataGeneratorMap = new HashMap<>();
+  public static transient Map<Integer, HoodieTestDataGenerator> dataGeneratorMap = new HashMap<>();
 
   public static void initDataGen() {
     dataGeneratorMap.putIfAbsent(DEFAULT_PARTITION_NUM,
@@ -66,6 +73,23 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }
+  }
+
+  public static void initDataGen(SQLContext sqlContext, String globParquetPath, int partition) {
+    List<Row> rows = sqlContext.read().format("hudi").load(globParquetPath)
+        .select("_hoodie_record_key", "_hoodie_partition_path")
+        .collectAsList();
+    Map<Integer, HoodieTestDataGenerator.KeyPartition> keyPartitionMap = IntStream
+        .range(0, rows.size()).boxed()
+        .collect(Collectors.toMap(Function.identity(), i -> {
+          Row r = rows.get(i);
+          HoodieTestDataGenerator.KeyPartition kp = new HoodieTestDataGenerator.KeyPartition();
+          kp.key = new HoodieKey(r.getString(0), r.getString(1));
+          kp.partitionPath = r.getString(1);
+          return kp;
+        }));
+    dataGeneratorMap.put(partition,
+        new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, keyPartitionMap));
   }
 
   public static void resetDataGen() {

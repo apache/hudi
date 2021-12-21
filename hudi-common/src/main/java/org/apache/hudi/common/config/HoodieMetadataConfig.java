@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+
 import javax.annotation.concurrent.Immutable;
 
 import java.io.File;
@@ -41,23 +44,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Enable the internal Metadata Table which saves file listings
   public static final ConfigProperty<Boolean> ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
-
-  // Enable syncing the Metadata Table
-  public static final ConfigProperty<Boolean> SYNC_ENABLE = ConfigProperty
-      .key(METADATA_PREFIX + ".sync.enable")
-      .defaultValue(true)
-      .sinceVersion("0.9.0")
-      .withDocumentation("Enable syncing of metadata table from actions on the dataset");
-
-  // Validate contents of Metadata Table on each access against the actual filesystem
-  public static final ConfigProperty<Boolean> VALIDATE_ENABLE = ConfigProperty
-      .key(METADATA_PREFIX + ".validate")
-      .defaultValue(false)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Validate contents of metadata table on each access; e.g against the actual listings from lake storage");
 
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
@@ -85,7 +74,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Maximum delta commits before compaction occurs
   public static final ConfigProperty<Integer> COMPACT_NUM_DELTA_COMMITS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.commits")
-      .defaultValue(24)
+      .defaultValue(10)
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
@@ -125,9 +114,28 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
-      .defaultValue(1500)
+      .defaultValue(200)
       .sinceVersion("0.7.0")
       .withDocumentation("Parallelism to use, when listing the table on lake storage.");
+
+  public static final ConfigProperty<Boolean> ENABLE_FULL_SCAN_LOG_FILES = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.full.scan.log.files")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable full scanning of log files while reading log records. If disabled, hudi does look up of only interested entries.");
+
+  public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
+      .key(METADATA_PREFIX + ".populate.meta.fields")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated.");
+
+  public static final ConfigProperty<Boolean> IGNORE_SPURIOUS_DELETES = ConfigProperty
+      .key("_" + METADATA_PREFIX + ".ignore.spurious.deletes")
+      .defaultValue(true)
+      .sinceVersion("0.10.10")
+      .withDocumentation("There are cases when extra files are requested to be deleted from metadata table which was never added before. This config"
+          + "determines how to handle such spurious deletes");
 
   private HoodieMetadataConfig() {
     super();
@@ -149,14 +157,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(ENABLE);
   }
 
-  public boolean enableSync() {
-    return enabled() && getBoolean(HoodieMetadataConfig.SYNC_ENABLE);
-  }
-
-  public boolean validateFileListingMetadata() {
-    return getBoolean(VALIDATE_ENABLE);
-  }
-
   public boolean enableMetrics() {
     return getBoolean(METRICS_ENABLE);
   }
@@ -165,8 +165,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getString(DIR_FILTER_REGEX);
   }
 
+  public boolean enableFullScan() {
+    return getBoolean(ENABLE_FULL_SCAN_LOG_FILES);
+  }
+
+  public boolean populateMetaFields() {
+    return getBooleanOrDefault(HoodieMetadataConfig.POPULATE_META_FIELDS);
+  }
+
+  public boolean ignoreSpuriousDeletes() {
+    return getBoolean(IGNORE_SPURIOUS_DELETES);
+  }
+
   public static class Builder {
 
+    private EngineType engineType = EngineType.SPARK;
     private final HoodieMetadataConfig metadataConfig = new HoodieMetadataConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
@@ -186,18 +199,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder enableSync(boolean enable) {
-      metadataConfig.setValue(SYNC_ENABLE, String.valueOf(enable));
-      return this;
-    }
-
     public Builder enableMetrics(boolean enableMetrics) {
       metadataConfig.setValue(METRICS_ENABLE, String.valueOf(enableMetrics));
-      return this;
-    }
-
-    public Builder validate(boolean validate) {
-      metadataConfig.setValue(VALIDATE_ENABLE, String.valueOf(validate));
       return this;
     }
 
@@ -213,6 +216,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
       metadataConfig.setValue(COMPACT_NUM_DELTA_COMMITS, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      return this;
+    }
+
+    public Builder withPopulateMetaFields(boolean populateMetaFields) {
+      metadataConfig.setValue(POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       return this;
     }
 
@@ -242,9 +250,37 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder enableFullScan(boolean enableFullScan) {
+      metadataConfig.setValue(ENABLE_FULL_SCAN_LOG_FILES, String.valueOf(enableFullScan));
+      return this;
+    }
+
+    public Builder ignoreSpuriousDeletes(boolean validateMetadataPayloadConsistency) {
+      metadataConfig.setValue(IGNORE_SPURIOUS_DELETES, String.valueOf(validateMetadataPayloadConsistency));
+      return this;
+    }
+
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
+      metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
+    }
+
+    private boolean getDefaultMetadataEnable(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return ENABLE.defaultValue();
+        case FLINK:
+        case JAVA:
+          return false;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
     }
   }
 
@@ -258,16 +294,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
    */
   @Deprecated
   public static final boolean DEFAULT_METADATA_ENABLE = ENABLE.defaultValue();
-  /**
-   * @deprecated Use {@link #VALIDATE_ENABLE} and its methods.
-   */
-  @Deprecated
-  public static final String METADATA_VALIDATE_PROP = VALIDATE_ENABLE.key();
-  /**
-   * @deprecated Use {@link #VALIDATE_ENABLE} and its methods.
-   */
-  @Deprecated
-  public static final boolean DEFAULT_METADATA_VALIDATE = VALIDATE_ENABLE.defaultValue();
 
   /**
    * @deprecated Use {@link #METRICS_ENABLE} and its methods.

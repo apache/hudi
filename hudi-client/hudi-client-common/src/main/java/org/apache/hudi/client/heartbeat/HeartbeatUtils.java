@@ -21,7 +21,6 @@ package org.apache.hudi.client.heartbeat;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -29,11 +28,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Helper class to delete heartbeat for completed or failed instants with expired heartbeats.
@@ -53,9 +48,11 @@ public class HeartbeatUtils {
     boolean deleted = false;
     try {
       String heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
-      deleted = fs.delete(new Path(heartbeatFolderPath + File.separator + instantTime), false);
+      deleted = fs.delete(new Path(heartbeatFolderPath + Path.SEPARATOR + instantTime), false);
       if (!deleted) {
         LOG.error("Failed to delete heartbeat for instant " + instantTime);
+      } else {
+        LOG.info("Deleted the heartbeat for instant " + instantTime);
       }
     } catch (IOException io) {
       LOG.error("Unable to delete heartbeat for instant " + instantTime, io);
@@ -64,20 +61,19 @@ public class HeartbeatUtils {
   }
 
   /**
-   * Deletes the heartbeat files for instants with expired heartbeats without any active instant.
-   * @param allExistingHeartbeatInstants
-   * @param metaClient
-   * @param basePath
+   * Deletes the heartbeat file for the specified instant.
+   * @param fs Hadoop FileSystem instance
+   * @param basePath Hoodie table base path
+   * @param instantTime Commit instant time
+   * @param config HoodieWriteConfig instance
+   * @return Boolean indicating whether heartbeat file was deleted or not
    */
-  public static void cleanExpiredHeartbeats(List<String> allExistingHeartbeatInstants,
-                                            HoodieTableMetaClient metaClient, String basePath) {
-    Set<String> nonExpiredHeartbeatInstants = metaClient.getActiveTimeline()
-        .filterCompletedInstants().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
-    allExistingHeartbeatInstants.stream().forEach(instant -> {
-      if (!nonExpiredHeartbeatInstants.contains(instant)) {
-        deleteHeartbeatFile(metaClient.getFs(), basePath, instant);
-      }
-    });
+  public static boolean deleteHeartbeatFile(FileSystem fs, String basePath, String instantTime, HoodieWriteConfig config) {
+    if (config.getFailedWritesCleanPolicy().isLazy()) {
+      return deleteHeartbeatFile(fs, basePath, instantTime);
+    }
+
+    return false;
   }
 
   /**

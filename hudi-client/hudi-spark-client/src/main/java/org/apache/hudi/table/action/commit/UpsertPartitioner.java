@@ -288,6 +288,10 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     return smallFileLocations;
   }
 
+  public List<BucketInfo> getBucketInfos() {
+    return Collections.unmodifiableList(new ArrayList<>(bucketInfoMap.values()));
+  }
+
   public BucketInfo getBucketInfo(int bucketNumber) {
     return bucketInfoMap.get(bucketNumber);
   }

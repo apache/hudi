@@ -38,7 +38,7 @@ class TestAlterTable extends TestHoodieSqlBase {
              |  ts long
              |) using hudi
              | location '$tablePath'
-             | options (
+             | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'ts'
@@ -127,7 +127,7 @@ class TestAlterTable extends TestHoodieSqlBase {
              |  dt string
              |) using hudi
              | location '${tmp.getCanonicalPath}/$partitionedTable'
-             | options (
+             | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
              |  preCombineField = 'ts'

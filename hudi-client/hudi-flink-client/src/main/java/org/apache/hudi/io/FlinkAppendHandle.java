@@ -75,6 +75,11 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   @Override
+  public boolean canWrite(HoodieRecord record) {
+    return true;
+  }
+
+  @Override
   protected boolean needsUpdateLocation() {
     return false;
   }
@@ -86,11 +91,6 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
     // and operation HoodieCdcOperation.DELETE would be put into either an INSERT bucket or UPDATE bucket.
     return hoodieRecord.getCurrentLocation() != null
         && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
-  }
-
-  @Override
-  public boolean canWrite(HoodieRecord record) {
-    return true;
   }
 
   @Override

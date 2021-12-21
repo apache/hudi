@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Utility funcitons copied from Hive ColumnProjectionUtils.java.
+ * Utility functions copied from Hive ColumnProjectionUtils.java.
  * Needed to copy as we see NoSuchMethod errors when directly using these APIs with/without Spark.
  * Some of these methods are not available across hive versions.
  */

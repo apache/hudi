@@ -52,7 +52,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
   private HoodieWriteConfig getConfig(Boolean autoCommit) {
     return getConfigBuilder(autoCommit)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).validate(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
   }
 
@@ -89,8 +89,8 @@ public class TestAsyncCompaction extends CompactionTestBase {
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
 
-      client.rollbackInflightCompaction(
-          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), hoodieTable);
+      hoodieTable.rollbackInflightCompaction(
+          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime));
       metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       pendingCompactionInstant = metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
           .getInstants().findFirst().get();

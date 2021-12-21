@@ -18,11 +18,13 @@
 package org.apache.spark.sql.hudi.command
 
 import java.util.concurrent.TimeUnit.{MICROSECONDS, MILLISECONDS}
+
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.{BaseKeyGenerator, ComplexKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
+import org.apache.hudi.keygen._
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{StructType, TimestampType}
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
@@ -48,7 +50,8 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
       val keyGenProps = new TypedProperties()
       keyGenProps.putAll(props)
       keyGenProps.remove(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME)
-      keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, beforeKeyGenClassName)
+      val convertedKeyGenClassName = SqlKeyGenerator.getRealKeyGenClassName(props)
+      keyGenProps.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, convertedKeyGenClassName)
       Some(KeyGenUtils.createKeyGeneratorByClassName(keyGenProps))
     } else {
       None
@@ -64,7 +67,7 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
   }
 
   override def getRecordKey(row: Row): String = {
-    if (originKeyGen.isDefined && originKeyGen.get.isInstanceOf[SparkKeyGeneratorInterface]) {
+    if (originKeyGen.isDefined) {
       originKeyGen.get.asInstanceOf[SparkKeyGeneratorInterface].getRecordKey(row)
     } else {
       super.getRecordKey(row)
@@ -121,4 +124,13 @@ object SqlKeyGenerator {
   val ORIGIN_KEYGEN_CLASS_NAME = "hoodie.sql.origin.keygen.class"
   private val timestampTimeFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")
   private val sqlTimestampFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.S")
+
+  def getRealKeyGenClassName(props: TypedProperties): String = {
+    val beforeKeyGenClassName = props.getString(SqlKeyGenerator.ORIGIN_KEYGEN_CLASS_NAME, null)
+    if (beforeKeyGenClassName != null) {
+      HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(beforeKeyGenClassName)
+    } else {
+      classOf[ComplexKeyGenerator].getCanonicalName
+    }
+  }
 }

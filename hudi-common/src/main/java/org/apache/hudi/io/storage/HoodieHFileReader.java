@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -33,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PositionedReadable;
 import org.apache.hadoop.fs.Seekable;
@@ -55,6 +57,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
   private Path path;
   private Configuration conf;
   private HFile.Reader reader;
+  private FSDataInputStream fsDataInputStream;
   private Schema schema;
   // Scanner used to read individual keys. This is cached to prevent the overhead of opening the scanner for each
   // key retrieval.
@@ -70,6 +73,13 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     this.conf = configuration;
     this.path = path;
     this.reader = HFile.createReader(FSUtils.getFs(path.toString(), configuration), path, cacheConfig, conf);
+  }
+
+  public HoodieHFileReader(Configuration configuration, Path path, CacheConfig cacheConfig, FileSystem inlineFs) throws IOException {
+    this.conf = configuration;
+    this.path = path;
+    this.fsDataInputStream = inlineFs.open(path);
+    this.reader = HFile.createReader(inlineFs, path, cacheConfig, configuration);
   }
 
   public HoodieHFileReader(byte[] content) throws IOException {
@@ -164,6 +174,25 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     return readAllRecords(schema, schema);
   }
 
+  public List<Pair<String, R>> readRecords(List<String> keys) throws IOException {
+    reader.loadFileInfo();
+    Schema schema = new Schema.Parser().parse(new String(reader.loadFileInfo().get(KEY_SCHEMA.getBytes())));
+    return readRecords(keys, schema);
+  }
+
+  public List<Pair<String, R>> readRecords(List<String> keys, Schema schema) throws IOException {
+    this.schema = schema;
+    reader.loadFileInfo();
+    List<Pair<String, R>> records = new ArrayList<>();
+    for (String key: keys) {
+      Option<R> value = getRecordByKey(key, schema);
+      if (value.isPresent()) {
+        records.add(new Pair(key, value.get()));
+      }
+    }
+    return records;
+  }
+
   @Override
   public Iterator getRecordIterator(Schema readerSchema) throws IOException {
     final HFileScanner scanner = reader.getScanner(false, false);
@@ -217,7 +246,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
 
     synchronized (this) {
       if (keyScanner == null) {
-        keyScanner = reader.getScanner(true, true);
+        keyScanner = reader.getScanner(false, false);
       }
 
       if (keyScanner.seekTo(kv) == 0) {
@@ -250,6 +279,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     try {
       reader.close();
       reader = null;
+      if (fsDataInputStream != null) {
+        fsDataInputStream.close();
+      }
       keyScanner = null;
     } catch (IOException e) {
       throw new HoodieIOException("Error closing the hfile reader", e);

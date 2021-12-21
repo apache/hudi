@@ -296,6 +296,64 @@ public class TestInLineFileSystem {
     }, "Should have thrown exception");
   }
 
+  static class TestFSPath {
+    final Path inputPath;
+    final Path expectedInLineFSPath;
+    final Path transformedInputPath;
+
+    TestFSPath(final Path inputPath, final Path expectedInLineFSPath, final Path transformedInputPath) {
+      this.inputPath = inputPath;
+      this.expectedInLineFSPath = expectedInLineFSPath;
+      this.transformedInputPath = transformedInputPath;
+    }
+  }
+
+  @Test
+  public void testInLineFSPathConversions() {
+    final List<TestFSPath> expectedInLinePaths = Arrays.asList(
+        new TestFSPath(
+            new Path("/zero/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs://zero/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
+            new Path("file:/zero/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSPath(
+            new Path("file:/one/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs://one/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
+            new Path("file:/one/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSPath(
+            new Path("file://two/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs://two/524bae7e-f01d-47ae-b7cd-910400a81336/file/?start_offset=10&length=10"),
+            new Path("file:/two/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSPath(
+            new Path("hdfs://three/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs://three/524bae7e-f01d-47ae-b7cd-910400a81336/hdfs/?start_offset=10&length=10"),
+            new Path("hdfs://three/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSPath(
+            new Path("s3://four/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs://four/524bae7e-f01d-47ae-b7cd-910400a81336/s3/?start_offset=10&length=10"),
+            new Path("s3://four/524bae7e-f01d-47ae-b7cd-910400a81336")),
+        new TestFSPath(
+            new Path("s3a://five/524bae7e-f01d-47ae-b7cd-910400a81336"),
+            new Path("inlinefs://five/524bae7e-f01d-47ae-b7cd-910400a81336/s3a/?start_offset=10&length=10"),
+            new Path("s3a://five/524bae7e-f01d-47ae-b7cd-910400a81336"))
+    );
+
+    for (TestFSPath entry : expectedInLinePaths) {
+      final Path inputPath = entry.inputPath;
+      final Path expectedInLineFSPath = entry.expectedInLineFSPath;
+      final Path expectedTransformedInputPath = entry.transformedInputPath;
+
+      String scheme = "file";
+      if (inputPath.toString().contains(":")) {
+        scheme = inputPath.toString().split(":")[0];
+      }
+      final Path actualInLineFSPath = InLineFSUtils.getInlineFilePath(inputPath, scheme, 10, 10);
+      assertEquals(expectedInLineFSPath, actualInLineFSPath);
+
+      final Path actualOuterFilePath = InLineFSUtils.getOuterFilePathFromInlinePath(actualInLineFSPath);
+      assertEquals(expectedTransformedInputPath, actualOuterFilePath);
+    }
+  }
+
   @Test
   public void testExists() throws IOException {
     Path inlinePath = getRandomInlinePath();

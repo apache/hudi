@@ -18,8 +18,16 @@ jobs:
         include:
           - scala: "scala-2.11"
             spark: "spark2"
+          - scala: "scala-2.11"
+            spark: "spark2,spark-shade-unbundle-avro"
+          - scala: "scala-2.12"
+            spark: "spark3,spark3.0.x"
+          - scala: "scala-2.12"
+            spark: "spark3,spark3.0.x,spark-shade-unbundle-avro"
           - scala: "scala-2.12"
             spark: "spark3"
+          - scala: "scala-2.12"
+            spark: "spark3,spark-shade-unbundle-avro"
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 8
@@ -31,5 +39,5 @@ jobs:
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scala }}
-          SPAKR_PROFILE: ${{ matrix.spark }}
-        run: mvn install -P "$SCALA_PROFILE,$SPAKR_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+          SPARK_PROFILE: ${{ matrix.spark }}
+        run: mvn install -P "$SCALA_PROFILE,$SPARK_PROFILE" -DskipTests=true -Dmaven.javadoc.skip=true -B -V

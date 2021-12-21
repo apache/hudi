@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
@@ -42,6 +41,7 @@ import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.javalin.BadRequestResponse;
 import io.javalin.Context;
 import io.javalin.Handler;
 import io.javalin.Javalin;
@@ -500,20 +500,26 @@ public class RequestHandler {
 
         if (refreshCheck) {
           long beginFinalCheck = System.currentTimeMillis();
-          String errMsg =
-              "Last known instant from client was "
-                  + context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
-                      HoodieTimeline.INVALID_INSTANT_TS)
-                  + " but server has the following timeline "
-                  + viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM))
-                      .getTimeline().getInstants().collect(Collectors.toList());
-          ValidationUtils.checkArgument(!isLocalViewBehind(context), errMsg);
+          if (isLocalViewBehind(context)) {
+            String errMsg =
+                "Last known instant from client was "
+                    + context.queryParam(RemoteHoodieTableFileSystemView.LAST_INSTANT_TS,
+                        HoodieTimeline.INVALID_INSTANT_TS)
+                    + " but server has the following timeline "
+                    + viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM))
+                        .getTimeline().getInstants().collect(Collectors.toList());
+            throw new BadRequestResponse(errMsg);
+          }
           long endFinalCheck = System.currentTimeMillis();
           finalCheckTimeTaken = endFinalCheck - beginFinalCheck;
         }
       } catch (RuntimeException re) {
         success = false;
-        LOG.error("Got runtime exception servicing request " + context.queryString(), re);
+        if (re instanceof BadRequestResponse) {
+          LOG.warn("Bad request response due to client view behind server view. " + re.getMessage());
+        } else {
+          LOG.error("Got runtime exception servicing request " + context.queryString(), re);
+        }
         throw re;
       } finally {
         long endTs = System.currentTimeMillis();

@@ -33,6 +33,8 @@ import java.util.List;
 public class MergeOnReadInputSplit implements InputSplit {
   private static final long serialVersionUID = 1L;
 
+  private static final long NUM_NO_CONSUMPTION = 0L;
+
   private final int splitNum;
   private final Option<String> basePath;
   private final Option<List<String>> logPaths;
@@ -41,6 +43,10 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final long maxCompactionMemoryInBytes;
   private final String mergeType;
   private final Option<InstantRange> instantRange;
+
+  // for streaming reader to record the consumed offset,
+  // which is the start of next round reading.
+  private long consumed = NUM_NO_CONSUMPTION;
 
   public MergeOnReadInputSplit(
       int splitNum,
@@ -94,6 +100,18 @@ public class MergeOnReadInputSplit implements InputSplit {
     return this.splitNum;
   }
 
+  public void consume() {
+    this.consumed += 1L;
+  }
+
+  public long getConsumed() {
+    return consumed;
+  }
+
+  public boolean isConsumed() {
+    return this.consumed != NUM_NO_CONSUMPTION;
+  }
+
   @Override
   public String toString() {
     return "MergeOnReadInputSplit{"
@@ -107,5 +125,4 @@ public class MergeOnReadInputSplit implements InputSplit {
         + ", instantRange=" + instantRange
         + '}';
   }
-
 }

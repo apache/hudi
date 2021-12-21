@@ -96,7 +96,7 @@ public class HoodieJavaWriteClientExample {
     List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
     List<HoodieRecord<HoodieAvroPayload>> writeRecords =
         recordsSoFar.stream().map(r -> new HoodieRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
-    client.upsert(writeRecords, newCommitTime);
+    client.insert(writeRecords, newCommitTime);
 
     // updates
     newCommitTime = client.startCommit();

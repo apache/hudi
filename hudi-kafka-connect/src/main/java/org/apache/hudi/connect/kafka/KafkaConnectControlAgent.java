@@ -18,17 +18,16 @@
 
 package org.apache.hudi.connect.kafka;
 
-import org.apache.hudi.connect.transaction.ControlEvent;
+import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionParticipant;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -66,7 +65,7 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
   // List of TransactionParticipants per Kafka Topic
   private final Map<String, ConcurrentLinkedQueue<TransactionParticipant>> partitionWorkers;
   private final KafkaControlProducer producer;
-  private KafkaConsumer<String, ControlEvent> consumer;
+  private KafkaConsumer<String, byte[]> consumer;
 
   public KafkaConnectControlAgent(String bootstrapServers,
                                   String controlTopicName) {
@@ -118,7 +117,7 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
   }
 
   @Override
-  public void publishMessage(ControlEvent message) {
+  public void publishMessage(ControlMessage message) {
     producer.publishMessage(message);
   }
 
@@ -128,28 +127,28 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
     // Todo fetch the worker id or name instead of a uuid.
     props.put(ConsumerConfig.GROUP_ID_CONFIG, "hudi-control-group" + UUID.randomUUID().toString());
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaJsonDeserializer.class);
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
     // Since we are using Kafka Control Topic as a RPC like interface,
     // we want consumers to only process messages that are sent after they come online
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
-    consumer = new KafkaConsumer<>(props, new StringDeserializer(),
-        new KafkaJsonDeserializer<>(ControlEvent.class));
+    consumer = new KafkaConsumer<>(props, new StringDeserializer(), new ByteArrayDeserializer());
 
     consumer.subscribe(Collections.singletonList(controlTopicName));
 
     executorService.submit(() -> {
       while (true) {
-        ConsumerRecords<String, ControlEvent> records;
+        ConsumerRecords<String, byte[]> records;
         records = consumer.poll(Duration.ofMillis(KAFKA_POLL_TIMEOUT_MS));
-        for (ConsumerRecord<String, ControlEvent> record : records) {
+        for (ConsumerRecord<String, byte[]> record : records) {
           try {
             LOG.debug(String.format("Kafka consumerGroupId = %s topic = %s, partition = %s, offset = %s, customer = %s, country = %s",
                 "", record.topic(), record.partition(), record.offset(), record.key(), record.value()));
-            ControlEvent message = record.value();
-            String senderTopic = message.senderPartition().topic();
-            if (message.getSenderType().equals(ControlEvent.SenderType.COORDINATOR)) {
+            ControlMessage message = ControlMessage.parseFrom(record.value());
+            String senderTopic = message.getTopicName();
+
+            if (message.getReceiverType().equals(ControlMessage.EntityType.PARTICIPANT)) {
               if (partitionWorkers.containsKey(senderTopic)) {
                 for (TransactionParticipant partitionWorker : partitionWorkers.get(senderTopic)) {
                   partitionWorker.processControlEvent(message);
@@ -157,11 +156,9 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
               } else {
                 LOG.warn(String.format("Failed to send message for unregistered participants for topic %s", senderTopic));
               }
-            } else if (message.getSenderType().equals(ControlEvent.SenderType.PARTICIPANT)) {
+            } else if (message.getReceiverType().equals(ControlMessage.EntityType.COORDINATOR)) {
               if (topicCoordinators.containsKey(senderTopic)) {
                 topicCoordinators.get(senderTopic).processControlEvent(message);
-              } else {
-                LOG.warn(String.format("Failed to send message for unregistered coordinator for topic %s", senderTopic));
               }
             } else {
               LOG.warn(String.format("Sender type of Control Message unknown %s", message.getSenderType().name()));
@@ -198,33 +195,6 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
             "Unclean Kafka Control Manager executor service shutdown ");
         executorService.shutdownNow();
       }
-    }
-  }
-
-  /**
-   * Deserializes the incoming Kafka records for the Control Topic.
-   *
-   * @param <T> represents the object that is sent over the Control Topic.
-   */
-  public static class KafkaJsonDeserializer<T> implements Deserializer<T> {
-
-    private static final Logger LOG = LogManager.getLogger(KafkaJsonDeserializer.class);
-    private final Class<T> type;
-
-    KafkaJsonDeserializer(Class<T> type) {
-      this.type = type;
-    }
-
-    @Override
-    public T deserialize(String s, byte[] bytes) {
-      ObjectMapper mapper = new ObjectMapper();
-      T obj = null;
-      try {
-        obj = mapper.readValue(bytes, type);
-      } catch (Exception e) {
-        LOG.error(e.getMessage());
-      }
-      return obj;
     }
   }
 }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -157,22 +158,12 @@ public class UtilHelpers {
     }
   }
 
-  /**
-   *
-   */
-  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf;
-    try {
-      conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
-    } catch (Exception e) {
-      conf = new DFSPropertiesConfiguration();
-      LOG.warn("Unexpected error read props file at :" + cfgPath, e);
-    }
-
+  public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig, Path cfgPath, List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -186,7 +177,7 @@ public class UtilHelpers {
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -196,7 +187,7 @@ public class UtilHelpers {
   }
 
   public static TypedProperties buildProperties(List<String> props) {
-    TypedProperties properties = new TypedProperties();
+    TypedProperties properties = DFSPropertiesConfiguration.getGlobalProps();
     props.forEach(x -> {
       String[] kv = x.split("=");
       ValidationUtils.checkArgument(kv.length == 2);
@@ -474,6 +465,15 @@ public class UtilHelpers {
         return finalLatestTableSchema;
       }
     };
+  }
+
+  public static HoodieTableMetaClient createMetaClient(
+      JavaSparkContext jsc, String basePath, boolean shouldLoadActiveTimelineOnLoad) {
+    return HoodieTableMetaClient.builder()
+        .setConf(jsc.hadoopConfiguration())
+        .setBasePath(basePath)
+        .setLoadActiveTimelineOnLoad(shouldLoadActiveTimelineOnLoad)
+        .build();
   }
 
   @FunctionalInterface

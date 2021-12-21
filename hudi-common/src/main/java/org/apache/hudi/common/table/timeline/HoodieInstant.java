@@ -147,7 +147,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
               : HoodieTimeline.makeCleanerFileName(timestamp);
     } else if (HoodieTimeline.ROLLBACK_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightRollbackFileName(timestamp)
-          : HoodieTimeline.makeRollbackFileName(timestamp);
+          : isRequested() ? HoodieTimeline.makeRequestedRollbackFileName(timestamp)
+              : HoodieTimeline.makeRollbackFileName(timestamp);
     } else if (HoodieTimeline.SAVEPOINT_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightSavePointFileName(timestamp)
           : HoodieTimeline.makeSavePointFileName(timestamp);

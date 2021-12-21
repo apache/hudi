@@ -36,9 +36,10 @@ import java.util.Properties;
 @Immutable
 @ConfigClassProperty(name = "Kafka Sink Connect Configurations",
     groupName = ConfigGroups.Names.KAFKA_CONNECT,
-    description = "Configurations for Kakfa Connect Sink Connector for Hudi.")
+    description = "Configurations for Kafka Connect Sink Connector for Hudi.")
 public class KafkaConnectConfigs extends HoodieConfig {
 
+  public static final int CURRENT_PROTOCOL_VERSION = 0;
   public static final String KAFKA_VALUE_CONVERTER = "value.converter";
 
   public static final ConfigProperty<String> KAFKA_BOOTSTRAP_SERVERS = ConfigProperty
@@ -67,10 +68,15 @@ public class KafkaConnectConfigs extends HoodieConfig {
 
   public static final ConfigProperty<String> COORDINATOR_WRITE_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.kafka.coordinator.write.timeout.secs")
-      .defaultValue("60")
+      .defaultValue("300")
       .withDocumentation("The timeout after sending an END_COMMIT until when "
           + "the coordinator will wait for the write statuses from all the partitions"
           + "to ignore the current commit and start a new commit.");
+
+  public static final ConfigProperty<String> ASYNC_COMPACT_ENABLE = ConfigProperty
+      .key("hoodie.kafka.compaction.async.enable")
+      .defaultValue("true")
+      .withDocumentation("Controls whether async compaction should be turned on for MOR table writing.");
 
   public static final ConfigProperty<String> META_SYNC_ENABLE = ConfigProperty
       .key("hoodie.meta.sync.enable")
@@ -82,14 +88,17 @@ public class KafkaConnectConfigs extends HoodieConfig {
       .defaultValue(HiveSyncTool.class.getName())
       .withDocumentation("Meta sync client tool, using comma to separate multi tools");
 
+  public static final ConfigProperty<Boolean> ALLOW_COMMIT_ON_ERRORS = ConfigProperty
+      .key("hoodie.kafka.allow.commit.on.errors")
+      .defaultValue(true)
+      .withDocumentation("Commit even when some records failed to be written");
+
   protected KafkaConnectConfigs() {
     super();
   }
 
   protected KafkaConnectConfigs(Properties props) {
     super(props);
-    Properties newProps = new Properties();
-    newProps.putAll(props);
   }
 
   public static KafkaConnectConfigs.Builder newBuilder() {
@@ -120,12 +129,20 @@ public class KafkaConnectConfigs extends HoodieConfig {
     return getString(KAFKA_VALUE_CONVERTER);
   }
 
+  public Boolean isAsyncCompactEnabled() {
+    return getBoolean(ASYNC_COMPACT_ENABLE);
+  }
+
   public Boolean isMetaSyncEnabled() {
     return getBoolean(META_SYNC_ENABLE);
   }
 
   public String getMetaSyncClasses() {
     return getString(META_SYNC_CLASSES);
+  }
+
+  public Boolean allowCommitOnErrors() {
+    return getBoolean(ALLOW_COMMIT_ON_ERRORS);
   }
 
   public static class Builder {
@@ -149,6 +166,11 @@ public class KafkaConnectConfigs extends HoodieConfig {
 
     public Builder withCoordinatorWriteTimeoutSecs(Long coordinatorWriteTimeoutSecs) {
       connectConfigs.setValue(COORDINATOR_WRITE_TIMEOUT_SECS, String.valueOf(coordinatorWriteTimeoutSecs));
+      return this;
+    }
+
+    public Builder withAllowCommitOnErrors(Boolean allowCommitOnErrors) {
+      connectConfigs.setValue(ALLOW_COMMIT_ON_ERRORS, String.valueOf(allowCommitOnErrors));
       return this;
     }
 

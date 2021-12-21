@@ -22,10 +22,17 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.util.TypeUtils;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -39,6 +46,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
+  public static final String SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.SparkSizeBasedClusteringPlanStrategy";
+  public static final String JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY =
+      "org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy";
+  public static final String SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY =
+      "org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy";
+  public static final String JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY =
+      "org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy";
+
+  // Any Space-filling curves optimize(z-order/hilbert) params can be saved with this prefix
+  public static final String LAYOUT_OPTIMIZE_PARAM_PREFIX = "hoodie.layout.optimize.";
 
   public static final ConfigProperty<String> DAYBASED_LOOKBACK_PARTITIONS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "daybased.lookback.partitions")
@@ -46,17 +64,23 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Number of partitions to list to create ClusteringPlan");
 
+  public static final ConfigProperty<String> PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
+      .defaultValue(String.valueOf(600 * 1024 * 1024L))
+      .sinceVersion("0.7.0")
+      .withDocumentation("Files smaller than the size specified here are candidates for clustering");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.plan.strategy.class")
-      .defaultValue("org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy")
+      .defaultValue(SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY)
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of ClusteringPlanStrategy) to create clustering plan "
-          + "i.e select what file groups are being clustered. Default strategy, looks at the last N (determined by "
-          + DAYBASED_LOOKBACK_PARTITIONS.key() + ") day based partitions picks the small file slices within those partitions.");
+          + "i.e select what file groups are being clustered. Default strategy, looks at the clustering small file size limit (determined by "
+          + PLAN_STRATEGY_SMALL_FILE_LIMIT.key() + ") to pick the small file slices within partitions for clustering.");
 
   public static final ConfigProperty<String> EXECUTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key("hoodie.clustering.execution.strategy.class")
-      .defaultValue("org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
+      .defaultValue(SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY)
       .sinceVersion("0.7.0")
       .withDocumentation("Config to provide a strategy class (subclass of RunClusteringStrategy) to define how the "
           + " clustering plan is executed. By default, we sort the file groups in th plan by the specified columns, while "
@@ -85,12 +109,6 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .defaultValue("0")
       .sinceVersion("0.9.0")
       .withDocumentation("Number of partitions to skip from latest when choosing partitions to create ClusteringPlan");
-
-  public static final ConfigProperty<String> PLAN_STRATEGY_SMALL_FILE_LIMIT = ConfigProperty
-      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "small.file.limit")
-      .defaultValue(String.valueOf(600 * 1024 * 1024L))
-      .sinceVersion("0.7.0")
-      .withDocumentation("Files smaller than the size specified here are candidates for clustering");
 
   public static final ConfigProperty<String> PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "max.bytes.per.group")
@@ -133,9 +151,78 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> PRESERVE_COMMIT_METADATA = ConfigProperty
       .key("hoodie.clustering.preserve.commit.metadata")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.9.0")
       .withDocumentation("When rewriting data, preserves existing hoodie_commit_time");
+
+  /**
+   * Using space-filling curves to optimize the layout of table to boost query performance.
+   * The table data which sorted by space-filling curve has better aggregation;
+   * combine with min-max filtering, it can achieve good performance improvement.
+   *
+   * Notice:
+   * when we use this feature, we need specify the sort columns.
+   * The more columns involved in sorting, the worse the aggregation, and the smaller the query performance improvement.
+   * Choose the filter columns which commonly used in query sql as sort columns.
+   * It is recommend that 2 ~ 4 columns participate in sorting.
+   */
+  public static final ConfigProperty LAYOUT_OPTIMIZE_ENABLE = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "enable")
+      .defaultValue(false)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable use z-ordering/space-filling curves to optimize the layout of table to boost query performance. "
+          + "This parameter takes precedence over clustering strategy set using " + EXECUTION_STRATEGY_CLASS_NAME.key());
+
+  public static final ConfigProperty LAYOUT_OPTIMIZE_STRATEGY = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "strategy")
+      .defaultValue("z-order")
+      .sinceVersion("0.10.0")
+      .withDocumentation("Type of layout optimization to be applied, current only supports `z-order` and `hilbert` curves.");
+
+  /**
+   * There exists two method to build z-curve.
+   * one is directly mapping sort cols to z-value to build z-curve;
+   * we can find this method in Amazon DynamoDB https://aws.amazon.com/cn/blogs/database/tag/z-order/
+   * the other one is Boundary-based Interleaved Index method which we proposed. simply call it sample method.
+   * Refer to rfc-28 for specific algorithm flow.
+   * Boundary-based Interleaved Index method has better generalization, but the build speed is slower than direct method.
+   */
+  public static final ConfigProperty LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "curve.build.method")
+      .defaultValue("direct")
+      .sinceVersion("0.10.0")
+      .withDocumentation("Controls how data is sampled to build the space filling curves. two methods: `direct`,`sample`."
+          + "The direct method is faster than the sampling, however sample method would produce a better data layout.");
+  /**
+   * Doing sample for table data is the first step in Boundary-based Interleaved Index method.
+   * larger sample number means better optimize result, but more memory consumption
+   */
+  public static final ConfigProperty LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "build.curve.sample.size")
+      .defaultValue("200000")
+      .sinceVersion("0.10.0")
+      .withDocumentation("when setting" + LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD.key() + " to `sample`, the amount of sampling to be done."
+          + "Large sample size leads to better results, at the expense of more memory usage.");
+
+  /**
+   * The best way to use Z-order/Space-filling curves is to cooperate with Data-Skipping
+   * with data-skipping query engine can greatly reduce the number of table files to be read.
+   * otherwise query engine can only do row-group skipping for files (parquet/orc)
+   */
+  public static final ConfigProperty LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE = ConfigProperty
+      .key(LAYOUT_OPTIMIZE_PARAM_PREFIX + "data.skipping.enable")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Enable data skipping by collecting statistics once layout optimization is complete.");
+
+  public static final ConfigProperty<Boolean> ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT = ConfigProperty
+      .key("hoodie.clustering.rollback.pending.replacecommit.on.conflict")
+      .defaultValue(false)
+      .sinceVersion("0.10.0")
+      .withDocumentation("If updates are allowed to file groups pending clustering, then set this config to rollback failed or pending clustering instants. "
+          + "Pending clustering will be rolled back ONLY IF there is conflict between incoming upsert and filegroup to be clustered. "
+          + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
+          + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
 
   /**
    * @deprecated Use {@link #PLAN_STRATEGY_CLASS_NAME} and its methods instead
@@ -250,9 +337,22 @@ public class HoodieClusteringConfig extends HoodieConfig {
   /** @deprecated Use {@link #ASYNC_CLUSTERING_ENABLE} and its methods instead */
   @Deprecated
   public static final String DEFAULT_ASYNC_CLUSTERING_ENABLE_OPT_VAL = ASYNC_CLUSTERING_ENABLE.defaultValue();
-  
+
+  // NOTE: This ctor is required for appropriate deserialization
   public HoodieClusteringConfig() {
     super();
+  }
+
+  public boolean isAsyncClusteringEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
+  }
+
+  public boolean isInlineClusteringEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.INLINE_CLUSTERING);
+  }
+
+  public static HoodieClusteringConfig from(TypedProperties props) {
+    return  HoodieClusteringConfig.newBuilder().fromProperties(props).build();
   }
 
   public static Builder newBuilder() {
@@ -262,6 +362,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
   public static class Builder {
 
     private final HoodieClusteringConfig clusteringConfig = new HoodieClusteringConfig();
+    private EngineType engineType = EngineType.SPARK;
+
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
+      return this;
+    }
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -331,6 +437,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
     }
 
     public Builder fromProperties(Properties props) {
+      // TODO this should cherry-pick only clustering properties
       this.clusteringConfig.getProps().putAll(props);
       return this;
     }
@@ -350,9 +457,120 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRollbackPendingClustering(Boolean rollbackPendingClustering) {
+      clusteringConfig.setValue(ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT, String.valueOf(rollbackPendingClustering));
+      return this;
+    }
+
+    public Builder withSpaceFillingCurveDataOptimizeEnable(Boolean enable) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withDataOptimizeStrategy(String strategy) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_STRATEGY, strategy);
+      return this;
+    }
+
+    public Builder withDataOptimizeBuildCurveStrategy(String method) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_CURVE_BUILD_METHOD, method);
+      return this;
+    }
+
+    public Builder withDataOptimizeBuildCurveSampleNumber(int sampleNumber) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_BUILD_CURVE_SAMPLE_SIZE, String.valueOf(sampleNumber));
+      return this;
+    }
+
+    public Builder withDataOptimizeDataSkippingEnable(boolean dataSkipping) {
+      clusteringConfig.setValue(LAYOUT_OPTIMIZE_DATA_SKIPPING_ENABLE, String.valueOf(dataSkipping));
+      return this;
+    }
+
     public HoodieClusteringConfig build() {
+      clusteringConfig.setDefaultValue(
+          PLAN_STRATEGY_CLASS_NAME, getDefaultPlanStrategyClassName(engineType));
+      clusteringConfig.setDefaultValue(
+          EXECUTION_STRATEGY_CLASS_NAME, getDefaultExecutionStrategyClassName(engineType));
       clusteringConfig.setDefaults(HoodieClusteringConfig.class.getName());
       return clusteringConfig;
+    }
+
+    private String getDefaultPlanStrategyClassName(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return SPARK_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+        case FLINK:
+        case JAVA:
+          return JAVA_SIZED_BASED_CLUSTERING_PLAN_STRATEGY;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private String getDefaultExecutionStrategyClassName(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return SPARK_SORT_AND_SIZE_EXECUTION_STRATEGY;
+        case FLINK:
+        case JAVA:
+          return JAVA_SORT_AND_SIZE_EXECUTION_STRATEGY;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+  }
+
+  /**
+   * Type of a strategy for building Z-order/Hilbert space-filling curves.
+   */
+  public enum BuildCurveStrategyType {
+    DIRECT("direct"),
+    SAMPLE("sample");
+
+    private static final Map<String, BuildCurveStrategyType> VALUE_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(BuildCurveStrategyType.class, e -> e.value);
+
+    private final String value;
+
+    BuildCurveStrategyType(String value) {
+      this.value = value;
+    }
+
+    public static BuildCurveStrategyType fromValue(String value) {
+      BuildCurveStrategyType enumValue = VALUE_TO_ENUM_MAP.get(value);
+      if (enumValue == null) {
+        throw new HoodieException(String.format("Invalid value (%s)", value));
+      }
+
+      return enumValue;
+    }
+  }
+
+  /**
+   * Layout optimization strategies such as Z-order/Hilbert space-curves, etc
+   */
+  public enum LayoutOptimizationStrategy {
+    ZORDER("z-order"),
+    HILBERT("hilbert");
+
+    private static final Map<String, LayoutOptimizationStrategy> VALUE_TO_ENUM_MAP =
+        TypeUtils.getValueToEnumMap(LayoutOptimizationStrategy.class, e -> e.value);
+
+    private final String value;
+
+    LayoutOptimizationStrategy(String value) {
+      this.value = value;
+    }
+
+    @Nonnull
+    public static LayoutOptimizationStrategy fromValue(String value) {
+      LayoutOptimizationStrategy enumValue = VALUE_TO_ENUM_MAP.get(value);
+      if (enumValue == null) {
+        throw new HoodieException(String.format("Invalid value (%s)", value));
+      }
+
+      return enumValue;
     }
   }
 }

@@ -28,11 +28,8 @@ import java.util.List;
 /**
  * WriteProfile that always return empty small files.
  *
- * <p>This write profile is used for cases:
- * i). INSERT OVERWRITE and INSERT OVERWRITE TABLE operations,
- * the existing small files are ignored because of the 'OVERWRITE' semantics;
- * ii). INSERT operation when data file merge is disabled.
- *
+ * <p>This write profile is used for INSERT OVERWRITE and INSERT OVERWRITE TABLE operations,
+ * the existing small files are ignored because of the 'OVERWRITE' semantics.
  *
  * <p>Note: assumes the index can always index log files for Flink write.
  */

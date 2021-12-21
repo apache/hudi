@@ -88,4 +88,18 @@ public class TestFileIndex {
     assertThat(fileStatuses.length, is(1));
     assertTrue(fileStatuses[0].getPath().toString().endsWith(HoodieFileFormat.PARQUET.getFileExtension()));
   }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testFileListingEmptyTable(boolean enableMetadata) {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(FlinkOptions.METADATA_ENABLED, enableMetadata);
+    FileIndex fileIndex = FileIndex.instance(new Path(tempFile.getAbsolutePath()), conf);
+    List<String> partitionKeys = Collections.singletonList("partition");
+    List<Map<String, String>> partitions = fileIndex.getPartitions(partitionKeys, "default", false);
+    assertThat(partitions.size(), is(0));
+
+    FileStatus[] fileStatuses = fileIndex.getFilesInPartitions();
+    assertThat(fileStatuses.length, is(0));
+  }
 }

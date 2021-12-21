@@ -22,7 +22,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SmallFile;
@@ -94,6 +93,11 @@ public class BucketAssigner implements AutoCloseable {
    */
   private final Map<String, NewFileAssignState> newFileAssignStates;
 
+  /**
+   * Num of accumulated successful checkpoints, used for cleaning the new file assign state.
+   */
+  private int accCkp = 0;
+
   public BucketAssigner(
       int taskID,
       int maxParallelism,
@@ -117,7 +121,6 @@ public class BucketAssigner implements AutoCloseable {
    */
   public void reset() {
     bucketInfoMap.clear();
-    newFileAssignStates.clear();
   }
 
   public BucketInfo addUpdate(String partitionPath, String fileIdHint) {
@@ -136,16 +139,7 @@ public class BucketAssigner implements AutoCloseable {
 
     // first try packing this into one of the smallFiles
     if (smallFileAssign != null && smallFileAssign.assign()) {
-      final String key = StreamerUtil.generateBucketKey(partitionPath, smallFileAssign.getFileId());
-      // create a new bucket or reuse an existing bucket
-      BucketInfo bucketInfo;
-      if (bucketInfoMap.containsKey(key)) {
-        // Assigns an inserts to existing update bucket
-        bucketInfo = bucketInfoMap.get(key);
-      } else {
-        bucketInfo = addUpdate(partitionPath, smallFileAssign.getFileId());
-      }
-      return bucketInfo;
+      return new BucketInfo(BucketType.UPDATE, smallFileAssign.getFileId(), partitionPath);
     }
 
     // if we have anything more, create new insert buckets, like normal
@@ -154,7 +148,20 @@ public class BucketAssigner implements AutoCloseable {
       if (newFileAssignState.canAssign()) {
         newFileAssignState.assign();
         final String key = StreamerUtil.generateBucketKey(partitionPath, newFileAssignState.fileId);
-        return bucketInfoMap.get(key);
+        if (bucketInfoMap.containsKey(key)) {
+          // the newFileAssignStates is cleaned asynchronously when received the checkpoint success notification,
+          // the records processed within the time range:
+          // (start checkpoint, checkpoint success(and instant committed))
+          // should still be assigned to the small buckets of last checkpoint instead of new one.
+
+          // the bucketInfoMap is cleaned when checkpoint starts.
+
+          // A promotion: when the HoodieRecord can record whether it is an UPDATE or INSERT,
+          // we can always return an UPDATE BucketInfo here, and there is no need to record the
+          // UPDATE bucket through calling #addUpdate.
+          return bucketInfoMap.get(key);
+        }
+        return new BucketInfo(BucketType.UPDATE, newFileAssignState.fileId, partitionPath);
       }
     }
     BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, createFileIdOfThisTask(), partitionPath);
@@ -166,7 +173,7 @@ public class BucketAssigner implements AutoCloseable {
     return bucketInfo;
   }
 
-  private SmallFileAssign getSmallFileAssign(String partitionPath) {
+  private synchronized SmallFileAssign getSmallFileAssign(String partitionPath) {
     if (smallFileAssignMap.containsKey(partitionPath)) {
       return smallFileAssignMap.get(partitionPath);
     }
@@ -180,19 +187,28 @@ public class BucketAssigner implements AutoCloseable {
       smallFileAssignMap.put(partitionPath, assign);
       return assign;
     }
+    smallFileAssignMap.put(partitionPath, null);
     return null;
   }
 
   /**
    * Refresh the table state like TableFileSystemView and HoodieTimeline.
    */
-  public void reload(long checkpointId) {
+  public synchronized void reload(long checkpointId) {
+    this.accCkp += 1;
+    if (this.accCkp > 1) {
+      // do not clean the new file assignment state for the first checkpoint,
+      // this #reload calling is triggered by checkpoint success event, the coordinator
+      // also relies on the checkpoint success event to commit the inflight instant,
+      // and very possibly this component receives the notification before the coordinator,
+      // if we do the cleaning, the records processed within the time range:
+      // (start checkpoint, checkpoint success(and instant committed))
+      // would be assigned to a fresh new data bucket which is not the right behavior.
+      this.newFileAssignStates.clear();
+      this.accCkp = 0;
+    }
     this.smallFileAssignMap.clear();
     this.writeProfile.reload(checkpointId);
-  }
-
-  public HoodieTable<?, ?, ?, ?> getTable() {
-    return this.writeProfile.getTable();
   }
 
   private boolean fileIdOfThisTask(String fileId) {

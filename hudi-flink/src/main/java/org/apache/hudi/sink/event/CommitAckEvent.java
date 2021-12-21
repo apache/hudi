@@ -26,13 +26,25 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 public class CommitAckEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
-  private static final CommitAckEvent INSTANCE = new CommitAckEvent();
+  private long checkpointId;
+
+  public CommitAckEvent(long checkpointId) {
+    this.checkpointId = checkpointId;
+  }
 
   // default constructor for efficient serialization
   public CommitAckEvent() {
   }
 
-  public static CommitAckEvent getInstance() {
-    return INSTANCE;
+  public long getCheckpointId() {
+    return checkpointId;
+  }
+
+  public void setCheckpointId(long checkpointId) {
+    this.checkpointId = checkpointId;
+  }
+
+  public static CommitAckEvent getInstance(long checkpointId) {
+    return new CommitAckEvent(checkpointId);
   }
 }

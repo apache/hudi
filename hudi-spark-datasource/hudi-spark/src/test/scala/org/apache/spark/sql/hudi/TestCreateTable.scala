@@ -43,7 +43,7 @@ class TestCreateTable extends TestHoodieSqlBase {
          |  price double,
          |  ts long
          | ) using hudi
-         | options (
+         | tblproperties (
          |   primaryKey = 'id',
          |   preCombineField = 'ts'
          | )
@@ -62,6 +62,53 @@ class TestCreateTable extends TestHoodieSqlBase {
     )(table.schema.fields)
   }
 
+  test("Test Create Hoodie Table With Options") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         | ) using hudi
+         | partitioned by (dt)
+         | options (
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts'
+         | )
+       """.stripMargin)
+    val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
+    assertResult(table.properties("type"))("cow")
+    assertResult(table.properties("primaryKey"))("id")
+    assertResult(table.properties("preCombineField"))("ts")
+    assertResult(tableName)(table.identifier.table)
+    assertResult("hudi")(table.provider.get)
+    assertResult(CatalogTableType.MANAGED)(table.tableType)
+    assertResult(
+      HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
+      ++ Seq(
+        StructField("id", IntegerType),
+        StructField("name", StringType),
+        StructField("price", DoubleType),
+        StructField("ts", LongType),
+        StructField("dt", StringType))
+    )(table.schema.fields)
+
+    val tablePath = table.storage.properties("path")
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(spark.sessionState.newHadoopConf())
+      .build()
+    val tableConfig = metaClient.getTableConfig.getProps.asScala.toMap
+    assertResult(true)(tableConfig.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+    assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
+    assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
+    assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELD.key))
+    assertResult(classOf[ComplexKeyGenerator].getCanonicalName)(tableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+  }
+
   test("Test Create External Hoodie Table") {
     withTempDir { tmp =>
       // Test create cow table.
@@ -74,7 +121,7 @@ class TestCreateTable extends TestHoodieSqlBase {
            |  price double,
            |  ts long
            |) using hudi
-           | options (
+           | tblproperties (
            |  primaryKey = 'id,name',
            |  type = 'cow'
            | )
@@ -93,8 +140,8 @@ class TestCreateTable extends TestHoodieSqlBase {
           StructField("price", DoubleType),
           StructField("ts", LongType))
       )(table.schema.fields)
-      assertResult(table.storage.properties("type"))("cow")
-      assertResult(table.storage.properties("primaryKey"))("id,name")
+      assertResult(table.properties("type"))("cow")
+      assertResult(table.properties("primaryKey"))("id,name")
 
       spark.sql(s"drop table $tableName")
       // Test create mor partitioned table
@@ -108,15 +155,15 @@ class TestCreateTable extends TestHoodieSqlBase {
            |  dt string
            |) using hudi
            | partitioned by (dt)
-           | options (
+           | tblproperties (
            |  primaryKey = 'id',
            |  type = 'mor'
            | )
            | location '${tmp.getCanonicalPath}/h0'
        """.stripMargin)
       val table2 = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
-      assertResult(table2.storage.properties("type"))("mor")
-      assertResult(table2.storage.properties("primaryKey"))("id")
+      assertResult(table2.properties("type"))("mor")
+      assertResult(table2.properties("primaryKey"))("id")
       assertResult(Seq("dt"))(table2.partitionColumnNames)
       assertResult(classOf[HoodieParquetRealtimeInputFormat].getCanonicalName)(table2.storage.inputFormat.get)
 
@@ -129,8 +176,8 @@ class TestCreateTable extends TestHoodieSqlBase {
            |location '${tmp.getCanonicalPath}/h0'
          """.stripMargin)
       val table3 = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName3))
-      assertResult(table3.storage.properties("type"))("mor")
-      assertResult(table3.storage.properties("primaryKey"))("id")
+      assertResult(table3.properties("type"))("mor")
+      assertResult(table3.properties("primaryKey"))("id")
       assertResult(
         HoodieRecord.HOODIE_META_COLUMNS.asScala.map(StructField(_, StringType))
           ++ Seq(
@@ -156,7 +203,7 @@ class TestCreateTable extends TestHoodieSqlBase {
              |  price double,
              |  ts long
              |) using hudi
-             | options (
+             | tblproperties (
              |  primaryKey = 'id1',
              |  type = 'cow'
              | )
@@ -173,7 +220,7 @@ class TestCreateTable extends TestHoodieSqlBase {
              |  price double,
              |  ts long
              |) using hudi
-             | options (
+             | tblproperties (
              |  primaryKey = 'id',
              |  preCombineField = 'ts1',
              |  type = 'cow'
@@ -191,7 +238,7 @@ class TestCreateTable extends TestHoodieSqlBase {
              |  price double,
              |  ts long
              |) using hudi
-             | options (
+             | tblproperties (
              |  primaryKey = 'id',
              |  preCombineField = 'ts',
              |  type = 'cow1'
@@ -208,7 +255,8 @@ class TestCreateTable extends TestHoodieSqlBase {
       val tableName1 = generateTableName
       spark.sql(
         s"""
-           |create table $tableName1 using hudi
+           | create table $tableName1 using hudi
+           | tblproperties(primaryKey = 'id')
            | location '${tmp.getCanonicalPath}/$tableName1'
            | AS
            | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
@@ -223,6 +271,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         s"""
            | create table $tableName2 using hudi
            | partitioned by (dt)
+           | tblproperties(primaryKey = 'id')
            | location '${tmp.getCanonicalPath}/$tableName2'
            | AS
            | select 1 as id, 'a1' as name, 10 as price, '2021-04-01' as dt
@@ -240,7 +289,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         s"""
            | create table $tableName3 using hudi
            | partitioned by (dt)
-           | options(primaryKey = 'id')
+           | tblproperties(primaryKey = 'id')
            | location '${tmp.getCanonicalPath}/$tableName3'
            | AS
            | select null as id, 'a1' as name, 10 as price, '2021-05-07' as dt
@@ -252,6 +301,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         s"""
            | create table $tableName3 using hudi
            | partitioned by (dt)
+           | tblproperties(primaryKey = 'id')
            | location '${tmp.getCanonicalPath}/$tableName3'
            | AS
            | select cast('2021-05-06 00:00:00' as timestamp) as dt, 1 as id, 'a1' as name, 10 as
@@ -267,6 +317,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         s"""
            | create table $tableName4 using hudi
            | partitioned by (dt)
+           | tblproperties(primaryKey = 'id')
            | location '${tmp.getCanonicalPath}/$tableName4'
            | AS
            | select cast('2021-05-06' as date) as dt, 1 as id, 'a1' as name, 10 as
@@ -303,7 +354,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             | options (
+             |tblproperties (
              | primaryKey = 'id',
              | preCombineField = 'ts'
              |)
@@ -380,7 +431,7 @@ class TestCreateTable extends TestHoodieSqlBase {
         spark.sql(
           s"""
              |create table $tableName using hudi
-             | options (
+             |tblproperties (
              | primaryKey = 'id',
              | preCombineField = 'ts'
              |)
@@ -455,7 +506,7 @@ class TestCreateTable extends TestHoodieSqlBase {
       spark.sql(
         s"""
            |create table $tableName using hudi
-           | options (
+           |tblproperties (
            | primaryKey = 'id',
            | preCombineField = 'ts'
            |)
@@ -514,6 +565,7 @@ class TestCreateTable extends TestHoodieSqlBase {
          | name string,
          | price double
          |) using hudi
+         |tblproperties(primaryKey = 'id')
          |""".stripMargin
     )
 
@@ -527,6 +579,7 @@ class TestCreateTable extends TestHoodieSqlBase {
          | name string,
          | price double
          |) using hudi
+         |tblproperties(primaryKey = 'id')
          |""".stripMargin
     )
   }
