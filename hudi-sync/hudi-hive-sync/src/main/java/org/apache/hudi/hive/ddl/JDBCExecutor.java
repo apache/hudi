@@ -32,6 +32,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -139,6 +140,13 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
     } finally {
       closeQuietly(result, null);
     }
+  }
+
+  @Override
+  public void dropPartitionsToTable(String tableName, List<String> partitionsToDrop) {
+    partitionsToDrop.stream()
+        .map(partition -> String.format("ALTER TABLE `%s` DROP PARTITION (%s)", tableName, partition))
+        .forEach(this::runSQL);
   }
 
   @Override

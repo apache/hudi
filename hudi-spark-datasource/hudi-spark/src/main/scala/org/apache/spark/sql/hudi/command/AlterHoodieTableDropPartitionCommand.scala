@@ -17,18 +17,19 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
+import org.apache.hudi.hive.MultiPartKeysValueExtractor
+import org.apache.hudi.hive.ddl.HiveSyncMode
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
+import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 case class AlterHoodieTableDropPartitionCommand(
     tableIdentifier: TableIdentifier,
@@ -67,7 +68,8 @@ extends RunnableCommand {
     val allPartitionPaths = hoodieCatalogTable.getAllPartitionPaths
     val enableHiveStylePartitioning = isHiveStyledPartitioning(allPartitionPaths, table)
     val enableEncodeUrl = isUrlEncodeEnabled(allPartitionPaths, table)
-    val partitionsToDelete = normalizedSpecs.map { spec =>
+    val partitionFields = hoodieCatalogTable.partitionFields.mkString(",")
+    val partitionsToDrop = normalizedSpecs.map { spec =>
       hoodieCatalogTable.partitionFields.map{ partitionColumn =>
         val encodedPartitionValue = if (enableEncodeUrl) {
           PartitionPathEncodeUtils.escapePathName(spec(partitionColumn))
@@ -82,16 +84,26 @@ extends RunnableCommand {
       }.mkString("/")
     }.mkString(",")
 
+    val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, Map.empty) {
       Map(
         "path" -> hoodieCatalogTable.tableLocation,
         TBL_NAME.key -> hoodieCatalogTable.tableName,
         TABLE_TYPE.key -> hoodieCatalogTable.tableTypeName,
         OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
-        PARTITIONS_TO_DELETE.key -> partitionsToDelete,
+        PARTITIONS_TO_DELETE.key -> partitionsToDrop,
         RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
         PRECOMBINE_FIELD.key -> hoodieCatalogTable.preCombineKey.getOrElse(""),
-        PARTITIONPATH_FIELD.key -> hoodieCatalogTable.partitionFields.mkString(",")
+        PARTITIONPATH_FIELD.key -> partitionFields,
+        HIVE_SYNC_ENABLED.key -> enableHive.toString,
+        META_SYNC_ENABLED.key -> enableHive.toString,
+        HIVE_SYNC_MODE.key -> HiveSyncMode.HMS.name(),
+        HIVE_USE_JDBC.key -> "false",
+        HIVE_DATABASE.key -> hoodieCatalogTable.table.identifier.database.getOrElse("default"),
+        HIVE_TABLE.key -> hoodieCatalogTable.table.identifier.table,
+        HIVE_SUPPORT_TIMESTAMP_TYPE.key -> "true",
+        HIVE_PARTITION_FIELDS.key -> partitionFields,
+        HIVE_PARTITION_EXTRACTOR_CLASS.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName
       )
     }
   }

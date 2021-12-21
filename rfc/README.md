@@ -65,3 +65,5 @@ The list of all RFCs can be found here.
 | 39 | [Incremental source for Debezium](./rfc-39/rfc-39.md) | `IN PROGRESS` |
 | 40 | [Hudi Connector for Trino] | `UNDER REVIEW` |
 | 41 | [Hudi Snowflake Integration] | `UNDER REVIEW` |
+| 42 | [Consistent Hashing Index](./rfc-42/rfc-42.md) | `UNDER REVIEW` |
+| 43 | [Compaction / Clustering Service](./rfc-43/rfc-43.md) | `UNDER REVIEW` |
