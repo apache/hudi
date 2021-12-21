@@ -36,9 +36,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.Arrays;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.countRecordsOptionallySince;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,36 +58,45 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataEnabled).build())
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
-         HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH})) {
+         HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(DEFAULT_PARTITION_PATHS)) {
 
-      // 1st write batch; 3 commits
-      for (int i = 0; i < 3; i++) {
+      // 1st write batch; 3 commits for 3 partitions
+      String instantTime1 = HoodieActiveTimeline.createNewInstantTime(1000);
+      client.startCommitWithTime(instantTime1);
+      client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime1, 10, DEFAULT_FIRST_PARTITION_PATH), 1), instantTime1);
+      String instantTime2 = HoodieActiveTimeline.createNewInstantTime(2000);
+      client.startCommitWithTime(instantTime2);
+      client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime2, 10, DEFAULT_SECOND_PARTITION_PATH), 1), instantTime2);
+      String instantTime3 = HoodieActiveTimeline.createNewInstantTime(3000);
+      client.startCommitWithTime(instantTime3);
+      client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime3, 1, DEFAULT_THIRD_PARTITION_PATH), 1), instantTime3);
+
+      final HoodieTimeline timeline1 = metaClient.getCommitsTimeline().filterCompletedInstants();
+      assertEquals(21, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline1, Option.empty()));
+
+      // delete the 1st partition; 1 replace commit
+      final String instantTime4 = HoodieActiveTimeline.createNewInstantTime(4000);
+      client.startCommitWithTime(instantTime4, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
+      client.deletePartitions(Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH), instantTime4);
+
+      // 2nd write batch; 3 commits for the 3rd partition; the 3rd commit to trigger archiving the replace commit
+      for (int i = 5; i < 8; i++) {
         String instantTime = HoodieActiveTimeline.createNewInstantTime(i * 1000);
         client.startCommitWithTime(instantTime);
-        client.insert(jsc().parallelize(dataGen.generateInserts(instantTime, 10), 1), instantTime);
-      }
-
-      // delete the only partition; 1 replace commit
-      final String instantTime3 = HoodieActiveTimeline.createNewInstantTime(3000);
-      client.startCommitWithTime(instantTime3, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
-      client.deletePartitions(Collections.singletonList(DEFAULT_FIRST_PARTITION_PATH), instantTime3);
-
-      // 2nd write batch; 3 commits; the 3rd commit to trigger archiving the replace commit
-      for (int i = 4; i < 7; i++) {
-        String instantTime = HoodieActiveTimeline.createNewInstantTime(i * 1000);
-        client.startCommitWithTime(instantTime);
-        client.insert(jsc().parallelize(dataGen.generateInserts(instantTime, 1), 1), instantTime);
+        client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime, 1, DEFAULT_THIRD_PARTITION_PATH), 1), instantTime);
       }
 
       // verify archived timeline
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime3),
-          "should contain the replace commit.");
+      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime1));
+      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime2));
+      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime3));
+      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime4), "should contain the replace commit.");
 
       // verify records
-      HoodieTimeline timeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-      assertEquals(3, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline, Option.empty()),
-          "should only have the records from the 2nd write batch.");
+      final HoodieTimeline timeline2 = metaClient.getCommitTimeline().filterCompletedInstants();
+      assertEquals(4, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline2, Option.empty()),
+          "should only have the 4 records from the 3rd partition.");
     }
   }
 }
