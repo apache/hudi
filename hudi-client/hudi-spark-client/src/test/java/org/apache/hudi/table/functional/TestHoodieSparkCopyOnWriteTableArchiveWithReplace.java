@@ -74,7 +74,7 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
       final HoodieTimeline timeline1 = metaClient.getCommitsTimeline().filterCompletedInstants();
       assertEquals(21, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline1, Option.empty()));
 
-      // delete the 1st partition; 1 replace commit
+      // delete the 1st and the 2nd partition; 1 replace commit
       final String instantTime4 = HoodieActiveTimeline.createNewInstantTime(4000);
       client.startCommitWithTime(instantTime4, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
       client.deletePartitions(Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH), instantTime4);
@@ -87,11 +87,11 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
       }
 
       // verify archived timeline
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime1));
-      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime2));
-      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime3));
-      assertTrue(metaClient.getArchivedTimeline().containsInstant(instantTime4), "should contain the replace commit.");
+      final HoodieTimeline archivedTimeline = HoodieTableMetaClient.reload(metaClient).getArchivedTimeline();
+      assertTrue(archivedTimeline.containsInstant(instantTime1));
+      assertTrue(archivedTimeline.containsInstant(instantTime2));
+      assertTrue(archivedTimeline.containsInstant(instantTime3));
+      assertTrue(archivedTimeline.containsInstant(instantTime4), "should contain the replace commit.");
 
       // verify records
       final HoodieTimeline timeline2 = metaClient.getCommitTimeline().filterCompletedInstants();
