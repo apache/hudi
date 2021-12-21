@@ -43,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests file system utils with retry wrapper enable.
+ * P.S extends TestFSUtils and setUp a HoodieWrapperFileSystem for metaClient which can test all the TestFSUtils uts with RetryWrapperEnable
  */
 public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
 
@@ -58,12 +59,13 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
             .tryMaxInterval(fileSystemRetryConfig.getMaxRetryIntervalMs())
             .tryNum(fileSystemRetryConfig.getMaxRetryNumbers())
             .tryInitialInterval(fileSystemRetryConfig.getInitialRetryIntervalMs());
-    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 1);
+    FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 2);
     FileSystem fileSystem = new HoodieRetryWrapperFileSystem(fakeFs, retryHelper);
     HoodieWrapperFileSystem fs = new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     metaClient.setFs(fs);
   }
 
+  // Test the scenario that fs keeps retrying until it fails.
   @Test
   public void testProcessFilesWithExceptions() throws Exception {
     FakeRemoteFileSystem fakeFs = new FakeRemoteFileSystem(FSUtils.getFs(metaClient.getMetaPath(), metaClient.getHadoopConf()), 100);
