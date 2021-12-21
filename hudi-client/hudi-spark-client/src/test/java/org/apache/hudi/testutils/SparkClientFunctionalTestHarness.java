@@ -213,7 +213,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         index.updateLocation(HoodieJavaRDD.of(writeStatus), context, table));
   }
 
-  protected Stream<HoodieBaseFile> insertRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
+  protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
                                                  SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -242,7 +242,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return dataFilesToRead;
   }
 
-  protected void updateRecords(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
+  protected void updateRecordsInMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
 
     Map<HoodieKey, HoodieRecord> recordsMap = new HashMap<>();
