@@ -66,6 +66,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     // control whether to filter the s3 objects starting with this prefix
     static final String S3_KEY_PREFIX = "hoodie.deltastreamer.source.s3incr.key.prefix";
     static final String S3_FS_PREFIX = "hoodie.deltastreamer.source.s3incr.fs.prefix";
+
+    // control whether to ignore the s3 objects starting with this prefix
+    static final String S3_IGNORE_KEY_PREFIX = "hoodie.deltastreamer.source.s3incr.ignore.key.prefix";
   }
 
   public S3EventsHoodieIncrSource(
@@ -109,6 +112,9 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     String filter = "s3.object.size > 0";
     if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX))) {
       filter = filter + " and s3.object.key like '" + props.getString(Config.S3_KEY_PREFIX) + "%'";
+    }
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_PREFIX))) {
+      filter = filter + " and s3.object.key not like '" + props.getString(Config.S3_IGNORE_KEY_PREFIX) + "%'";
     }
 
     String s3FS = props.getString(Config.S3_FS_PREFIX, "s3").toLowerCase();
