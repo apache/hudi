@@ -33,6 +33,7 @@ stages:
     jobs:
       - job: UT_FT_1
         displayName: UT FT common & flink & UT client/spark-client
+        timeoutInMinutes: '90'
         steps:
           - task: Cache@2
             displayName: set cache
@@ -71,6 +72,7 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_2
         displayName: FT client/spark-client
+        timeoutInMinutes: '90'
         steps:
           - task: Cache@2
             displayName: set cache
@@ -100,6 +102,7 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_3
         displayName: UT FT clients & cli & utilities & sync/hive-sync
+        timeoutInMinutes: '90'
         steps:
           - task: Cache@2
             displayName: set cache
@@ -138,6 +141,7 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: UT_FT_4
         displayName: UT FT other modules
+        timeoutInMinutes: '90'
         steps:
           - task: Cache@2
             displayName: set cache
