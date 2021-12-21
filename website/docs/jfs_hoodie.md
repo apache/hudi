@@ -87,7 +87,7 @@ Add the required configurations in your `core-site.xml` from where Hudi can fetc
 </property>
 ```
 
-You can visit [here](https://github.com/juicedata/juicefs/blob/main/docs/en/hadoop_java_sdk.md#client-configurations) for more configuration information.
+You can visit [here](https://juicefs.com/docs/community/hadoop_java_sdk#client-configurations) for more configuration information.
 
 ### Adding JuiceFS Hadoop Java SDK
 
