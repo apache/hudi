@@ -8,10 +8,11 @@ This guide provides a document at Hudi's capabilities using Flink SQL. We can fe
 Reading this guide, you can quickly start using Flink to write to(read from) Hudi, have a deeper understanding of configuration and optimization:
 
 - **Quick Start** : Read [Quick Start](#quick-start) to get started quickly Flink sql client to write to(read from) Hudi.
-- **Configuration** : For [Flink Configuration](#flink-configuration), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](#table-option).
-- **Writing Data** : Flink supports different writing data use cases, such as [Bulk Insert](#bulk-insert), [Index Bootstrap](#index-bootstrap), [Changelog Mode](#changelog-mode), [Insert Mode](#insert-mode)  and [Offline Compaction](#offline-compaction).
-- **Querying Data** : Flink supports different querying data use cases, such as [Hive Query](#hive-query), [Presto Query](#presto-query).
-- **Optimization** : For write/read tasks, this guide gives some optimization suggestions, such as [Memory Optimization](#memory-optimization) and [Write Rate Limit](#write-rate-limit).
+- **Configuration** : For [Flink Configuration](flink_configuration#global-configurations), sets up through `$FLINK_HOME/conf/flink-conf.yaml`. For per job configuration, sets up through [Table Option](flink_configuration#table-options).
+- **Writing Data** : Flink supports different writing data use cases, such as [CDC Ingestion](hoodie_deltastreamer#cdc-ingestion), [Bulk Insert](hoodie_deltastreamer#bulk-insert), [Index Bootstrap](hoodie_deltastreamer#index-bootstrap), [Changelog Mode](hoodie_deltastreamer#changelog-mode) and [Append Mode](hoodie_deltastreamer#append-mode).
+- **Querying Data** : Flink supports different querying data use cases, such as [Incremental Query](hoodie_deltastreamer#incremental-query), [Hive Query](syncing_metastore#flink-setup), [Presto Query](query_engine_setup#prestodb).
+- **Tuning** : For write/read tasks, this guide gives some tuning suggestions, such as [Memory Optimization](flink_configuration#memory-optimization) and [Write Rate Limit](flink_configuration#write-rate-limit).
+- **Optimization**: Offline compaction is supported [Offline Compaction](compaction#flink-offline-compaction).
 
 ## Quick Start
 
