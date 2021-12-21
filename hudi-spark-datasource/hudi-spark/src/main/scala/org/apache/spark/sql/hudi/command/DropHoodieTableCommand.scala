@@ -40,6 +40,7 @@ case class DropHoodieTableCommand(
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
     logInfo(s"start execute drop table command for $fullTableName")
+    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
 
     try {
       // drop catalog table for this hoodie table
@@ -49,7 +50,6 @@ case class DropHoodieTableCommand(
         logWarning(s"Failed to drop catalog table in metastore: ${e.getMessage}")
     }
 
-    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     logInfo(s"Finish execute drop table command for $fullTableName")
     Seq.empty[Row]
   }
