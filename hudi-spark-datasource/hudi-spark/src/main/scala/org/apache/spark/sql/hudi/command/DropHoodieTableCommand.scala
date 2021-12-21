@@ -49,6 +49,7 @@ case class DropHoodieTableCommand(
         logWarning(s"Failed to drop catalog table in metastore: ${e.getMessage}")
     }
 
+    sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
     logInfo(s"Finish execute drop table command for $fullTableName")
     Seq.empty[Row]
   }
