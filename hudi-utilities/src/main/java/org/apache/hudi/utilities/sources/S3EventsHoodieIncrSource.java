@@ -66,6 +66,11 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     // control whether to filter the s3 objects starting with this prefix
     static final String S3_KEY_PREFIX = "hoodie.deltastreamer.source.s3incr.key.prefix";
     static final String S3_FS_PREFIX = "hoodie.deltastreamer.source.s3incr.fs.prefix";
+
+    // control whether to ignore the s3 objects starting with this prefix
+    static final String S3_IGNORE_KEY_PREFIX = "hoodie.deltastreamer.source.s3incr.ignore.key.prefix";
+    // control whether to ignore the s3 objects with this substring
+    static final String S3_IGNORE_KEY_SUBSTRING = "hoodie.deltastreamer.source.s3incr.ignore.key.substring";
   }
 
   public S3EventsHoodieIncrSource(
@@ -88,6 +93,7 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     if (readLatestOnMissingCkpt) {
       missingCheckpointStrategy = IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST;
     }
+    String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
 
     // Use begin Instant if set and non-empty
     Option<String> beginInstant =
@@ -119,6 +125,14 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
     if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_KEY_PREFIX))) {
       filter = filter + " and s3.object.key like '" + props.getString(Config.S3_KEY_PREFIX) + "%'";
     }
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_PREFIX))) {
+      filter = filter + " and s3.object.key not like '" + props.getString(Config.S3_IGNORE_KEY_PREFIX) + "%'";
+    }
+    if (!StringUtils.isNullOrEmpty(props.getString(Config.S3_IGNORE_KEY_SUBSTRING))) {
+      filter = filter + " and s3.object.key not like '%" + props.getString(Config.S3_IGNORE_KEY_SUBSTRING) + "%'";
+    }
+    // add file format filtering by default
+    filter = filter +  " and s3.object.key like '%" + fileFormat + "%'";
 
     String s3FS = props.getString(Config.S3_FS_PREFIX, "s3").toLowerCase();
     String s3Prefix = s3FS + "://";
@@ -149,7 +163,6 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
         cloudFiles.add(filePath);
       }
     }
-    String fileFormat = props.getString(SOURCE_FILE_FORMAT, DEFAULT_SOURCE_FILE_FORMAT);
     Option<Dataset<Row>> dataset = Option.empty();
     if (!cloudFiles.isEmpty()) {
       dataset = Option.of(sparkSession.read().format(fileFormat).load(cloudFiles.toArray(new String[0])));
