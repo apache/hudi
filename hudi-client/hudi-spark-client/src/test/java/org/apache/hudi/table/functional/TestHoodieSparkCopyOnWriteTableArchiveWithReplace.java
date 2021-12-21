@@ -87,7 +87,8 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
       }
 
       // verify archived timeline
-      final HoodieTimeline archivedTimeline = HoodieTableMetaClient.reload(metaClient).getArchivedTimeline();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      final HoodieTimeline archivedTimeline = metaClient.getArchivedTimeline();
       assertTrue(archivedTimeline.containsInstant(instantTime1));
       assertTrue(archivedTimeline.containsInstant(instantTime2));
       assertTrue(archivedTimeline.containsInstant(instantTime3));
