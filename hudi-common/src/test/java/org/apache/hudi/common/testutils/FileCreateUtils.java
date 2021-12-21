@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.directory.api.util.Strings;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -217,20 +218,32 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, serializeCleanMetadata(metadata).get());
   }
 
+  public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata, boolean isEmpty) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanMetadata(metadata).get());
+  }
+
   public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
+  }
+
+  public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan, boolean isEmpty) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
   }
 
   public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
   }
 
+  public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan, boolean isEmpty) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeCleanerPlan(cleanerPlan).get());
+  }
+
   public static void createInflightRollbackFile(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
   }
 
-  public static void createRollbackFile(String basePath, String instantTime, HoodieRollbackMetadata hoodieRollbackMetadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION, serializeRollbackMetadata(hoodieRollbackMetadata).get());
+  public static void createRollbackFile(String basePath, String instantTime, HoodieRollbackMetadata hoodieRollbackMetadata, boolean isEmpty) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION, isEmpty ? Strings.EMPTY_BYTES : serializeRollbackMetadata(hoodieRollbackMetadata).get());
   }
 
   public static void createRestoreFile(String basePath, String instantTime, HoodieRestoreMetadata hoodieRestoreMetadata) throws IOException {
