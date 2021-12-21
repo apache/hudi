@@ -243,10 +243,6 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         MultiPartKeysValueExtractor.class.getName());
   }
 
-  protected static void prepareParquetDFSFiles(int numRecords) throws IOException {
-    prepareParquetDFSFiles(numRecords, PARQUET_SOURCE_ROOT);
-  }
-
   protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath) throws IOException {
     prepareParquetDFSFiles(numRecords, baseParquetPath, FIRST_PARQUET_FILE_NAME, false, null, null);
   }

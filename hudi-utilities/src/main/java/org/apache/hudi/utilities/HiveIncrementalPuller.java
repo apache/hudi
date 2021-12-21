@@ -146,7 +146,7 @@ public class HiveIncrementalPuller {
       String tempDbTable = config.tmpDb + "." + config.targetTable + "__" + config.sourceTable;
       String tempDbTablePath =
           config.hoodieTmpDir + "/" + config.targetTable + "__" + config.sourceTable + "/" + lastCommitTime;
-      executeStatement("drop table " + tempDbTable, stmt);
+      executeStatement("drop table if exists " + tempDbTable, stmt);
       deleteHDFSPath(fs, tempDbTablePath);
       if (!ensureTempPathExists(fs, lastCommitTime)) {
         throw new IllegalStateException("Could not create target path at "
