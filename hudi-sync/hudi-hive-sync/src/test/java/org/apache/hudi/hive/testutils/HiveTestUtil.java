@@ -127,10 +127,8 @@ public class HiveTestUtil {
   }
 
   public static void clearIncrementalPullSetup(String path1, String path2) throws IOException, HiveException, MetaException {
-    if (path1 != null && fileSystem.exists(new Path(path1))) {
-      fileSystem.delete(new Path(path1), true);
-    }
-    if (path2 != null && fileSystem.exists(new Path(path2))) {
+    fileSystem.delete(new Path(path1), true);
+    if (path2 != null) {
       fileSystem.delete(new Path(path2), true);
     }
     clear();
