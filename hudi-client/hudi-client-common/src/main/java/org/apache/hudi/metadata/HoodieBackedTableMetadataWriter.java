@@ -706,7 +706,20 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
-  protected void doClean(AbstractHoodieWriteClient writeClient, String instantTime) {
+  protected void cleanIfNecessary(AbstractHoodieWriteClient writeClient, String instantTime) {
+    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.reloadActiveTimeline()
+        .getCommitTimeline().filterCompletedInstants().lastInstant();
+    if (lastCompletedCompactionInstant.isPresent()
+        && metadataMetaClient.getActiveTimeline().filterCompletedInstants()
+            .findInstantsAfter(lastCompletedCompactionInstant.get().getTimestamp()).countInstants() < 3) {
+      // do not clean the log files immediately after compaction to give some buffer time for metadata table reader,
+      // because there is case that the reader has prepared for the log file readers already before the compaction completes
+      // while before/during the reading of the log files, the cleaning triggers and delete the reading files,
+      // then a FileNotFoundException(for LogFormatReader) or NPE(for HFileReader) would throw.
+
+      // 3 is a value that I think is enough for metadata table reader.
+      return;
+    }
     // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.

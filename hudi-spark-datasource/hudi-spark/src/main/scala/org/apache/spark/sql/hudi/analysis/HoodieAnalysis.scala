@@ -19,24 +19,22 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
 import org.apache.hudi.SparkAdapterSupport
-
-import scala.collection.JavaConverters._
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
-import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Alias, Expression, Literal, NamedExpression}
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedStar}
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
-import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command._
+import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
 import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.{AnalysisException, SparkSession}
+
+import scala.collection.JavaConverters._
 
 object HoodieAnalysis {
   def customResolutionRules(): Seq[SparkSession => Rule[LogicalPlan]] =
@@ -407,6 +405,10 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case CreateDataSourceTableCommand(table, ignoreIfExists)
         if isHoodieTable(table) =>
         CreateHoodieTableCommand(table, ignoreIfExists)
+      // Rewrite the DropTableCommand to DropHoodieTableCommand
+      case DropTableCommand(tableName, ifExists, isView, purge)
+        if isHoodieTable(tableName, sparkSession) =>
+        DropHoodieTableCommand(tableName, ifExists, isView, purge)
       // Rewrite the AlterTableDropPartitionCommand to AlterHoodieTableDropPartitionCommand
       case AlterTableDropPartitionCommand(tableName, specs, _, _, _)
         if isHoodieTable(tableName, sparkSession) =>

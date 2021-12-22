@@ -18,7 +18,6 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -110,7 +109,7 @@ case class HoodieFileIndex(
   private lazy val _partitionSchemaFromProperties: StructType = {
     val tableConfig = metaClient.getTableConfig
     val partitionColumns = tableConfig.getPartitionFields
-    val nameFieldMap = schema.fields.map(filed => filed.name -> filed).toMap
+    val nameFieldMap = generateNameFieldMap(Right(schema))
 
     if (partitionColumns.isPresent) {
       if (tableConfig.getKeyGeneratorClassName.equalsIgnoreCase(classOf[TimestampBasedKeyGenerator].getName)
@@ -128,6 +127,25 @@ case class HoodieFileIndex(
       logWarning("No partition columns available from hoodie.properties." +
         " Partition pruning will not work")
       new StructType()
+    }
+  }
+
+  /**
+   * This method traverses StructType recursively to build map of columnName -> StructField
+   * Note : If there is nesting of columns like ["a.b.c.d", "a.b.c.e"]  -> final map will have keys corresponding
+   * only to ["a.b.c.d", "a.b.c.e"] and not for subsets like ["a.b.c", "a.b"]
+   * @param structField
+   * @return map of ( columns names -> StructField )
+   */
+  private def generateNameFieldMap(structField: Either[StructField, StructType]) : Map[String, StructField] = {
+    structField match {
+      case Right(field) => field.fields.map(f => generateNameFieldMap(Left(f))).flatten.toMap
+      case Left(field) => field.dataType match {
+        case struct: StructType => generateNameFieldMap(Right(struct)).map {
+          case (key: String, sf: StructField)  => (field.name + "." + key, sf)
+        }
+        case _ => Map(field.name -> field)
+      }
     }
   }
 
