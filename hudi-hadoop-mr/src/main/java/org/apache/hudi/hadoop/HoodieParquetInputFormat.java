@@ -63,11 +63,13 @@ import java.util.stream.IntStream;
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
-public class HoodieParquetInputFormat extends MapredParquetInputFormat implements Configurable {
+public class HoodieParquetInputFormat extends HoodieInputFormatBase implements Configurable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
 
-  protected Configuration conf;
+  // NOTE: We're only using {@code MapredParquetInputFormat} to compose vectorized
+  //       {@code RecordReader}
+  private final MapredParquetInputFormat mapredParquetInputFormat = new MapredParquetInputFormat();
 
   protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
     return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
@@ -79,84 +81,6 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
 
   protected boolean includeLogFilesForSnapShotView() {
     return false;
-  }
-
-  @Override
-  public FileStatus[] listStatus(JobConf job) throws IOException {
-    // Segregate inputPaths[] to incremental, snapshot and non hoodie paths
-    List<String> incrementalTables = HoodieHiveUtils.getIncrementalTableNames(Job.getInstance(job));
-    InputPathHandler inputPathHandler = new InputPathHandler(conf, getInputPaths(job), incrementalTables);
-    List<FileStatus> returns = new ArrayList<>();
-
-    Map<String, HoodieTableMetaClient> tableMetaClientMap = inputPathHandler.getTableMetaClientMap();
-    // process incremental pulls first
-    for (String table : incrementalTables) {
-      HoodieTableMetaClient metaClient = tableMetaClientMap.get(table);
-      if (metaClient == null) {
-        /* This can happen when the INCREMENTAL mode is set for a table but there were no InputPaths
-         * in the jobConf
-         */
-        continue;
-      }
-      List<Path> inputPaths = inputPathHandler.getGroupedIncrementalPaths().get(metaClient);
-      List<FileStatus> result = listStatusForIncrementalMode(job, metaClient, inputPaths);
-      if (result != null) {
-        returns.addAll(result);
-      }
-    }
-
-    // process non hoodie Paths next.
-    List<Path> nonHoodiePaths = inputPathHandler.getNonHoodieInputPaths();
-    if (nonHoodiePaths.size() > 0) {
-      setInputPaths(job, nonHoodiePaths.toArray(new Path[nonHoodiePaths.size()]));
-      FileStatus[] fileStatuses = super.listStatus(job);
-      returns.addAll(Arrays.asList(fileStatuses));
-    }
-
-    // process snapshot queries next.
-    List<Path> snapshotPaths = inputPathHandler.getSnapshotPaths();
-    if (snapshotPaths.size() > 0) {
-      returns.addAll(HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths, includeLogFilesForSnapShotView()));
-    }
-    return returns.toArray(new FileStatus[0]);
-  }
-
-
-
-  /**
-   * Achieves listStatus functionality for an incrementally queried table. Instead of listing all
-   * partitions and then filtering based on the commits of interest, this logic first extracts the
-   * partitions touched by the desired commits and then lists only those partitions.
-   */
-  protected List<FileStatus> listStatusForIncrementalMode(
-      JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
-    String tableName = tableMetaClient.getTableConfig().getTableName();
-    Job jobContext = Job.getInstance(job);
-    Option<HoodieTimeline> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
-    if (!timeline.isPresent()) {
-      return null;
-    }
-    Option<List<HoodieInstant>> commitsToCheck = HoodieInputFormatUtils.getCommitsForIncrementalQuery(jobContext, tableName, timeline.get());
-    if (!commitsToCheck.isPresent()) {
-      return null;
-    }
-    Option<String> incrementalInputPaths = HoodieInputFormatUtils.getAffectedPartitions(commitsToCheck.get(), tableMetaClient, timeline.get(), inputPaths);
-    // Mutate the JobConf to set the input paths to only partitions touched by incremental pull.
-    if (!incrementalInputPaths.isPresent()) {
-      return null;
-    }
-    setInputPaths(job, incrementalInputPaths.get());
-    FileStatus[] fileStatuses = super.listStatus(job);
-    return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
-  }
-
-  public void setConf(Configuration conf) {
-    this.conf = conf;
-  }
-
-  @Override
-  public Configuration getConf() {
-    return conf;
   }
 
   @Override
@@ -196,9 +120,9 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
           .filter(p -> !HoodieRecord.HOODIE_META_COLUMNS.contains(p.getKey())).collect(Collectors.toList());
       LOG.info("colNameWithTypes =" + colNameWithTypes + ", Num Entries =" + colNameWithTypes.size());
       if (hoodieColsProjected.isEmpty()) {
-        return super.getRecordReader(eSplit.getBootstrapFileSplit(), job, reporter);
+        return getRecordReaderInternal(eSplit.getBootstrapFileSplit(), job, reporter);
       } else if (externalColsProjected.isEmpty()) {
-        return super.getRecordReader(split, job, reporter);
+        return getRecordReaderInternal(split, job, reporter);
       } else {
         FileSplit rightSplit = eSplit.getBootstrapFileSplit();
         // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;
@@ -211,9 +135,9 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
         jobConfCopy.unset(ConvertAstToSearchArg.SARG_PUSHDOWN);
 
         LOG.info("Generating column stitching reader for " + eSplit.getPath() + " and " + rightSplit.getPath());
-        return new BootstrapColumnStichingRecordReader(super.getRecordReader(eSplit, jobConfCopy, reporter),
+        return new BootstrapColumnStichingRecordReader(getRecordReaderInternal(eSplit, jobConfCopy, reporter),
             HoodieRecord.HOODIE_META_COLUMNS.size(),
-            super.getRecordReader(rightSplit, jobConfCopy, reporter),
+            getRecordReaderInternal(rightSplit, jobConfCopy, reporter),
             colNamesWithTypesForExternal.size(),
             true);
       }
@@ -221,7 +145,13 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     if (LOG.isDebugEnabled()) {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
     }
-    return super.getRecordReader(split, job, reporter);
+    return getRecordReaderInternal(split, job, reporter);
+  }
+
+  private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
+                                                                            JobConf job,
+                                                                            Reporter reporter) throws IOException {
+    return mapredParquetInputFormat.getRecordReader(split, job, reporter);
   }
 
   @Override

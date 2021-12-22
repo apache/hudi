@@ -18,14 +18,12 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
@@ -51,7 +49,7 @@ import java.util.Map;
  * HoodieInputFormat for HUDI datasets which store data in HFile base file format.
  */
 @UseFileSplitsFromInputFormat
-public class HoodieHFileInputFormat extends FileInputFormat<NullWritable, ArrayWritable> implements Configurable {
+public class HoodieHFileInputFormat extends HoodieInputFormatBase {
 
   private static final Logger LOG = LogManager.getLogger(HoodieHFileInputFormat.class);
 
@@ -62,70 +60,8 @@ public class HoodieHFileInputFormat extends FileInputFormat<NullWritable, ArrayW
   }
 
   @Override
-  public FileStatus[] listStatus(JobConf job) throws IOException {
-    // Segregate inputPaths[] to incremental, snapshot and non hoodie paths
-    List<String> incrementalTables = HoodieHiveUtils.getIncrementalTableNames(Job.getInstance(job));
-    InputPathHandler inputPathHandler = new InputPathHandler(conf, getInputPaths(job), incrementalTables);
-    List<FileStatus> returns = new ArrayList<>();
-
-    Map<String, HoodieTableMetaClient> tableMetaClientMap = inputPathHandler.getTableMetaClientMap();
-    // process incremental pulls first
-    for (String table : incrementalTables) {
-      HoodieTableMetaClient metaClient = tableMetaClientMap.get(table);
-      if (metaClient == null) {
-        /* This can happen when the INCREMENTAL mode is set for a table but there were no InputPaths
-         * in the jobConf
-         */
-        continue;
-      }
-      List<Path> inputPaths = inputPathHandler.getGroupedIncrementalPaths().get(metaClient);
-      List<FileStatus> result = listStatusForIncrementalMode(job, metaClient, inputPaths);
-      if (result != null) {
-        returns.addAll(result);
-      }
-    }
-
-    // process non hoodie Paths next.
-    List<Path> nonHoodiePaths = inputPathHandler.getNonHoodieInputPaths();
-    if (nonHoodiePaths.size() > 0) {
-      setInputPaths(job, nonHoodiePaths.toArray(new Path[nonHoodiePaths.size()]));
-      FileStatus[] fileStatuses = super.listStatus(job);
-      returns.addAll(Arrays.asList(fileStatuses));
-    }
-
-    // process snapshot queries next.
-    List<Path> snapshotPaths = inputPathHandler.getSnapshotPaths();
-    if (snapshotPaths.size() > 0) {
-      returns.addAll(HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths));
-    }
-    return returns.toArray(new FileStatus[0]);
-  }
-
-  /**
-   * Achieves listStatus functionality for an incrementally queried table. Instead of listing all
-   * partitions and then filtering based on the commits of interest, this logic first extracts the
-   * partitions touched by the desired commits and then lists only those partitions.
-   */
-  private List<FileStatus> listStatusForIncrementalMode(
-      JobConf job, HoodieTableMetaClient tableMetaClient, List<Path> inputPaths) throws IOException {
-    String tableName = tableMetaClient.getTableConfig().getTableName();
-    Job jobContext = Job.getInstance(job);
-    Option<HoodieTimeline> timeline = HoodieInputFormatUtils.getFilteredCommitsTimeline(jobContext, tableMetaClient);
-    if (!timeline.isPresent()) {
-      return null;
-    }
-    Option<List<HoodieInstant>> commitsToCheck = HoodieInputFormatUtils.getCommitsForIncrementalQuery(jobContext, tableName, timeline.get());
-    if (!commitsToCheck.isPresent()) {
-      return null;
-    }
-    Option<String> incrementalInputPaths = HoodieInputFormatUtils.getAffectedPartitions(commitsToCheck.get(), tableMetaClient, timeline.get(), inputPaths);
-    // Mutate the JobConf to set the input paths to only partitions touched by incremental pull.
-    if (!incrementalInputPaths.isPresent()) {
-      return null;
-    }
-    setInputPaths(job, incrementalInputPaths.get());
-    FileStatus[] fileStatuses = super.listStatus(job);
-    return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
+  protected boolean includeLogFilesForSnapShotView() {
+    return false;
   }
 
   @Override
@@ -137,15 +73,6 @@ public class HoodieHFileInputFormat extends FileInputFormat<NullWritable, ArrayW
   @Override
   protected boolean isSplitable(FileSystem fs, Path filename) {
     // This file isn't splittable.
-    return false;
-  }
-
-  public void setConf(Configuration conf) {
-    this.conf = conf;
-  }
-
-  @Override
-  public Configuration getConf() {
-    return conf;
+    return includeLogFilesForSnapShotView();
   }
 }
