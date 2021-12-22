@@ -89,7 +89,9 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     boolean isIncrementalSplits = HoodieRealtimeInputFormatUtils.isIncrementalQuerySplits(fileSplits);
 
-    return isIncrementalSplits ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits.stream()) : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits.stream());
+    return isIncrementalSplits
+        ? HoodieRealtimeInputFormatUtils.getIncrementalRealtimeSplits(job, fileSplits.stream())
+        : HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits.stream());
   }
 
   /**
@@ -321,10 +323,5 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     }
     return new HoodieRealtimeRecordReader(realtimeSplit, jobConf,
         super.getRecordReader(split, jobConf, reporter));
-  }
-
-  @Override
-  public Configuration getConf() {
-    return conf;
   }
 }
