@@ -220,6 +220,7 @@ public class HMSDDLExecutor implements DDLExecutor {
         return new Partition(partitionValues, syncConfig.databaseName, tableName, 0, 0, sd, null);
       }).collect(Collectors.toList());
       System.out.println("total partitions " +  partitionList.size());
+      partitionList.forEach(p -> System.out.println("partition debug logs === " + p.getValues().get(0) + "\n location =" +  p.getSd().getLocation()));
       client.alter_partitions(syncConfig.databaseName, tableName, partitionList, null);
     } catch (TException e) {
       LOG.error(syncConfig.databaseName + "." + tableName + " update partition failed", e);

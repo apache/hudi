@@ -191,11 +191,11 @@ public class HiveSyncTool extends AbstractSyncTool {
     LOG.info("Schema sync complete. Syncing partitions for " + tableName);
     // Get the last time we successfully synced partitions
     Option<String> lastCommitTimeSynced = Option.empty();
-    if (tableExists) {
+    if (!syncAllPartitions && tableExists) {
       lastCommitTimeSynced = hoodieHiveClient.getLastCommitTimeSynced(tableName);
     }
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
-    List<String> writtenPartitionsSince = hoodieHiveClient.getPartitionsWrittenToSince(lastCommitTimeSynced, true);
+    List<String> writtenPartitionsSince = hoodieHiveClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
     System.out.println("total partitions before sync" + writtenPartitionsSince.size());
 

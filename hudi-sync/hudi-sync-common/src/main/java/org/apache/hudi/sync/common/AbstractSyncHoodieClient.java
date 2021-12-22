@@ -178,13 +178,10 @@ public abstract class AbstractSyncHoodieClient {
     return false;
   }
 
-  public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
-    return getPartitionsWrittenToSince(lastCommitTimeSynced,false);
-  }
 
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-  public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced, boolean syncAllPartitions) {
-    if (syncAllPartitions || !lastCommitTimeSynced.isPresent()) {
+  public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
+    if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in " + basePath + ",FS :" + fs);
       return getAllPartitions();
     } else {
