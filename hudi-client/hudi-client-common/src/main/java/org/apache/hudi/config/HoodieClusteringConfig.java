@@ -177,6 +177,12 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .withDocumentation("Determines how to handle updates, deletes to file groups that are under clustering."
           + " Default strategy just rejects the update");
 
+  public static final ConfigProperty<String> ASYNC_CLUSTERING_SCHEDULE = ConfigProperty
+      .key("hoodie.clustering.schedule.async")
+      .defaultValue("false")
+      .withDocumentation("When set to true, clustering service will be attempted for scheduling after each write. Users have to ensure "
+          + "they have a separate job to run async clustering(execution) for the one scheduled by this writer");
+
   public static final ConfigProperty<String> ASYNC_CLUSTERING_ENABLE = ConfigProperty
       .key("hoodie.clustering.async.enabled")
       .defaultValue("false")

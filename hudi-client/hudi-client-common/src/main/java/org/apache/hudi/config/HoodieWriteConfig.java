@@ -1140,6 +1140,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
   }
 
+  public boolean scheduleAsyncCompaction() {
+    return getBoolean(HoodieCompactionConfig.SCHEDULE_ASYNC_COMPACT);
+  }
+
   public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
     return CompactionTriggerStrategy.valueOf(getString(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY));
   }
@@ -1178,6 +1182,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean inlineClusteringEnabled() {
     return getBoolean(HoodieClusteringConfig.INLINE_CLUSTERING);
+  }
+
+  public boolean scheduleAsyncClustering() {
+    return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_SCHEDULE);
   }
 
   public boolean isAsyncClusteringEnabled() {
@@ -1866,6 +1874,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public Boolean areAnyTableServicesAsync() {
     return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
+  }
+
+  public Boolean scheduleAsyncTableServices() {
+    return scheduleAsyncCompaction() || scheduleAsyncClustering();
   }
 
   public String getPreCommitValidators() {

@@ -464,28 +464,44 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   }
 
   protected void runTableServicesInline(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
-    if (config.areAnyTableServicesInline()) {
-      if (config.isMetadataTableEnabled()) {
-        table.getHoodieView().sync();
-      }
-      // Do an inline compaction if enabled
-      if (config.inlineCompactionEnabled()) {
-        runAnyPendingCompactions(table);
-        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
-        inlineCompact(extraMetadata);
-      } else {
-        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
-      }
+      if (config.areAnyTableServicesInline() || config.scheduleAsyncTableServices()) {
+        if (config.isMetadataTableEnabled()) {
+          table.getHoodieView().sync();
+        }
+        // Do an inline compaction if enabled
+        if (config.inlineCompactionEnabled()) {
+          runAnyPendingCompactions(table);
+          metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
+          inlineCompact(extraMetadata, !config.scheduleAsyncCompaction());
+        } else {
+          metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "false");
+        }
 
-      // Do an inline clustering if enabled
-      if (config.inlineClusteringEnabled()) {
-        runAnyPendingClustering(table);
-        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
-        inlineCluster(extraMetadata);
-      } else {
-        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
+        // if just async schedule
+        if (config.scheduleAsyncCompaction() && table.getActiveTimeline().getWriteTimeline().filterPendingCompactionTimeline().getInstants().count() == 0) {
+          // proceed only if there are no pending compactions
+          // ?? what value to add for the metadata. true/false?
+          metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
+          inlineCompact(extraMetadata, !config.scheduleAsyncCompaction());
+        }
+
+        // Do an inline clustering if enabled
+        if (config.inlineClusteringEnabled() || config.scheduleAsyncClustering()) {
+          runAnyPendingClustering(table);
+          metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
+          inlineCluster(extraMetadata, !config.scheduleAsyncCompaction());
+        } else {
+          metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "false");
+        }
+
+        // if just async schedule
+        if (config.scheduleAsyncClustering() && table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().count() == 0) {
+          // proceed only if there are no pending clustering
+          // ?? what value to add for the metadata. true/false?
+          metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING.key(), "true");
+          inlineCluster(extraMetadata, !config.scheduleAsyncCompaction());
+        }
       }
-    }
   }
 
   protected void runAnyPendingCompactions(HoodieTable<T, I, K, O> table) {
@@ -1006,12 +1022,14 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   /**
    * Performs a compaction operation on a table, serially before or after an insert/upsert action.
    */
-  protected Option<String> inlineCompact(Option<Map<String, String>> extraMetadata) {
+  protected Option<String> inlineCompact(Option<Map<String, String>> extraMetadata, boolean executeInline) {
     Option<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);
-    compactionInstantTimeOpt.ifPresent(compactInstantTime -> {
-      // inline compaction should auto commit as the user is never given control
-      compact(compactInstantTime, true);
-    });
+    if (executeInline) {
+      compactionInstantTimeOpt.ifPresent(compactInstantTime -> {
+        // inline compaction should auto commit as the user is never given control
+        compact(compactInstantTime, true);
+      });
+    }
     return compactionInstantTimeOpt;
   }
 
@@ -1117,12 +1135,14 @@ public abstract class BaseHoodieWriteClient<T extends HoodieRecordPayload, I, K,
   /**
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
    */
-  protected Option<String> inlineCluster(Option<Map<String, String>> extraMetadata) {
+  protected Option<String> inlineCluster(Option<Map<String, String>> extraMetadata, boolean executeInline) {
     Option<String> clusteringInstantOpt = scheduleClustering(extraMetadata);
-    clusteringInstantOpt.ifPresent(clusteringInstant -> {
-      // inline cluster should auto commit as the user is never given control
-      cluster(clusteringInstant, true);
-    });
+    if (executeInline) {
+      clusteringInstantOpt.ifPresent(clusteringInstant -> {
+        // inline cluster should auto commit as the user is never given control
+        cluster(clusteringInstant, true);
+      });
+    }
     return clusteringInstantOpt;
   }
 
