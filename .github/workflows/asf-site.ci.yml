@@ -19,6 +19,8 @@ jobs:
           fetch-depth: 0
       - name: Prepare branch
         run: |
+          git config --global user.name "CI BOT"
+          git config --global user.email "cibot@hudi.apache.org"
           git checkout -b pr
           git remote add hudi https://${{ secrets.GITHUB_TOKEN }}@github.com/apache/hudi.git
           git pull --rebase hudi asf-site
@@ -38,5 +40,5 @@ jobs:
           rm -rf content
           cp -R ${{ env.DOCS_ROOT }}/build content
           git add -A
-          git -c "user.name=CI BOT" -c "user.email=cibot@hudi.apache.org" commit -am "GitHub Actions build asf-site"
+          git commit -am "GitHub Actions build asf-site"
           git push hudi pr:asf-site
