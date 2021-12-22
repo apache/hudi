@@ -121,14 +121,14 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
   public void testUpdateRecords() throws Exception {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
-    String firstCommitTime = makeNewCommitTime();
+    int startInstant = 1;
+    String firstCommitTime = makeNewCommitTime(startInstant++);
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
 
     String partitionPath = "2016/01/31";
-    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
 
     // Get some records belong to the same partition (2016/01/31)
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -149,7 +149,6 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     records.add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
-    final HoodieJavaCopyOnWriteTable cowTable = table;
     writeClient.insert(records, firstCommitTime);
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
@@ -185,8 +184,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
 
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
-    Thread.sleep(1000);
-    String newCommitTime = makeNewCommitTime();
+    String newCommitTime = makeNewCommitTime(startInstant++);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     writeClient.startCommitWithTime(newCommitTime);
     List<WriteStatus> statuses = writeClient.upsert(updatedRecords, newCommitTime);
@@ -197,9 +195,9 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     assertEquals(FSUtils.getFileId(filePath.getName()), FSUtils.getFileId(allFiles[0].getPath().getName()));
 
     // Check whether the record has been updated
-    Path updatedfilePath = allFiles[0].getPath();
+    Path updatedFilePath = allFiles[0].getPath();
     BloomFilter updatedFilter =
-        fileUtils.readBloomFilterFromMetadata(hadoopConf, updatedfilePath);
+        fileUtils.readBloomFilterFromMetadata(hadoopConf, updatedFilePath);
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
@@ -208,7 +206,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestBase 
     assertTrue(updatedFilter.mightContain(insertedRecord1.getRecordKey()));
     records.add(insertedRecord1);// add this so it can further check below
 
-    ParquetReader updatedReader = ParquetReader.builder(new AvroReadSupport<>(), updatedfilePath).build();
+    ParquetReader updatedReader = ParquetReader.builder(new AvroReadSupport<>(), updatedFilePath).build();
     index = 0;
     while ((newRecord = (GenericRecord) updatedReader.read()) != null) {
       assertEquals(newRecord.get("_row_key").toString(), records.get(index).getRecordKey());
