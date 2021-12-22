@@ -54,7 +54,7 @@ import java.util.stream.IntStream;
  */
 @UseRecordReaderFromInputFormat
 @UseFileSplitsFromInputFormat
-public class HoodieParquetInputFormat extends HoodieInputFormatBase implements Configurable {
+public class HoodieParquetInputFormat extends HoodieFileInputFormatBase implements Configurable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
 

@@ -25,7 +25,7 @@ import java.util.Map;
 /**
  * TODO java-doc
  */
-public abstract class HoodieInputFormatBase extends FileInputFormat<NullWritable, ArrayWritable>
+public abstract class HoodieFileInputFormatBase extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
 
   protected Configuration conf;
