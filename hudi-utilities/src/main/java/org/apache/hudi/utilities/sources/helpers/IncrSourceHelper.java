@@ -32,14 +32,15 @@ import java.util.Objects;
 
 public class IncrSourceHelper {
 
+  private static final String DEFAULT_BEGIN_TIMESTAMP = "000";
   /**
    * Kafka reset offset strategies.
    */
   public enum MissingCheckpointStrategy {
     // read from latest commit in hoodie source table
     READ_LATEST,
-    // read everything until latest commit
-    READ_EVERYTHING_UNTIL_LATEST
+    // read everything upto latest commit
+    READ_UPTO_LATEST_COMMIT
   }
 
   /**
@@ -77,9 +78,9 @@ public class IncrSourceHelper {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
           Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp())).orElse("000");
+          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp())).orElse(DEFAULT_BEGIN_TIMESTAMP);
         } else {
-          return "000";
+          return DEFAULT_BEGIN_TIMESTAMP;
         }
       } else {
         throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
@@ -87,12 +88,12 @@ public class IncrSourceHelper {
       }
     });
 
-    if (!beginInstantTime.equals("000")) {
+    if (!beginInstantTime.equals(DEFAULT_BEGIN_TIMESTAMP)) {
       Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
           .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
       return Pair.of(beginInstantTime, nthInstant.map(HoodieInstant::getTimestamp).orElse(beginInstantTime));
     } else {
-      // if beginInstant is null,  MissingCheckpointStrategy should be set.
+      // if beginInstant is DEFAULT_BEGIN_TIMESTAMP,  MissingCheckpointStrategy should be set.
       // when MissingCheckpointStrategy is set to read everything until latest.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
       return Pair.of(beginInstantTime, lastInstant.get().getTimestamp());

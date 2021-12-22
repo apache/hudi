@@ -68,14 +68,8 @@ public class TestHoodieIncrSource extends HoodieClientTestHarness {
     Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, true, null);
     Pair<String, List<HoodieRecord>> inserts3 = writeRecords(writeClient, true, null);
 
-    Properties properties = new Properties();
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.path", basePath);
-    properties.setProperty("hoodie.deltastreamer.source.hoodieincr.missing.checkpoint.strategy", IncrSourceHelper.MissingCheckpointStrategy.READ_EVERYTHING_UNTIL_LATEST.name());
-    TypedProperties typedProperties = new TypedProperties(properties);
-    HoodieIncrSource incrSource = new HoodieIncrSource(typedProperties, jsc, sparkSession, new TestSchemaProvider(HoodieTestDataGenerator.AVRO_SCHEMA));
-
-    // read everything until latest
-    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_EVERYTHING_UNTIL_LATEST, 300, inserts3.getKey());
+    // read everything upto latest
+    readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, 300, inserts3.getKey());
 
     // read just the latest
     readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, 100, inserts3.getKey());
