@@ -63,32 +63,29 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
   private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
-  public HoodieAvroDataBlock(
-      HoodieLogFile logFile,
-      FSDataInputStream inputStream,
-      Option<byte[]> content,
-      boolean readBlockLazily,
-      long position, long blockSize, long blockEndPos,
-      Option<Schema> readerSchema,
-      Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer,
-      String keyField) {
+  public HoodieAvroDataBlock(HoodieLogFile logFile,
+                             FSDataInputStream inputStream,
+                             Option<byte[]> content,
+                             boolean readBlockLazily,
+                             long position, long blockSize, long blockEndPos,
+                             Option<Schema> readerSchema,
+                             Map<HeaderMetadataType, String> header,
+                             Map<HeaderMetadataType, String> footer,
+                             String keyField) {
     super(content, inputStream, readBlockLazily,
         Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), readerSchema, header,
         footer, keyField, false);
   }
 
-  public HoodieAvroDataBlock(
-      @Nonnull List<IndexedRecord> records,
-      @Nonnull Map<HeaderMetadataType, String> header,
-      @Nonnull String keyField
+  public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,
+                             @Nonnull Map<HeaderMetadataType, String> header,
+                             @Nonnull String keyField
   ) {
     super(records, header, new HashMap<>(), keyField);
   }
 
-  public HoodieAvroDataBlock(
-      @Nonnull List<IndexedRecord> records,
-      @Nonnull Map<HeaderMetadataType, String> header) {
+  public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,
+                             @Nonnull Map<HeaderMetadataType, String> header) {
     this(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
