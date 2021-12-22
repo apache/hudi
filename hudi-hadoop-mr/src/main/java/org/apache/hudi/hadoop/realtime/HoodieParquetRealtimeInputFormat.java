@@ -46,7 +46,6 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -161,7 +160,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
 
     // step5
     // find all file status in partitionPaths.
-    FileStatus[] fileStatuses = getStatus(job);
+    FileStatus[] fileStatuses = super.listStatus(job);
     Map<String, FileStatus> candidateFileStatus = new HashMap<>();
     for (int i = 0; i < fileStatuses.length; i++) {
       String key = fileStatuses[i].getPath().toString();
@@ -261,13 +260,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
       return HoodieRealtimeInputFormatUtils
           .createRealtimeBoostrapBaseFileSplit((BootstrapBaseFileSplit) bf, path.getBasePath(), path.getDeltaLogFiles(), path.getMaxCommitTime());
     }
-  }
-
-  @Override
-  public FileStatus[] listStatus(JobConf job) throws IOException {
-    // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit
-    // timeline.
-    return super.listStatus(job);
   }
 
   @Override

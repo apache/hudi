@@ -22,6 +22,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * TODO java-doc
+ */
 public abstract class HoodieInputFormatBase extends FileInputFormat<NullWritable, ArrayWritable>
     implements Configurable {
 
@@ -105,5 +108,4 @@ public abstract class HoodieInputFormatBase extends FileInputFormat<NullWritable
     FileStatus[] fileStatuses = super.listStatus(job);
     return HoodieInputFormatUtils.filterIncrementalFileStatus(jobContext, tableMetaClient, timeline.get(), fileStatuses, commitsToCheck.get());
   }
-
 }
