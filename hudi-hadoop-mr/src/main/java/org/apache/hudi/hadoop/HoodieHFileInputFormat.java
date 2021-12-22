@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
@@ -29,8 +28,6 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.io.IOException;
 
@@ -39,10 +36,6 @@ import java.io.IOException;
  */
 @UseFileSplitsFromInputFormat
 public class HoodieHFileInputFormat extends HoodieFileInputFormatBase {
-
-  private static final Logger LOG = LogManager.getLogger(HoodieHFileInputFormat.class);
-
-  protected Configuration conf;
 
   protected HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
     return HoodieInputFormatUtils.filterInstantsTimeline(timeline);
