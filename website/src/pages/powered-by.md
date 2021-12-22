@@ -21,6 +21,7 @@ export const companiesList = [
 	{ img_path: '/assets/images/powers/H3C.JPG', },
 	{ img_path: '/assets/images/powers/moveworks.png', },
 	{ img_path: '/assets/images/powers/robinhood.png', },
+	{ img_path: '/assets/images/powers/zendesk.png', },
 ];
 
 # Who's Using
@@ -90,6 +91,10 @@ Yields.io is the first FinTech platform that uses AI for automated model validat
 ### Yotpo
 
 Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in their open source ETL framework, [Metorikku](https://github.com/YotpoLtd/metorikku) and using as an output writer for a CDC pipeline, with events that are being generated from a database binlog streams to Kafka and then are written to S3. 
+
+### Zendesk
+
+At [Zendesk](https://www.zendesk.com/), Apache Hudi is adopted for building Data Lake on AWS.
 
 ### 37 Interactive Entertainment
 
