@@ -18,11 +18,10 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.spark.sql.SaveMode
-
-import scala.util.control.NonFatal
 
 class TestAlterTableDropPartition extends TestHoodieSqlBase {
 
@@ -88,7 +87,62 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
 
-        checkAnswer(s"select dt from $tableName") (Seq(s"2021/10/02"))
+        val partitionPath = if (urlencode) {
+          PartitionPathEncodeUtils.escapePathName("2021/10/01")
+        } else {
+          "2021/10/01"
+        }
+        checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
+        assertResult(true)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
+      }
+    }
+  }
+
+  Seq(false, true).foreach { urlencode =>
+    test(s"Purge drop single-partition table' partitions, urlencode: $urlencode") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        import spark.implicits._
+        val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))
+          .toDF("id", "name", "ts", "dt")
+
+        df.write.format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "dt")
+          .option(URL_ENCODE_PARTITIONING.key(), urlencode)
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+          .mode(SaveMode.Overwrite)
+          .save(tablePath)
+
+        // register meta to spark catalog by creating table
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |tblproperties (
+             | primaryKey = 'id',
+             | preCombineField = 'ts'
+             |)
+             |partitioned by (dt)
+             |location '$tablePath'
+             |""".stripMargin)
+
+        // drop 2021-10-01 partition
+        spark.sql(s"alter table $tableName drop partition (dt='2021/10/01') purge")
+
+        val partitionPath = if (urlencode) {
+          PartitionPathEncodeUtils.escapePathName("2021/10/01")
+        } else {
+          "2021/10/01"
+        }
+        checkAnswer(s"select dt from $tableName")(Seq(s"2021/10/02"))
+        assertResult(false)(existsPath(s"${tmp.getCanonicalPath}/$tableName/$partitionPath"))
       }
     }
   }
@@ -169,6 +223,53 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
         )
+      }
+    }
+  }
+
+  Seq(false, true).foreach { hiveStyle =>
+    test(s"Purge drop multi-level partitioned table's partitions, isHiveStylePartitioning: $hiveStyle") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        import spark.implicits._
+        val df = Seq((1, "z3", "v1", "2021", "10", "01"), (2, "l4", "v1", "2021", "10","02"))
+          .toDF("id", "name", "ts", "year", "month", "day")
+
+        df.write.format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "year,month,day")
+          .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+          .mode(SaveMode.Overwrite)
+          .save(tablePath)
+
+        // register meta to spark catalog by creating table
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |tblproperties (
+             | primaryKey = 'id',
+             | preCombineField = 'ts'
+             |)
+             |partitioned by (year, month, day)
+             |location '$tablePath'
+             |""".stripMargin)
+
+        // drop 2021-10-01 partition
+        spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01') purge")
+
+        checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
+          Seq(2, "l4", "v1", "2021", "10", "02")
+        )
+        assertResult(false)(existsPath(
+          s"${tmp.getCanonicalPath}/$tableName/year='2021'/month='10'/day='01'"))
       }
     }
   }

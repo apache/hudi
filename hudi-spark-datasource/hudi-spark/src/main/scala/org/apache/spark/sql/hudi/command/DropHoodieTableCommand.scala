@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -77,10 +78,9 @@ case class DropHoodieTableCommand(
     if (purge) {
       logInfo("Clean up " + basePath)
       val targetPath = new Path(basePath)
+      val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       val fs = FSUtils.getFs(basePath, sparkSession.sparkContext.hadoopConfiguration)
-      if (fs.exists(targetPath)) {
-        fs.delete(targetPath, true)
-      }
+      FSUtils.deleteDir(engineContext, fs, targetPath, sparkSession.sparkContext.defaultParallelism)
     }
   }
 
