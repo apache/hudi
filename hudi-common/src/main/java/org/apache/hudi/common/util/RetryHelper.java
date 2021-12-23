@@ -66,30 +66,25 @@ public class RetryHelper<T> {
 
   public T start() throws IOException {
     int retries = 0;
-    boolean success = false;
-    IOException | RuntimeException exception = null;
     T functionResult = null;
-    do {
+
+    while (true) {
       long waitTime = Math.min(getWaitTimeExp(retries), maxIntervalTime);
       try {
         functionResult = func.get();
-        success = true;
         break;
       } catch (IOException | RuntimeException e) {
-        exception = e;
+        if (retries++ >= num) {
+          LOG.error("Still failed to " + taskInfo + " after retried " + num + " times.", e);
+          throw e;
+        }
         LOG.warn("Catch Exception " + taskInfo + ", will retry after " + waitTime + " ms.", e);
         try {
           Thread.sleep(waitTime);
         } catch (InterruptedException ex) {
             // ignore InterruptedException here
         }
-        retries++;
       }
-    } while (retries <= num);
-
-    if (!success) {
-      LOG.error("Still failed to " + taskInfo + " after retried " + num + " times.", exception);
-      throw exception;
     }
 
     if (retries > 0) {

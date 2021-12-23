@@ -231,6 +231,11 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
   }
 
   @Override
+  public boolean exists(Path f) throws IOException {
+    return (boolean) retryHelper.tryWith(() -> fileSystem.exists(f)).start();
+  }
+
+  @Override
   public Configuration getConf() {
     return fileSystem.getConf();
   }
