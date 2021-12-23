@@ -630,7 +630,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieCommitMetadata commitMetadata, String instantTime, boolean isTableServiceAction) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
-        commitMetadata, dataMetaClient, instantTime), !isTableServiceAction);
+        commitMetadata, dataMetaClient, getWriteConfig().isMetaIndexColumnStatsForAllColumns(), instantTime), !isTableServiceAction);
   }
 
   /**
@@ -642,7 +642,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
-        cleanMetadata, instantTime), false);
+        cleanMetadata, dataMetaClient, instantTime), false);
   }
 
   /**
@@ -654,7 +654,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   @Override
   public void update(HoodieRestoreMetadata restoreMetadata, String instantTime) {
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
-        enabledPartitionTypes, metadataMetaClient.getActiveTimeline(), restoreMetadata, instantTime,
+        enabledPartitionTypes, metadataMetaClient.getActiveTimeline(), restoreMetadata, dataMetaClient, instantTime,
         metadata.getSyncedInstantTime()), false);
   }
 
@@ -681,7 +681,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       Map<MetadataPartitionType, HoodieData<HoodieRecord>> records =
           HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, enabledPartitionTypes,
-              metadataMetaClient.getActiveTimeline(), rollbackMetadata, instantTime,
+              metadataMetaClient.getActiveTimeline(), rollbackMetadata, dataMetaClient, instantTime,
               metadata.getSyncedInstantTime(), wasSynced);
       commit(instantTime, records, false);
     }

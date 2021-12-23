@@ -140,6 +140,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "enabled, a new partition under metadata table will be created to store the column ranges and will "
           + "used for pruning files during the index lookups.");
 
+  public static final ConfigProperty<Boolean> META_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.column.stats.all_columns")
+      .defaultValue(false)
+      .sinceVersion("0.11.0")
+      .withDocumentation("Enable indexing user data files column ranges under metadata table key lookups. When "
+          + "enabled, a new partition under metadata table will be created to store the column ranges and will "
+          + "used for pruning files during the index lookups.");
+
   public static final ConfigProperty<Boolean> ENABLE_META_INDEX_BLOOM_FILTER_BATCH_LOAD_MODE = ConfigProperty
       .key(METADATA_PREFIX + ".index.bloomfilter.batchload.enable")
       .defaultValue(false)
@@ -186,6 +194,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isMetaIndexColumnStatsEnabled() {
     return getBooleanOrDefault(ENABLE_META_INDEX_COLUMN_STATS);
+  }
+
+  public boolean isMetaIndexColumnStatsForAllColumns() {
+    return getBooleanOrDefault(META_INDEX_COLUMN_STATS_FOR_ALL_COLUMNS);
   }
 
   public boolean isMetaIndexBloomFilterBatchLoadEnabled() {
