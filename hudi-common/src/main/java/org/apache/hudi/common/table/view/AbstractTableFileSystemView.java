@@ -257,7 +257,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Clears the partition Map and reset view states.
    */
   @Override
-  public final void reset() {
+  public void reset() {
     try {
       writeLock.lock();
       clear();
@@ -1135,8 +1135,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
     refreshTimeline(newTimeline);
-    addedPartitions.clear();
-    resetViewState();
+    clear();
     // Initialize with new Hoodie timeline.
     init(metaClient, newTimeline);
   }

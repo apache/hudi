@@ -46,7 +46,7 @@ public class FlinkTables {
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         new SerializableConfiguration(getHadoopConf()),
         new FlinkTaskContextSupplier(runtimeContext));
-    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf);
+    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true);
     return HoodieFlinkTable.create(writeConfig, context);
   }
 
@@ -71,7 +71,7 @@ public class FlinkTables {
    * <p>This expects to be used by driver.
    */
   public static HoodieFlinkTable<?> createTable(Configuration conf) {
-    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(conf);
+    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(conf, true, false);
     return HoodieFlinkTable.create(writeConfig, HoodieFlinkEngineContext.DEFAULT);
   }
 }

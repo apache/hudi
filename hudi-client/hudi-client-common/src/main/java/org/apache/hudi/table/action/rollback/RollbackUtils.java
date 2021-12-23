@@ -65,8 +65,9 @@ public class RollbackUtils {
   public static HoodieRollbackPlan getRollbackPlan(HoodieTableMetaClient metaClient, HoodieInstant rollbackInstant)
       throws IOException {
     // TODO: add upgrade step if required.
+    final HoodieInstant requested = HoodieTimeline.getRollbackRequestedInstant(rollbackInstant);
     return TimelineMetadataUtils.deserializeAvroMetadata(
-        metaClient.getActiveTimeline().readRollbackInfoAsBytes(rollbackInstant).get(), HoodieRollbackPlan.class);
+        metaClient.getActiveTimeline().readRollbackInfoAsBytes(requested).get(), HoodieRollbackPlan.class);
   }
 
   static Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String instantToRollback, String rollbackInstantTime) {
