@@ -71,6 +71,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,6 +110,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   private String testMethodName;
   protected transient JavaSparkContext jsc = null;
   protected transient HoodieSparkEngineContext context = null;
+  protected transient SparkSession sparkSession = null;
   protected transient Configuration hadoopConf = null;
   protected transient SQLContext sqlContext;
   protected transient FileSystem fs;
@@ -182,6 +184,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     sqlContext = new SQLContext(jsc);
     context = new HoodieSparkEngineContext(jsc);
     hadoopConf = context.getHadoopConf().get();
+    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
   }
 
   /**

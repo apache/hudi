@@ -113,7 +113,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       client.startCommitWithTime(newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
-      Stream<HoodieBaseFile> dataFiles = insertRecords(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
+      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
       assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       /*
@@ -122,7 +122,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       // we already set small file size to small number to force inserts to go into new file.
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
-      dataFiles = insertRecords(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
+      dataFiles = insertRecordsToMORTable(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
       assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
       if (doUpdates) {
@@ -132,7 +132,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         newCommitTime = "003";
         client.startCommitWithTime(newCommitTime);
         records = dataGen.generateUpdates(newCommitTime, 100);
-        updateRecords(metaClient, records, client, cfg, newCommitTime);
+        updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime);
       }
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
@@ -190,18 +190,18 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
-      Stream<HoodieBaseFile> dataFiles = insertRecords(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
+      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
       assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
-      dataFiles = insertRecords(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
+      dataFiles = insertRecordsToMORTable(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
       assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
       // run updates
       if (doUpdates) {
         newCommitTime = "003";
         client.startCommitWithTime(newCommitTime);
         records = dataGen.generateUpdates(newCommitTime, 100);
-        updateRecords(metaClient, records, client, cfg, newCommitTime);
+        updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime);
       }
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);

@@ -233,7 +233,7 @@ class DedupeSparkJob(basePath: String,
     }
 
     println("No duplicates found & counts are in check!!!! ")
-    // 4. Prepare to copy the fixed files back.
+    // 5. Prepare to copy the fixed files back.
     fileNameToPathMap.foreach { case (_, filePath) =>
       val srcPath = new Path(s"$repairOutputPath/${filePath.getName}")
       val dstPath = new Path(s"$basePath/$duplicatedPartitionPath/${filePath.getName}")
