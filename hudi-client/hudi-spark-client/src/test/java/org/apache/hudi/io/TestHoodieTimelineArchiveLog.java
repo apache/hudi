@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.avro.model.HoodieActionInstant;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -62,9 +64,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
-import static org.junit.jupiter.params.provider.Arguments.arguments;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -125,7 +124,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata, int minArchivalCommits, int maxArchivalCommits, int maxDeltaCommitsMetadataTable) throws Exception {
-    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, false, 10);
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, false, 10, 209715200);
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
@@ -133,16 +132,18 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                                                            int maxArchivalCommits,
                                                            int maxDeltaCommitsMetadataTable,
                                                            HoodieTableType tableType) throws Exception {
-    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, tableType, false, 10);
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, tableType, false, 10, 209715200);
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
                                                            int minArchivalCommits,
                                                            int maxArchivalCommits,
                                                            int maxDeltaCommitsMetadataTable,
-                                                           boolean enableArchiveTrim,
-                                                           int archiveFilesToKeep) throws Exception {
-    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits, maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, enableArchiveTrim, archiveFilesToKeep);
+                                                           boolean enableArchiveMerge,
+                                                           int archiveFilesBatch,
+                                                           long size) throws Exception {
+    return initTestTableAndGetWriteConfig(enableMetadata, minArchivalCommits, maxArchivalCommits,
+        maxDeltaCommitsMetadataTable, HoodieTableType.COPY_ON_WRITE, enableArchiveMerge, archiveFilesBatch, size);
   }
 
   private HoodieWriteConfig initTestTableAndGetWriteConfig(boolean enableMetadata,
@@ -150,16 +151,18 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
                                                            int maxArchivalCommits,
                                                            int maxDeltaCommitsMetadataTable,
                                                            HoodieTableType tableType,
-                                                           boolean enableArchiveTrim,
-                                                           int archiveFilesToKeep) throws Exception {
+                                                           boolean enableArchiveMerge,
+                                                           int archiveFilesBatch,
+                                                           long size) throws Exception {
     init(tableType);
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .retainCommits(1)
-            .withArchiveAutoTrimEnable(enableArchiveTrim)
-            .maxArchiveFilesToKeep(archiveFilesToKeep)
             .archiveCommitsWith(minArchivalCommits, maxArchivalCommits)
+            .withArchiveAutoMergeEnable(enableArchiveMerge)
+            .withArchiveFilesMergeBatchSize(archiveFilesBatch)
+            .withArchiveMergeSmallFileLimit(size)
             .build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
@@ -217,43 +220,108 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @MethodSource("testArchiveTableWithArchivalTrim")
-  public void testArchiveTableWithArchivalCleanUp(boolean enableMetadata, boolean enableArchiveTrim, int archiveFilesToKeep) throws Exception {
-    HashSet<String> archiveFilesExisted = new HashSet<>();
-    ArrayList<String> currentExistArchiveFiles = new ArrayList<>();
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(enableMetadata, 2, 3, 2, enableArchiveTrim, archiveFilesToKeep);
-    String archivePath = metaClient.getArchivePath();
+  @Test
+  public void testArchiveTableWithArchivalSmallFileMergeEnable() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2, true, 3, 30000);
     for (int i = 1; i < 10; i++) {
       testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
-      // trigger archival
+    }
+
+    // trigger archival and generate a big archive file.
+    archiveAndGetCommitsList(writeConfig);
+    RemoteIterator<LocatedFileStatus> iter = metaClient.getFs().listFiles(new Path(metaClient.getArchivePath()), false);
+    Path hugeArchiveFile = null;
+    while (iter.hasNext()) {
+      hugeArchiveFile = iter.next().getPath();
+    }
+
+    // keep ingest and archive
+    for (int i = 1; i < 10; i++) {
+      testTable.doWriteOperation("1000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       archiveAndGetCommitsList(writeConfig);
-      RemoteIterator<LocatedFileStatus> iter = metaClient.getFs().listFiles(new Path(archivePath), false);
-      ArrayList<String> files = new ArrayList<>();
-      while (iter.hasNext()) {
-        files.add(iter.next().getPath().toString());
-      }
-      archiveFilesExisted.addAll(files);
-      currentExistArchiveFiles = files;
     }
 
-    assertEquals(archiveFilesToKeep, currentExistArchiveFiles.size());
+    // this huge archive file is not under merge and still exists.
+    assertTrue(hugeArchiveFile != null && metaClient.getFs().exists(hugeArchiveFile));
+    HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
+    assertEquals(18 * 3, archivedTimeLine.countInstants() + rawActiveTimeline.countInstants());
+  }
 
-    if (enableArchiveTrim) {
-      // sort archive files path
-      List<String> sorted = archiveFilesExisted.stream().sorted().collect(Collectors.toList());
-      List<String> archiveFilesDeleted = sorted.subList(0, 3 - archiveFilesToKeep);
-      List<String> archiveFilesKept = sorted.subList(3 - archiveFilesToKeep, sorted.size());
-
-      // assert older archive files are deleted
-      assertFalse(currentExistArchiveFiles.containsAll(archiveFilesDeleted));
-      // assert most recent archive files are preserved
-      assertTrue(currentExistArchiveFiles.containsAll(archiveFilesKept));
-    } else {
-      // Disable archive files trim, so no archived files will be deleted.
-      assertEquals(archiveFilesExisted.size(), currentExistArchiveFiles.size());
-      assertTrue(archiveFilesExisted.containsAll(currentExistArchiveFiles));
+  @Test
+  public void testArchiveTableWithArchivalSmallFileMergeEnableRecoverFromDeleteFailed() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2, true, 3, 209715200);
+    for (int i = 1; i < 8; i++) {
+      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      archiveAndGetCommitsList(writeConfig);
     }
+
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(writeConfig, table);
+    FileStatus[] fsStatuses = metaClient.getFs().globStatus(
+        new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
+    List<String> candidateFiles = Arrays.stream(fsStatuses).map(fs -> fs.getPath().toString()).collect(Collectors.toList());
+    archiveLog.reOpenWriter();
+
+
+    archiveLog.buildArchiveMergePlan(candidateFiles, new Path(metaClient.getArchivePath(), archiveLog.getMergeArchivePlanName()), ".commits_.archive.3_1-0-1");
+    archiveLog.mergeArchiveFiles(Arrays.stream(fsStatuses).collect(Collectors.toList()));
+    archiveLog.reOpenWriter();
+
+    metaClient.getFs().delete(fsStatuses[0].getPath());
+
+
+    HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
+    assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
+
+
+    for (int i = 1; i < 10; i++) {
+      testTable.doWriteOperation("1000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+
+    HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline().reload();
+
+    assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
+  }
+
+  @Test
+  public void testArchiveTableWithArchivalSmallFileMergeEnableRecoverFromMergeFailed() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2, true, 3, 209715200);
+    for (int i = 1; i < 8; i++) {
+      testTable.doWriteOperation("0000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(writeConfig, table);
+    FileStatus[] fsStatuses = metaClient.getFs().globStatus(
+        new Path(metaClient.getArchivePath() + "/.commits_.archive*"));
+    List<String> candidateFiles = Arrays.stream(fsStatuses).map(fs -> fs.getPath().toString()).collect(Collectors.toList());
+    archiveLog.reOpenWriter();
+
+
+    archiveLog.buildArchiveMergePlan(candidateFiles, new Path(metaClient.getArchivePath(), archiveLog.getMergeArchivePlanName()), ".commits_.archive.3_1-0-1");
+    archiveLog.mergeArchiveFiles(Arrays.stream(fsStatuses).collect(Collectors.toList()));
+    archiveLog.reOpenWriter();
+
+    HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline().reload();
+    assertEquals(7 * 3, rawActiveTimeline.countInstants() + archivedTimeLine.reload().countInstants());
+
+    metaClient.getFs().delete(new Path(metaClient.getArchivePath(), ".commits_.archive.3_1-0-1"));
+
+    for (int i = 1; i < 10; i++) {
+      testTable.doWriteOperation("1000000" + i, WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+
+    HoodieActiveTimeline rawActiveTimeline1 = new HoodieActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine1 = metaClient.getArchivedTimeline().reload();
+
+    assertEquals(16 * 3, archivedTimeLine1.countInstants() + rawActiveTimeline1.countInstants());
   }
 
   @ParameterizedTest
@@ -814,15 +882,5 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       HoodieTestTable.of(metaClient).addRollback(rollbackTime, hoodieRollbackMetadata);
     }
     return new HoodieInstant(inflight, "rollback", rollbackTime);
-  }
-
-  private static Stream<Arguments> testArchiveTableWithArchivalTrim() {
-    // boolean enableMetadata, boolean enableArchiveTrim, int archiveFilesToKeep
-    return Stream.of(
-        arguments(false, true, 1),
-        arguments(false, false, 3),
-        arguments(true, true, 1),
-        arguments(true, false, 3)
-    );
   }
 }

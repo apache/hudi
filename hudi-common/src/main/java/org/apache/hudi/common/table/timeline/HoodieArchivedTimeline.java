@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -218,7 +219,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       // Sort files by version suffix in reverse (implies reverse chronological order)
       Arrays.sort(fsStatuses, new ArchiveFileVersionComparator());
 
-      List<HoodieInstant> instantsInRange = new ArrayList<>();
+      Set<HoodieInstant> instantsInRange = new HashSet<>();
       for (FileStatus fs : fsStatuses) {
         // Read the archived file
         try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
@@ -251,8 +252,9 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         }
       }
 
-      Collections.sort(instantsInRange);
-      return instantsInRange;
+      ArrayList<HoodieInstant> result = new ArrayList<>(instantsInRange);
+      Collections.sort(result);
+      return result;
     } catch (IOException e) {
       throw new HoodieIOException(
               "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);

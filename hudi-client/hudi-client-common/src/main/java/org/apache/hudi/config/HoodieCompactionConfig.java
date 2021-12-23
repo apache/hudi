@@ -249,18 +249,21 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "record size estimate compute dynamically based on commit metadata. "
           + " This is critical in computing the insert parallelism and bin-packing inserts into small files.");
 
-  public static final ConfigProperty<String> ARCHIVE_MAX_FILES = ConfigProperty
-      .key("hoodie.archive.max.files")
-      .noDefaultValue()
-      .withDocumentation("The numbers of kept archive files under archived.");
+  public static final ConfigProperty<String> ARCHIVE_FILES_MERGE_BATCH_SIZE = ConfigProperty
+      .key("hoodie.archive.files.merge.batch.size")
+      .defaultValue(String.valueOf(10))
+      .withDocumentation("The numbers of small archive files are merged at once.");
 
-  public static final ConfigProperty<String> ARCHIVE_AUTO_TRIM_ENABLE = ConfigProperty
-      .key("hoodie.archive.auto.trim.enable")
+  public static final ConfigProperty<String> ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES = ConfigProperty
+      .key("hoodie.archive.merge.small.file.limit.bytes")
+      .defaultValue(String.valueOf(20 * 1024 * 1024))
+      .withDocumentation("This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.");
+
+  public static final ConfigProperty<String> ARCHIVE_AUTO_MERGE_ENABLE = ConfigProperty
+      .key("hoodie.archive.auto.merge.enable")
       .defaultValue("false")
-      .withDocumentation("WARNING: do not use this config unless you know what you're doing. "
-          + "If enabled, Hoodie will keep the most recent " + ARCHIVE_MAX_FILES.key() + " archive files and details of older archived instants will be deleted, "
-          + "resulting in information loss in the archived timeline, which may affect tools like CLI and repair. "
-          + "Only enable this if you hit severe performance issues for retrieving archived timeline.");
+      .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
+          + " useful when storage scheme doesn't support append operation.");
 
 
 
@@ -556,13 +559,18 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder maxArchiveFilesToKeep(int number) {
-      compactionConfig.setValue(ARCHIVE_MAX_FILES, String.valueOf(number));
+    public Builder withArchiveFilesMergeBatchSize(int number) {
+      compactionConfig.setValue(ARCHIVE_FILES_MERGE_BATCH_SIZE, String.valueOf(number));
       return this;
     }
 
-    public Builder withArchiveAutoTrimEnable(boolean enable) {
-      compactionConfig.setValue(ARCHIVE_AUTO_TRIM_ENABLE, String.valueOf(enable));
+    public Builder withArchiveMergeSmallFileLimit(long size) {
+      compactionConfig.setValue(ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES, String.valueOf(size));
+      return this;
+    }
+
+    public Builder withArchiveAutoMergeEnable(boolean enable) {
+      compactionConfig.setValue(ARCHIVE_AUTO_MERGE_ENABLE, String.valueOf(enable));
       return this;
     }
 
