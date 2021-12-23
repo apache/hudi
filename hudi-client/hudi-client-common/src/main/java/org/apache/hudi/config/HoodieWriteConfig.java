@@ -1441,6 +1441,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     return isMetadataTableEnabled() && getMetadataConfig().isMetaIndexBloomFilterEnabled();
   }
 
+  public boolean isMetaIndexColumnStatsForAllColumns() {
+    return isMetadataTableEnabled() && isMetaIndexColumnStatsForAllColumns()
+        && getMetadataConfig().isMetaIndexColumnStatsForAllColumns();
+  }
+
   public boolean isMetaIndexBloomFilterBatchLoadEnabled() {
     return isMetadataTableEnabled() && getMetadataConfig().isMetaIndexBloomFilterBatchLoadEnabled();
   }

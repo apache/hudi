@@ -424,6 +424,20 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     sb.append(SCHEMA_FIELD_NAME_TYPE + "=").append(type).append(", ");
     sb.append("creations=").append(Arrays.toString(getFilenames().toArray())).append(", ");
     sb.append("deletions=").append(Arrays.toString(getDeletions().toArray())).append(", ");
+    if (type == METADATA_TYPE_BLOOM_FILTER) {
+      ValidationUtils.checkState(getBloomFilterMetadata().isPresent());
+      sb.append("BloomFilter: {");
+      sb.append("bloom size: " + getBloomFilterMetadata().get().getBloomFilter().array().length).append(", ");
+      sb.append("timestamp: " + getBloomFilterMetadata().get().getTimestamp()).append(", ");
+      sb.append("deleted: " + getBloomFilterMetadata().get().getIsDeleted());
+      sb.append("}");
+    }
+    if (type == METADATA_TYPE_COLUMN_STATS) {
+      ValidationUtils.checkState(getColumnStatMetadata().isPresent());
+      sb.append("ColStats: {");
+      sb.append(getColumnStatMetadata().get());
+      sb.append("}");
+    }
     sb.append('}');
     return sb.toString();
   }
