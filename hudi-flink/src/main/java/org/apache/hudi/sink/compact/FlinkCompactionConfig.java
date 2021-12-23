@@ -102,6 +102,13 @@ public class FlinkCompactionConfig extends Configuration {
       + "2). LIFO: execute the latest plan first, by default LIFO", required = false)
   public String compactionSeq = SEQ_LIFO;
 
+  @Parameter(names = {"--service"}, description = "Flink Compaction runs in service mode, disable by default")
+  public Boolean serviceMode = false;
+
+  @Parameter(names = {"--min-compaction-interval-seconds"},
+      description = "Min compaction interval of async compaction service, default 10 minutes")
+  public Integer minCompactionIntervalSeconds = 600;
+
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.
    * The latter is more suitable for the table APIs. It reads all the properties

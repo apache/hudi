@@ -18,7 +18,6 @@
 package org.apache.hudi
 
 import java.util.Properties
-
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -31,6 +30,7 @@ import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.{Config, TimestampType}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.PartitionDirectory
 import org.apache.spark.sql.types.StringType
@@ -38,7 +38,7 @@ import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
@@ -251,6 +251,29 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     assertEquals(10, readDF2.count())
     // There are 5 rows in the  dt = 2021/03/01 and hh = 10
     assertEquals(5, readDF2.filter("dt = '2021/03/01' and hh ='10'").count())
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("true,a.b.c","false,a.b.c","true,c","false,c"))
+  def testQueryPartitionPathsForNestedPartition(useMetaFileList:Boolean, partitionBy:String): Unit = {
+    val inputDF = spark.range(100)
+      .withColumn("c",lit("c"))
+      .withColumn("b",struct("c"))
+      .withColumn("a",struct("b"))
+    inputDF.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(RECORDKEY_FIELD.key, "id")
+      .option(PRECOMBINE_FIELD.key, "id")
+      .option(PARTITIONPATH_FIELD.key, partitionBy)
+      .option(HoodieMetadataConfig.ENABLE.key(), useMetaFileList)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val fileIndex = HoodieFileIndex(spark, metaClient, None,
+      queryOpts ++ Map(HoodieMetadataConfig.ENABLE.key -> useMetaFileList.toString))
+    // test if table is partitioned on nested columns, getAllQueryPartitionPaths does not break
+    assert(fileIndex.getAllQueryPartitionPaths.get(0).partitionPath.equals("c"))
   }
 
   private def attribute(partition: String): AttributeReference = {
