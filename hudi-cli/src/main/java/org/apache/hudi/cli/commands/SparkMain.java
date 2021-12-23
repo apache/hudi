@@ -454,14 +454,10 @@ public class SparkMain {
   protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
     HoodieWriteConfig config = getWriteConfig(basePath);
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder()
-                .setConf(jsc.hadoopConfiguration())
-                .setBasePath(config.getBasePath())
-                .setLoadActiveTimelineOnLoad(false)
-                .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-                .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
-                .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
-                .build();
+        HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(config.getBasePath())
+            .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
+            .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     try {
       new UpgradeDowngrade(metaClient, config, new HoodieSparkEngineContext(jsc), SparkUpgradeDowngradeHelper.getInstance())
           .run(HoodieTableVersion.valueOf(toVersion), null);
