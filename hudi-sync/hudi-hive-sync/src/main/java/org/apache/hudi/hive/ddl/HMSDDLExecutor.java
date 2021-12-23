@@ -136,6 +136,7 @@ public class HMSDDLExecutor implements DDLExecutor {
       List<FieldSchema> fieldSchema = HiveSchemaUtil.convertParquetSchemaToHiveFieldSchema(newSchema, syncConfig);
       Table table = client.getTable(syncConfig.databaseName, tableName);
       StorageDescriptor sd = table.getSd();
+      sd.setLocation(syncConfig.basePath);
       sd.setCols(fieldSchema);
       table.setSd(sd);
       EnvironmentContext environmentContext = new EnvironmentContext();

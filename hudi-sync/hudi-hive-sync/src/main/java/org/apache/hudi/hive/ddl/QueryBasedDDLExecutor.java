@@ -89,16 +89,20 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   @Override
   public void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
+      StringBuilder alterTableBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
+          .append(config.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
+          .append(tableName).append(HIVE_ESCAPE_CHARACTER);
       String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, config.partitionFields, config.supportTimestamp);
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = config.partitionFields.size() > 0 ? " cascade" : "";
-      StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
-          .append(config.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
-          .append(HIVE_ESCAPE_CHARACTER).append(tableName)
-          .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
-          .append(newSchemaStr).append(" )").append(cascadeClause);
-      LOG.info("Updating table definition with " + sqlBuilder);
-      runSQL(sqlBuilder.toString());
+      StringBuilder replaceColumnsBuilder = new StringBuilder(alterTableBuilder)
+          .append(" REPLACE COLUMNS(").append(newSchemaStr).append(" )")
+          .append(cascadeClause);
+      LOG.info("Updating table definition with " + replaceColumnsBuilder);
+      runSQL(replaceColumnsBuilder.toString());
+      LOG.info("Updating table location with " + alterTableBuilder);
+      StringBuilder setLocationBuilder = alterTableBuilder.append(" SET LOCATION '").append(config.basePath).append("'");
+      runSQL(setLocationBuilder.toString());
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to update table for " + tableName, e);
     }
