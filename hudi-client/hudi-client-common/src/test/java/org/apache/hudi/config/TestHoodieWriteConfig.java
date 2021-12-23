@@ -128,7 +128,7 @@ public class TestHoodieWriteConfig {
         put(ASYNC_CLEAN.key(), "false");
       }
     });
-    assertTrue(writeConfig.isAnyTableServicesAsync());
+    assertTrue(writeConfig.areAnyTableServicesAsync());
     assertEquals(inProcessLockProviderClassName, writeConfig.getLockProviderClass());
 
     // 2. Async clean
@@ -140,7 +140,7 @@ public class TestHoodieWriteConfig {
         put(ASYNC_CLEAN.key(), "true");
       }
     });
-    assertTrue(writeConfig.isAnyTableServicesAsync());
+    assertTrue(writeConfig.areAnyTableServicesAsync());
     assertEquals(inProcessLockProviderClassName, writeConfig.getLockProviderClass());
 
     // 3. Async compaction
@@ -152,7 +152,7 @@ public class TestHoodieWriteConfig {
         put(ASYNC_CLEAN.key(), "false");
       }
     });
-    assertTrue(writeConfig.isAnyTableServicesAsync());
+    assertTrue(writeConfig.areAnyTableServicesAsync());
     assertEquals(inProcessLockProviderClassName, writeConfig.getLockProviderClass());
 
     // 4. All inline services
@@ -164,8 +164,8 @@ public class TestHoodieWriteConfig {
         put(ASYNC_CLEAN.key(), "false");
       }
     });
-    assertFalse(writeConfig.isAnyTableServicesAsync());
-    assertTrue(writeConfig.isAnyTableServicesInline());
+    assertFalse(writeConfig.areAnyTableServicesAsync());
+    assertTrue(writeConfig.areAnyTableServicesInline());
     assertEquals(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue(), writeConfig.getLockProviderClass());
 
     // 5. User override for the lock provider should always take the precedence
@@ -179,7 +179,7 @@ public class TestHoodieWriteConfig {
 
     // Default config should have default lock provider
     writeConfig = createWriteConfig(Collections.emptyMap());
-    if (!writeConfig.isAnyTableServicesAsync()) {
+    if (!writeConfig.areAnyTableServicesAsync()) {
       assertEquals(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.defaultValue(), writeConfig.getLockProviderClass());
     } else {
       assertEquals(inProcessLockProviderClassName, writeConfig.getLockProviderClass());
@@ -188,9 +188,7 @@ public class TestHoodieWriteConfig {
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {
     final Properties properties = new Properties();
-    for (Map.Entry<String, String> entry : configs.entrySet()) {
-      properties.setProperty(entry.getKey(), entry.getValue());
-    }
+    configs.forEach(properties::setProperty);
     return HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withProperties(properties)

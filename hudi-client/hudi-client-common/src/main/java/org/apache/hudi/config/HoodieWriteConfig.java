@@ -1840,7 +1840,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    *
    * @return True if any table services are configured to run inline, false otherwise.
    */
-  public Boolean isAnyTableServicesInline() {
+  public Boolean areAnyTableServicesInline() {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
   }
 
@@ -1849,7 +1849,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    *
    * @return True if any table services are configured to run async, false otherwise.
    */
-  public Boolean isAnyTableServicesAsync() {
+  public Boolean areAnyTableServicesAsync() {
     return isAsyncClusteringEnabled() || !inlineCompactionEnabled() || isAsyncClean();
   }
 
@@ -2288,9 +2288,12 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
 
+      // Async table services can update the metadata table and a lock provider is
+      // needed to guard against any concurrent table write operations. If user has
+      // not configured any lock provider, let's use the InProcess lock provider.
       if (!isLockConfigSet) {
         HoodieLockConfig.Builder lockConfigBuilder = HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps());
-        if (writeConfig.isAnyTableServicesAsync()) {
+        if (writeConfig.areAnyTableServicesAsync()) {
           lockConfigBuilder.withLockProvider(InProcessLockProvider.class);
         }
         writeConfig.setDefault(lockConfigBuilder.build());
