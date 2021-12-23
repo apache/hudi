@@ -18,16 +18,14 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.Random;
 
 public class RetryHelper<T> {
   private static final Logger LOG = LogManager.getLogger(RetryHelper.class);
-  private HoodieWrapperFileSystem.CheckedFunction<T> func;
+  private CheckedFunction<T> func;
   private int num;
   private long maxIntervalTime;
   private long initialIntervalTime = 100L;
@@ -40,7 +38,7 @@ public class RetryHelper<T> {
     this.taskInfo = taskInfo;
   }
 
-  public RetryHelper tryWith(HoodieWrapperFileSystem.CheckedFunction<T> func) {
+  public RetryHelper tryWith(CheckedFunction<T> func) {
     this.func = func;
     return this;
   }
@@ -65,10 +63,10 @@ public class RetryHelper<T> {
     return this;
   }
 
-  public T start() throws IOException {
+  public T start() throws Exception {
     int retries = 0;
     boolean success = false;
-    RuntimeException exception = null;
+    Exception exception = null;
     T functionResult = null;
     do {
       long waitTime = Math.min(getWaitTimeExp(retries), maxIntervalTime);
@@ -76,7 +74,7 @@ public class RetryHelper<T> {
         functionResult = func.get();
         success = true;
         break;
-      } catch (RuntimeException e) {
+      } catch (Exception e) {
         // deal with RuntimeExceptions such like AmazonS3Exception 503
         exception = e;
         LOG.warn("Catch RuntimeException " + taskInfo + ", will retry after " + waitTime + " ms.", e);
@@ -107,5 +105,10 @@ public class RetryHelper<T> {
     }
 
     return (long) Math.pow(2, retryCount) * initialIntervalTime + random.nextInt(100);
+  }
+
+  @FunctionalInterface
+  public interface CheckedFunction<T> {
+    T get() throws Exception;
   }
 }

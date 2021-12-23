@@ -37,25 +37,25 @@ import java.util.Properties;
 public class FileSystemRetryConfig  extends HoodieConfig {
 
   public static final ConfigProperty<String> FILESYSTEM_RETRY_ENABLE = ConfigProperty
-      .key("hoodie.filesystem.action.retry.enable")
+      .key("hoodie.filesystem.operation.retry.enable")
       .defaultValue("false")
       .sinceVersion("0.11.0")
       .withDocumentation("Enabled to handle list/get/delete etc file system performance issue.");
 
   public static final ConfigProperty<Long> INITIAL_RETRY_INTERVAL_MS = ConfigProperty
-      .key("hoodie.filesystem.action.retry.initial_interval_ms")
+      .key("hoodie.filesystem.operation.retry.initial_interval_ms")
       .defaultValue(100L)
       .sinceVersion("0.11.0")
       .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on storage.");
 
   public static final ConfigProperty<Long> MAX_RETRY_INTERVAL_MS = ConfigProperty
-      .key("hoodie.filesystem.action.retry.max_interval_ms")
+      .key("hoodie.filesystem.operation.retry.max_interval_ms")
       .defaultValue(2000L)
       .sinceVersion("0.11.0")
       .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
 
   public static final ConfigProperty<Integer> MAX_RETRY_NUMBERS = ConfigProperty
-      .key("hoodie.filesystem.action.retry.max_numbers")
+      .key("hoodie.filesystem.operation.retry.max_numbers")
       .defaultValue(4)
       .sinceVersion("0.11.0")
       .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");

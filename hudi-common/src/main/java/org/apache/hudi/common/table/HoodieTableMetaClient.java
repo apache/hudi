@@ -143,15 +143,8 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTableMetaClient() {}
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
-    return HoodieTableMetaClient.builder()
-            .setConf(oldMetaClient.hadoopConf.get())
-            .setBasePath(oldMetaClient.basePath)
-            .setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
-            .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig)
-            .setFileSystemRetryConfig(oldMetaClient.fileSystemRetryConfig)
-            .setLayoutVersion(Option.of(oldMetaClient.timelineLayoutVersion))
-            .setPayloadClassName(null)
-            .build();
+    return HoodieTableMetaClient.builder().setConf(oldMetaClient.hadoopConf.get()).setBasePath(oldMetaClient.basePath).setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
+        .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig).setLayoutVersion(Option.of(oldMetaClient.timelineLayoutVersion)).setPayloadClassName(null).setFileSystemRetryConfig(oldMetaClient.fileSystemRetryConfig).build();
   }
 
   /**
