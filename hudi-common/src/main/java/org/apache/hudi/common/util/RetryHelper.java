@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.Random;
 
 public class RetryHelper<T> {
@@ -63,10 +64,10 @@ public class RetryHelper<T> {
     return this;
   }
 
-  public T start() throws Exception {
+  public T start() throws IOException {
     int retries = 0;
     boolean success = false;
-    Exception exception = null;
+    IOException | RuntimeException exception = null;
     T functionResult = null;
     do {
       long waitTime = Math.min(getWaitTimeExp(retries), maxIntervalTime);
@@ -74,10 +75,9 @@ public class RetryHelper<T> {
         functionResult = func.get();
         success = true;
         break;
-      } catch (Exception e) {
-        // deal with RuntimeExceptions such like AmazonS3Exception 503
+      } catch (IOException | RuntimeException e) {
         exception = e;
-        LOG.warn("Catch RuntimeException " + taskInfo + ", will retry after " + waitTime + " ms.", e);
+        LOG.warn("Catch Exception " + taskInfo + ", will retry after " + waitTime + " ms.", e);
         try {
           Thread.sleep(waitTime);
         } catch (InterruptedException ex) {
@@ -109,6 +109,6 @@ public class RetryHelper<T> {
 
   @FunctionalInterface
   public interface CheckedFunction<T> {
-    T get() throws Exception;
+    T get() throws IOException;
   }
 }
