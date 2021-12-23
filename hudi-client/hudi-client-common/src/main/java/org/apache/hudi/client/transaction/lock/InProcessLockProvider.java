@@ -30,6 +30,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -42,9 +43,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * HoodieLockException. Threads other than the current lock owner, will
  * block on lock() and return false on tryLock().
  */
-public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock> {
+public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(ZookeeperBasedLockProvider.class);
+  private static final Logger LOG = LogManager.getLogger(InProcessLockProvider.class);
   private static final ReentrantReadWriteLock LOCK = new ReentrantReadWriteLock();
   private final long maxWaitTimeMillis;
 
