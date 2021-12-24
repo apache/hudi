@@ -27,10 +27,11 @@ import org.apache.spark.sql.Row;
 /**
  * A built-in partitioner that does local sorting for each spark partitions after coalesce for bulk insert operation, corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
  */
-public class PartitionSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class PartitionSortPartitionerWithRows extends BulkInsertPartitioner<Dataset<Row>> {
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    generateFileIdPfx(outputSparkPartitions);
     return rows.coalesce(outputSparkPartitions).sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 

@@ -108,6 +108,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase {
     JavaRDD<HoodieRecord<? extends HoodieRecordPayload>> actualRecords =
         (JavaRDD<HoodieRecord<? extends HoodieRecordPayload>>) partitioner.repartitionRecords(records, numPartitions);
     assertEquals(numPartitions, actualRecords.getNumPartitions());
+    assertEquals(numPartitions, partitioner.getFileIdPfx().size());
     List<HoodieRecord<? extends HoodieRecordPayload>> collectedActualRecords = actualRecords.collect();
     if (isGloballySorted) {
       // Verify global order

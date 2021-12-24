@@ -18,24 +18,64 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.io.WriteHandleFactory;
+
+import java.io.Serializable;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 /**
  * Repartition input records into at least expected number of output spark partitions. It should give below guarantees -
  * Output spark partition will have records from only one hoodie partition. - Average records per output spark
  * partitions should be almost equal to (#inputRecords / #outputSparkPartitions) to avoid possible skews.
  */
-public interface BulkInsertPartitioner<I> {
+public abstract class BulkInsertPartitioner<I> implements Serializable {
+
+  private WriteHandleFactory defaultWriteHandleFactory;
+  private List<String> fileIdPfx;
 
   /**
-   * Repartitions the input records into at least expected number of output spark partitions.
+   * Repartitions the input records into at least expected number of output spark partitions,
+   * and generates fileIdPfx for each partition.
    *
    * @param records               Input Hoodie records
    * @param outputSparkPartitions Expected number of output partitions
    * @return
    */
-  I repartitionRecords(I records, int outputSparkPartitions);
+  public abstract I repartitionRecords(I records, int outputSparkPartitions);
 
   /**
    * @return {@code true} if the records within a partition are sorted; {@code false} otherwise.
    */
-  boolean arePartitionRecordsSorted();
+  public abstract boolean arePartitionRecordsSorted();
+
+  public List<String> getFileIdPfx() {
+    return fileIdPfx;
+  }
+
+  public void setDefaultWriteHandleFactory(WriteHandleFactory defaultWriteHandleFactory) {
+    this.defaultWriteHandleFactory = defaultWriteHandleFactory;
+  }
+
+  /**
+   * Return write handle factory for the given partition.
+   * By default, return the pre-assigned write handle factory for all partitions
+   * @param partition data partition
+   * @return
+   */
+  public WriteHandleFactory getWriteHandleFactory(int partition) {
+    return defaultWriteHandleFactory;
+  }
+
+  /**
+   * Initialize a list of file id prefix randomly.
+   * In most cases, bulk_insert put all incoming records to randomly generated file groups (i.e., the current default implementation).
+   * @param parallelism the number of output file id
+   * @return lists of file groups, the Nth element corresponds to partition N
+   */
+  protected void generateFileIdPfx(int parallelism) {
+    fileIdPfx = IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());
+  }
 }

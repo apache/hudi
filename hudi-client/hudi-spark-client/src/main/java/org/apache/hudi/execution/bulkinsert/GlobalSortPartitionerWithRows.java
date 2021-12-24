@@ -28,10 +28,11 @@ import org.apache.spark.sql.functions;
 /**
  * A built-in partitioner that does global sorting for the input Rows across partitions after repartition for bulk insert operation, corresponding to the {@code BulkInsertSortMode.GLOBAL_SORT} mode.
  */
-public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
+public class GlobalSortPartitionerWithRows extends BulkInsertPartitioner<Dataset<Row>> {
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    generateFileIdPfx(outputSparkPartitions);
     // Now, sort the records and line them up nicely for loading.
     // Let's use "partitionPath + key" as the sort key.
     return rows.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))

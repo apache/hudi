@@ -35,7 +35,7 @@ import org.apache.spark.api.java.JavaRDD;
  * @param <T> HoodieRecordPayload type
  */
 public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    extends BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;
   private final SerializableSchema serializableSchema;
@@ -56,6 +56,7 @@ public class RDDCustomColumnsSortPartitioner<T extends HoodieRecordPayload>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
+    generateFileIdPfx(outputSparkPartitions);
     final String[] sortColumns = this.sortColumnNames;
     final SerializableSchema schema = this.serializableSchema;
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;

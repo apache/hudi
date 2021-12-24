@@ -31,11 +31,12 @@ import java.util.List;
  * @param <T> HoodieRecordPayload type
  */
 public class JavaNonSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
+    extends BulkInsertPartitioner<List<HoodieRecord<T>>> {
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records,
                                                   int outputPartitions) {
+    generateFileIdPfx(outputPartitions);
     return records;
   }
 

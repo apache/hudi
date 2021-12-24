@@ -31,11 +31,12 @@ import org.apache.spark.api.java.JavaRDD;
  * @param <T> HoodieRecordPayload type
  */
 public class NonSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+    extends BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
+    generateFileIdPfx(outputSparkPartitions);
     return records.coalesce(outputSparkPartitions);
   }
 

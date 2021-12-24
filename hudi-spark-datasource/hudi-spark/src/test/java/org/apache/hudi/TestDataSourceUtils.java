@@ -281,7 +281,7 @@ public class TestDataSourceUtils {
   }
 
   public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
-      implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+      extends BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
     public NoOpBulkInsertPartitioner(HoodieWriteConfig config) {}
 
@@ -297,7 +297,7 @@ public class TestDataSourceUtils {
   }
 
   public static class NoOpBulkInsertPartitionerRows
-      implements BulkInsertPartitioner<Dataset<Row>> {
+      extends BulkInsertPartitioner<Dataset<Row>> {
 
     public NoOpBulkInsertPartitionerRows(HoodieWriteConfig config) {}
 

@@ -33,11 +33,12 @@ import java.util.List;
  * @param <T> HoodieRecordPayload type
  */
 public class JavaGlobalSortPartitioner<T extends HoodieRecordPayload>
-    implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
+    extends BulkInsertPartitioner<List<HoodieRecord<T>>> {
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records,
                                                   int outputSparkPartitions) {
+    generateFileIdPfx(outputSparkPartitions);
     // Now, sort the records and line them up nicely for loading.
     records.sort(new Comparator() {
       @Override
