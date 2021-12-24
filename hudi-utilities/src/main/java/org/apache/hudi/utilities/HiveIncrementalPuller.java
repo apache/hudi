@@ -126,7 +126,7 @@ public class HiveIncrementalPuller {
 
   public void saveDelta() throws IOException {
     Configuration conf = new Configuration();
-    conf.set("fs.defaultFs",config.fsDefaultFs);
+    conf.set("fs.defaultFS",config.fsDefaultFs);
     FileSystem fs = FileSystem.get(conf);
     Statement stmt = null;
     try {
