@@ -36,9 +36,9 @@ import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 case class AlterHoodieTableDropPartitionCommand(
     tableIdentifier: TableIdentifier,
     specs: Seq[TablePartitionSpec],
-    ifExists : scala.Boolean,
-    purge : scala.Boolean,
-    retainData : scala.Boolean)
+    ifExists : Boolean,
+    purge : Boolean,
+    retainData : Boolean)
 extends RunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
