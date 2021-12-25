@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -63,6 +64,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRequestedReplaceMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRestoreMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackPlan;
 
 public class FileCreateUtils {
 
@@ -223,6 +225,10 @@ public class FileCreateUtils {
 
   public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
+  }
+
+  public static void createRequestedRollbackFile(String basePath, String instantTime, HoodieRollbackPlan plan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, serializeRollbackPlan(plan).get());
   }
 
   public static void createInflightRollbackFile(String basePath, String instantTime) throws IOException {
