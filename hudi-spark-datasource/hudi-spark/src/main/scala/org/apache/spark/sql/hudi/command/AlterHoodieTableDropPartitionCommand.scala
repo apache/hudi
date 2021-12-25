@@ -42,7 +42,15 @@ case class AlterHoodieTableDropPartitionCommand(
 extends RunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
+    val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"
+    logInfo(s"start execute alter table drop partition command for $fullTableName")
+
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
+
+    if (!hoodieCatalogTable.isPartitionTable) {
+      throw new AnalysisException(s"$fullTableName is non-partitioned table is not allowed to drop partition")
+    }
+
     DDLUtils.verifyAlterTableType(
       sparkSession.sessionState.catalog, hoodieCatalogTable.table, isView = false)
 
@@ -74,6 +82,7 @@ extends RunnableCommand {
     }
 
     sparkSession.catalog.refreshTable(tableIdentifier.unquotedString)
+    logInfo(s"Finish execute alter table drop partition command for $fullTableName")
     Seq.empty[Row]
   }
 

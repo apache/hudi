@@ -46,7 +46,31 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
     spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
 
     checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01')")(
-      s"dt is not a valid partition column in table")
+      s"$tableName is non-partitioned table is not allowed to drop partition")
+  }
+
+  test("Purge drop non-partitioned table") {
+    val tableName = generateTableName
+    // create table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id bigint,
+         |  name string,
+         |  ts string,
+         |  dt string
+         | )
+         | using hudi
+         | tblproperties (
+         |  primaryKey = 'id',
+         |  preCombineField = 'ts'
+         | )
+         |""".stripMargin)
+    // insert data
+    spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
+
+    checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01') purge")(
+      s"$tableName is non-partitioned table is not allowed to drop partition")
   }
 
   Seq(false, true).foreach { urlencode =>
