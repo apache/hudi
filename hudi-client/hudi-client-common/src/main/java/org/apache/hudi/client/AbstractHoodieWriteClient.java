@@ -902,10 +902,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   protected Map<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInfos(HoodieTableMetaClient metaClient) {
     List<HoodieInstant> instants = metaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants().collect(Collectors.toList());
     Map<String, Option<HoodiePendingRollbackInfo>> infoMap = new HashMap<>();
+    HoodieTimeline pendingCompactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline();
     for (HoodieInstant instant : instants) {
       try {
         HoodieRollbackPlan rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, instant);
-        infoMap.putIfAbsent(rollbackPlan.getInstantToRollback().getCommitTime(), Option.of(new HoodiePendingRollbackInfo(instant, rollbackPlan)));
+        String instantToRollback = rollbackPlan.getInstantToRollback().getCommitTime();
+        if (!pendingCompactionTimeline.containsInstant(instantToRollback)) {
+          infoMap.putIfAbsent(instantToRollback, Option.of(new HoodiePendingRollbackInfo(instant, rollbackPlan)));
+        }
       } catch (IOException e) {
         LOG.warn("Fetching rollback plan failed for " + infoMap + ", skip the plan", e);
       }
