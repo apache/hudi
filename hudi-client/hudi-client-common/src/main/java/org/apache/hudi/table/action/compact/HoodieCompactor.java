@@ -182,13 +182,29 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
         .build();
-    if (!scanner.iterator().hasNext()) {
-      scanner.close();
-      return new ArrayList<>();
-    }
 
     Option<HoodieBaseFile> oldDataFileOpt =
         operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
+
+    // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
+    // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
+    if (!scanner.iterator().hasNext()) {
+      if (!oldDataFileOpt.isPresent()) {
+        scanner.close();
+        return new ArrayList<>();
+      } else {
+        // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
+        /*
+        TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
+        String newFileName = FSUtils.makeDataFileName(instantTime,
+            FSUtils.makeWriteToken(taskContextSupplier.getPartitionIdSupplier().get(), taskContextSupplier.getStageIdSupplier().get(), taskContextSupplier.getAttemptIdSupplier().get()),
+            operation.getFileId(), hoodieCopyOnWriteTable.getBaseFileExtension());
+        Path oldFilePath = new Path(oldDataFileOpt.get().getPath());
+        Path newFilePath = new Path(oldFilePath.getParent(), newFileName);
+        FileUtil.copy(fs,oldFilePath, fs, newFilePath, false, fs.getConf());
+        */
+      }
+    }
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
@@ -69,6 +70,10 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
    */
   private int totalBuckets = 0;
   /**
+   * Stat for the input and output workload. Describe the workload before and after being assigned buckets.
+   */
+  private WorkloadProfile workloadProfile;
+  /**
    * Helps decide which bucket an incoming update should go to.
    */
   private HashMap<String, Integer> updateLocationToBucket;
@@ -83,15 +88,25 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
   protected final HoodieWriteConfig config;
 
+//<<<<<<< HEAD
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
       HoodieWriteConfig config) {
     super(profile, table);
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();
+/*=======
+  public UpsertPartitioner(WorkloadProfile workloadProfile, HoodieEngineContext context, HoodieTable table,
+                           HoodieWriteConfig config) {
+    updateLocationToBucket = new HashMap<>();
+    partitionPathToInsertBucketInfos = new HashMap<>();
+    bucketInfoMap = new HashMap<>();
+    this.workloadProfile = workloadProfile;
+    this.table = table;
+>>>>>>> 5357800bb ([HUDI-2917] rollback insert data appended to log file in Hbase Index)*/
     this.config = config;
-    assignUpdates(profile);
-    assignInserts(profile, context);
+    assignUpdates(workloadProfile);
+    assignInserts(workloadProfile, context);
 
     LOG.info("Total Buckets :" + totalBuckets + ", buckets info => " + bucketInfoMap + ", \n"
         + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
@@ -100,12 +115,16 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
   private void assignUpdates(WorkloadProfile profile) {
     // each update location gets a partition
-    Set<Entry<String, WorkloadStat>> partitionStatEntries = profile.getPartitionPathStatMap().entrySet();
+    Set<Entry<String, WorkloadStat>> partitionStatEntries = profile.getInputPartitionPathStatMap().entrySet();
     for (Map.Entry<String, WorkloadStat> partitionStat : partitionStatEntries) {
+      WorkloadStat outputWorkloadStats = profile.getOutputPartitionPathStatMap().getOrDefault(partitionStat.getKey(), new WorkloadStat());
       for (Map.Entry<String, Pair<String, Long>> updateLocEntry :
           partitionStat.getValue().getUpdateLocationToCount().entrySet()) {
         addUpdateBucket(partitionStat.getKey(), updateLocEntry.getKey());
+        HoodieRecordLocation hoodieRecordLocation = new HoodieRecordLocation(updateLocEntry.getValue().getKey(), updateLocEntry.getKey());
+        outputWorkloadStats.addUpdates(hoodieRecordLocation, updateLocEntry.getValue().getValue());
       }
+      profile.getOutputPartitionPathStatMap().putIfAbsent(partitionStat.getKey(), outputWorkloadStats);
     }
   }
 
@@ -161,6 +180,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
 
     for (String partitionPath : partitionPaths) {
       WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
+      WorkloadStat outputWorkloadStats = profile.getOutputPartitionPathStatMap().getOrDefault(partitionPath, new WorkloadStat());
       if (pStat.getNumInserts() > 0) {
 
         List<SmallFile> smallFiles =
@@ -189,6 +209,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
               bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
             }
+            outputWorkloadStats.addInserts(smallFile.location, recordsToAppend);
             bucketNumbers.add(bucket);
             recordsPerBucket.add(recordsToAppend);
             totalUnassignedInserts -= recordsToAppend;
@@ -218,6 +239,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
             }
             BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath);
             bucketInfoMap.put(totalBuckets, bucketInfo);
+            outputWorkloadStats.addInserts(new HoodieRecordLocation(HoodieWriteStat.NULL_COMMIT, bucketInfo.getFileIdPrefix()), recordsPerBucket.get(recordsPerBucket.size() - 1));
             totalBuckets++;
           }
         }
@@ -235,6 +257,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
         LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
       }
+      profile.getOutputPartitionPathStatMap().putIfAbsent(partitionPath, outputWorkloadStats);
     }
   }
 
@@ -303,6 +326,11 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
   }
 
   @Override
+  public int getNumPartitions() {
+    return totalBuckets;
+  }
+
+  @Override
   public int getPartition(Object key) {
     Tuple2<HoodieKey, Option<HoodieRecordLocation>> keyLocation =
         (Tuple2<HoodieKey, Option<HoodieRecordLocation>>) key;
@@ -313,7 +341,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
       String partitionPath = keyLocation._1().getPartitionPath();
       List<InsertBucketCumulativeWeightPair> targetBuckets = partitionPathToInsertBucketInfos.get(partitionPath);
       // pick the target bucket to use based on the weights.
-      final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
+      final long totalInserts = Math.max(1, workloadProfile.getWorkloadStat(partitionPath).getNumInserts());
       final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation._1().getRecordKey());
       final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
 
