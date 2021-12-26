@@ -222,7 +222,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       for (FileStatus fs : fsStatuses) {
         // Read the archived file
         try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient.getFs(),
-            new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema())) {
+            new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema(),
+            metaClient.getTableConfig().getRecordKeyFieldProp())) {
           int instantsInPreviousFile = instantsInRange.size();
           // Read the avro blocks
           while (reader.hasNext()) {

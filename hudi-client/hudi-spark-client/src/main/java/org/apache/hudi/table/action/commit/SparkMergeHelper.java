@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
@@ -69,7 +70,8 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     final GenericDatumReader<GenericRecord> gReader;
     Schema readSchema;
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
-      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
+      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath(),
+          Option.of(table.getMetaClient().getTableConfig().getRecordKeyFieldProp())).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
       gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
     } else {
@@ -79,7 +81,8 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(
+        cfgForHoodieFile, mergeHandle.getOldFilePath(), Option.of(table.getMetaClient().getTableConfig().getRecordKeyFieldProp()));
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {

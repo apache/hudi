@@ -117,7 +117,8 @@ public class ExportCommand implements CommandMarker {
     for (FileStatus fs : statuses) {
       // read the archived file
       Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(HoodieCLI.getTableMetaClient().getBasePath(), HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema(),
+          HoodieCLI.getTableMetaClient().getTableConfig().getRecordKeyFieldProp());
 
       // read the avro blocks
       while (reader.hasNext() && copyCount < limit) {

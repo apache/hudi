@@ -474,7 +474,7 @@ public class TableSchemaResolver {
    * @return
    */
   public MessageType readSchemaFromLogFile(Path path) throws IOException {
-    return readSchemaFromLogFile(metaClient.getRawFs(), path);
+    return readSchemaFromLogFile(metaClient.getRawFs(), path, metaClient.getTableConfig().getRecordKeyFieldProp());
   }
 
   /**
@@ -497,8 +497,8 @@ public class TableSchemaResolver {
    *
    * @return
    */
-  public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
-    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
+  public static MessageType readSchemaFromLogFile(FileSystem fs, Path path, String keyField) throws IOException {
+    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null, keyField);
     HoodieDataBlock lastBlock = null;
     while (reader.hasNext()) {
       HoodieLogBlock block = reader.next();

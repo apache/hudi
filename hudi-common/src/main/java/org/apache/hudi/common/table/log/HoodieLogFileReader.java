@@ -22,7 +22,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
@@ -77,14 +76,13 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, false);
+                             boolean readBlockLazily, String keyField) throws IOException {
+    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, false, keyField);
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily, boolean reverseReader) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, false,
-        HoodieRecord.RECORD_KEY_METADATA_FIELD);
+                             boolean readBlockLazily, boolean reverseReader, String keyField) throws IOException {
+    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, false, keyField);
   }
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
@@ -102,10 +100,6 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = logFile.getFileSize();
     }
     addShutDownHook();
-  }
-
-  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema) throws IOException {
-    this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE, false, false);
   }
 
   /**

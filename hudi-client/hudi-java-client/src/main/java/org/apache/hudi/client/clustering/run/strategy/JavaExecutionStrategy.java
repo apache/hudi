@@ -190,7 +190,8 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
 
         Option<HoodieFileReader> baseFileReader = StringUtils.isNullOrEmpty(clusteringOp.getDataFilePath())
             ? Option.empty()
-            : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath())));
+            : Option.of(HoodieFileReaderFactory.getFileReader(table.getHadoopConf(),
+            new Path(clusteringOp.getDataFilePath()), Option.of(table.getMetaClient().getTableConfig().getRecordKeyFieldProp())));
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         Iterator<HoodieRecord<T>> fileSliceReader = getFileSliceReader(baseFileReader, scanner, readerSchema,
             tableConfig.getPayloadClass(),
@@ -214,7 +215,9 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
     clusteringOps.forEach(clusteringOp -> {
       try {
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
-        HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
+        HoodieFileReader<IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(
+            getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()),
+            Option.of(getHoodieTable().getMetaClient().getTableConfig().getRecordKeyFieldProp()));
         Iterator<IndexedRecord> recordIterator = baseFileReader.getRecordIterator(readerSchema);
         recordIterator.forEachRemaining(record -> records.add(transform(record)));
       } catch (IOException e) {

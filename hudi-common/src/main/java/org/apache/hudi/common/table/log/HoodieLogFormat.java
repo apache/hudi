@@ -272,15 +272,15 @@ public interface HoodieLogFormat {
     return new WriterBuilder();
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, String keyField)
       throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false);
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false, keyField);
   }
 
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
-      boolean readBlockLazily, boolean reverseReader) throws IOException {
+                                          boolean readBlockLazily, boolean reverseReader, String keyField) throws IOException {
     return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, readBlockLazily,
-        reverseReader);
+        reverseReader, keyField);
   }
 
   /**

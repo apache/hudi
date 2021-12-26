@@ -279,7 +279,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Option<HoodieBaseFile> basefile = slice.getBaseFile();
     if (basefile.isPresent()) {
       String basefilePath = basefile.get().getPath();
-      baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
+      baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath),
+          Option.of(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY));
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", basefilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));

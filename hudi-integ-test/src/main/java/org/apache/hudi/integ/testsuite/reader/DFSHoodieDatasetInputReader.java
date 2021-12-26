@@ -265,7 +265,8 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       // Read the base files using the latest writer schema.
       Schema schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
       HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(metaClient.getHadoopConf(),
-          new Path(fileSlice.getBaseFile().get().getPath()));
+          new Path(fileSlice.getBaseFile().get().getPath()),
+          Option.of(metaClient.getTableConfig().getRecordKeyFieldProp()));
       return reader.getRecordIterator(schema);
     } else {
       // If there is no data file, fall back to reading log files

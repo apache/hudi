@@ -420,7 +420,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
     long oldNumWrites = 0;
     try {
-      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
+      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath,
+          Option.of(hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp()));
       oldNumWrites = reader.getTotalRecords();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to check for merge data validation", e);

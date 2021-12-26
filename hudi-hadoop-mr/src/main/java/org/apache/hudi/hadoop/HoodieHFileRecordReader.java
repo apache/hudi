@@ -44,10 +44,10 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
   private Iterator<GenericRecord> recordIterator;
   private Schema schema;
 
-  public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job) throws IOException {
+  public HoodieHFileRecordReader(Configuration conf, InputSplit split, JobConf job, String keyField) throws IOException {
     FileSplit fileSplit = (FileSplit) split;
     Path path = fileSplit.getPath();
-    reader = new HoodieHFileReader(conf, path, new CacheConfig(conf));
+    reader = new HoodieHFileReader(conf, path, new CacheConfig(conf), keyField);
 
     schema = reader.getSchema();
     valueObj = new ArrayWritable(Writable.class, new Writable[schema.getFields().size()]);

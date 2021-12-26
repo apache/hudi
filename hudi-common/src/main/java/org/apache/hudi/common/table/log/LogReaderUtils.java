@@ -43,10 +43,10 @@ import java.util.stream.Collectors;
  */
 public class LogReaderUtils {
 
-  private static Schema readSchemaFromLogFileInReverse(FileSystem fs, HoodieActiveTimeline activeTimeline, HoodieLogFile hoodieLogFile)
-      throws IOException {
+  private static Schema readSchemaFromLogFileInReverse(FileSystem fs, HoodieActiveTimeline activeTimeline,
+                                                       HoodieLogFile hoodieLogFile, String keyField) throws IOException {
     // set length for the HoodieLogFile as it will be leveraged by HoodieLogFormat.Reader with reverseReading enabled
-    Reader reader = HoodieLogFormat.newReader(fs, hoodieLogFile, null, true, true);
+    Reader reader = HoodieLogFormat.newReader(fs, hoodieLogFile, null, true, true, keyField);
     Schema writerSchema = null;
     HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     while (reader.hasPrev()) {
@@ -74,7 +74,8 @@ public class LogReaderUtils {
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
       for (String logPath : deltaPaths) {
         FileSystem fs = FSUtils.getFs(logPath, config);
-        Schema schemaFromLogFile = readSchemaFromLogFileInReverse(fs, metaClient.getActiveTimeline(), deltaFilePathToFileStatus.get(logPath));
+        Schema schemaFromLogFile = readSchemaFromLogFileInReverse(fs, metaClient.getActiveTimeline(),
+            deltaFilePathToFileStatus.get(logPath), metaClient.getTableConfig().getRecordKeyFieldProp());
         if (schemaFromLogFile != null) {
           return schemaFromLogFile;
         }

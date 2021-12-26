@@ -74,7 +74,8 @@ public class ArchivedCommitsCommand implements CommandMarker {
     for (FileStatus fs : fsStatuses) {
       // read the archived file
       Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema(),
+          HoodieCLI.getTableMetaClient().getTableConfig().getRecordKeyFieldProp());
 
       List<IndexedRecord> readRecords = new ArrayList<>();
       // read the avro blocks
@@ -149,7 +150,8 @@ public class ArchivedCommitsCommand implements CommandMarker {
     for (FileStatus fs : fsStatuses) {
       // read the archived file
       HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
-          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
+          new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema(),
+          metaClient.getTableConfig().getRecordKeyFieldProp());
 
       List<IndexedRecord> readRecords = new ArrayList<>();
       // read the avro blocks

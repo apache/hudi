@@ -31,6 +31,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -131,7 +132,7 @@ public class HoodieHFileInputFormat extends FileInputFormat<NullWritable, ArrayW
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
       final Reporter reporter) throws IOException {
-    return new HoodieHFileRecordReader(conf, split, job);
+    return new HoodieHFileRecordReader(conf, split, job, HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
   @Override

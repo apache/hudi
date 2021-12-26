@@ -232,7 +232,7 @@ public abstract class AbstractSyncHoodieClient {
    */
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private MessageType readSchemaFromLogFile(Option<HoodieInstant> lastCompactionCommitOpt, Path path) throws Exception {
-    MessageType messageType = TableSchemaResolver.readSchemaFromLogFile(fs, path);
+    MessageType messageType = TableSchemaResolver.readSchemaFromLogFile(fs, path, metaClient.getTableConfig().getRecordKeyFieldProp());
     // Fall back to read the schema from last compaction
     if (messageType == null) {
       LOG.info("Falling back to read the schema from last compaction " + lastCompactionCommitOpt);

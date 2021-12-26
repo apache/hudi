@@ -27,6 +27,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.orc.CompressionKind;
 import org.apache.orc.OrcFile;
@@ -79,10 +80,11 @@ public class TestHoodieOrcReaderWriter {
   @Test
   public void testWriteReadMetadata() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
+    final String keyField = "_row_key";
     HoodieOrcWriter writer = createOrcWriter(avroSchema);
     for (int i = 0; i < 3; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
-      record.put("_row_key", "key" + i);
+      record.put(keyField, "key" + i);
       record.put("time", Integer.toString(i));
       record.put("number", i);
       writer.writeAvro("key" + i, record);
@@ -98,7 +100,7 @@ public class TestHoodieOrcReaderWriter {
     assertTrue(orcReader.getMetadataKeys().contains(AVRO_SCHEMA_METADATA_KEY));
     assertEquals(CompressionKind.ZLIB.name(), orcReader.getCompressionKind().toString());
 
-    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath, Option.of(keyField));
     BloomFilter filter = hoodieReader.readBloomFilter();
     for (int i = 0; i < 3; i++) {
       assertTrue(filter.mightContain("key" + i));
@@ -114,10 +116,11 @@ public class TestHoodieOrcReaderWriter {
   @Test
   public void testWriteReadPrimitiveRecord() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
+    final String keyField = "_row_key";
     HoodieOrcWriter writer = createOrcWriter(avroSchema);
     for (int i = 0; i < 3; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
-      record.put("_row_key", "key" + i);
+      record.put(keyField, "key" + i);
       record.put("time", Integer.toString(i));
       record.put("number", i);
       writer.writeAvro("key" + i, record);
@@ -129,7 +132,7 @@ public class TestHoodieOrcReaderWriter {
     assertEquals("struct<_row_key:string,time:string,number:int>", orcReader.getSchema().toString());
     assertEquals(3, orcReader.getNumberOfRows());
 
-    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath, Option.of(keyField));
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator();
     int index = 0;
     while (iter.hasNext()) {
@@ -145,10 +148,11 @@ public class TestHoodieOrcReaderWriter {
   public void testWriteReadComplexRecord() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithUDT.avsc");
     Schema udtSchema = avroSchema.getField("driver").schema().getTypes().get(1);
+    final String keyField = "_row_key";
     HoodieOrcWriter writer = createOrcWriter(avroSchema);
     for (int i = 0; i < 3; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
-      record.put("_row_key", "key" + i);
+      record.put(keyField, "key" + i);
       record.put("time", Integer.toString(i));
       record.put("number", i);
       GenericRecord innerRecord = new GenericData.Record(udtSchema);
@@ -166,7 +170,7 @@ public class TestHoodieOrcReaderWriter {
         reader.getSchema().toString());
     assertEquals(3, reader.getNumberOfRows());
 
-    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath, Option.of(keyField));
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator();
     int index = 0;
     while (iter.hasNext()) {
@@ -186,10 +190,11 @@ public class TestHoodieOrcReaderWriter {
   @Test
   public void testWriteReadWithEvolvedSchema() throws Exception {
     Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
+    final String keyField = "_row_key";
     HoodieOrcWriter writer = createOrcWriter(avroSchema);
     for (int i = 0; i < 3; i++) {
       GenericRecord record = new GenericData.Record(avroSchema);
-      record.put("_row_key", "key" + i);
+      record.put(keyField, "key" + i);
       record.put("time", Integer.toString(i));
       record.put("number", i);
       writer.writeAvro("key" + i, record);
@@ -197,7 +202,7 @@ public class TestHoodieOrcReaderWriter {
     writer.close();
 
     Configuration conf = new Configuration();
-    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath, Option.of(keyField));
     Schema evolvedSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleEvolvedSchema.avsc");
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator(evolvedSchema);
     int index = 0;

@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.Option;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,19 +42,19 @@ public class TestHoodieFileReaderFactory {
     // parquet file format.
     final Configuration hadoopConf = new Configuration();
     final Path parquetPath = new Path("/partition/path/f1_1-0-1_000.parquet");
-    HoodieFileReader<IndexedRecord> parquetReader = HoodieFileReaderFactory.getFileReader(hadoopConf, parquetPath);
+    HoodieFileReader<IndexedRecord> parquetReader = HoodieFileReaderFactory.getFileReader(hadoopConf, parquetPath, Option.empty());
     assertTrue(parquetReader instanceof HoodieParquetReader);
 
     // log file format.
     final Path logPath = new Path("/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
     final Throwable thrown = assertThrows(UnsupportedOperationException.class, () -> {
-      HoodieFileReader<IndexedRecord> logWriter = HoodieFileReaderFactory.getFileReader(hadoopConf, logPath);
+      HoodieFileReader<IndexedRecord> logWriter = HoodieFileReaderFactory.getFileReader(hadoopConf, logPath, Option.empty());
     }, "should fail since log storage reader is not supported yet.");
     assertTrue(thrown.getMessage().contains("format not supported yet."));
 
     // Orc file format.
     final Path orcPath = new Path("/partition/path/f1_1-0-1_000.orc");
-    HoodieFileReader<IndexedRecord> orcReader = HoodieFileReaderFactory.getFileReader(hadoopConf, orcPath);
+    HoodieFileReader<IndexedRecord> orcReader = HoodieFileReaderFactory.getFileReader(hadoopConf, orcPath, Option.empty());
     assertTrue(orcReader instanceof HoodieOrcReader);
   }
 }

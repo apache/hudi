@@ -150,7 +150,8 @@ public abstract class SingleSparkJobExecutionStrategy<T extends HoodieRecordPayl
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
       Iterable<IndexedRecord> indexedRecords = () -> {
         try {
-          return HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath())).getRecordIterator(readerSchema);
+          return HoodieFileReaderFactory.getFileReader(getHoodieTable().getHadoopConf(), new Path(clusteringOp.getDataFilePath()),
+              Option.of(getHoodieTable().getMetaClient().getTableConfig().getRecordKeyFieldProp())).getRecordIterator(readerSchema);
         } catch (IOException e) {
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);

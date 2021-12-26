@@ -92,9 +92,10 @@ public class HoodieLogFileCommand implements CommandMarker {
 
     for (String logFilePath : logFilePaths) {
       FileStatus[] fsStatus = fs.listStatus(new Path(logFilePath));
+      final String keyField = HoodieCLI.getTableMetaClient().getTableConfig().getRecordKeyFieldProp();
       Schema writerSchema = new AvroSchemaConverter()
-          .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath))));
-      Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema);
+          .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePath), keyField)));
+      Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema, keyField);
 
       // read the avro blocks
       while (reader.hasNext()) {
@@ -186,8 +187,10 @@ public class HoodieLogFileCommand implements CommandMarker {
     // TODO : readerSchema can change across blocks/log files, fix this inside Scanner
     AvroSchemaConverter converter = new AvroSchemaConverter();
     // get schema from last log file
+    final String keyField = client.getTableConfig().getRecordKeyFieldProp();
     Schema readerSchema =
-        converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.get(logFilePaths.size() - 1)))));
+        converter.convert(Objects.requireNonNull(
+            TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.get(logFilePaths.size() - 1)), keyField)));
 
     List<IndexedRecord> allRecords = new ArrayList<>();
 
@@ -224,9 +227,10 @@ public class HoodieLogFileCommand implements CommandMarker {
     } else {
       for (String logFile : logFilePaths) {
         Schema writerSchema = new AvroSchemaConverter()
-            .convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(client.getFs(), new Path(logFile))));
+            .convert(Objects.requireNonNull(
+                TableSchemaResolver.readSchemaFromLogFile(client.getFs(), new Path(logFile), keyField)));
         HoodieLogFormat.Reader reader =
-            HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFile)), writerSchema);
+            HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFile)), writerSchema, keyField);
         // read the avro blocks
         while (reader.hasNext()) {
           HoodieLogBlock n = reader.next();

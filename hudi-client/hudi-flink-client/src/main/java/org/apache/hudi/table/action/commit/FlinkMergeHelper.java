@@ -69,7 +69,8 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
-      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
+      readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(),
+          mergeHandle.getOldFilePath(), Option.of(table.getMetaClient().getTableConfig().getRecordKeyFieldProp())).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
       gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetaFields());
     } else {
@@ -80,7 +81,8 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
     Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
+    HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile,
+        mergeHandle.getOldFilePath(), Option.of(table.getMetaClient().getTableConfig().getRecordKeyFieldProp()));
     try {
       final Iterator<GenericRecord> readerIterator;
       if (baseFile.getBootstrapBaseFile().isPresent()) {

@@ -24,6 +24,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import java.io.IOException;
 
@@ -34,12 +36,17 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 public class HoodieFileReaderFactory {
 
   public static <R extends IndexedRecord> HoodieFileReader<R> getFileReader(Configuration conf, Path path) throws IOException {
+    return getFileReader(conf, path, Option.empty());
+  }
+
+  public static <R extends IndexedRecord> HoodieFileReader<R> getFileReader(Configuration conf, Path path,
+                                                                            Option<String> keyField) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetFileReader(conf, path);
     }
     if (HFILE.getFileExtension().equals(extension)) {
-      return newHFileFileReader(conf, path);
+      return newHFileFileReader(conf, path, keyField.orElse(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY));
     }
     if (ORC.getFileExtension().equals(extension)) {
       return newOrcFileReader(conf, path);
@@ -52,9 +59,10 @@ public class HoodieFileReaderFactory {
     return new HoodieParquetReader<>(conf, path);
   }
 
-  private static <R extends IndexedRecord> HoodieFileReader<R> newHFileFileReader(Configuration conf, Path path) throws IOException {
+  private static <R extends IndexedRecord> HoodieFileReader<R> newHFileFileReader(Configuration conf, Path path,
+                                                                                  String keyField) throws IOException {
     CacheConfig cacheConfig = new CacheConfig(conf);
-    return new HoodieHFileReader<>(conf, path, cacheConfig);
+    return new HoodieHFileReader<>(conf, path, cacheConfig, keyField);
   }
 
   private static <R extends IndexedRecord> HoodieFileReader<R> newOrcFileReader(Configuration conf, Path path) {

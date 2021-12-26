@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -38,12 +40,18 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -59,6 +67,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -73,6 +82,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieMetadataMergedLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -96,6 +106,8 @@ import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.util.Time;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
@@ -137,6 +149,7 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -374,7 +387,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(tableMetadata.getLatestCompactionTime().get(), "0000004001");
   }
 
-
   /**
    * Tests that virtual key configs are honored in base files after compaction in metadata table.
    *
@@ -413,7 +425,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(), new Path(baseFile.getPath()),
-        new CacheConfig(context.getHadoopConf().get()));
+        new CacheConfig(context.getHadoopConf().get()), HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
     List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
     records.forEach(entry -> {
       if (populateMetaFields) {
@@ -505,6 +517,258 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       doWriteOperation(testTable, "0000008", UPSERT);
       validateMetadata(testTable);
     }
+  }
+
+  /**
+   * Test arguments - Table type, populate meta fields, exclude key from payload.
+   */
+  public static List<Arguments> testMetadataRecordKeyExcludeFromPayloadArgs() {
+    return asList(
+        Arguments.of(COPY_ON_WRITE, true),
+        Arguments.of(COPY_ON_WRITE, false),
+        Arguments.of(MERGE_ON_READ, true),
+        Arguments.of(MERGE_ON_READ, false)
+    );
+  }
+
+  /**
+   * 1. Verify metadata table records key deduplication feature. When record key
+   * deduplication is enabled, verify the metadata record payload on disk has empty key.
+   * Otherwise, verify the valid key.
+   * 2. Verify populate meta fields work irrespective of record key deduplication config.
+   * 3. Verify table services like compaction benefit from record key deduplication feature.
+   */
+  @ParameterizedTest
+  @MethodSource("testMetadataRecordKeyExcludeFromPayloadArgs")
+  public void testMetadataRecordKeyExcludeFromPayload(final HoodieTableType tableType, final boolean enableMetaFields) throws Exception {
+    initPath();
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withPopulateMetaFields(enableMetaFields)
+            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .build())
+        .build();
+    init(tableType, writeConfig);
+
+    // 2nd commit
+    doWriteOperation(testTable, "0000001", INSERT);
+
+    final HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+        .setConf(hadoopConf)
+        .setBasePath(metadataTableBasePath)
+        .build();
+    HoodieWriteConfig metadataTableWriteConfig = getMetadataWriteConfig(writeConfig);
+    metadataMetaClient.reloadActiveTimeline();
+    final HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
+
+    // Compaction has not yet kicked in. Verify all the log files
+    // for the metadata records persisted on disk as per the config.
+    assertDoesNotThrow(() -> {
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000001",
+          enableMetaFields);
+    }, "Metadata table should have valid log files!");
+
+    // Verify no base file created yet.
+    assertThrows(IllegalStateException.class, () -> {
+      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
+    }, "Metadata table should not have a base file yet!");
+
+    // 3rd commit
+    doWriteOperation(testTable, "0000002", UPSERT);
+
+    // Compaction should be triggered by now. Let's verify the log files
+    // if any for the metadata records persisted on disk as per the config.
+    assertDoesNotThrow(() -> {
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000002",
+          enableMetaFields);
+    }, "Metadata table should have valid log files!");
+
+    // Verify the base file created by the just completed compaction.
+    assertDoesNotThrow(() -> {
+      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
+    }, "Metadata table should have a valid base file!");
+
+    // 3 more commits to trigger one more compaction, along with a clean
+    doWriteOperation(testTable, "0000004", UPSERT);
+    doWriteOperation(testTable, "0000005", UPSERT);
+    doClean(testTable, "0000006", Arrays.asList("0000004"));
+    doWriteOperation(testTable, "0000007", UPSERT);
+
+    assertDoesNotThrow(() -> {
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "7", enableMetaFields);
+    }, "Metadata table should have valid log files!");
+
+    assertDoesNotThrow(() -> {
+      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
+    }, "Metadata table should have a valid base file!");
+
+    validateMetadata(testTable);
+  }
+
+  /**
+   * Verify the metadata table log files for the record field correctness. On disk format
+   * should be based on meta fields and key deduplication config. And the in-memory merged
+   * records should all be materialized fully irrespective of the config.
+   *
+   * @param table                 - Hoodie metadata test table
+   * @param metadataMetaClient    - Metadata meta client
+   * @param latestCommitTimestamp - Latest commit timestamp
+   * @param enableMetaFields      - Enable meta fields for the table records
+   * @throws IOException
+   */
+  private void verifyMetadataRecordKeyExcludeFromPayloadLogFiles(HoodieTable table, HoodieTableMetaClient metadataMetaClient,
+                                                                 String latestCommitTimestamp,
+                                                                 boolean enableMetaFields) throws IOException {
+    table.getHoodieView().sync();
+
+    // Compaction should not be triggered yet. Let's verify no base file
+    // and few log files available.
+    List<FileSlice> fileSlices = table.getSliceView()
+        .getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
+    if (fileSlices.isEmpty()) {
+      throw new IllegalStateException("LogFile slices are not available!");
+    }
+
+    // Verify the log files honor the key deduplication and virtual keys config
+    List<HoodieLogFile> logFiles = fileSlices.get(0).getLogFiles().map(logFile -> {
+      return logFile;
+    }).collect(Collectors.toList());
+
+    List<String> logFilePaths = logFiles.stream().map(logFile -> {
+      return logFile.getPath().toString();
+    }).collect(Collectors.toList());
+
+    // Verify the on-disk raw records before they get materialized
+    verifyMetadataRawRecords(table, logFiles, enableMetaFields);
+
+    // Verify the in-memory materialized and merged records
+    verifyMetadataMergedRecords(metadataMetaClient, logFilePaths, latestCommitTimestamp, enableMetaFields);
+  }
+
+  /**
+   * Verify the metadata table on-disk raw records. When populate meta fields is enabled,
+   * these records should have additional meta fields in the payload. When key deduplication
+   * is enabled, these records on the disk should have key in the payload as empty string.
+   *
+   * @param table            - Hoodie test table
+   * @param logFiles         - Metadata table log files to be verified
+   * @param enableMetaFields - Enable meta fields for records
+   * @throws IOException
+   */
+  private void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
+    for (HoodieLogFile logFile : logFiles) {
+      FileStatus[] fsStatus = fs.listStatus(logFile.getPath());
+      MessageType writerSchemaMsg = TableSchemaResolver.readSchemaFromLogFile(fs, logFile.getPath(),
+          table.getMetaClient().getTableConfig().getRecordKeyFieldProp());
+      if (writerSchemaMsg == null) {
+        // not a data block
+        continue;
+      }
+
+      Schema writerSchema = new AvroSchemaConverter().convert(writerSchemaMsg);
+      HoodieLogFormat.Reader logFileReader = HoodieLogFormat.newReader(
+          fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema,
+          table.getMetaClient().getTableConfig().getRecordKeyFieldProp());
+
+      while (logFileReader.hasNext()) {
+        HoodieLogBlock logBlock = logFileReader.next();
+        if (logBlock instanceof HoodieDataBlock) {
+          for (IndexedRecord indexRecord : ((HoodieDataBlock) logBlock).getRecords()) {
+            final GenericRecord record = (GenericRecord) indexRecord;
+            if (enableMetaFields) {
+              // Metadata table records should have meta fields!
+              assertNotNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+              assertNotNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+            } else {
+              // Metadata table records should not have meta fields!
+              assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+              assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+            }
+
+            final String key = String.valueOf(record.get(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY));
+            assertFalse(key.isEmpty());
+            if (enableMetaFields) {
+              assertTrue(key.equals(String.valueOf(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD))));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Verify the metadata table in-memory merged records. Irrespective of key deduplication
+   * config, the in-memory merged records should always have the key field in the record
+   * payload fully materialized.
+   *
+   * @param metadataMetaClient    - Metadata table meta client
+   * @param logFilePaths          - Metadata table log file paths
+   * @param latestCommitTimestamp
+   * @param enableMetaFields      - Enable meta fields
+   */
+  private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<String> logFilePaths,
+                                           String latestCommitTimestamp, boolean enableMetaFields) {
+    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+    if (enableMetaFields) {
+      schema = HoodieAvroUtils.addMetadataFields(schema);
+    }
+    HoodieMetadataMergedLogRecordReader logRecordReader = HoodieMetadataMergedLogRecordReader.newBuilder()
+        .withFileSystem(metadataMetaClient.getFs())
+        .withBasePath(metadataMetaClient.getBasePath())
+        .withLogFilePaths(logFilePaths)
+        .withLatestInstantTime(latestCommitTimestamp)
+        .withPartition(MetadataPartitionType.FILES.partitionPath())
+        .withReaderSchema(schema)
+        .withMaxMemorySizeInBytes(100000L)
+        .withBufferSize(4096)
+        .withSpillableMapBasePath(tempDir.toString())
+        .withDiskMapType(ExternalSpillableMap.DiskMapType.BITCASK)
+        .build();
+
+    assertDoesNotThrow(() -> {
+      logRecordReader.scan();
+    }, "Metadata log records materialization failed");
+
+    for (Map.Entry<String, HoodieRecord<? extends HoodieRecordPayload>> entry : logRecordReader.getRecords().entrySet()) {
+      assertFalse(entry.getKey().isEmpty());
+      assertFalse(entry.getValue().getRecordKey().isEmpty());
+      assertEquals(entry.getKey(), entry.getValue().getRecordKey());
+    }
+  }
+
+  /**
+   * Verify metadata table base files for the records persisted based on the config. When
+   * the key deduplication is enabled, the records persisted on the disk in the base file
+   * should have key field in the payload as empty string.
+   *
+   * @param table            - Metadata table
+   * @param enableMetaFields - Enable meta fields
+   */
+  private void verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(HoodieTable table, boolean enableMetaFields) throws IOException {
+    table.getHoodieView().sync();
+    List<FileSlice> fileSlices = table.getSliceView()
+        .getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
+    if (!fileSlices.get(0).getBaseFile().isPresent()) {
+      throw new IllegalStateException("Base file not available!");
+    }
+    final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
+
+    HoodieHFileReader hoodieHFileReader = new HoodieHFileReader(context.getHadoopConf().get(),
+        new Path(baseFile.getPath()),
+        new CacheConfig(context.getHadoopConf().get()), HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+    List<Pair<String, IndexedRecord>> records = hoodieHFileReader.readAllRecords();
+    records.forEach(entry -> {
+      if (enableMetaFields) {
+        assertNotNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      } else {
+        assertNull(((GenericRecord) entry.getSecond()).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      }
+
+      final String keyInPayload = (String) ((GenericRecord) entry.getSecond())
+          .get(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+      assertFalse(keyInPayload.isEmpty());
+    });
   }
 
   /**

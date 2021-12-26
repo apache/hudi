@@ -38,6 +38,7 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -63,6 +64,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final Schema schema;
+  private final Schema.Field schemaRecordKeyField;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -71,12 +74,15 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private static String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
 
   public HoodieHFileWriter(String instantTime, Path file, HoodieHFileConfig hfileConfig, Schema schema,
-                           TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
-
+                           Schema.Field schemaRecordKeyField, TaskContextSupplier taskContextSupplier,
+                           boolean populateMetaFields) throws IOException {
+    ValidationUtils.checkArgument(schemaRecordKeyField != null, "Unknown record key field in the schema!");
     Configuration conf = FSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
+    this.schemaRecordKeyField = schemaRecordKeyField;
+    this.schema = schema;
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
@@ -122,7 +128,10 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
-    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord)object);
+    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord) object);
+    GenericRecord recordKeyExcludedRecord = HoodieAvroUtils.bytesToAvro(value, this.schema);
+    recordKeyExcludedRecord.put(this.schemaRecordKeyField.pos(), "");
+    value = HoodieAvroUtils.avroToBytes(recordKeyExcludedRecord);
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 
