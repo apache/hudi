@@ -90,27 +90,29 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
 
-    WorkloadProfile profile = null;
+    WorkloadProfile inputProfile = null;
     if (isWorkloadProfileNeeded()) {
-      profile = new WorkloadProfile(buildProfile(inputRecords));
-      LOG.info("Workload profile :" + profile);
-      try {
-        saveWorkloadProfileMetadataToInflight(profile, instantTime);
-      } catch (Exception e) {
-        HoodieTableMetaClient metaClient = table.getMetaClient();
-        HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
-        try {
-          if (!metaClient.getFs().exists(new Path(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
-            throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", e);
-          }
-        } catch (IOException ex) {
-          LOG.error("Check file exists failed");
-          throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", ex);
-        }
-      }
+      inputProfile = new WorkloadProfile(buildProfile(inputRecords));
+      LOG.info("Input workload profile :" + inputProfile);
     }
 
-    final Partitioner partitioner = getPartitioner(profile);
+    final Partitioner partitioner = getPartitioner(inputProfile);
+    try {
+      WorkloadProfile executionProfile = partitioner.getExecutionWorkloadProfile();
+      LOG.info("Execution workload profile :" + inputProfile);
+      saveWorkloadProfileMetadataToInflight(executionProfile, instantTime);
+    } catch (Exception e) {
+      HoodieTableMetaClient metaClient = table.getMetaClient();
+      HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime);
+      try {
+        if (!metaClient.getFs().exists(new Path(metaClient.getMetaPath(), inflightInstant.getFileName()))) {
+          throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", e);
+        }
+      } catch (IOException ex) {
+        LOG.error("Check file exists failed");
+        throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", ex);
+      }
+    }
     Map<Integer, List<HoodieRecord<T>>> partitionedRecords = partition(inputRecords, partitioner);
 
     List<WriteStatus> writeStatuses = new LinkedList<>();

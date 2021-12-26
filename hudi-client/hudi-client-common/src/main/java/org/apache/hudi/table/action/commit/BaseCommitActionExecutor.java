@@ -54,6 +54,7 @@ import java.time.Instant;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I, K, O, R>
     extends BaseActionExecutor<T, I, K, O, R> {
@@ -97,15 +98,25 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
         insertStat.setFileId("");
         insertStat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
         metadata.addWriteStat(path, insertStat);
-
-        partitionStat.getUpdateLocationToCount().forEach((key, value) -> {
-          HoodieWriteStat writeStat = new HoodieWriteStat();
-          writeStat.setFileId(key);
-          // TODO : Write baseCommitTime is possible here ?
-          writeStat.setPrevCommit(value.getKey());
-          writeStat.setNumUpdateWrites(value.getValue());
-          metadata.addWriteStat(path, writeStat);
-        });
+        Map<String, Pair<String, Long>> updateLocationMap = partitionStat.getUpdateLocationToCount();
+        Map<String, Pair<String, Long>> insertLocationMap = partitionStat.getInsertLocationToCount();
+        Stream.concat(updateLocationMap.keySet().stream(), insertLocationMap.keySet().stream())
+            .distinct()
+            .forEach(fileId -> {
+              HoodieWriteStat writeStat = new HoodieWriteStat();
+              writeStat.setFileId(fileId);
+              Pair<String, Long> updateLocation = updateLocationMap.get(fileId);
+              Pair<String, Long> insertLocation = insertLocationMap.get(fileId);
+              // TODO : Write baseCommitTime is possible here ?
+              writeStat.setPrevCommit(updateLocation != null ? updateLocation.getKey() : insertLocation.getKey());
+              if (updateLocation != null) {
+                writeStat.setNumUpdateWrites(updateLocation.getValue());
+              }
+              if (insertLocation != null) {
+                writeStat.setNumInserts(insertLocation.getValue());
+              }
+              metadata.addWriteStat(path, writeStat);
+            });
       });
       metadata.setOperationType(operationType);
 

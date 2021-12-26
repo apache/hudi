@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
@@ -64,9 +65,13 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
    */
   private int totalBuckets = 0;
   /**
-   * Stat for the current workload. Helps in determining inserts, upserts etc.
+   * Stat for the input workload. Describe the workload before being assigned buckets.
    */
-  private WorkloadProfile profile;
+  private WorkloadProfile inputProfile;
+  /**
+   * Stat for the execution workload. Describe the workload after being assigned buckets.
+   */
+  private HashMap<String, WorkloadStat> executionProfile = new HashMap<>();
   /**
    * Helps decide which bucket an incoming update should go to.
    */
@@ -84,16 +89,16 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
 
   protected final HoodieWriteConfig config;
 
-  public JavaUpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
+  public JavaUpsertPartitioner(WorkloadProfile inputProfile, HoodieEngineContext context, HoodieTable table,
                                HoodieWriteConfig config) {
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();
-    this.profile = profile;
+    this.inputProfile = inputProfile;
     this.table = table;
     this.config = config;
-    assignUpdates(profile);
-    assignInserts(profile, context);
+    assignUpdates(inputProfile);
+    assignInserts(inputProfile, context);
 
     LOG.info("Total Buckets :" + totalBuckets + ", buckets info => " + bucketInfoMap + ", \n"
         + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
@@ -104,10 +109,14 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
     // each update location gets a partition
     Set<Map.Entry<String, WorkloadStat>> partitionStatEntries = profile.getPartitionPathStatMap().entrySet();
     for (Map.Entry<String, WorkloadStat> partitionStat : partitionStatEntries) {
+      WorkloadStat executionStat = executionProfile.getOrDefault(partitionStat.getKey(), new WorkloadStat());
       for (Map.Entry<String, Pair<String, Long>> updateLocEntry :
           partitionStat.getValue().getUpdateLocationToCount().entrySet()) {
         addUpdateBucket(partitionStat.getKey(), updateLocEntry.getKey());
+        HoodieRecordLocation hoodieRecordLocation = new HoodieRecordLocation(updateLocEntry.getValue().getKey(), updateLocEntry.getKey());
+        executionStat.addUpdates(hoodieRecordLocation, updateLocEntry.getValue().getValue());
       }
+      executionProfile.putIfAbsent(partitionStat.getKey(), executionStat);
     }
   }
 
@@ -133,6 +142,8 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
 
     for (String partitionPath : partitionPaths) {
       WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
+      WorkloadStat executionStat = executionProfile.getOrDefault(partitionPath, new WorkloadStat());
+      executionProfile.putIfAbsent(partitionPath, executionStat);
       if (pStat.getNumInserts() > 0) {
 
         List<SmallFile> smallFiles = partitionSmallFilesMap.get(partitionPath);
@@ -158,6 +169,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
               bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
             }
+            executionStat.addInserts(smallFile.location, recordsToAppend);
             bucketNumbers.add(bucket);
             recordsPerBucket.add(recordsToAppend);
             totalUnassignedInserts -= recordsToAppend;
@@ -183,6 +195,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
             }
             BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath);
             bucketInfoMap.put(totalBuckets, bucketInfo);
+            executionStat.addInserts(new HoodieRecordLocation(HoodieWriteStat.NULL_COMMIT, bucketInfo.getFileIdPrefix()), recordsPerBucket.get(recordsPerBucket.size() - 1));
             totalBuckets++;
           }
         }
@@ -266,7 +279,7 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
       String partitionPath = keyLocation.getLeft().getPartitionPath();
       List<InsertBucketCumulativeWeightPair> targetBuckets = partitionPathToInsertBucketInfos.get(partitionPath);
       // pick the target bucket to use based on the weights.
-      final long totalInserts = Math.max(1, profile.getWorkloadStat(partitionPath).getNumInserts());
+      final long totalInserts = Math.max(1, inputProfile.getWorkloadStat(partitionPath).getNumInserts());
       final long hashOfKey = NumericUtils.getMessageDigestHash("MD5", keyLocation.getLeft().getRecordKey());
       final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
 
@@ -283,6 +296,11 @@ public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements 
       // return first one, by default
       return targetBuckets.get(0).getKey().bucketNumber;
     }
+  }
+
+  @Override
+  public WorkloadProfile getExecutionWorkloadProfile() {
+    return new WorkloadProfile(Pair.of(executionProfile, inputProfile.getGlobalStat()), inputProfile.getOperationType());
   }
 
   /**

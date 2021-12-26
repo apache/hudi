@@ -154,19 +154,21 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       LOG.info("RDD PreppedRecords was persisted at: " + inputRecordsRDD.getStorageLevel());
     }
 
-    WorkloadProfile profile = null;
+    WorkloadProfile inputProfile = null;
     if (isWorkloadProfileNeeded()) {
       context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile");
-      profile = new WorkloadProfile(buildProfile(inputRecordsRDD), operationType);
-      LOG.info("Workload profile :" + profile);
-      saveWorkloadProfileMetadataToInflight(profile, instantTime);
+      inputProfile = new WorkloadProfile(buildProfile(inputRecordsRDD), operationType);
+      LOG.info("Input workload profile :" + inputProfile);
     }
 
     // handle records update with clustering
     JavaRDD<HoodieRecord<T>> inputRecordsRDDWithClusteringUpdate = clusteringHandleUpdate(inputRecordsRDD);
 
     // partition using the insert partitioner
-    final Partitioner partitioner = getPartitioner(profile);
+    final Partitioner partitioner = getPartitioner(inputProfile);
+    WorkloadProfile executionProfile = ((org.apache.hudi.table.action.commit.Partitioner)partitioner).getExecutionWorkloadProfile();
+    saveWorkloadProfileMetadataToInflight(executionProfile, instantTime);
+    LOG.info("Execution workload profile :" + executionProfile);
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data");
     JavaRDD<HoodieRecord<T>> partitionedRecords = partition(inputRecordsRDDWithClusteringUpdate, partitioner);
     JavaRDD<WriteStatus> writeStatusRDD = partitionedRecords.mapPartitionsWithIndex((partition, recordItr) -> {
