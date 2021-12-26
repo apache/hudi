@@ -18,9 +18,6 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -47,6 +44,10 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.util.DataTypeUtils;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -123,19 +124,6 @@ public class DataSourceUtils {
     }
   }
 
-  /**
-   * Create a payload class via reflection, passing in an ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
-  }
-
   public static Map<String, String> getExtraMetadata(Map<String, String> properties) {
     Map<String, String> extraMetadataMap = new HashMap<>();
     if (properties.containsKey(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key())) {
@@ -146,19 +134,6 @@ public class DataSourceUtils {
       });
     }
     return extraMetadataMap;
-  }
-
-  /**
-   * Create a payload class via reflection, do not ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {Option.class}, Option.of(record));
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
   }
 
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
@@ -233,16 +208,32 @@ public class DataSourceUtils {
     return client.deletePartitions(partitionsToDelete, instantTime);
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-      String payloadClass) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
-    return new HoodieRecord<>(hKey, payload);
+  public static HoodieRecord createHoodieRecord(HoodieKey hoodieKey, GenericRecord record, String payloadClass) {
+    HoodieRecordPayload payload = ReflectionUtils.loadPayload(payloadClass,
+        new Object[] {Option.of(record)}, Option.class);
+    return new HoodieRecord<>(hoodieKey, payload);
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
-    return new HoodieRecord<>(hKey, payload);
+  public static HoodieRecord createHoodieRecord(HoodieKey hoodieKey, GenericRecord record, String payloadClass, Comparable orderingVal) {
+    HoodieRecordPayload payload = ReflectionUtils.loadPayload(payloadClass,
+        new Object[] {record, orderingVal}, GenericRecord.class, Comparable.class);
+    return new HoodieRecord<>(hoodieKey, payload);
+  }
+
+  public static HoodieRecord createHoodieRecord(HoodieKey hoodieKey, GenericRecord record, String payloadClass, Comparable orderingVal, long eventTime) {
+    try {
+      HoodieRecordPayload payload = ReflectionUtils.loadPayload(payloadClass,
+          new Object[] {record, orderingVal, eventTime}, GenericRecord.class, Comparable.class, Long.class);
+      return new HoodieRecord<>(hoodieKey, payload);
+    } catch (HoodieException e) {
+      if (e.getCause() instanceof NoSuchMethodException) {
+        HoodieRecordPayload payload = ReflectionUtils.loadPayload(payloadClass,
+            new Object[] {record, orderingVal}, GenericRecord.class, Comparable.class);
+        return new HoodieRecord<>(hoodieKey, payload);
+      } else {
+        throw e;
+      }
+    }
   }
 
   /**

@@ -25,15 +25,16 @@ import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.HoodieAvroUtils.getEventTime
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, HoodieTimelineTimeZone, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, Option, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
-import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieInternalConfig, HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.{BulkInsertInternalPartitionerWithRowsFactory, NonSortPartitionerWithRows}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
@@ -49,8 +50,8 @@ import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkContext}
-import java.util.Properties
 
+import java.util.Properties
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -233,16 +234,18 @@ object HoodieSparkSqlWriter {
               operation.equals(WriteOperationType.UPSERT) ||
               parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
                 HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
+            val eventTimeField = Option.ofNullable(hoodieConfig.getProps.getString(HoodiePayloadConfig.EVENT_TIME_FIELD.key, null))
             val hoodieAllIncomingRecords = genericRecords.map(gr => {
               val processedRecord = getProcessedRecord(partitionColumns, gr, dropPartitionColumns)
+              val eventTime = getEventTime(processedRecord, eventTimeField)
               val hoodieRecord = if (shouldCombine) {
                 val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD), false)
                   .asInstanceOf[Comparable[_]]
-                DataSourceUtils.createHoodieRecord(processedRecord,
-                  orderingVal, keyGenerator.getKey(gr),
-                  hoodieConfig.getString(PAYLOAD_CLASS_NAME))
+                DataSourceUtils.createHoodieRecord(
+                  keyGenerator.getKey(gr), processedRecord, hoodieConfig.getString(PAYLOAD_CLASS_NAME), orderingVal, eventTime)
               } else {
-                DataSourceUtils.createHoodieRecord(processedRecord, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS_NAME))
+                DataSourceUtils.createHoodieRecord(
+                  keyGenerator.getKey(gr), processedRecord, hoodieConfig.getString(PAYLOAD_CLASS_NAME), eventTime)
               }
               hoodieRecord
             }).toJavaRDD()

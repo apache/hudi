@@ -29,6 +29,9 @@ import java.io.Serializable;
  * Base class for all AVRO record based payloads, that can be ordered based on a field.
  */
 public abstract class BaseAvroPayload implements Serializable {
+
+  public static final long DEFAULT_IGNORING_EVENT_TIME = -1L;
+
   /**
    * Avro data extracted from the source converted to bytes.
    */
@@ -40,16 +43,33 @@ public abstract class BaseAvroPayload implements Serializable {
   public final Comparable orderingVal;
 
   /**
+   * Unix timestamp (millisecond) to compute latency and freshness.
+   *
+   * Valid for computation only when being non-negative.
+   */
+  public final long eventTime;
+
+  public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this(record, orderingVal, DEFAULT_IGNORING_EVENT_TIME);
+  }
+
+  /**
    * Instantiate {@link BaseAvroPayload}.
    *
    * @param record      Generic record for the payload.
    * @param orderingVal {@link Comparable} to be used in pre combine.
+   * @param eventTime   unix timestamp to be used to compute latency and freshness
    */
-  public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
+  public BaseAvroPayload(GenericRecord record, Comparable orderingVal, long eventTime) {
     this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
     this.orderingVal = orderingVal;
     if (orderingVal == null) {
       throw new HoodieException("Ordering value is null for record: " + record);
     }
+    this.eventTime = eventTime;
+  }
+
+  public boolean usesEventTime() {
+    return eventTime > DEFAULT_IGNORING_EVENT_TIME;
   }
 }

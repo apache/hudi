@@ -27,6 +27,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -40,8 +42,14 @@ import java.util.Objects;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
+  public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
+
+  public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal, long eventTime) {
+    super(record, orderingVal, eventTime);
+  }
+
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+    this(record, orderingVal, DEFAULT_IGNORING_EVENT_TIME);
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
@@ -78,6 +86,16 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     } else {
       return Option.of(indexedRecord);
     }
+  }
+
+  @Override
+  public Option<Map<String, String>> getMetadata() {
+    if (!usesEventTime()) {
+      return Option.empty();
+    }
+    Map<String, String> metadata = new HashMap<>(1);
+    metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
+    return Option.of(metadata);
   }
 
   /**

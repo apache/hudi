@@ -25,8 +25,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
@@ -39,11 +37,12 @@ import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldVal;
  */
 public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
-  public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
-  private Option<Object> eventTime = Option.empty();
+  public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal, long eventTime) {
+    super(record, orderingVal, eventTime);
+  }
 
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
-    super(record, orderingVal);
+    this(record, orderingVal, DEFAULT_IGNORING_EVENT_TIME);
   }
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
@@ -66,37 +65,9 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
     /*
      * We reached a point where the value is disk is older than the incoming record.
-     */
-    eventTime = updateEventTime(incomingRecord, properties);
-
-    /*
      * Now check if the incoming record is a delete record.
      */
     return isDeleteRecord(incomingRecord) ? Option.empty() : Option.of(incomingRecord);
-  }
-
-  @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
-    if (recordBytes.length == 0) {
-      return Option.empty();
-    }
-    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
-    eventTime = updateEventTime(incomingRecord, properties);
-
-    return isDeleteRecord(incomingRecord) ? Option.empty() : Option.of(incomingRecord);
-  }
-
-  private static Option<Object> updateEventTime(GenericRecord record, Properties properties) {
-    return Option.ofNullable(getNestedFieldVal(record, properties.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY), true));
-  }
-
-  @Override
-  public Option<Map<String, String>> getMetadata() {
-    Map<String, String> metadata = new HashMap<>();
-    if (eventTime.isPresent()) {
-      metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime.get()));
-    }
-    return metadata.isEmpty() ? Option.empty() : Option.of(metadata);
   }
 
   protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,

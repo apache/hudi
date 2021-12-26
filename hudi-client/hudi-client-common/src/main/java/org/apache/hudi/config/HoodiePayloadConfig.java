@@ -48,7 +48,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> EVENT_TIME_FIELD = ConfigProperty
       .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
-      .defaultValue("ts")
+      .noDefaultValue()
       .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
           + "be useful for e.g, determining the freshness of the table.");
 

@@ -18,18 +18,25 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
 
+import static org.apache.hudi.common.model.BaseAvroPayload.DEFAULT_IGNORING_EVENT_TIME;
+import static org.apache.hudi.common.model.OverwriteWithLatestAvroPayload.METADATA_EVENT_TIME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link OverwriteWithLatestAvroPayload}.
@@ -98,6 +105,39 @@ public class TestOverwriteWithLatestAvroPayload {
 
     assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), record1);
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {0L, 1L, 1612542030000L})
+  public void testGetEventTimeInMetadata(long ts) {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("partition", "partition0");
+    record.put("ts", ts);
+    record.put("_hoodie_is_deleted", false);
+
+    OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(record, ts, ts);
+    assertTrue(payload.getMetadata().isPresent());
+    assertEquals(ts, Long.parseLong(payload.getMetadata().get().get(METADATA_EVENT_TIME_KEY)));
+  }
+
+  @Test
+  public void testNoEventTimeInMetadata() {
+    final long ts = DEFAULT_IGNORING_EVENT_TIME;
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("partition", "partition0");
+    record.put("ts", ts);
+    record.put("_hoodie_is_deleted", false);
+
+    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(Option.of(record));
+    assertFalse(payload1.getMetadata().isPresent());
+
+    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(record, ts);
+    assertFalse(payload2.getMetadata().isPresent());
+
+    OverwriteWithLatestAvroPayload payload3 = new OverwriteWithLatestAvroPayload(record, ts, ts);
+    assertFalse(payload3.getMetadata().isPresent());
   }
 
 }

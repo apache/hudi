@@ -33,6 +33,9 @@ import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
 /**
  * The only difference with {@link DefaultHoodieRecordPayload} is that is does not
  * track the event time metadata for efficiency.
+ *
+ * @deprecated This is deprecated as event time won't be extracted by default
+ * in super class {@link DefaultHoodieRecordPayload}.
  */
 public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
 

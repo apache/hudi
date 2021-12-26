@@ -29,6 +29,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -41,6 +42,8 @@ import org.apache.spark.sql.SparkSession;
 
 import java.io.IOException;
 import java.util.List;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.getEventTime;
 
 public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBootstrapDataProvider<JavaRDD<HoodieRecord>> {
 
@@ -64,17 +67,15 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
       KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
       String structName = tableName + "_record";
       String namespace = "hoodie." + tableName;
+      Option<String> eventTimeField = Option.ofNullable(props.getString(HoodiePayloadConfig.EVENT_TIME_FIELD.key(), null));
       RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace, false,
           Option.empty());
       return genericRecords.toJavaRDD().map(gr -> {
         String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
             gr, props.getString("hoodie.datasource.write.precombine.field"), false);
-        try {
-          return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-              props.getString("hoodie.datasource.write.payload.class"));
-        } catch (IOException ioe) {
-          throw new HoodieIOException(ioe.getMessage(), ioe);
-        }
+        long eventTime = getEventTime(gr, eventTimeField);
+        return DataSourceUtils.createHoodieRecord(
+            keyGenerator.getKey(gr), gr, props.getString("hoodie.datasource.write.payload.class"), orderingVal, eventTime);
       });
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);

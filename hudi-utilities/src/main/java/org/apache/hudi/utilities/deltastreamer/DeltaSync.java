@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -30,8 +29,8 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -102,6 +101,8 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.getEventTime;
+import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldVal;
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
@@ -448,12 +449,13 @@ public class DeltaSync implements Serializable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
+    Option<String> eventTimeField = Option.ofNullable(props.getString(HoodiePayloadConfig.EVENT_TIME_FIELD.key(), null));
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
-      HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false))
-          : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
-      return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
+      HoodieKey key = keyGenerator.getKey(gr);
+      Comparable orderingVal = shouldCombine ? (Comparable) getNestedFieldVal(gr, cfg.sourceOrderingField, false) : 0;
+      long eventTime = getEventTime(gr, eventTimeField);
+      return DataSourceUtils.createHoodieRecord(key, gr, cfg.payloadClassName, orderingVal, eventTime);
     });
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));

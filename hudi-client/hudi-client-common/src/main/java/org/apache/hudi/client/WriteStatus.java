@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
+import static org.apache.hudi.common.model.OverwriteWithLatestAvroPayload.METADATA_EVENT_TIME_KEY;
 
 /**
  * Status of a write operation.

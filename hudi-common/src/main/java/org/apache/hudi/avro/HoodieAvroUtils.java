@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -68,6 +69,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
+
+import static org.apache.hudi.common.model.BaseAvroPayload.DEFAULT_IGNORING_EVENT_TIME;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -615,5 +618,12 @@ public class HoodieAvroUtils {
                                              String[] columns,
                                              SerializableSchema schema) {
     return getRecordColumnValues(record, columns, schema.get());
+  }
+
+  public static long getEventTime(GenericRecord record, Option<String> eventTimeField) {
+    Option<String> eventTimeOpt = Option.ofNullable(eventTimeField.isPresent()
+        ? getNestedFieldValAsString(record, eventTimeField.get(), true) : null);
+    return eventTimeOpt.isPresent()
+        ? DateTimeUtils.parseDateTime(eventTimeOpt.get()).toEpochMilli() : DEFAULT_IGNORING_EVENT_TIME;
   }
 }
