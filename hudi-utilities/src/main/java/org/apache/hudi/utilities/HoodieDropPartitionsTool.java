@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.utilities;
 
 import com.beust.jcommander.JCommander;
@@ -46,8 +47,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
@@ -56,7 +57,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -72,7 +72,6 @@ public class HoodieDropPartitionsTool {
   private TypedProperties props;
 
   private final HoodieTableMetaClient metaClient;
-
 
   public HoodieDropPartitionsTool(JavaSparkContext jsc, Config cfg) {
     this.jsc = jsc;
@@ -120,21 +119,15 @@ public class HoodieDropPartitionsTool {
     public String tableName = null;
     @Parameter(names = {"--partitions", "-p"}, description = "Comma separated list of partitions to delete.", required = true)
     public String partitions = null;
-
-
-
-
-
-
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert/upsert/delete", required = false)
     public int parallelism = 1500;
     @Parameter(names = {"--instant-time", "-it"}, description = "instant time for delete table partitions operation.", required = false)
     public String instantTime = null;
     @Parameter(names = {"--sync-hive-meta", "-sync"}, description = "Sync information to HMS.", required = false)
-    public boolean sync2Hive = true;
+    public boolean sync2Hive = false;
     @Parameter(names = {"--hive-database", "-db"}, description = "Database to sync to.", required = false)
     public String hiveDataBase = null;
-    @Parameter(names = {"--hive-table-name", "-tn"}, description = "Table to sync to.", required = false)
+    @Parameter(names = {"--hive-table-name"}, description = "Table to sync to.", required = false)
     public String hiveTableName = null;
     @Parameter(names = {"--hive-user-name", "-user"}, description = "hive user name to use.", required = false)
     public String hiveUserName = "hive";
@@ -218,11 +211,12 @@ public class HoodieDropPartitionsTool {
   }
 
   public void dryRun() {
-    try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, null, cfg.parallelism, Option.empty(), props)) {
+    try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
       List<String> parts = Arrays.asList(cfg.partitions.split(","));
       Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(parts, parts.size()).distinct()
-          .mapToPair(partitionPath -> new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath, table))).collectAsMap();
+          .mapToPair(partitionPath -> new Tuple2<>(partitionPath, table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList())))
+          .collectAsMap();
       printDeleteFilesInfo(partitionToReplaceFileIds);
     }
   }
@@ -235,7 +229,7 @@ public class HoodieDropPartitionsTool {
   }
 
   public void doDeleteTablePartitions() {
-    try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, null, cfg.parallelism, Option.empty(), props)) {
+    try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       List<String> partitionsToDelete = Arrays.asList(cfg.partitions.split(","));
       if (StringUtils.isNullOrEmpty(cfg.instantTime)) {
         cfg.instantTime = HoodieActiveTimeline.createNewInstantTime();
@@ -249,10 +243,10 @@ public class HoodieDropPartitionsTool {
   }
 
   private void deleteDataFiles() {
-    try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, null, cfg.parallelism, Option.empty(), props)) {
+    try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       HoodieTimeline completedReplaceTimeline = metaClient.getActiveTimeline().reload().getCompletedReplaceTimeline();
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
-      Optional<HoodieInstant> instant = completedReplaceTimeline.getInstants().filter(in -> in.getTimestamp().equals(cfg.instantTime)).findFirst();
+      Option<HoodieInstant> instant = Option.fromJavaOptional(completedReplaceTimeline.getInstants().filter(in -> in.getTimestamp().equals(cfg.instantTime)).findFirst());
       instant.ifPresent(hoodieInstant -> deleteReplacedFileGroups(client.getEngineContext(), hoodieInstant, table));
     }
   }
@@ -364,10 +358,6 @@ public class HoodieDropPartitionsTool {
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
   }
 
-  protected List<String> getAllExistingFileIds(String partitionPath, HoodieSparkTable table) {
-    return table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList());
-  }
-
   /**
    * Prints the delete data files info.
    *
@@ -376,7 +366,7 @@ public class HoodieDropPartitionsTool {
   private void printDeleteFilesInfo(Map<String, List<String>> partitionToReplaceFileIds) {
     LOG.info("Data files and partitions to delete : ");
     for (Map.Entry<String, List<String>> entry  : partitionToReplaceFileIds.entrySet()) {
-      LOG.info(String.format("Partitions : %s, corresponding data files : $%s", entry.getKey(), Arrays.toString(entry.getValue().toArray())));
+      LOG.info(String.format("Partitions : %s, corresponding data file IDs : $%s", entry.getKey(), entry.getValue()));
     }
   }
 }
