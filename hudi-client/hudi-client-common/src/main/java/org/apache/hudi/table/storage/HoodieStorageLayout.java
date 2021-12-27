@@ -19,33 +19,36 @@
 package org.apache.hudi.table.storage;
 
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
 
+/**
+ * Storage layout defines how the files are organized within a table.
+ */
 public class HoodieStorageLayout implements Serializable {
 
-  protected String partitionClass;
-
   public HoodieStorageLayout() {
-
   }
 
   /**
-   * When writing, a bucket can write more than one file to prevent from generating the large file.
+   * By default, layout does not directly control the total number of files.
    */
-  public boolean requireOneFileForBucket() {
+  public boolean determinesNumFileGroups() {
     return false;
   }
 
-  public boolean isUniqueDistribution() {
-    return false;
+  /**
+   * Return the layout specific partitioner for writing data, if any.
+   */
+  public Option<String> layoutPartitionerClass() {
+    return Option.empty();
   }
 
-  public String getPartitioner() {
-    return partitionClass;
-  }
-
-  public boolean operationConstraint(WriteOperationType operationType) {
+  /**
+   * Determines if the operation is supported by the layout.
+   */
+  public boolean doesNotSupport(WriteOperationType operationType) {
     return false;
   }
 }

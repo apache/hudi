@@ -145,7 +145,7 @@ public class HoodieBucketIndex<T extends HoodieRecordPayload<T>>
   }
 
   @Override
-  public boolean performTagging(WriteOperationType operationType) {
+  public boolean requiresTagging(WriteOperationType operationType) {
     switch (operationType) {
       case INSERT:
       case INSERT_OVERWRITE:

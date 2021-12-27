@@ -195,8 +195,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return false;
   }
 
-  public boolean canSwitchToNewOne() {
-    return hoodieTable.getStorageLayout().requireOneFileForBucket();
+  boolean layoutControlsNumFiles() {
+    return hoodieTable.getStorageLayout().determinesNumFileGroups();
   }
 
   /**

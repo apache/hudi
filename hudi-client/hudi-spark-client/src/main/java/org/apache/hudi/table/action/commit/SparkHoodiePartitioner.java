@@ -36,8 +36,7 @@ public abstract class SparkHoodiePartitioner<T extends HoodieRecordPayload<T>> e
 
   protected final HoodieTable table;
 
-  public SparkHoodiePartitioner(WorkloadProfile profile,
-      HoodieTable table) {
+  public SparkHoodiePartitioner(WorkloadProfile profile, HoodieTable table) {
     this.profile = profile;
     this.table = table;
   }

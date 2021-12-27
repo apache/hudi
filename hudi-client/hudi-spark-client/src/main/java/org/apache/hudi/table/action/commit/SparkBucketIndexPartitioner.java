@@ -125,8 +125,7 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
 
   @Override
   public int getPartition(Object key) {
-    Tuple2<HoodieKey, Option<HoodieRecordLocation>> keyLocation =
-        (Tuple2<HoodieKey, Option<HoodieRecordLocation>>) key;
+    Tuple2<HoodieKey, Option<HoodieRecordLocation>> keyLocation = (Tuple2<HoodieKey, Option<HoodieRecordLocation>>) key;
     String partitionPath = keyLocation._1.getPartitionPath();
     Option<HoodieRecordLocation> location = keyLocation._2;
     int bucketId = location.isPresent()

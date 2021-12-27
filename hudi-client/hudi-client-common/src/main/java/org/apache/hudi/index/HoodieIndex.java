@@ -127,11 +127,9 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
    * If the `getCustomizedPartitioner` returns a partitioner, it has to be true.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public boolean performTagging(WriteOperationType operationType) {
+  public boolean requiresTagging(WriteOperationType operationType) {
     switch (operationType) {
-      case INSERT:
-      case INSERT_OVERWRITE:
-        return false;
+      case DELETE:
       case UPSERT:
         return true;
       default:

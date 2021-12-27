@@ -119,8 +119,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath())
-        || canSwitchToNewOne();
+    return (fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath()))
+        || layoutControlsNumFiles();
   }
 
   /**

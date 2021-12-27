@@ -19,6 +19,7 @@
 package org.apache.hudi.table.storage;
 
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -34,27 +35,26 @@ public class HoodieBucketLayout extends HoodieStorageLayout {
       add(WriteOperationType.DELETE);
       add(WriteOperationType.COMPACT);
       add(WriteOperationType.DELETE_PARTITION);
-      // TODO: HUDI-2155 bulk insert support bucket index.
-      // TODO: HUDI-2156 cluster the table with bucket index.
     }};
 
   public HoodieBucketLayout() {
     super();
-    partitionClass = "org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner";
   }
 
+  /**
+   * Bucketing controls the number of file groups directly.
+   */
   @Override
-  public boolean requireOneFileForBucket() {
+  public boolean determinesNumFileGroups() {
     return true;
   }
 
-  @Override
-  public boolean isUniqueDistribution() {
-    return true;
+  public Option<String> layoutPartitionerClass() {
+    return Option.of("org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner");
   }
 
   @Override
-  public boolean operationConstraint(WriteOperationType operationType) {
+  public boolean doesNotSupport(WriteOperationType operationType) {
     return !SUPPORTED_OPERATIONS.contains(operationType);
   }
 }

@@ -57,7 +57,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
       .key("hoodie.index.type")
-      .defaultValue("BLOOM")
+      .noDefaultValue()
       .withDocumentation("Type of index to use. Default is Bloom filter. "
           + "Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. "
           + "Bloom filters removes the dependency on a external system "
@@ -220,7 +220,7 @@ public class HoodieIndexConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> BUCKET_INDEX_NUM_BUCKETS = ConfigProperty
       .key("hoodie.bucket.index.num.buckets")
       .defaultValue(256)
-      .withDocumentation("Only applies if index type is BUCKET_INDEX. Determine the bucket num of the hudi table, "
+      .withDocumentation("Only applies if index type is BUCKET_INDEX. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
 
   public static final ConfigProperty<String> BUCKET_INDEX_HASH_FIELD = ConfigProperty
@@ -582,8 +582,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     private void validateBucketIndexConfig() {
-      if (hoodieIndexConfig.getString(INDEX_TYPE)
-          .equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
+      if (hoodieIndexConfig.getString(INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
         // check the bucket index hash field
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_HASH_FIELD))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD,
