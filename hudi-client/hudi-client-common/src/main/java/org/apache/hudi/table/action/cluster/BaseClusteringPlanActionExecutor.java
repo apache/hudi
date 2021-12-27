@@ -79,7 +79,8 @@ public abstract class BaseClusteringPlanActionExecutor<T extends HoodieRecordPay
 
     LOG.info("Generating clustering plan for table " + config.getBasePath());
     ClusteringPlanStrategy strategy = (ClusteringPlanStrategy)
-        ReflectionUtils.loadClass(config.getClusteringPlanStrategyClass(), table, context, config);
+        ReflectionUtils.loadClass(ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config), table, context, config);
+
     return strategy.generateClusteringPlan();
   }
 
