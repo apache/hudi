@@ -374,11 +374,9 @@ public class UtilHelpers {
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = "org.apache.hive.jdbc.HiveDriver".equals(options.get("driver")) ? JdbcUtils.getHiveSchema(rs,
-              dialect, true) : JdbcUtils.getSchema(rs, dialect, true);
+            structType = JdbcUtils.getSchema(rs, dialect, true);
           } else {
-            structType = "org.apache.hive.jdbc.HiveDriver".equals(options.get("driver")) ? JdbcUtils.getHiveSchema(rs,
-              dialect, false) : JdbcUtils.getSchema(rs, dialect, false);
+            structType = JdbcUtils.getSchema(rs, dialect, false);
           }
           return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
         }
