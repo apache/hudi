@@ -46,7 +46,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
     spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
 
     checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01')")(
-      s"$tableName is non-partitioned table is not allowed to drop partition")
+      s"$tableName is a non-partitioned table that is not allowed to drop partition")
   }
 
   test("Purge drop non-partitioned table") {
@@ -70,7 +70,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
     spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2021-10-01"), (2, "l4", "v1", "2021-10-02")""")
 
     checkExceptionContain(s"alter table $tableName drop partition (dt='2021-10-01') purge")(
-      s"$tableName is non-partitioned table is not allowed to drop partition")
+      s"$tableName is a non-partitioned table that is not allowed to drop partition")
   }
 
   Seq(false, true).foreach { urlencode =>
@@ -293,7 +293,7 @@ class TestAlterTableDropPartition extends TestHoodieSqlBase {
           Seq(2, "l4", "v1", "2021", "10", "02")
         )
         assertResult(false)(existsPath(
-          s"${tmp.getCanonicalPath}/$tableName/year='2021'/month='10'/day='01'"))
+          s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
       }
     }
   }

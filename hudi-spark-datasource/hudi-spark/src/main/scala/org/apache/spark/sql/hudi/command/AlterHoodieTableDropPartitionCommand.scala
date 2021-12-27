@@ -47,8 +47,8 @@ extends RunnableCommand {
 
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
 
-    if (!hoodieCatalogTable.isPartitionTable) {
-      throw new AnalysisException(s"$fullTableName is non-partitioned table is not allowed to drop partition")
+    if (!hoodieCatalogTable.isPartitionedTable) {
+      throw new AnalysisException(s"$fullTableName is a non-partitioned table that is not allowed to drop partition")
     }
 
     DDLUtils.verifyAlterTableType(
