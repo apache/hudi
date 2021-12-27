@@ -135,6 +135,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public <I, O> void flatMapAndForeach(List<I> data, SerializableFunction<I, Stream<O>> func, SerializableConsumer<O> consumer, int parallelism, int consumerParallelism) {
+    javaSparkContext.parallelize(data, parallelism).flatMap(x -> func.apply(x).iterator()).repartition(consumerParallelism).foreach(consumer::accept);
+  }
+
+  @Override
   public <I> void foreach(List<I> data, SerializableConsumer<I> consumer, int parallelism) {
     javaSparkContext.parallelize(data, parallelism).foreach(consumer::accept);
   }
