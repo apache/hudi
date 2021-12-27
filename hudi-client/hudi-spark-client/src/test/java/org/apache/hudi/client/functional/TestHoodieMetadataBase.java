@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -42,8 +43,6 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
@@ -92,6 +91,20 @@ public class TestHoodieMetadataBase extends HoodieClientTestHarness {
     writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, enableMetadataTable, enableMetrics,
         enableFullScan, true, validateMetadataPayloadStateConsistency).build();
     initWriteConfigAndMetatableWriter(writeConfig, enableMetadataTable);
+  }
+
+  public void init(HoodieTableType tableType, HoodieWriteConfig writeConfig) throws IOException {
+    this.tableType = tableType;
+    initPath();
+    initSparkContexts("TestHoodieMetadata");
+    initFileSystem();
+    fs.mkdirs(new Path(basePath));
+    initTimelineService();
+    initMetaClient(tableType);
+    initTestDataGenerator();
+    metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    this.writeConfig = writeConfig;
+    initWriteConfigAndMetatableWriter(writeConfig, writeConfig.isMetadataTableEnabled());
   }
 
   protected void initWriteConfigAndMetatableWriter(HoodieWriteConfig writeConfig, boolean enableMetadataTable) {

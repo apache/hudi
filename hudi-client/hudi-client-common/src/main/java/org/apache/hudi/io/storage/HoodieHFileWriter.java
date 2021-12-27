@@ -38,6 +38,8 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.io.Writable;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -63,6 +65,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final Schema schema;
+  private final Option<Schema.Field> schemaRecordKeyField;
   private HFile.Writer writer;
   private String minRecordKey;
   private String maxRecordKey;
@@ -77,6 +81,8 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     this.fs = (HoodieWrapperFileSystem) this.file.getFileSystem(conf);
     this.hfileConfig = hfileConfig;
+    this.schema = schema;
+    this.schemaRecordKeyField = Option.ofNullable(schema.getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY));
 
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
@@ -122,7 +128,13 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord object) throws IOException {
-    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord)object);
+    byte[] value = HoodieAvroUtils.avroToBytes((GenericRecord) object);
+    if (schemaRecordKeyField.isPresent()) {
+      GenericRecord recordKeyExcludedRecord = HoodieAvroUtils.bytesToAvro(value, this.schema);
+      recordKeyExcludedRecord.put(this.schemaRecordKeyField.get().pos(), "");
+      value = HoodieAvroUtils.avroToBytes(recordKeyExcludedRecord);
+    }
+
     KeyValue kv = new KeyValue(recordKey.getBytes(), null, null, value);
     writer.append(kv);
 

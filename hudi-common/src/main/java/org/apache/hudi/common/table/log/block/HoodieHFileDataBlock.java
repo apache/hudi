@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -43,6 +42,7 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileContext;
 import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
 import org.apache.hadoop.hbase.util.Pair;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -83,10 +83,6 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     super(records, header, new HashMap<>(), keyField);
   }
 
-  public HoodieHFileDataBlock(@Nonnull List<IndexedRecord> records, @Nonnull Map<HeaderMetadataType, String> header) {
-    this(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
-  }
-
   @Override
   public HoodieLogBlockType getBlockType() {
     return HoodieLogBlockType.HFILE_DATA_BLOCK;
@@ -110,8 +106,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     boolean useIntegerKey = false;
     int key = 0;
     int keySize = 0;
-    Field keyField = records.get(0).getSchema().getField(this.keyField);
-    if (keyField == null) {
+    final Field schemaKeyField = records.get(0).getSchema().getField(HoodieMetadataPayload.SCHEMA_FIELD_ID_KEY);
+    if (schemaKeyField == null) {
       // Missing key metadata field so we should use an integer sequence key
       useIntegerKey = true;
       keySize = (int) Math.ceil(Math.log(records.size())) + 1;
@@ -122,9 +118,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
       if (useIntegerKey) {
         recordKey = String.format("%" + keySize + "s", key++);
       } else {
-        recordKey = record.get(keyField.pos()).toString();
+        recordKey = record.get(schemaKeyField.pos()).toString();
       }
-      byte[] recordBytes = HoodieAvroUtils.indexedRecordToBytes(record);
+      final byte[] recordBytes = serializeRecord(record, Option.ofNullable(schemaKeyField));
       ValidationUtils.checkState(!sortedRecordsMap.containsKey(recordKey),
           "Writing multiple records with same key not supported for " + this.getClass().getName());
       sortedRecordsMap.put(recordKey, recordBytes);
@@ -160,6 +156,20 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   public List<IndexedRecord> getRecords(List<String> keys) throws IOException {
     readWithInlineFS(keys);
     return records;
+  }
+
+  /**
+   * Serialize the record to byte buffer.
+   *
+   * @param record         - Record to serialize
+   * @param schemaKeyField - Key field in the schema
+   * @return Serialized byte buffer for the record
+   */
+  private byte[] serializeRecord(final IndexedRecord record, final Option<Field> schemaKeyField) {
+    if (schemaKeyField.isPresent()) {
+      record.put(schemaKeyField.get().pos(), "");
+    }
+    return HoodieAvroUtils.indexedRecordToBytes(record);
   }
 
   private void readWithInlineFS(List<String> keys) throws IOException {
