@@ -152,7 +152,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return result;
   }
 
-  public StringBuilder getAlterTablePrefix(String tableName) {
+  private StringBuilder getAlterTablePrefix(String tableName) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
     alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName)
         .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)

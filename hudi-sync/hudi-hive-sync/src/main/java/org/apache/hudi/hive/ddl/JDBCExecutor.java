@@ -174,7 +174,7 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
       if ((i + 1) % batchSyncPartitionNum == 0) {
         result.add(alterSQL.toString());
-        alterSQL = getAlterTablePrefix(tableName);
+        alterSQL = getAlterTableDropPrefix(tableName);
       }
     }
     // add left partitions to result
