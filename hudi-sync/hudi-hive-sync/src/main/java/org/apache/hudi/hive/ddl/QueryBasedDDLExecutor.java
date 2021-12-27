@@ -152,7 +152,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return result;
   }
 
-  private StringBuilder getAlterTablePrefix(String tableName) {
+  public StringBuilder getAlterTablePrefix(String tableName) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
     alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName)
         .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
@@ -160,7 +160,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return alterSQL;
   }
 
-  private String getPartitionClause(String partition) {
+  public String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
     ValidationUtils.checkArgument(config.partitionFields.size() == partitionValues.size(),
         "Partition key parts " + config.partitionFields + " does not match with partition values " + partitionValues

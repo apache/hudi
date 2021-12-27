@@ -46,9 +46,11 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
@@ -124,7 +126,7 @@ public class HoodieDropPartitionsTool {
     @Parameter(names = {"--instant-time", "-it"}, description = "instant time for delete table partitions operation.", required = false)
     public String instantTime = null;
     @Parameter(names = {"--sync-hive-meta", "-sync"}, description = "Sync information to HMS.", required = false)
-    public boolean sync2Hive = false;
+    public boolean syncToHive = false;
     @Parameter(names = {"--hive-database", "-db"}, description = "Database to sync to.", required = false)
     public String hiveDataBase = null;
     @Parameter(names = {"--hive-table-name"}, description = "Table to sync to.", required = false)
@@ -138,11 +140,16 @@ public class HoodieDropPartitionsTool {
     @Parameter(names = {"--hive-partition-field"}, description = "Comma separated list of field in the hive table to use for determining hive partition columns.", required = false)
     public String hivePartitionsField = "";
     @Parameter(names = {"--hive-sync-use-jdbc"}, description = "Use JDBC when hive synchronization.", required = false)
-    public boolean hiveUseJdbc = false;
+    public boolean hiveUseJdbc = true;
+    @Parameter(names = {"--hive-metastore-uris"}, description = "hive meta store uris to use.", required = false)
+    public String hiveHMSUris = null;
     @Parameter(names = {"--hive-sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.", required = false)
     public String hiveSyncMode = "hms";
     @Parameter(names = {"--hive-sync-ignore-exception"}, description = "Ignore hive sync exception.", required = false)
     public boolean hiveSyncIgnoreException = false;
+    @Parameter(names = {"--hive-partition-value-extractor-class"}, description = "Class which implements PartitionValueExtractor to extract the partition values,"
+        + " default 'SlashEncodedDayPartitionValueExtractor'.", required = false)
+    public String partitionValueExtractorClass = "org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor";
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
@@ -158,6 +165,34 @@ public class HoodieDropPartitionsTool {
     public Boolean help = false;
   }
 
+  private String getConfigDetails() {
+    final StringBuilder sb = new StringBuilder("HoodieDropPartitionsToolConfig {\n");
+    sb.append("   --base-path ").append(cfg.basePath).append(", \n");
+    sb.append("   --mode ").append(cfg.runningMode).append(", \n");
+    sb.append("   --table-name ").append(cfg.tableName).append(", \n");
+    sb.append("   --partitions ").append(cfg.partitions).append(", \n");
+    sb.append("   --parallelism ").append(cfg.parallelism).append(", \n");
+    sb.append("   --instantTime ").append(cfg.instantTime).append(", \n");
+    sb.append("   --sync-hive-meta ").append(cfg.syncToHive).append(", \n");
+    sb.append("   --hive-database ").append(cfg.hiveDataBase).append(", \n");
+    sb.append("   --hive-table-name ").append(cfg.hiveTableName).append(", \n");
+    sb.append("   --hive-user-name ").append("Masked").append(", \n");
+    sb.append("   --hive-pass-word ").append("Masked").append(", \n");
+    sb.append("   --hive-jdbc-url ").append(cfg.hiveURL).append(", \n");
+    sb.append("   --hive-partition-field ").append(cfg.hivePartitionsField).append(", \n");
+    sb.append("   --hive-sync-use-jdbc ").append(cfg.hiveUseJdbc).append(", \n");
+    sb.append("   --hive-metastore-uris ").append(cfg.hiveHMSUris).append(", \n");
+    sb.append("   --hive-sync-mode ").append(cfg.hiveSyncMode).append(", \n");
+    sb.append("   --hive-sync-ignore-exception ").append(cfg.hiveSyncIgnoreException).append(", \n");
+    sb.append("   --hive-partition-value-extractor-class ").append(cfg.partitionValueExtractorClass).append(", \n");
+    sb.append("   --spark-master ").append(cfg.sparkMaster).append(", \n");
+    sb.append("   --spark-memory ").append(cfg.sparkMemory).append(", \n");
+    sb.append("   --props ").append(cfg.propsFilePath).append(", \n");
+    sb.append("   --hoodie-conf ").append(cfg.configs);
+    sb.append("\n}");
+    return sb.toString();
+  }
+
   public static void main(String[] args) {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
@@ -165,11 +200,14 @@ public class HoodieDropPartitionsTool {
       cmd.usage();
       System.exit(1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Drop-Table-Partitions", cfg.sparkMaster, cfg.sparkMemory);
+    SparkConf sparkConf = UtilHelpers.buildSparkConf("Hoodie-Drop-Table-Partitions", cfg.sparkMaster);
+    sparkConf.set("spark.executor.memory", cfg.sparkMemory);
+    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    HoodieDropPartitionsTool tool = new HoodieDropPartitionsTool(jsc, cfg);
     try {
-      new HoodieDropPartitionsTool(jsc, cfg).run();
+      tool.run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run table repair for " + cfg.basePath, throwable);
+      LOG.error("Fail to run deleting table partitions for " + tool.getConfigDetails(), throwable);
     } finally {
       jsc.stop();
     }
@@ -206,13 +244,14 @@ public class HoodieDropPartitionsTool {
 
   public void doDeleteTablePartitionsEager() {
     doDeleteTablePartitions();
-    syncToHiveIfNecessary();
     deleteDataFiles();
+    syncToHiveIfNecessary();
   }
 
   public void dryRun() {
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
+      LOG.info(getConfigDetails());
       List<String> parts = Arrays.asList(cfg.partitions.split(","));
       Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(parts, parts.size()).distinct()
           .mapToPair(partitionPath -> new Tuple2<>(partitionPath, table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList())))
@@ -222,7 +261,7 @@ public class HoodieDropPartitionsTool {
   }
 
   private void syncToHiveIfNecessary() {
-    if (cfg.sync2Hive) {
+    if (cfg.syncToHive) {
       HiveSyncConfig hiveSyncConfig = buildHiveSyncProps();
       syncHive(hiveSyncConfig);
     }
@@ -234,6 +273,7 @@ public class HoodieDropPartitionsTool {
       if (StringUtils.isNullOrEmpty(cfg.instantTime)) {
         cfg.instantTime = HoodieActiveTimeline.createNewInstantTime();
       }
+      LOG.info(getConfigDetails());
       client.startCommitWithTime(cfg.instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
       HoodieWriteResult hoodieWriteResult = client.deletePartitions(partitionsToDelete, cfg.instantTime);
 
@@ -270,7 +310,7 @@ public class HoodieDropPartitionsTool {
 
       return new ArrayList<>(metadata.getPartitionToReplaceFileIds().keySet());
     } catch (IOException e) {
-      throw new HoodieCommitException("Failed to archive because cannot delete replace files", e);
+      throw new HoodieCommitException("Cannot delete replace files", e);
     }
   }
 
@@ -285,7 +325,7 @@ public class HoodieDropPartitionsTool {
       }
       return fileNumbers;
     } catch (IOException e) {
-      throw new HoodieCommitException("Failed to archive because cannot delete replace files", e);
+      throw new HoodieCommitException("Cannot delete replace files", e);
     }
   }
 
@@ -312,7 +352,7 @@ public class HoodieDropPartitionsTool {
 
   private static boolean deletePath(Path path, HoodieTableMetaClient metaClient, HoodieInstant instant) {
     try {
-      LOG.info("Deleting " + path + " before archiving " + instant);
+      LOG.info("Deleting " + path);
       metaClient.getFs().delete(path);
       return true;
     } catch (IOException e) {
@@ -335,6 +375,8 @@ public class HoodieDropPartitionsTool {
     props.put(DataSourceWriteOptions.HIVE_IGNORE_EXCEPTIONS().key(), cfg.hiveSyncIgnoreException);
     props.put(DataSourceWriteOptions.HIVE_PASS().key(), cfg.hivePassWord);
     props.put(DataSourceWriteOptions.PARTITIONS_TO_DELETE().key(), cfg.partitions);
+    props.put(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS().key(), cfg.partitionValueExtractorClass);
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), cfg.hivePartitionsField);
 
     return DataSourceUtils.buildHiveSyncConfig(props, cfg.basePath, "PARQUET");
   }
@@ -353,6 +395,9 @@ public class HoodieDropPartitionsTool {
     LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
     FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     HiveConf hiveConf = new HiveConf();
+    if(!StringUtils.isNullOrEmpty(cfg.hiveHMSUris)) {
+      hiveConf.set("hive.metastore.uris", cfg.hiveHMSUris);
+    }
     hiveConf.addResource(fs.getConf());
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
