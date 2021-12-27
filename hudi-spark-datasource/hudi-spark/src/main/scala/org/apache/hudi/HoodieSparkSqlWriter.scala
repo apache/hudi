@@ -32,7 +32,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, HoodieTimelineTimeZone, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{CommitUtils, Option, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -234,7 +234,8 @@ object HoodieSparkSqlWriter {
               operation.equals(WriteOperationType.UPSERT) ||
               parameters.getOrElse(HoodieWriteConfig.COMBINE_BEFORE_INSERT.key(),
                 HoodieWriteConfig.COMBINE_BEFORE_INSERT.defaultValue()).toBoolean
-            val eventTimeField = Option.ofNullable(hoodieConfig.getProps.getString(HoodiePayloadConfig.EVENT_TIME_FIELD.key, null))
+            val eventTimeField = org.apache.hudi.common.util.Option
+              .ofNullable(hoodieConfig.getProps.getString(HoodiePayloadConfig.EVENT_TIME_FIELD.key, null))
             val hoodieAllIncomingRecords = genericRecords.map(gr => {
               val processedRecord = getProcessedRecord(partitionColumns, gr, dropPartitionColumns)
               val eventTime = getEventTime(processedRecord, eventTimeField)
