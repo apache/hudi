@@ -28,7 +28,7 @@ import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.junit.jupiter.api.Test;
 
-public class BucketIdentifierSuite {
+public class TestBucketIdentifier {
 
   @Test
   public void testBucketFileId() {

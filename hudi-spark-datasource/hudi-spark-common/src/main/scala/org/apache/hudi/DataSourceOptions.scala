@@ -526,11 +526,11 @@ object DataSourceWriteOptions {
     .noDefaultValue()
     .withDocumentation("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql.")
 
-  // bucketSpec: CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS
-  val HIVE_SYNC_BUCKET_SPEC: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.hive_sync.bucket_spec")
-    .noDefaultValue()
-    .withDocumentation("Hive metastore bucket specification.")
+  val HIVE_SYNC_BUCKET_SYNC: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.bucket_sync")
+    .defaultValue(false)
+    .withDocumentation("Whether sync hive metastore bucket specification when using bucket index." +
+      "The specification is 'CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS'")
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE: ConfigProperty[String] = ConfigProperty

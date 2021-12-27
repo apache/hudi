@@ -49,7 +49,6 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
     HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "8",
     KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> "_row_key"
   )
-  private val bucketSpec = "8\t_row_key"
 
   @BeforeEach override def setUp(): Unit = {
     initPath()
@@ -87,7 +86,6 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
       .save(basePath)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .option("bucketSpec", bucketSpec)
       .load(basePath + "/*/*/*/*")
     assertEquals(200, hudiSnapshotDF1.count())
   }
@@ -108,7 +106,6 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-        .option("bucketSpec", bucketSpec)
         .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
 
@@ -123,7 +120,6 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
         .save(basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-        .option("bucketSpec", bucketSpec)
         .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF2.count()) // still 100, since we only updated
     val commit1Time = hudiSnapshotDF1.select("_hoodie_commit_time").head().get(0).toString
@@ -143,7 +139,6 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
         .save(basePath)
     val hudiSnapshotDF4 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-        .option("bucketSpec", bucketSpec)
         .load(basePath + "/*/*/*/*")
     // 200, because we insert 100 records to a new partition
     assertEquals(200, hudiSnapshotDF4.count())

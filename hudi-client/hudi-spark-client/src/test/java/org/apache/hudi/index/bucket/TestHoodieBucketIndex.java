@@ -50,10 +50,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class HoodieBucketIndexSuite extends HoodieClientTestHarness {
+public class TestHoodieBucketIndex extends HoodieClientTestHarness {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieBucketIndexSuite.class);
-  private static final Schema SCHEMA = getSchemaFromResource(HoodieBucketIndexSuite.class, "/exampleSchema.avsc", true);
+  private static final Logger LOG = LogManager.getLogger(TestHoodieBucketIndex.class);
+  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBucketIndex.class, "/exampleSchema.avsc", true);
   private static final int NUM_BUCKET = 8;
 
   @BeforeEach

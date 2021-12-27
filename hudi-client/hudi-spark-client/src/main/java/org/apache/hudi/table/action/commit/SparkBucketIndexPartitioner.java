@@ -43,6 +43,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
+/**
+ * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
+ */
 public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> extends
     SparkHoodiePartitioner<T> {
 
@@ -50,7 +53,15 @@ public class SparkBucketIndexPartitioner<T extends HoodieRecordPayload<T>> exten
   private final String indexKeyField;
   private final int totalPartitionPaths;
   private final List<String> partitionPaths;
+  /**
+   * Helps get the RDD partition id, partition id is partition offset + bucket id.
+   * The partition offset is a multiple of the bucket num.
+   */
   private final Map<String, Integer> partitionPathOffset;
+
+  /**
+   * Partition path and file groups in it pair. Decide the file group an incoming update should go to.
+   */
   private Map<String, Set<String>> updatePartitionPathFileIds;
 
   public SparkBucketIndexPartitioner(WorkloadProfile profile,

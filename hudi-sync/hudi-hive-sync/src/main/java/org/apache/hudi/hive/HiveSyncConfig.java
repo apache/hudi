@@ -186,4 +186,8 @@ public class HiveSyncConfig implements Serializable {
       + ", isConditionalSync=" + isConditionalSync
       + '}';
   }
+
+  public static String getBucketSpec(String bucketCols, int bucketNum) {
+    return "CLUSTERED BY (" + bucketCols + " INTO " + bucketNum + " BUCKETS";
+  }
 }
