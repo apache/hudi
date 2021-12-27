@@ -18,14 +18,18 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.model.HoodieInstantInfo;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
@@ -340,6 +344,27 @@ public class TestClientRollback extends HoodieClientTestBase {
       rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
       assertEquals(rollbackInstants.size(), 1);
       assertEquals(rollbackInstants.get(0), rollbackInstant);
+
+      final String commitTime4 = "20160507040601";
+      final String commitTime5 = "20160507050611";
+
+      // add inflight compaction then rolls it back
+      testTable.addInflightCompaction(commitTime4, new HoodieCommitMetadata());
+      HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
+      rollbackPlan.setRollbackRequests(Collections.emptyList());
+      rollbackPlan.setInstantToRollback(new HoodieInstantInfo(commitTime4, HoodieTimeline.COMPACTION_ACTION));
+      testTable.addRequestedRollback(commitTime5, rollbackPlan);
+
+      // the compaction instants should be excluded
+      metaClient.reloadActiveTimeline();
+      assertEquals(0, client.getPendingRollbackInfos(metaClient).size());
+
+      // verify there is no extra rollback instants
+      client.rollback(commitTime4);
+
+      metaClient.reloadActiveTimeline();
+      rollbackInstants = metaClient.reloadActiveTimeline().getRollbackTimeline().getInstants().collect(Collectors.toList());
+      assertEquals(2, rollbackInstants.size());
     }
   }
 
