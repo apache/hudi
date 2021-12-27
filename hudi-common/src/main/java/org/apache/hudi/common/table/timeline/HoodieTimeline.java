@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
@@ -130,6 +131,14 @@ public interface HoodieTimeline extends Serializable {
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedAndCompactionInstants();
+
+  /**
+   * Filter this timeline to include the completed and exclude operation type is delete partition instants.
+   *
+   * @return New instance of HoodieTimeline with include the completed and
+   * exclude operation type is delete partition instants
+   */
+  HoodieTimeline filterCompletedExcludeDeletePartitionInstants();
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
@@ -280,6 +289,21 @@ public interface HoodieTimeline extends Serializable {
    * Read the completed instant details.
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);
+
+  /**
+   * Get WriteOperationType for instant.
+   */
+  Option<WriteOperationType> getWriteOperationType(HoodieInstant instant);
+
+  /**
+   * Check WriteOperationType is DeletePartition.
+   */
+  boolean isDeletePartitionType(HoodieInstant instant);
+
+  /**
+   * Check WriteOperationType is not DeletePartition.
+   */
+  boolean isNotDeletePartitionType(HoodieInstant instant);
 
   /**
    * Helper methods to compare instants.

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -98,6 +100,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline filterCompletedInstants() {
     return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isCompleted), details);
+  }
+
+  @Override
+  public HoodieTimeline filterCompletedExcludeDeletePartitionInstants() {
+    return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isCompleted)
+            .filter(this::isNotDeletePartitionType), details);
   }
 
   @Override
@@ -349,6 +357,28 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
+  }
+
+  @Override
+  public Option<WriteOperationType> getWriteOperationType(HoodieInstant instant) {
+    try {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+              .fromBytes(getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+      return Option.of(commitMetadata.getOperationType());
+    } catch (Exception e) {
+      return Option.empty();
+    }
+  }
+
+  @Override
+  public boolean isDeletePartitionType(HoodieInstant instant) {
+    Option<WriteOperationType> operationType = getWriteOperationType(instant);
+    return operationType.isPresent() && WriteOperationType.DELETE_PARTITION.equals(operationType.get());
+  }
+
+  @Override
+  public boolean isNotDeletePartitionType(HoodieInstant instant) {
+    return !isDeletePartitionType(instant);
   }
 
   @Override
