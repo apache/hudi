@@ -17,19 +17,22 @@
 
 package org.apache.hudi.functional
 
+import scala.collection.JavaConversions._
+
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, MergeOnReadSnapshotRelation}
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieLayoutConfig, HoodieWriteConfig}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.testutils.HoodieClientTestBase
+
 import org.apache.spark.sql._
-import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
-import scala.collection.JavaConversions._
+import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner
+import org.apache.hudi.table.storage.HoodieStorageLayout
 
 /**
  *
@@ -47,7 +50,9 @@ class TestDataSourceForBucketIndex extends HoodieClientTestBase {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET.name,
     HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "8",
-    KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> "_row_key"
+    KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key -> "_row_key",
+    HoodieLayoutConfig.LAYOUT_TYPE.key -> HoodieStorageLayout.LayoutType.BUCKET.name,
+    HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME.key -> classOf[SparkBucketIndexPartitioner[_]].getName
   )
 
   @BeforeEach override def setUp(): Unit = {

@@ -74,7 +74,7 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.storage.HoodieBucketLayout;
+import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -133,10 +133,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   protected abstract HoodieIndex<T, ?, ?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
   protected HoodieStorageLayout getStorageLayout(HoodieWriteConfig config) {
-    if (config.getIndexType().equals(HoodieIndex.IndexType.BUCKET)) {
-      return new HoodieBucketLayout();
-    }
-    return new HoodieStorageLayout();
+    return HoodieLayoutFactory.createLayout(config);
   }
 
   private synchronized FileSystemViewManager getViewManager() {

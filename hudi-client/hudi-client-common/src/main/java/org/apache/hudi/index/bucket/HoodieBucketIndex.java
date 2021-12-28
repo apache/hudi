@@ -40,6 +40,10 @@ import org.apache.log4j.Logger;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Hash indexing mechanism.
+ * @param <T>
+ */
 public class HoodieBucketIndex<T extends HoodieRecordPayload<T>>
     extends HoodieIndex<T, Object, Object, Object> {
 

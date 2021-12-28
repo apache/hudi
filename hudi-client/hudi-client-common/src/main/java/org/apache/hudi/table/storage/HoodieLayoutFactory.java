@@ -18,39 +18,21 @@
 
 package org.apache.hudi.table.storage;
 
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import java.io.Serializable;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
 /**
- * Storage layout defines how the files are organized within a table.
+ * A factory to generate layout.
  */
-public abstract class HoodieStorageLayout implements Serializable {
-
-  protected final HoodieWriteConfig config;
-
-  public HoodieStorageLayout(HoodieWriteConfig config) {
-    this.config = config;
-  }
-
-  /**
-   * By default, layout does not directly control the total number of files.
-   */
-  public abstract boolean determinesNumFileGroups();
-
-  /**
-   * Return the layout specific partitioner for writing data, if any.
-   */
-  public abstract Option<String> layoutPartitionerClass();
-
-  /**
-   * Determines if the operation is supported by the layout.
-   */
-  public abstract boolean doesNotSupport(WriteOperationType operationType);
-
-  public enum LayoutType {
-    DEFAULT, BUCKET
+public final class HoodieLayoutFactory {
+  public static HoodieStorageLayout createLayout(HoodieWriteConfig config) {
+    switch (config.getLayoutType()) {
+      case DEFAULT:
+        return new HoodieDefaultLayout(config);
+      case BUCKET:
+        return new HoodieBucketLayout(config);
+      default:
+        throw new HoodieNotSupportedException("Unknown layout type, set " + config.getLayoutType());
+    }
   }
 }

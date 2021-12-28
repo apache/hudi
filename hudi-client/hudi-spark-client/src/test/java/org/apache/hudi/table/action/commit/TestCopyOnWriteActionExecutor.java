@@ -34,15 +34,18 @@ import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -71,6 +74,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -90,7 +94,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   private static final Schema SCHEMA = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
   private static final Stream<Arguments> indexType() {
     HoodieIndex.IndexType[] data = new HoodieIndex.IndexType[] {
-        HoodieIndex.IndexType.BLOOM
+        HoodieIndex.IndexType.BLOOM,
+        HoodieIndex.IndexType.BUCKET
     };
     return Stream.of(data).map(Arguments::of);
   }
@@ -129,13 +134,18 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
             .withRemoteServerPort(timelineServicePort).build());
   }
 
-  private HoodieIndexConfig makeIndexConfig(HoodieIndex.IndexType indexType) {
+  private Properties makeIndexConfig(HoodieIndex.IndexType indexType) {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     HoodieIndexConfig.Builder indexConfig = HoodieIndexConfig.newBuilder()
-        .withIndexType(indexType);
+        .fromProperties(props).withIndexType(indexType);
     if (indexType.equals(HoodieIndex.IndexType.BUCKET)) {
-      indexConfig.withIndexKeyField("_row_key").withBucketNum("8");
+      indexConfig.withIndexKeyField("_row_key").withBucketNum("1");
+      props.setProperty(HoodieLayoutConfig.LAYOUT_TYPE.key(), HoodieStorageLayout.LayoutType.BUCKET.name());
+      props.setProperty(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME.key(), SparkBucketIndexPartitioner.class.getName());
     }
-    return indexConfig.build();
+    props.putAll(indexConfig.build().getProps());
+    return props;
   }
 
   // TODO (weiy): Add testcases for crossing file writing.
@@ -144,7 +154,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
   public void testUpdateRecords(HoodieIndex.IndexType indexType) throws Exception {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
-        .withIndexConfig(makeIndexConfig(indexType)).build();
+        .withProps(makeIndexConfig(indexType)).build();
     String firstCommitTime = makeNewCommitTime();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
     writeClient.startCommitWithTime(firstCommitTime);

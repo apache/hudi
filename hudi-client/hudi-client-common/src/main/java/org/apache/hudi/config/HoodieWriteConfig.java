@@ -57,6 +57,7 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
+import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -1842,6 +1843,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(FILEID_PREFIX_PROVIDER_CLASS);
   }
 
+  /**
+   * Layout configs.
+   */
+  public HoodieStorageLayout.LayoutType getLayoutType() {
+    return HoodieStorageLayout.LayoutType.valueOf(getString(HoodieLayoutConfig.LAYOUT_TYPE));
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -1863,6 +1871,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isPreCommitValidationConfigSet = false;
     private boolean isMetricsJmxConfigSet = false;
     private boolean isMetricsGraphiteConfigSet = false;
+    private boolean isLayoutConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -2233,6 +2242,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isPreCommitValidationConfigSet,
           HoodiePreCommitValidatorConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+      writeConfig.setDefaultOnCondition(!isLayoutConfigSet,
+          HoodieLayoutConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
     }
 
