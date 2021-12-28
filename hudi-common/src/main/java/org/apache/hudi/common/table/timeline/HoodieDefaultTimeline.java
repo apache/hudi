@@ -103,9 +103,9 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public HoodieTimeline filterCompletedExcludeDeletePartitionInstants() {
+  public HoodieTimeline filterCompletedInstantsWithCommitMetadata() {
     return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isCompleted)
-            .filter(this::isNotDeletePartitionType), details);
+            .filter(i -> !isDeletePartitionType(i)), details);
   }
 
   @Override
@@ -360,25 +360,18 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Option<WriteOperationType> getWriteOperationType(HoodieInstant instant) {
+  public boolean isDeletePartitionType(HoodieInstant instant) {
+    Option<WriteOperationType> operationType;
+
     try {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-      return Option.of(commitMetadata.getOperationType());
+      operationType = Option.of(commitMetadata.getOperationType());
     } catch (Exception e) {
-      return Option.empty();
+      operationType = Option.empty();
     }
-  }
 
-  @Override
-  public boolean isDeletePartitionType(HoodieInstant instant) {
-    Option<WriteOperationType> operationType = getWriteOperationType(instant);
     return operationType.isPresent() && WriteOperationType.DELETE_PARTITION.equals(operationType.get());
-  }
-
-  @Override
-  public boolean isNotDeletePartitionType(HoodieInstant instant) {
-    return !isDeletePartitionType(instant);
   }
 
   @Override

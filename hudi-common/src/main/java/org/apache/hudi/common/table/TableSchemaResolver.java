@@ -84,7 +84,7 @@ public class TableSchemaResolver {
           // If this is COW, get the last commit and read the schema from a file written in the
           // last commit
           HoodieInstant lastCommit =
-              activeTimeline.getCommitsTimeline().filterCompletedExcludeDeletePartitionInstants()
+              activeTimeline.getCommitsTimeline().filterCompletedInstantsWithCommitMetadata()
                       .lastInstant().orElseThrow(() -> new InvalidTableException(metaClient.getBasePath()));
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(activeTimeline.getInstantDetails(lastCommit).get(), HoodieCommitMetadata.class);
@@ -98,7 +98,7 @@ public class TableSchemaResolver {
           // compaction commit
           // Get a datafile written and get the schema from that file
           Option<HoodieInstant> lastCompactionCommit = metaClient.getActiveTimeline().getCommitTimeline()
-                  .filterCompletedExcludeDeletePartitionInstants().lastInstant();
+                  .filterCompletedInstantsWithCommitMetadata().lastInstant();
           LOG.info("Found the last compaction commit as " + lastCompactionCommit);
 
           Option<HoodieInstant> lastDeltaCommit;
