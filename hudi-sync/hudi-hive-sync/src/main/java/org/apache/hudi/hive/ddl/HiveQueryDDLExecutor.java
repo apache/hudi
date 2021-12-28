@@ -19,6 +19,8 @@
 package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
@@ -136,7 +138,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
     try {
       for (String dropPartition : partitionsToDrop) {
-        metaStoreClient.dropPartition(config.databaseName, tableName, dropPartition, false);
+        String partitionClause = getPartitionClauseForDrop(dropPartition);
+        metaStoreClient.dropPartition(config.databaseName, tableName, partitionClause, false);
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
     } catch (Exception e) {
@@ -144,6 +147,31 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       throw new HoodieHiveSyncException(config.databaseName + "." + tableName + " drop partition failed", e);
     }
   }
+
+  /**
+   * Remove "`" and "'"in partBuilder compared with getPartitionClause in QueryBasedDDLExecutor
+   * Use "/" as join delimiter
+   * @param partition
+   * @return String example as year=2021/month=06/day=25
+   */
+  public String getPartitionClauseForDrop(String partition) {
+    List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
+    ValidationUtils.checkArgument(config.partitionFields.size() == partitionValues.size(),
+        "Partition key parts " + config.partitionFields + " does not match with partition values " + partitionValues
+            + ". Check partition strategy. ");
+    List<String> partBuilder = new ArrayList<>();
+    for (int i = 0; i < config.partitionFields.size(); i++) {
+      String partitionValue = partitionValues.get(i);
+      // decode the partition before sync to hive to prevent multiple escapes of HIVE
+      if (config.decodePartition) {
+        // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
+        partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
+      }
+      partBuilder.add(config.partitionFields.get(i) + "=" + partitionValue);
+    }
+    return String.join("/", partBuilder);
+  }
+
 
   @Override
   public void close() {
