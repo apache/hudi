@@ -123,6 +123,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   public <I, O> void flatMapAndForeach(List<I> data, SerializableFunction<I, Stream<O>> func, SerializableConsumer<O> consumer, int parallelism, int consumerParallelism) {
     data.stream().parallel().flatMap(throwingFlatMapWrapper(func)).forEach(throwingForeachWrapper(consumer));
   }
+
   @Override
   public <I> void foreach(List<I> data, SerializableConsumer<I> consumer, int parallelism) {
     data.stream().forEach(throwingForeachWrapper(consumer));
