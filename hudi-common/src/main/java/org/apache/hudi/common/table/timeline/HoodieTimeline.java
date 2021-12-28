@@ -132,6 +132,14 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedAndCompactionInstants();
 
   /**
+   * Filter this timeline to include the completed and exclude operation type is delete partition instants.
+   *
+   * @return New instance of HoodieTimeline with include the completed and
+   * exclude operation type is delete partition instants
+   */
+  HoodieTimeline filterCompletedInstantsWithCommitMetadata();
+
+  /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
    * 
    * @return
@@ -280,6 +288,11 @@ public interface HoodieTimeline extends Serializable {
    * Read the completed instant details.
    */
   Option<byte[]> getInstantDetails(HoodieInstant instant);
+
+  /**
+   * Check WriteOperationType is DeletePartition.
+   */
+  boolean isDeletePartitionType(HoodieInstant instant);
 
   /**
    * Helper methods to compare instants.
