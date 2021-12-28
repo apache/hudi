@@ -59,7 +59,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
    */
   protected List<String> filterPartitionPaths(List<String> partitionPaths) {
     List<String> filteredPartitions = ClusteringPlanPartitionFilter.filter(partitionPaths, getWriteConfig());
-    LOG.info("Filtered to the following partitions: " + filteredPartitions);
+    LOG.debug("Filtered to the following partitions: " + filteredPartitions);
     return filteredPartitions;
   }
 

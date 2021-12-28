@@ -30,10 +30,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
-/**
- *
- */
-public class TestClusteringPlanStrategy {
+public class TestClusteringPlanStrategyConfigCompatibility {
 
   private static Stream<Arguments> configParams() {
     /**

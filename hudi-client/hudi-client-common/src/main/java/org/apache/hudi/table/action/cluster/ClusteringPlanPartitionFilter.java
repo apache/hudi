@@ -47,7 +47,7 @@ public class ClusteringPlanPartitionFilter {
     }
   }
 
-  public static List<String> recentDaysFilter(List<String> partitions, HoodieWriteConfig config) {
+  private static List<String> recentDaysFilter(List<String> partitions, HoodieWriteConfig config) {
     int targetPartitionsForClustering = config.getTargetPartitionsForClustering();
     int skipPartitionsFromLatestForClustering = config.getSkipPartitionsFromLatestForClustering();
     return partitions.stream()
