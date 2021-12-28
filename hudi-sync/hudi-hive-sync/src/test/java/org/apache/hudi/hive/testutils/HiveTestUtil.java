@@ -178,10 +178,10 @@ public class HiveTestUtil {
     createCommitFile(commitMetadata, instantTime);
   }
 
-  public static void createReplaceCommit(String instantTime, String partitions)
+  public static void createReplaceCommit(String instantTime, String partitions, WriteOperationType type)
       throws IOException {
     HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
-    replaceCommitMetadata.setOperationType(WriteOperationType.DELETE_PARTITION);
+    replaceCommitMetadata.setOperationType(type);
     Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
     partitionToReplaceFileIds.put(partitions, new ArrayList<>());
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);

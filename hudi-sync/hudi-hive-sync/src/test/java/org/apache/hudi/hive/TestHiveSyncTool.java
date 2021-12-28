@@ -20,6 +20,7 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -816,7 +817,7 @@ public class TestHiveSyncTool {
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
     // create a replace commit to delete current partitions
-    HiveTestUtil.createReplaceCommit("101", "2021/12/28");
+    HiveTestUtil.createReplaceCommit("101", "2021/12/28", WriteOperationType.DELETE_PARTITION);
 
     // sync drop partitins
     tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);

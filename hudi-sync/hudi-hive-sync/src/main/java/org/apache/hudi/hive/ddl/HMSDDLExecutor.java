@@ -21,11 +21,10 @@ package org.apache.hudi.hive.ddl;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
-import org.apache.hudi.common.util.PartitionPathEncodeUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.PartitionValueExtractor;
+import org.apache.hudi.hive.util.HivePartitionUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -49,7 +48,6 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -239,7 +237,7 @@ public class HMSDDLExecutor implements DDLExecutor {
     LOG.info("Drop partitions " + partitionsToDrop.size() + " on " + tableName);
     try {
       for (String dropPartition : partitionsToDrop) {
-        String partitionClause = getPartitionClauseForDrop(dropPartition).replace("`", "");
+        String partitionClause = HivePartitionUtil.getPartitionClauseForDrop(dropPartition, partitionValueExtractor, syncConfig);
         client.dropPartition(syncConfig.databaseName, tableName, partitionClause, false);
         LOG.info("Drop partition " + dropPartition + " on " + tableName);
       }
@@ -247,28 +245,6 @@ public class HMSDDLExecutor implements DDLExecutor {
       LOG.error(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
       throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " drop partition failed", e);
     }
-  }
-
-  /**
-   * @param partition partitions to be dropped
-   * @return String example as year=2021/month=06/day=25
-   */
-  public String getPartitionClauseForDrop(String partition) {
-    List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-    ValidationUtils.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
-        "Partition key parts " + syncConfig.partitionFields + " does not match with partition values " + partitionValues
-            + ". Check partition strategy. ");
-    List<String> partBuilder = new ArrayList<>();
-    for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
-      String partitionValue = partitionValues.get(i);
-      // decode the partition before sync to hive to prevent multiple escapes of HIVE
-      if (syncConfig.decodePartition) {
-        // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
-        partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
-      }
-      partBuilder.add(syncConfig.partitionFields.get(i) + "=" + partitionValue);
-    }
-    return String.join("/", partBuilder);
   }
 
   @Override
