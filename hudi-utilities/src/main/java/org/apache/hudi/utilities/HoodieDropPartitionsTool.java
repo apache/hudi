@@ -202,6 +202,8 @@ public class HoodieDropPartitionsTool {
     }
     SparkConf sparkConf = UtilHelpers.buildSparkConf("Hoodie-Drop-Table-Partitions", cfg.sparkMaster);
     sparkConf.set("spark.executor.memory", cfg.sparkMemory);
+    sparkConf.set("spark.driver.bindAddress", "localhost");
+    sparkConf.set("spark.driver.host", "localhost");
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     HoodieDropPartitionsTool tool = new HoodieDropPartitionsTool(jsc, cfg);
     try {

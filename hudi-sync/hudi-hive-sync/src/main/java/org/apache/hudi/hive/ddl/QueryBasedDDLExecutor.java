@@ -46,7 +46,7 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
 public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
   private final HiveSyncConfig config;
-  private final PartitionValueExtractor partitionValueExtractor;
+  public final PartitionValueExtractor partitionValueExtractor;
   private final FileSystem fs;
 
   public QueryBasedDDLExecutor(HiveSyncConfig config, FileSystem fs) {
