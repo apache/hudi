@@ -167,9 +167,6 @@ public class HiveSyncTool extends AbstractSyncTool {
     // check if isDropPartition
     boolean isDropPartition = hoodieHiveClient.isDropPartition();
 
-    // check if schemaChanged
-    boolean schemaChanged;
-
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
 
@@ -184,7 +181,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     }
 
     // Sync schema if needed
-    schemaChanged = syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
+    boolean schemaChanged = syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
 
     LOG.info("Schema sync complete. Syncing partitions for " + tableName);
     // Get the last time we successfully synced partitions
