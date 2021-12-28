@@ -106,9 +106,9 @@ extends HoodieLeafRunnableCommand {
       val snapshotTableName = hoodieCatalogTable.tableName + SUFFIX_SNAPSHOT_TABLE
       val roTableName = hoodieCatalogTable.tableName + SUFFIX_READ_OPTIMIZED_TABLE
 
+      dropHiveTable(sparkSession, dbName, hoodieCatalogTable.tableName)
       dropHiveTable(sparkSession, dbName, snapshotTableName)
-      dropHiveTable(sparkSession, dbName, roTableName)
-      dropHiveTable(sparkSession, dbName, hoodieCatalogTable.tableName, purge)
+      dropHiveTable(sparkSession, dbName, roTableName, purge)
     } else {
       dropHiveTable(sparkSession, dbName, tableName, purge)
     }
