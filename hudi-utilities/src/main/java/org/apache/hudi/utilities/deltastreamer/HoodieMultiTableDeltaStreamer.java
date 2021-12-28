@@ -82,12 +82,7 @@ public class HoodieMultiTableDeltaStreamer {
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
-    TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<String>()).getProps();
-    // get the schema of target table from hive database by jdbc
-    if (commonProperties.getProperty(Constants.SOURCE_SCHEMA_JDBC_CONNECTION_URL) != null) {
-      JdbcbasedSchemaProvider jsp = new JdbcbasedSchemaProvider(commonProperties, jssc);
-      commonProperties.setProperty("targetSchema", jsp.getTargetSchema().toString());
-    }
+    TypedProperties commonProperties = UtilHelpers.readConfig(fs.getConf(), new Path(commonPropsFile), new ArrayList<>()).getProps();
     // get the tables to be ingested and their corresponding config files from this properties instance
     populateTableExecutionContextList(commonProperties, configFolder, fs, config);
   }
@@ -122,7 +117,6 @@ public class HoodieMultiTableDeltaStreamer {
       // populate the table execution context by traversing source tables
       List<String> sourcesToBeBonded = getSourcesToBeBound(properties);
       logger.info("Source tables to be bound via MultiTableDeltaStreamer : " + sourcesToBeBonded);
-
       String tableToBeIngested = getTableToBeIngested(properties);
       String[] targetTableWithDataBase = tableToBeIngested.split("\\.");
       String targetDataBase = targetTableWithDataBase.length > 1 ? targetTableWithDataBase[0] : "default";
@@ -157,7 +151,7 @@ public class HoodieMultiTableDeltaStreamer {
       FileSystem fs, Config config, String configProp, String database, String currentTable, String targetBasePath) throws IOException {
     // copy all common properties to current table properties
     TypedProperties currentTableProperties = getCurrentTableProperties(properties, configFolder, fs, configProp, database,
-        currentTable, targetBasePath);
+        currentTable);
 
     // copy all the values from config to cfg
     final HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
@@ -180,22 +174,18 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   private TypedProperties getCurrentTableProperties(TypedProperties properties, String configFolder, FileSystem fs,
-      String configProp, String database, String currentTable, String targetBasePath) throws IOException {
+      String configProp, String database, String currentTable) throws IOException {
 
     String configFilePath = properties.getString(configProp, Helpers.getDefaultConfigFilePath(configFolder, database, currentTable));
     checkIfTableConfigFileExists(configFolder, fs, configFilePath);
 
-    TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<String>()).getProps();
+    TypedProperties tableProperties = UtilHelpers.readConfig(fs.getConf(), new Path(configFilePath), new ArrayList<>()).getProps();
     properties.forEach((k, v) -> {
       if (tableProperties.get(k) == null) {
         tableProperties.setProperty(k.toString(), v.toString());
       }
     });
-    // These two properties are required only when the mode is populating the table execution context by traversing source tables.
-    if (!StringUtils.isNullOrEmpty(targetBasePath)) {
-      tableProperties.setProperty("currentSourceDataBase", database);
-      tableProperties.setProperty("currentSourceTable", currentTable);
-    }
+
     return tableProperties;
   }
 
@@ -292,11 +282,9 @@ public class HoodieMultiTableDeltaStreamer {
 
   public static void main(String[] args) throws IOException {
     final Config config = new Config();
-
     if (config.enableHiveSync) {
       logger.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
-
     JCommander cmd = new JCommander(config, null, args);
     if (config.help || args.length == 0) {
       cmd.usage();
@@ -524,7 +512,12 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   public static class Constants {
-    private static final String SOURCE_SCHEMA_JDBC_CONNECTION_URL = "hoodie.deltastreamer.schemaprovider.source.schema.jdbc.connection.url";
+    // When there are multiple sources, you can use this configuration item to set an independent checkpoint for the source.
+    public static final String SOURCE_CHECKPOINT = "hoodie.deltastreamer.current.source.checkpoint";
+
+    // If there are multiple sources, you can use this configuration item to set an alias for the source to distinguish the source.
+    // In addition, the alias is used as a suffix to distinguish the CHECKPOINT_KEY and CHECKPOINT_RESET_KEY of each source.
+    public static final String SOURCE_NAME = "hoodie.deltastreamer.current.source.name";
 
     public static final String KAFKA_TOPIC_PROP = "hoodie.deltastreamer.source.kafka.topic";
 
@@ -544,11 +537,15 @@ public class HoodieMultiTableDeltaStreamer {
 
     private static final String TABLES_TO_BE_INGESTED_PROP = "hoodie.deltastreamer.ingestion.tablesToBeIngested";
 
-    private static final String SOURCES_TO_BE_BOUND = "hoodie.deltastreamer.source.sourcesToBeBound";
+    // This configuration item specifies the database name and table name of the source. The format is "database.table".
+    // It is recommended that table name be the same as the alias of the source. If there are multiple sources, separate them with commas.
+    public static final String SOURCES_TO_BE_BOUND = "hoodie.deltastreamer.source.sourcesToBeBound";
 
     private static final String SOURCE_PREFIX = "hoodie.deltastreamer.source.";
 
-    public static final String ASSOCIATED_TABLES = "hoodie.deltastreamer.associated.tables";
+    // This configuration item specifies the path of the hudi table associated with the current source.
+    // If there are multiple hudi tables, separate them with commas.
+    public static final String ASSOCIATED_TABLES = "hoodie.deltastreamer.source.associated.tables";
 
     private static final String INGESTION_PREFIX = "hoodie.deltastreamer.ingestion.";
 
@@ -562,7 +559,7 @@ public class HoodieMultiTableDeltaStreamer {
 
     public static final String PATH_SEPARATOR = "/";
 
-    private static final String PATH_CUR_DIR = ".";
+    public static final String PATH_CUR_DIR = ".";
 
     private static final String UNDERSCORE = "_";
 

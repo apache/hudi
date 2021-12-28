@@ -327,31 +327,13 @@ public class DeltaSync implements Serializable {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
       if (lastCommit.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-          .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
-        if (cfg.checkpoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))
-          || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
-          resumeCheckpointStr = Option.of(cfg.checkpoint);
-        } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
-          //if previous checkpoint is an empty string, skip resume use Option.empty()
-          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
-        } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-          HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
-          // if previous commit metadata did not have the checkpoint key, try traversing previous commits until we find one.
-          Option<String> prevCheckpoint = getPreviousCheckpoint(commitTimelineOpt.get());
-          if (prevCheckpoint.isPresent()) {
-            resumeCheckpointStr = prevCheckpoint;
-          } else {
-            throw new HoodieDeltaStreamerException(
-              "Unable to find previous checkpoint. Please double check if this table "
-                + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
-                + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
-                + commitMetadata.toJsonString());
-          }
-        }
-        // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
-        if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
+        if (!StringUtils.isNullOrEmpty(props.getProperty(Constants.SOURCES_TO_BE_BOUND))) {
+          resumeCheckpointStr = getResumeCheckPointStr(lastCommit,
+            CHECKPOINT_KEY + Constants.PATH_CUR_DIR + props.getProperty(Constants.SOURCE_NAME),
+            CHECKPOINT_RESET_KEY + Constants.PATH_CUR_DIR + props.getProperty(Constants.SOURCE_NAME),
+            props.getProperty(Constants.SOURCE_CHECKPOINT), true);
+        } else {
+          resumeCheckpointStr = getResumeCheckPointStr(lastCommit, CHECKPOINT_KEY, CHECKPOINT_RESET_KEY, cfg.checkpoint, false);
         }
       }
     } else {
@@ -371,8 +353,8 @@ public class DeltaSync implements Serializable {
           SimpleKeyGenerator.class.getName()))
         .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
-    if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
-      resumeCheckpointStr = Option.of(cfg.checkpoint);
+    if (!resumeCheckpointStr.isPresent() && (cfg.checkpoint != null || props.getProperty(Constants.SOURCE_CHECKPOINT) != null)) {
+      resumeCheckpointStr = cfg.checkpoint != null ? Option.of(cfg.checkpoint) : Option.of(props.getProperty(Constants.SOURCE_CHECKPOINT));
     }
     LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
@@ -421,15 +403,11 @@ public class DeltaSync implements Serializable {
           transformed
                 .map(r -> {
                   // determine the targetSchemaProvider. use latestTableSchema if reconcileSchema is enabled.
-                  SchemaProvider targetSchemaProvider = null;
+                  SchemaProvider targetSchemaProvider;
                   if (reconcileSchema) {
                     targetSchemaProvider = UtilHelpers.createLatestSchemaProvider(r.schema(), jssc, fs, cfg.targetBasePath);
                   } else {
-                    targetSchemaProvider = props.getProperty("targetSchema") != null
-                      // If you have obtained the target schema from Hive, use it directly.
-                      ? UtilHelpers.createRowBasedSchemaProvider((StructType) SchemaConverters.toSqlType(
-                        new Schema.Parser().parse(props.getProperty("targetSchema"))).dataType(), props, jssc)
-                      : UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc);
+                    targetSchemaProvider = UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc);
                   }
                   return (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
                     dataAndCheckpoint.getSchemaProvider(), targetSchemaProvider); })
@@ -458,16 +436,17 @@ public class DeltaSync implements Serializable {
 
     jssc.setJobGroup(this.getClass().getSimpleName(), "Checking if input is empty");
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
-      LOG.info("No new data, perform empty commit.");
-      return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
+      // When no new data is available, don't perform empty commit.
+      LOG.info("No new data, current batch is empty.");
+      return null;
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-        (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false))
-        : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
+          (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false))
+          : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
@@ -478,12 +457,56 @@ public class DeltaSync implements Serializable {
     return timeline.getReverseOrderedInstants().map(instant -> {
       try {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-          .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
         return Option.ofNullable(commitMetadata.getMetadata(CHECKPOINT_KEY));
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }
     }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+  }
+
+  /**
+   *
+   * @param lastCommit
+   * @param metaDataCheckPointKey the key of checkpoint that saved in meta data
+   * @param metaDataCheckPointResetKey the key of checkpoint_reset that saved in meta data
+   * @param checkPoint the checkpoint that configured by cfg.checkpoint or hoodie.deltastreamer.current.source.checkpoint.
+   * @param isMultiSource whether there are multiple sources
+   * @return
+   * @throws IOException
+   */
+  private Option<String> getResumeCheckPointStr(Option<HoodieInstant> lastCommit, String metaDataCheckPointKey,
+    String metaDataCheckPointResetKey, String checkPoint, boolean isMultiSource) throws IOException {
+
+    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+      .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
+
+    if (checkPoint != null && (StringUtils.isNullOrEmpty(commitMetadata.getMetadata(metaDataCheckPointResetKey))
+      || !checkPoint.equals(commitMetadata.getMetadata(metaDataCheckPointResetKey)))) {
+      return Option.of(checkPoint);
+    } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(metaDataCheckPointKey))) {
+      // if previous checkpoint is an empty string, skip resume use Option.empty()
+      return Option.of(commitMetadata.getMetadata(metaDataCheckPointKey));
+    } else if (commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
+      // in case of CLUSTER commit, no checkpoint will be available in metadata.
+      return Option.empty();
+    } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+      HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
+      // If there are multiple source tables, each source will reach here when it obtains data for the first time.This is normal, no exception needs to be thrown.
+      if (isMultiSource) {
+        return Option.empty();
+      }
+      throw new HoodieDeltaStreamerException(
+        "Unable to find previous checkpoint. Please double check if this table "
+          + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
+          + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
+          + commitMetadata.toJsonString());
+    }
+    // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
+    if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(metaDataCheckPointResetKey))) {
+      props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
+    }
+    return Option.empty();
   }
 
   /**
@@ -496,8 +519,8 @@ public class DeltaSync implements Serializable {
    * @return Option Compaction instant if one is scheduled
    */
   private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
-    HoodieDeltaStreamerMetrics metrics,
-    Timer.Context overallTimerContext) {
+      HoodieDeltaStreamerMetrics metrics,
+      Timer.Context overallTimerContext) throws IOException {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {
@@ -538,14 +561,11 @@ public class DeltaSync implements Serializable {
     long metaSyncTimeMs = 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
-      if (cfg.checkpoint != null) {
-        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
-      }
+      writeCheckpointToCommitMetadata(checkpointStr, checkpointCommitMetadata);
 
       if (hasErrors) {
         LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
-          + totalErrorRecords + "/" + totalRecords);
+            + totalErrorRecords + "/" + totalRecords);
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, Collections.emptyMap());
@@ -582,6 +602,40 @@ public class DeltaSync implements Serializable {
     // Send DeltaStreamer Metrics
     metrics.updateDeltaStreamerMetrics(overallTimeMs);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
+  }
+
+  /**
+   *
+   * @param checkpointStr the beginning offset of next batch
+   * @param checkpointCommitMetadata the checkpoint data of current source that needs to write to meta data of current commit
+   * @throws IOException
+   */
+  private void writeCheckpointToCommitMetadata(String checkpointStr, HashMap<String, String> checkpointCommitMetadata)
+    throws IOException {
+    // If there are multiple source tables, the checkpoint data of the last commit must be synchronized and updated before the current commit is complete.
+    if (!StringUtils.isNullOrEmpty(props.getProperty(Constants.SOURCES_TO_BE_BOUND))) {
+      Option<HoodieInstant> lastCommit = commitTimelineOpt.get()
+        .filter(instant -> !instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).lastInstant();
+      // the checkpoint data of the last commit must be synchronized
+      if (lastCommit.isPresent()) {
+        HoodieCommitMetadata lastCommitMetadata = HoodieCommitMetadata
+          .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
+        lastCommitMetadata.getExtraMetadata().entrySet().stream()
+          .filter(i -> i.getKey().contains(CHECKPOINT_KEY) || i.getKey().contains(CHECKPOINT_RESET_KEY))
+          .forEach(i -> checkpointCommitMetadata.put(i.getKey(), i.getValue()));
+      }
+      // update or insert checkpoint data of current source
+      checkpointCommitMetadata.put(CHECKPOINT_KEY + Constants.PATH_CUR_DIR + props.getProperty(Constants.SOURCE_NAME), checkpointStr);
+      if (props.getProperty(Constants.SOURCE_CHECKPOINT) != null) {
+        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY + Constants.PATH_CUR_DIR + props.getProperty(Constants.SOURCE_NAME), props.getProperty(
+          Constants.SOURCE_CHECKPOINT));
+      }
+    } else {
+      checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+      if (cfg.checkpoint != null) {
+        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+      }
+    }
   }
 
   /**
@@ -653,7 +707,7 @@ public class DeltaSync implements Serializable {
   public void syncHive() {
     HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath, cfg.baseFileFormat);
     LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
-      + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+        + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
     HiveConf hiveConf = new HiveConf(conf, HiveConf.class);
     LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
     LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
@@ -721,7 +775,7 @@ public class DeltaSync implements Serializable {
     //       need to explicitly set up some configuration aspects that
     //       are based on these (for ex Clustering configuration)
     HoodieWriteConfig.Builder builder =
-      HoodieWriteConfig.newBuilder()
+        HoodieWriteConfig.newBuilder()
         .withPath(cfg.targetBasePath)
         .combineInput(cfg.filterDupes, combineBeforeUpsert)
         .withCompactionConfig(
@@ -760,17 +814,17 @@ public class DeltaSync implements Serializable {
 
     // Validate what deltastreamer assumes of write-config to be really safe
     ValidationUtils.checkArgument(config.inlineCompactionEnabled() == cfg.isInlineCompactionEnabled(),
-      String.format("%s should be set to %s", INLINE_COMPACT.key(), cfg.isInlineCompactionEnabled()));
+        String.format("%s should be set to %s", INLINE_COMPACT.key(), cfg.isInlineCompactionEnabled()));
     ValidationUtils.checkArgument(config.inlineClusteringEnabled() == clusteringConfig.isInlineClusteringEnabled(),
-      String.format("%s should be set to %s", INLINE_CLUSTERING.key(), clusteringConfig.isInlineClusteringEnabled()));
+        String.format("%s should be set to %s", INLINE_CLUSTERING.key(), clusteringConfig.isInlineClusteringEnabled()));
     ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == clusteringConfig.isAsyncClusteringEnabled(),
-      String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), clusteringConfig.isAsyncClusteringEnabled()));
+        String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE.key(), clusteringConfig.isAsyncClusteringEnabled()));
     ValidationUtils.checkArgument(!config.shouldAutoCommit(),
-      String.format("%s should be set to %s", AUTO_COMMIT_ENABLE.key(), autoCommit));
+        String.format("%s should be set to %s", AUTO_COMMIT_ENABLE.key(), autoCommit));
     ValidationUtils.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes,
-      String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
+        String.format("%s should be set to %s", COMBINE_BEFORE_INSERT.key(), cfg.filterDupes));
     ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),
-      String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT.key(), combineBeforeUpsert));
+        String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT.key(), combineBeforeUpsert));
     return config;
   }
 
