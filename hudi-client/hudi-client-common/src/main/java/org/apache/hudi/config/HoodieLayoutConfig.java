@@ -64,6 +64,16 @@ public class HoodieLayoutConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withLayoutType(String type) {
+      layoutConfig.setValue(LAYOUT_TYPE, type);
+      return this;
+    }
+
+    public Builder withLayoutPartitioner(String partitionerClass) {
+      layoutConfig.setValue(LAYOUT_PARTITIONER_CLASS_NAME, partitionerClass);
+      return this;
+    }
+
     public HoodieLayoutConfig build() {
       setDefault();
       return layoutConfig;

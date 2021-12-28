@@ -136,15 +136,17 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
   private Properties makeIndexConfig(HoodieIndex.IndexType indexType) {
     Properties props = new Properties();
-    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     HoodieIndexConfig.Builder indexConfig = HoodieIndexConfig.newBuilder()
-        .fromProperties(props).withIndexType(indexType);
-    if (indexType.equals(HoodieIndex.IndexType.BUCKET)) {
-      indexConfig.withIndexKeyField("_row_key").withBucketNum("1");
-      props.setProperty(HoodieLayoutConfig.LAYOUT_TYPE.key(), HoodieStorageLayout.LayoutType.BUCKET.name());
-      props.setProperty(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME.key(), SparkBucketIndexPartitioner.class.getName());
-    }
+        .withIndexType(indexType);
     props.putAll(indexConfig.build().getProps());
+    if (indexType.equals(HoodieIndex.IndexType.BUCKET)) {
+      props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+      indexConfig.fromProperties(props).withIndexKeyField("_row_key").withBucketNum("1");
+      props.putAll(indexConfig.build().getProps());
+      props.putAll(HoodieLayoutConfig.newBuilder().fromProperties(props)
+          .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
+          .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build().getProps());
+    }
     return props;
   }
 
