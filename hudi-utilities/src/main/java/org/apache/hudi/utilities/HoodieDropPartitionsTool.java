@@ -470,7 +470,7 @@ public class HoodieDropPartitionsTool {
     LOG.info("Hive Sync Conf => " + hiveSyncConfig.toString());
     FileSystem fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     HiveConf hiveConf = new HiveConf();
-    if(!StringUtils.isNullOrEmpty(cfg.hiveHMSUris)) {
+    if (!StringUtils.isNullOrEmpty(cfg.hiveHMSUris)) {
       hiveConf.set("hive.metastore.uris", cfg.hiveHMSUris);
     }
     hiveConf.addResource(fs.getConf());
