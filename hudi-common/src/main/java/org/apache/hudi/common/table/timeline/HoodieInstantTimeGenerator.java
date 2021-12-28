@@ -109,10 +109,6 @@ public class HoodieInstantTimeGenerator {
     return instant.length() == SECS_INSTANT_ID_LENGTH;
   }
 
-  public static String formatInstantTime(Instant timestamp) {
-    return MILLIS_INSTANT_TIME_FORMATTER.format(timestamp);
-  }
-
   public static String formatDate(Date timestamp) {
     return getInstantFromTemporalAccessor(convertDateToTemporalAccessor(timestamp));
   }
