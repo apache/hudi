@@ -172,7 +172,6 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
     return String.join("/", partBuilder);
   }
 
-
   @Override
   public void close() {
     if (metaStoreClient != null) {
