@@ -16,28 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.clustering.plan.strategy;
+package org.apache.hudi.table.action.cluster.strategy;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
+import org.apache.hudi.table.HoodieTable;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestSparkRegexMatchClusteringPlanStrategy {
+public class TestPartitionAwareClusteringPlanStrategy {
+
   @Mock
-  HoodieSparkCopyOnWriteTable table;
+  HoodieTable table;
   @Mock
-  HoodieSparkEngineContext context;
+  HoodieEngineContext context;
   HoodieWriteConfig hoodieWriteConfig;
 
   @BeforeEach
@@ -46,10 +51,9 @@ public class TestSparkRegexMatchClusteringPlanStrategy {
     props.setProperty("hoodie.clustering.plan.strategy.cluster.partition.regex.pattern", "2021072.*");
     this.hoodieWriteConfig = HoodieWriteConfig
         .newBuilder()
-        .withPath("Fake_Table_Path")
+        .withPath("dummy_Table_Path")
         .withClusteringConfig(HoodieClusteringConfig
             .newBuilder()
-            .withClusteringPlanStrategyClass("org.apache.hudi.client.clustering.plan.strategy.SparkRegexMatchPartitionsClusteringPlanStrategy")
             .fromProperties(props)
             .build())
         .build();
@@ -57,7 +61,7 @@ public class TestSparkRegexMatchClusteringPlanStrategy {
 
   @Test
   public void testFilterPartitionPaths() {
-    SparkRegexMatchPartitionsClusteringPlanStrategy sg = new SparkRegexMatchPartitionsClusteringPlanStrategy(table, context, hoodieWriteConfig);
+    PartitionAwareClusteringPlanStrategy sg = new DummyPartitionAwareClusteringPlanStrategy(table, context, hoodieWriteConfig);
 
     ArrayList<String> fakeTimeBasedPartitionsPath = new ArrayList<>();
     fakeTimeBasedPartitionsPath.add("20210718");
@@ -66,10 +70,26 @@ public class TestSparkRegexMatchClusteringPlanStrategy {
     fakeTimeBasedPartitionsPath.add("20210719");
     fakeTimeBasedPartitionsPath.add("20210721");
 
-    List list = sg.filterPartitionPaths(fakeTimeBasedPartitionsPath);
-
+    List list = sg.getRegexPatternMatchedPartitions(hoodieWriteConfig, fakeTimeBasedPartitionsPath);
     assertEquals(2, list.size());
     assertTrue(list.contains("20210721"));
     assertTrue(list.contains("20210723"));
+  }
+
+  class DummyPartitionAwareClusteringPlanStrategy extends PartitionAwareClusteringPlanStrategy {
+
+    public DummyPartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
+      super(table, engineContext, writeConfig);
+    }
+
+    @Override
+    protected Stream<HoodieClusteringGroup> buildClusteringGroupsForPartition(String partitionPath, List list) {
+      return null;
+    }
+
+    @Override
+    protected Map<String, String> getStrategyParams() {
+      return null;
+    }
   }
 }
