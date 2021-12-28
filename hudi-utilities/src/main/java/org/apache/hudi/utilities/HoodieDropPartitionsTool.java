@@ -63,12 +63,87 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+/**
+ * A tool with spark-submit to drop Hudi table partitions
+ * <p>
+ * You can dry run this tool with the following command:
+ * ```
+ * spark-submit \
+ * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
+ * --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ * --master local[*]
+ * --driver-memory 1g \
+ * --executor-memory 1g \
+ * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * --base-path basePath \
+ * --table-name tableName \
+ * --mode dry_run \
+ * --partitions partition1,partition2
+ * ```
+ * <p>
+ * You can specify the running mode of the tool through `--mode`.
+ * There are three modes of the {@link HoodieDropPartitionsTool}:
+ * - DELETE_PARTITIONS_LAZY ("delete_partitions_lazy"): This tool will mask/tombstone these partitions and corresponding data files and let cleaner delete these files later.
+ * - Also you can set --sync-hive-meta to sync current drop partition into hive
+ * <p>
+ * Example command:
+ * ```
+ * spark-submit \
+ * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
+ * --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ * --master local[*]
+ * --driver-memory 1g \
+ * --executor-memory 1g \
+ * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * --base-path basePath \
+ * --table-name tableName \
+ * --mode delete_partitions_lazy \
+ * --partitions partition1,partition2
+ * ```
+ * <p>
+ * - DELETE_PARTITIONS_EAGER ("delete_partitions_eager"): This tool will mask/tombstone these partitions and corresponding data files and and delete these data files immediately.
+ * - Also you can set --sync-hive-meta to sync current drop partition into hive
+ * <p>
+ * Example command:
+ * ```
+ * spark-submit \
+ * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
+ * --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ * --master local[*]
+ * --driver-memory 1g \
+ * --executor-memory 1g \
+ * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * --base-path basePath \
+ * --table-name tableName \
+ * --mode delete_partitions_eager \
+ * --partitions partition1,partition2
+ * ```
+ * <p>
+ * - DRY_RUN ("dry_run"): look and print for the table partitions and corresponding data files which will be deleted.
+ * <p>
+ * Example command:
+ * ```
+ * spark-submit \
+ * --class org.apache.hudi.utilities.HoodieDropPartitionsTool \
+ * --packages org.apache.spark:spark-avro_2.11:2.4.4 \
+ * --master local[*]
+ * --driver-memory 1g \
+ * --executor-memory 1g \
+ * $HUDI_DIR/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * --base-path basePath \
+ * --table-name tableName \
+ * --mode dry_run \
+ * --partitions partition1,partition2
+ * ```
+ *
+ * Also you can use --help to find more configs to use.
+ */
 public class HoodieDropPartitionsTool {
 
   private static final Logger LOG = LogManager.getLogger(HoodieDropPartitionsTool.class);
   // Spark context
   private final JavaSparkContext jsc;
-  // Repair config
+  // config
   private final Config cfg;
   // Properties with source, hoodie client, key generator etc.
   private TypedProperties props;
@@ -101,11 +176,11 @@ public class HoodieDropPartitionsTool {
   }
 
   public enum Mode {
-    // Mask/Tombstone these partitions and corresponding data files table partitions and let cleaner delete these files later.
+    // Mask/Tombstone these partitions and corresponding data files and let cleaner delete these files later.
     DELETE_PARTITIONS_LAZY,
-    // Delete data files and corresponding directory directly,
+    // Mask/Tombstone these partitions and corresponding data files. And delete these data files immediately.
     DELETE_PARTITIONS_EAGER,
-    // Dry run by looking for the table partitions will be deleted and corresponding data files.
+    // Dry run by looking for the table partitions and corresponding data files which will be deleted.
     DRY_RUN
   }
 
@@ -202,8 +277,6 @@ public class HoodieDropPartitionsTool {
     }
     SparkConf sparkConf = UtilHelpers.buildSparkConf("Hoodie-Drop-Table-Partitions", cfg.sparkMaster);
     sparkConf.set("spark.executor.memory", cfg.sparkMemory);
-    sparkConf.set("spark.driver.bindAddress", "localhost");
-    sparkConf.set("spark.driver.host", "localhost");
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     HoodieDropPartitionsTool tool = new HoodieDropPartitionsTool(jsc, cfg);
     try {
