@@ -18,25 +18,25 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.SparkAdapterSupport
+
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, NoSuchTableException}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HoodieCatalogTable}
-import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hudi.HoodieSqlUtils.isEnableHive
 
 import scala.util.control.NonFatal
 
 case class DropHoodieTableCommand(
-          tableIdentifier: TableIdentifier,
-          ifExists: Boolean,
-          isView: Boolean,
-          purge: Boolean) extends RunnableCommand
-  with SparkAdapterSupport {
+    tableIdentifier: TableIdentifier,
+    ifExists: Boolean,
+    isView: Boolean,
+    purge: Boolean)
+extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"

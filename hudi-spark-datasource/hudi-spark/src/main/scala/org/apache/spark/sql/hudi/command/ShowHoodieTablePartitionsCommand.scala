@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.types.StringType
 
@@ -34,7 +34,7 @@ import org.apache.spark.sql.types.StringType
 case class ShowHoodieTablePartitionsCommand(
     tableIdentifier: TableIdentifier,
     specOpt: Option[TablePartitionSpec])
-extends RunnableCommand {
+extends HoodieLeafRunnableCommand {
 
   override val output: Seq[Attribute] = {
     AttributeReference("partition", StringType, nullable = false)() :: Nil

@@ -15,21 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.execution.datasources
+package org.apache.spark.sql.catalyst.trees
 
-import java.util.TimeZone
+/**
+ * Similar to `LeafLike` in Spark3.2.
+ */
+trait HoodieLeafLike[T <: TreeNode[T]] { self: TreeNode[T] =>
 
-import org.apache.hadoop.fs.Path
+  override final def children: Seq[T] = Nil
 
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.DataType
+  override final def mapChildren(f: T => T): T = this.asInstanceOf[T]
 
-trait SparkParsePartitionUtil extends Serializable {
-
-  def parsePartition(
-    path: Path,
-    typeInference: Boolean,
-    basePaths: Set[Path],
-    userSpecifiedDataTypes: Map[String, DataType],
-    timeZone: TimeZone): InternalRow
+  final def withNewChildrenInternal(newChildren: IndexedSeq[T]): T = this.asInstanceOf[T]
 }

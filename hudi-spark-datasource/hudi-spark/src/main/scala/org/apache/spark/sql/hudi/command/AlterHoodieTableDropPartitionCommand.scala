@@ -25,11 +25,12 @@ import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkSqlWriter}
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
+import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
@@ -39,7 +40,7 @@ case class AlterHoodieTableDropPartitionCommand(
     ifExists : Boolean,
     purge : Boolean,
     retainData : Boolean)
-extends RunnableCommand {
+extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val fullTableName = s"${tableIdentifier.database}.${tableIdentifier.table}"

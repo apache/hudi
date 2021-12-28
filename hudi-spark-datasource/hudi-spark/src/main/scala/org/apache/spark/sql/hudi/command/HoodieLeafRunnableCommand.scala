@@ -15,21 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.execution.datasources
+package org.apache.spark.sql.hudi.command
 
-import java.util.TimeZone
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.trees.HoodieLeafLike
+import org.apache.spark.sql.execution.command.RunnableCommand
 
-import org.apache.hadoop.fs.Path
-
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.DataType
-
-trait SparkParsePartitionUtil extends Serializable {
-
-  def parsePartition(
-    path: Path,
-    typeInference: Boolean,
-    basePaths: Set[Path],
-    userSpecifiedDataTypes: Map[String, DataType],
-    timeZone: TimeZone): InternalRow
-}
+/**
+ * Similar to `LeafRunnableCommand` in Spark3.2, `HoodieLeafRunnableCommand` mixed in
+ * `HoodieLeafLike` can avoid subclasses of `RunnableCommand` to override
+ * the `withNewChildrenInternal` method repeatedly.
+ */
+trait HoodieLeafRunnableCommand extends RunnableCommand with HoodieLeafLike[LogicalPlan]

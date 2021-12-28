@@ -36,7 +36,6 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
-import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.internal.SQLConf
@@ -54,7 +53,7 @@ case class InsertIntoHoodieTableCommand(
     query: LogicalPlan,
     partition: Map[String, Option[String]],
     overwrite: Boolean)
-  extends RunnableCommand {
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     assert(logicalRelation.catalogTable.isDefined, "Missing catalog table")

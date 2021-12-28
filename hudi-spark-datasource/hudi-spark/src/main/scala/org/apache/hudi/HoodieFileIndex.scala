@@ -578,14 +578,10 @@ case class HoodieFileIndex(
           }.mkString("/")
           val pathWithPartitionName = new Path(basePath, partitionWithName)
           val partitionDataTypes = partitionSchema.fields.map(f => f.name -> f.dataType).toMap
-          val partitionValues = sparkParsePartitionUtil.parsePartition(pathWithPartitionName,
+
+          sparkParsePartitionUtil.parsePartition(pathWithPartitionName,
             typeInference = false, Set(new Path(basePath)), partitionDataTypes,
             DateTimeUtils.getTimeZone(timeZoneId))
-
-          // Convert partitionValues to InternalRow
-          partitionValues.map(_.literals.map(_.value))
-            .map(InternalRow.fromSeq)
-            .getOrElse(InternalRow.empty)
         }
       }
       PartitionRowPath(partitionRow, partitionPath)
