@@ -162,6 +162,7 @@ public class ParquetRowDataWriter {
 
   private interface FieldWriter {
     void write(RowData row, int ordinal);
+
     void write(ArrayData array, int ordinal);
   }
 
