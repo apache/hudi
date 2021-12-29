@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import java.text.ParseException;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -107,10 +106,6 @@ public class HoodieInstantTimeGenerator {
 
   private static boolean isSecondGranularity(String instant) {
     return instant.length() == SECS_INSTANT_ID_LENGTH;
-  }
-
-  public static String formatInstantTime(Instant timestamp) {
-    return MILLIS_INSTANT_TIME_FORMATTER.format(timestamp);
   }
 
   public static String formatDate(Date timestamp) {
