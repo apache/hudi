@@ -47,7 +47,13 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 
 object HoodieSparkUtils extends SparkAdapterSupport {
 
+  def isSpark2: Boolean = SPARK_VERSION.startsWith("2.")
+
   def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
+
+  def isSpark3_0: Boolean = SPARK_VERSION.startsWith("3.0")
+
+  def isSpark3_2: Boolean = SPARK_VERSION.startsWith("3.2")
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {

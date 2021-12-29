@@ -27,7 +27,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import scala.util.control.NonFatal
@@ -39,7 +39,7 @@ case class AlterHoodieTableChangeColumnCommand(
     tableIdentifier: TableIdentifier,
     columnName: String,
     newColumn: StructField)
-  extends RunnableCommand {
+  extends HoodieLeafRunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val hoodieCatalogTable = HoodieCatalogTable(sparkSession, tableIdentifier)
