@@ -28,7 +28,6 @@ import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.ReplaceArchivalHelper;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -362,11 +361,11 @@ public class HoodieDropPartitionsTool {
       HoodieTimeline completedReplaceTimeline = metaClient.getActiveTimeline().reload().getCompletedReplaceTimeline();
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
       Option<HoodieInstant> instant = Option.fromJavaOptional(completedReplaceTimeline.getInstants().filter(in -> in.getTimestamp().equals(cfg.instantTime)).findFirst());
-      instant.ifPresent(hoodieInstant -> deleteReplacedFileGroups(client.getEngineContext(), hoodieInstant, table));
+      instant.ifPresent(hoodieInstant -> deleteReplacedFileGroups(hoodieInstant, table));
     }
   }
 
-  private boolean deleteReplacedFileGroups(HoodieEngineContext context, HoodieInstant instant, HoodieSparkTable table) {
+  private boolean deleteReplacedFileGroups(HoodieInstant instant, HoodieSparkTable table) {
     if (!instant.isCompleted() || !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
       // only delete files for completed replace instants
       return true;
@@ -374,7 +373,7 @@ public class HoodieDropPartitionsTool {
     TableFileSystemView fileSystemView = table.getFileSystemView();
     List<String> replacedPartitions = getReplacedPartitions(instant);
     int replacedFiles = getReplacedFiles(instant);
-    return deleteReplacedFileGroups(context, metaClient, fileSystemView, instant, replacedPartitions, Math.min(cfg.parallelism, replacedFiles));
+    return deleteReplacedFileGroups(metaClient, fileSystemView, instant, replacedPartitions, Math.min(cfg.parallelism, replacedFiles));
   }
 
   private List<String> getReplacedPartitions(HoodieInstant instant) {
@@ -404,15 +403,15 @@ public class HoodieDropPartitionsTool {
     }
   }
 
-  public static boolean deleteReplacedFileGroups(HoodieEngineContext context, HoodieTableMetaClient metaClient,
+  public boolean deleteReplacedFileGroups(HoodieTableMetaClient metaClient,
                                                  TableFileSystemView fileSystemView,
                                                  HoodieInstant instant, List<String> replacedPartitions, int parallelism) {
-    context.setJobStatus(ReplaceArchivalHelper.class.getSimpleName(), "Delete replaced file groups");
+    jsc.setJobGroup(ReplaceArchivalHelper.class.getSimpleName(), "Delete replaced file groups");
 
-    context.flatMapAndForeach(replacedPartitions, partition -> {
+    jsc.parallelize(replacedPartitions, replacedPartitions.size()).flatMap(partition -> {
       return fileSystemView.getReplacedFileGroupsBeforeOrOn(instant.getTimestamp(), partition)
-          .flatMap(HoodieFileGroup::getAllRawFileSlices);
-    }, fileSlice -> deleteFileSlice(fileSlice, metaClient, instant), replacedPartitions.size(), parallelism);
+          .flatMap(HoodieFileGroup::getAllRawFileSlices).iterator();
+    }).repartition(parallelism).foreach(fileSlice -> deleteFileSlice(fileSlice, metaClient, instant));
     return true;
   }
 

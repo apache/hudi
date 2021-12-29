@@ -85,8 +85,6 @@ public abstract class HoodieEngineContext {
 
   public abstract <I, O> List<O> flatMap(List<I> data, SerializableFunction<I, Stream<O>> func, int parallelism);
 
-  public abstract <I, O> void flatMapAndForeach(List<I> data, SerializableFunction<I, Stream<O>> func, SerializableConsumer<O> consumer, int parallelism, int consumerParallelism);
-
   public abstract <I> void foreach(List<I> data, SerializableConsumer<I> consumer, int parallelism);
 
   public abstract <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism);
