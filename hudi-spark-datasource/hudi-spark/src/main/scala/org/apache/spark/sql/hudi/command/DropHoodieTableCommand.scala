@@ -21,7 +21,6 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
@@ -94,7 +93,7 @@ extends HoodieLeafRunnableCommand {
        hoodieCatalogTable: HoodieCatalogTable): Unit = {
     val table = hoodieCatalogTable.table
     val dbName = table.identifier.database.get
-    val tableName = table.identifier.table
+    val tableName = hoodieCatalogTable.tableName
 
     // check database exists
     val dbExists = sparkSession.sessionState.catalog.databaseExists(dbName)
@@ -103,16 +102,14 @@ extends HoodieLeafRunnableCommand {
     }
 
     if (HoodieTableType.MERGE_ON_READ == hoodieCatalogTable.tableType && purge) {
-      val originTableName = hoodieCatalogTable.tableName
-      val snapshotTableName = originTableName + MOR_SNAPSHOT_TABLE_SUFFIX
-      val roTableName = originTableName + MOR_READ_OPTIMIZED_TABLE_SUFFIX
+      val snapshotTableName = tableName + MOR_SNAPSHOT_TABLE_SUFFIX
+      val roTableName = tableName + MOR_READ_OPTIMIZED_TABLE_SUFFIX
 
-      dropHiveTable(sparkSession, dbName, originTableName)
       dropHiveTable(sparkSession, dbName, snapshotTableName)
-      dropHiveTable(sparkSession, dbName, roTableName, purge)
-    } else {
-      dropHiveTable(sparkSession, dbName, tableName, purge)
+      dropHiveTable(sparkSession, dbName, roTableName)
     }
+
+    dropHiveTable(sparkSession, dbName, tableName, purge)
   }
 
   private def dropHiveTable(
