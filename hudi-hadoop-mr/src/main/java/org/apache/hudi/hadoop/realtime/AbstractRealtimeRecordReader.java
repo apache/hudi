@@ -21,21 +21,18 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.LogReaderUtils;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.InputSplitUtils;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -72,8 +69,8 @@ public abstract class AbstractRealtimeRecordReader {
       this.usesCustomPayload = usesCustomPayload(metaClient);
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
       init();
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
+    } catch (Exception e) {
+      throw new HoodieException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
     }
   }
 
@@ -83,19 +80,17 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Goes through the log files in reverse order and finds the schema from the last available data block. If not, falls
+   * Gets schema from HoodieTableMetaClient. If not, falls
    * back to the schema from the latest parquet file. Finally, sets the partition column and projection fields into the
    * job conf.
    */
-  private void init() throws IOException {
-    Schema schemaFromLogFile = LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogFiles(), jobConf);
-    if (schemaFromLogFile == null) {
-      writerSchema = InputSplitUtils.getBaseFileSchema((FileSplit)split, jobConf);
-      LOG.info("Writer Schema From Parquet => " + writerSchema.getFields());
-    } else {
-      writerSchema = schemaFromLogFile;
-      LOG.info("Writer Schema From Log => " + writerSchema.toString(true));
-    }
+  private void init() throws Exception {
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(split.getPath().getFileSystem(jobConf).getConf()).setBasePath(split.getBasePath()).build();
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    LOG.info("Getting writer schema from table avro schema ");
+    writerSchema = schemaUtil.getTableAvroSchema();
+
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
     List<String> partitioningFields =
